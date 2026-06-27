@@ -1,0 +1,22 @@
+spring:
+  jpa:
+    show-sql: false
+  flyway:
+    validate-on-migrate: true
+
+logging:
+  level:
+    com.cpintel: INFO
+    org.springframework.security: WARN
+    org.hibernate: WARN
+  pattern:
+    console: '{"time":"%d{yyyy-MM-dd HH:mm:ss}","level":"%level","logger":"%logger{36}","msg":"%msg"}%n'
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics,prometheus
+  endpoint:
+    health:
+      show-details: never

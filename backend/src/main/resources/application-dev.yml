@@ -1,0 +1,15 @@
+spring:
+  jpa:
+    show-sql: true
+
+logging:
+  level:
+    com.cpintel: DEBUG
+    org.springframework.security: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql: TRACE
+
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: none

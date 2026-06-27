@@ -1,0 +1,79 @@
+{
+  "title": "CPIntel Backend",
+  "uid": "cpintel-main",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "30s",
+  "panels": [
+    {
+      "id": 1,
+      "title": "HTTP Request Rate",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [{
+        "expr": "rate(http_server_requests_seconds_count{job='cpintel-backend'}[1m])",
+        "legendFormat": "{{method}} {{uri}} {{status}}"
+      }]
+    },
+    {
+      "id": 2,
+      "title": "HTTP Error Rate",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [{
+        "expr": "rate(http_server_requests_seconds_count{job='cpintel-backend',status=~'5..'}[1m])",
+        "legendFormat": "{{uri}} {{status}}"
+      }]
+    },
+    {
+      "id": 3,
+      "title": "JVM Heap Memory",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "targets": [{
+        "expr": "jvm_memory_used_bytes{job='cpintel-backend',area='heap'}",
+        "legendFormat": "{{id}}"
+      }]
+    },
+    {
+      "id": 4,
+      "title": "Active DB Connections",
+      "type": "stat",
+      "gridPos": { "h": 8, "w": 6, "x": 12, "y": 8 },
+      "targets": [{
+        "expr": "hikaricp_connections_active{job='cpintel-backend'}",
+        "legendFormat": "Active"
+      }]
+    },
+    {
+      "id": 5,
+      "title": "Cache Hit Rate",
+      "type": "stat",
+      "gridPos": { "h": 8, "w": 6, "x": 18, "y": 8 },
+      "targets": [{
+        "expr": "rate(cache_gets_total{job='cpintel-backend',result='hit'}[5m]) / rate(cache_gets_total{job='cpintel-backend'}[5m]) * 100",
+        "legendFormat": "Hit %"
+      }]
+    },
+    {
+      "id": 6,
+      "title": "P99 Request Latency",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "targets": [{
+        "expr": "histogram_quantile(0.99, rate(http_server_requests_seconds_bucket{job='cpintel-backend'}[5m]))",
+        "legendFormat": "p99 {{uri}}"
+      }]
+    },
+    {
+      "id": 7,
+      "title": "JVM Threads",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "targets": [{
+        "expr": "jvm_threads_live_threads{job='cpintel-backend'}",
+        "legendFormat": "Live threads"
+      }]
+    }
+  ]
+}

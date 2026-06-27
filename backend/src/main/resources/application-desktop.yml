@@ -1,0 +1,18 @@
+# Profile activated when running inside Electron
+spring:
+  jpa:
+    show-sql: false
+  data:
+    mongodb:
+      uri: ${SPRING_DATA_MONGODB_URI:mongodb://localhost:27017/cpintel}
+
+cpintel:
+  cors:
+    allowed-origins:
+      - http://localhost:5173
+      - app://cpintel-desktop
+      - file://
+
+logging:
+  level:
+    com.cpintel: INFO

@@ -1,0 +1,49 @@
+{
+  "name": "cpintel-desktop",
+  "version": "0.1.0",
+  "description": "CPIntel Desktop App",
+  "main": "dist/main.js",
+  "scripts": {
+    "dev":   "concurrently \"tsc -w\" \"electron .\"",
+    "build": "tsc && electron-builder",
+    "pack":  "electron-builder --dir"
+  },
+  "dependencies": {
+    "electron-store": "^8.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "concurrently": "^8.2.2",
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3",
+    "typescript": "^5.4.5"
+  },
+  "build": {
+    "appId": "com.cpintel.desktop",
+    "productName": "CPIntel",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "resources/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "../frontend/dist",
+        "to":   "frontend"
+      }
+    ],
+    "linux": {
+      "target": ["AppImage", "deb"],
+      "category": "Development"
+    },
+    "mac": {
+      "target": ["dmg"],
+      "category": "public.app-category.developer-tools"
+    },
+    "win": {
+      "target": ["nsis"]
+    }
+  }
+}
