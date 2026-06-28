@@ -12,7 +12,7 @@ let mainWindow:   BrowserWindow | null = null
 let tray:         Tray | null = null
 let backendProc:  ChildProcess | null = null
 
-const IS_DEV   = process.env.NODE_ENV === 'development'
+const IS_DEV = !app.isPackaged
 const DEV_URL  = 'http://localhost:5173'
 const PROD_DIR = path.join(process.resourcesPath, 'frontend')
 

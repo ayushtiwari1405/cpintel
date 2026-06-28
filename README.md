@@ -91,14 +91,26 @@ Swagger UI: `http://localhost:8080/swagger-ui.html`
 
 ## Desktop app
 
+Electron dev mode does **not** spawn its own backend or bundle the frontend — it just opens a window pointed at your already-running Vite dev server. Start the backend and frontend exactly as in the steps above first, then:
+
 ```bash
 cd electron
 npm install
-npm run dev      # requires backend + frontend already running
-npm run build    # packaged binary
+npm run dev
 ```
 
-The Electron shell wraps the same React SPA used on web — no separate frontend codebase.
+This opens a desktop window loading `http://localhost:5173` with DevTools open. If you see `Unable to access jarfile .../resources/backend/app.jar`, `NODE_ENV` isn't set to `development` — the `dev` script in `electron/package.json` must run Electron with `NODE_ENV=development` (via `cross-env` for cross-platform safety) so `main.ts` skips spawning the packaged backend.
+
+For a production desktop build (spawns the bundled backend jar and loads the built frontend instead of Vite):
+
+```bash
+# from repo root
+cd backend && ./mvnw clean package -DskipTests && cd ..
+cd frontend && npm run build && cd ..
+cd electron && npm run build
+```
+
+The packaged app and backend jar/frontend dist are bundled together as Electron resources (see `extraResources` in `electron/package.json`). The Electron shell wraps the same React SPA used on web — no separate frontend codebase.
 
 ## Repository structure
 
