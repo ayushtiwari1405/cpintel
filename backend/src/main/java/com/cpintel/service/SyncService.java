@@ -14,6 +14,8 @@ import com.cpintel.integration.codechef.CodeChefClient;
 import com.cpintel.integration.leetcode.LeetCodeClient;
 import com.cpintel.integration.leetcode.LcModels;
 import com.cpintel.repository.jpa.*;
+import com.cpintel.repository.mongo.CcSubmissionRepository;
+import com.cpintel.repository.jpa.ContestSummaryRepository;
 import com.cpintel.repository.mongo.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -35,6 +37,8 @@ public class SyncService {
     private final SyncJobRepository syncJobRepository;
     private final CfSubmissionRepository cfSubmissionRepository;
     private final LcSubmissionRepository lcSubmissionRepository;
+    private final CcSubmissionRepository ccSubmissionRepository;
+    private final ContestSummaryRepository contestSummaryRepository;
     private final CodeforcesClient cfClient;
     private final LeetCodeClient lcClient;
     private final CodeChefClient ccClient;
@@ -76,7 +80,20 @@ public class SyncService {
         PlatformAccount account = platformAccountRepository
             .findByUserUserIdAndPlatform(userId, platform)
             .orElseThrow(() -> ApiException.notFound(platform + " account not linked"));
+
+        // Wipe all derived data tied to this platform for this user so a later
+        // re-link with a different handle never inherits stale contest/submission
+        // history from the previous handle.
+        contestSummaryRepository.deleteByUserUserIdAndPlatform(userId, platform);
+
+        switch (platform) {
+            case "CODEFORCES" -> cfSubmissionRepository.deleteByUserId(userId);
+            case "LEETCODE"   -> lcSubmissionRepository.deleteByUserId(userId);
+            case "CODECHEF"   -> ccSubmissionRepository.deleteByUserId(userId);
+        }
+
         platformAccountRepository.delete(account);
+        log.info("Unlinked {} for user {} and purged derived data", platform, userId);
     }
 
     @Transactional

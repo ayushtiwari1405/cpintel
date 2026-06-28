@@ -2,6 +2,8 @@ package com.cpintel.repository.jpa;
 
 import com.cpintel.entity.ContestSummary;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -28,4 +30,8 @@ public interface ContestSummaryRepository extends JpaRepository<ContestSummary, 
         WHERE cs.user_id = :userId AND cs.platform = :platform
         """, nativeQuery = true)
     Double getAvgRatingChange(@Param("userId") Long userId, @Param("platform") String platform);
+
+    @Modifying
+    @Transactional
+    void deleteByUserUserIdAndPlatform(Long userId, String platform);
 }

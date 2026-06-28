@@ -17,4 +17,6 @@ public interface CcSubmissionRepository extends MongoRepository<CcSubmission, St
 
     @Query("{ 'userId': ?0, 'normalized': false }")
     List<CcSubmission> findUnnormalized(Long userId);
+
+    void deleteByUserId(Long userId);
 }

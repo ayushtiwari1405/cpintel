@@ -46,6 +46,16 @@ public class ContestSyncService {
             return 0;
         }
 
+        // Defense in depth: always rebuild this platform's contest rows from
+        // scratch on every full sync rather than trusting "skip if exists" by
+        // contest_cf_id alone. If the linked handle ever changed since the last
+        // sync, stale rows from a previous handle would otherwise survive
+        // forever because their contest_cf_id values never match the new
+        // handle's contests. Wiping first guarantees the table only ever
+        // reflects the currently linked handle.
+        contestSummaryRepository.deleteByUserUserIdAndPlatform(userId, "CODEFORCES");
+        log.info("Cleared existing CODEFORCES contest rows for user {} before rebuild", userId);
+
         User user = userRepository.findById(userId)
             .orElseThrow(() -> ApiException.notFound("User not found"));
 
