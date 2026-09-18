@@ -1,9 +1,10 @@
 package com.cpintel.dto;
 
 import lombok.*;
+import lombok.extern.jackson.Jacksonized;
 import java.time.Instant;
 
-@Getter @Builder
+@Getter @Builder @Jacksonized
 public class TopicMasteryDto {
     private Long masteryId;
     private String topic;

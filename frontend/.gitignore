@@ -1,0 +1,4 @@
+
+
+# MathJax runtime, copied from node_modules by scripts/copy-mathjax.mjs
+public/mathjax/

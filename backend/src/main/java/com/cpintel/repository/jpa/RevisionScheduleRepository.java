@@ -17,7 +17,7 @@ public interface RevisionScheduleRepository extends JpaRepository<RevisionSchedu
     @Query(value = """
         SELECT rs.* FROM revision_schedule rs
         WHERE rs.user_id = :userId
-        AND rs.next_revision_at <= SYSTIMESTAMP
+        AND rs.next_revision_at <= now()
         ORDER BY rs.revision_priority DESC, rs.next_revision_at ASC
         """, nativeQuery = true)
     List<RevisionSchedule> findDueRevisions(@Param("userId") Long userId);

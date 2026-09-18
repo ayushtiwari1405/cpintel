@@ -23,25 +23,6 @@ export function useLogin() {
   })
 }
 
-export function useRegister() {
-  const { setTokens, setUser } = useAuthStore()
-  const toast = useToast()
-  const navigate = useNavigate()
-
-  return useMutation({
-    mutationFn: authApi.register,
-    onSuccess: (res) => {
-      setTokens(res.data.accessToken, res.data.refreshToken)
-      setUser(res.data.user)
-      navigate('/dashboard')
-      toast.push('success', 'Account created! Welcome to CPIntel.')
-    },
-    onError: (err: any) => {
-      toast.push('error', err.response?.data?.message ?? 'Registration failed')
-    },
-  })
-}
-
 export function useLogout() {
   const { logout } = useAuthStore()
   const queryClient = useQueryClient()

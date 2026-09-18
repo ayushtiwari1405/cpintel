@@ -1,7 +1,17 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios'
 import { useAuthStore } from '@/store/authStore'
 
-const BASE_URL = import.meta.env.VITE_API_URL || '/api'
+/**
+ * Where the API lives, versioned.
+ *
+ * Exported because the Codeforces cookie helper needs the same value: it runs as a separate
+ * process and posts the session to the backend itself, so it has to be handed an absolute URL
+ * built from this. It previously carried its own copy that had drifted to the unversioned
+ * '/api', which 404s.
+ */
+export const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1'
+
+const BASE_URL = API_BASE_URL
 
 export const apiClient = axios.create({
   baseURL: BASE_URL,

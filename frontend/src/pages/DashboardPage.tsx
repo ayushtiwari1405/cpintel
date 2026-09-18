@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { userApi } from '@/api/userApi'
 import { useAuth } from '@/contexts/AuthContext'
 import { useRefreshAnalytics } from '@/hooks/useAnalytics'
+import { useEffect } from 'react'
 import {
   Zap, Target, Award, RefreshCw,
   Loader2, Link2, ChevronRight
@@ -13,20 +14,6 @@ import {
 } from 'recharts'
 import { tooltipStyle } from '@/charts/ChartTheme'
 
-function StatCard({ label, value, sub, accent = false }: {
-  label: string; value: string | number; sub?: string; accent?: boolean
-}) {
-  return (
-    <div className="card">
-      <p className="card-header">{label}</p>
-      <p className={`text-3xl font-bold ${accent ? 'text-indigo-400' : 'text-white'}`}>
-        {value ?? '—'}
-      </p>
-      {sub && <p className="text-xs text-gray-500 mt-1">{sub}</p>}
-    </div>
-  )
-}
-
 export default function DashboardPage() {
   const { user } = useAuth()
   const refresh = useRefreshAnalytics()
@@ -34,7 +21,12 @@ export default function DashboardPage() {
   const { data: dashboard, isLoading } = useQuery({
     queryKey: ['dashboard'],
     queryFn: () => userApi.getDashboard().then(r => r.data),
+    staleTime: 0,
+    refetchOnMount: true,
   })
+  useEffect(() => {
+    refresh.mutate()
+  }, [])
 
   const platforms = dashboard?.user?.platforms ?? []
   const score = dashboard?.unifiedScore
@@ -74,12 +66,36 @@ export default function DashboardPage() {
 
       {/* Score row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          label="Unified score"
-          value={score?.unifiedScore?.toFixed(0) ?? '—'}
-          sub="Across all platforms"
-          accent
-        />
+        <div className="card">
+          <div className="flex items-center gap-1.5 mb-1">
+            <p className="card-header mb-0">Unified score</p>
+            <div className="group relative">
+              <span className="text-gray-600 text-xs cursor-help border border-gray-700 
+                       rounded-full w-3.5 h-3.5 flex items-center justify-center 
+                       hover:border-gray-500">?</span>
+              <div className="absolute left-0 top-5 z-10 hidden group-hover:block 
+                      bg-gray-800 border border-gray-700 rounded-lg p-3 
+                      w-56 text-xs text-gray-300 shadow-xl">
+                <p className="font-medium text-white mb-1">How it's calculated</p>
+                <p>Normalizes each platform's rating to a 0–1000 scale, then blends them:</p>
+                <ul className="mt-1.5 space-y-0.5 text-gray-400">
+                  <li>Codeforces — 40%</li>
+                  <li>LeetCode — 35%</li>
+                  <li>CodeChef — 25%</li>
+                </ul>
+                <p className="mt-1.5 text-gray-500">Only linked platforms contribute.</p>
+              </div>
+            </div>
+          </div>
+          <p className="text-3xl font-bold text-indigo-400">
+            {score?.unifiedScore != null ? score.unifiedScore.toFixed(0) : '—'}
+          </p>
+          <p className="text-xs text-gray-500 mt-1">
+            {platforms.length === 0
+              ? 'Link accounts to compute'
+              : `Based on ${platforms.length} platform${platforms.length > 1 ? 's' : ''}`}
+          </p>
+        </div>
         {['CODEFORCES', 'LEETCODE', 'CODECHEF'].map(p => {
           const acc = platforms.find((a: any) => a.platform === p)
           return (
@@ -160,9 +176,8 @@ export default function DashboardPage() {
                     <p className="text-xs text-gray-500">{c.platform} · Rank {c.rank ?? '?'}</p>
                   </div>
                   <div className="flex flex-col items-end ml-3 flex-shrink-0">
-                    <span className={`text-sm font-semibold ${
-                      (c.ratingChange ?? 0) >= 0 ? 'text-green-400' : 'text-red-400'
-                    }`}>
+                    <span className={`text-sm font-semibold ${(c.ratingChange ?? 0) >= 0 ? 'text-green-400' : 'text-red-400'
+                      }`}>
                       {(c.ratingChange ?? 0) >= 0 ? '+' : ''}{c.ratingChange ?? 0}
                     </span>
                     <span className="text-xs text-gray-600">

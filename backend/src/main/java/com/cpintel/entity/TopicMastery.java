@@ -26,8 +26,32 @@ public class TopicMastery {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    @Column(name = "topic", nullable = false, length = 100)
+    /**
+     * Identity of the thing being scored: a skill-tree node id when {@link #scope} is
+     * {@code NODE}, a coarse roll-up name when it is {@code TOPIC}. The two namespaces cannot
+     * collide — node ids are kebab-case, roll-up names are title-case words — so they share the
+     * unique constraint on (user_id, topic).
+     */
+    @Column(name = "topic", nullable = false, length = 120)
     private String topic;
+
+    /**
+     * {@code NODE} for one skill-tree node, {@code TOPIC} for a roll-up derived from nodes.
+     *
+     * <p>Both live in one table because everything downstream — scoring, decay, the revision
+     * queue — treats them identically; only the reader decides which granularity it wants.
+     */
+    @Column(name = "scope", nullable = false, length = 10)
+    @Builder.Default
+    private String scope = Scope.TOPIC;
+
+    /** For a NODE row, the roll-up topic it contributes to. Null on a TOPIC row. */
+    @Column(name = "parent_topic", length = 100)
+    private String parentTopic;
+
+    /** For a NODE row, the tree track it belongs to. Null on a TOPIC row. */
+    @Column(name = "track", length = 60)
+    private String track;
 
     @Column(name = "mastery_score")
     @Builder.Default
@@ -58,6 +82,16 @@ public class TopicMastery {
 
     @Column(name = "computed_at")
     private Instant computedAt;
+
+    /** Values of {@link #scope}. A plain constant holder rather than an enum: the column is
+     *  written by a native upsert, which cannot bind a Java enum. */
+    public static final class Scope {
+        private Scope() {}
+        public static final String NODE = "NODE";
+        public static final String TOPIC = "TOPIC";
+    }
+
+    public boolean isNode() { return Scope.NODE.equals(scope); }
 
     public enum MasteryBand {
         STRONG, MODERATE, WEAK, UNTOUCHED;

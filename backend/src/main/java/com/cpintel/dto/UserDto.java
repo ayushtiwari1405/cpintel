@@ -2,13 +2,14 @@ package com.cpintel.dto;
 
 import jakarta.validation.constraints.*;
 import lombok.*;
+import lombok.extern.jackson.Jacksonized;
 
 import java.time.Instant;
 import java.util.List;
 
 public class UserDto {
 
-    @Getter @Builder
+    @Getter @Builder @Jacksonized
     public static class Profile {
         private Long userId;
         private String username;
@@ -39,7 +40,7 @@ public class UserDto {
         private String avatarUrl;
     }
 
-    @Getter @Builder
+    @Getter @Builder @Jacksonized
     public static class DashboardData {
         private Profile user;
         private UnifiedScoreDto unifiedScore;

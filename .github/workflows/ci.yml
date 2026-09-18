@@ -5,6 +5,10 @@ on:
     branches: [main, develop]
   pull_request:
     branches: [main]
+  schedule:
+    # Weekly. Advisories against pinned versions appear on their own schedule, not on ours —
+    # Argon2, JJWT, Jsoup and BouncyCastle are all pinned here and nothing was watching them.
+    - cron: '0 6 * * 1'
 
 env:
   REGISTRY: ghcr.io
@@ -25,9 +29,19 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
-      - name: Run tests
+      # verify rather than test: this runs the suite and then the JaCoCo coverage gate,
+      # which fails the build if coverage drops below the floor in pom.xml. The floor is set
+      # just under current coverage and is meant to be raised, never lowered.
+      - name: Run tests and coverage gate
         working-directory: backend
-        run: ./mvnw test -q
+        run: ./mvnw verify -q
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: backend/target/site/jacoco/
 
       - name: Build JAR
         working-directory: backend
@@ -133,3 +147,27 @@ jobs:
    #         docker compose up -d --no-deps backend frontend nginx
    #         docker system prune -f
    #         echo "Deploy complete at $(date)"
+
+  dependency-audit:
+    name: Dependency vulnerabilities
+    runs-on: ubuntu-latest
+    # Reports rather than blocks: a new advisory is not a reason a pull request cannot merge,
+    # but it is something somebody should see this week.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Audit backend dependencies
+        working-directory: backend
+        run: ./mvnw org.owasp:dependency-check-maven:check -DfailBuildOnCVSS=9 -q
+
+      - name: Audit frontend dependencies
+        working-directory: frontend
+        run: npm audit --audit-level=high

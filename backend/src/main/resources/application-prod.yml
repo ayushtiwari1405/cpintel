@@ -1,3 +1,11 @@
+server:
+  # nginx terminates the connection and forwards the caller's address in X-Forwarded-For.
+  # Without this the application sees nginx's own address, which made every audit row record
+  # the proxy rather than the user, and would have put every caller in one rate-limit bucket.
+  # Safe to trust here precisely because the backend port is bound to loopback, so nothing can
+  # reach it except through the proxy that sets the header.
+  forward-headers-strategy: framework
+
 spring:
   jpa:
     show-sql: false
@@ -10,7 +18,7 @@ logging:
     org.springframework.security: WARN
     org.hibernate: WARN
   pattern:
-    console: '{"time":"%d{yyyy-MM-dd HH:mm:ss}","level":"%level","logger":"%logger{36}","msg":"%msg"}%n'
+    console: '{"time":"%d{yyyy-MM-dd HH:mm:ss}","level":"%level","logger":"%logger{36}","requestId":"%X{requestId:-}","msg":"%msg"}%n'
 
 management:
   endpoints:
@@ -20,3 +28,10 @@ management:
   endpoint:
     health:
       show-details: never
+
+cpintel:
+  runner:
+    # Off in prod: this deployment is multi-user and network-reachable, where compiling and
+    # running submitted code would hand every account a shell on the server. The editor
+    # still works; it just cannot run code, and the UI says so.
+    enabled: false

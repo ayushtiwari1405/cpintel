@@ -20,7 +20,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 @RestController
-@RequestMapping("/api/integrations")
+@RequestMapping("/api/v1/integrations")
 @RequiredArgsConstructor
 @Tag(name = "Integrations", description = "Platform account linking and sync")
 @SecurityRequirement(name = "bearerAuth")

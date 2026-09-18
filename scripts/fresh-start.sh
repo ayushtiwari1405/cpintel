@@ -7,11 +7,11 @@ pkill -f 'spring-boot' 2>/dev/null || true
 pkill -f 'vite'        2>/dev/null || true
 
 docker compose down -v
-docker compose up oracle mongodb redis -d
+docker compose up postgres mongodb redis -d
 
-echo "Waiting for Oracle (this takes ~3 minutes first time)..."
-while ! docker exec cpintel-oracle healthcheck.sh 2>/dev/null; do
-  sleep 5
+echo "Waiting for Postgres..."
+while [ "$(docker inspect -f '{{.State.Health.Status}}' cpintel-postgres 2>/dev/null)" != "healthy" ]; do
+  sleep 2
   echo -n "."
 done
 echo ""

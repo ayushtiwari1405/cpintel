@@ -8,6 +8,9 @@ export interface AuthResponse {
 }
 
 export const authApi = {
+  // Self-registration is closed by default (cpintel.auth.registration-enabled) and there is no
+  // sign-up screen. Kept because the endpoint is still real: a deployment that turns the flag
+  // back on needs only a form to call this again.
   register: (data: { username: string; email: string; password: string; fullName?: string }) =>
     apiClient.post<ApiResponse<AuthResponse>>('/auth/register', data).then(r => r.data),
 

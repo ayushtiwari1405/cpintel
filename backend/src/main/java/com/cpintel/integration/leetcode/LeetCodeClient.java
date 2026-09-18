@@ -6,6 +6,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
+import com.cpintel.integration.OutboundRateLimiter;
+import jakarta.annotation.PostConstruct;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.util.retry.Retry;
 
@@ -17,7 +19,12 @@ import java.util.Map;
 @Slf4j
 public class LeetCodeClient {
 
-    private final WebClient.Builder webClientBuilder;
+    private static final String PLATFORM = "leetcode";
+    private static final long MAX_WAIT_MS = 30_000;
+
+    private final WebClient platformWebClient;
+    private final OutboundRateLimiter rateLimiter;
+    private WebClient client;
 
     @Value("${cpintel.platforms.leetcode.graphql-url}")
     private String graphqlUrl;
@@ -25,15 +32,21 @@ public class LeetCodeClient {
     @Value("${cpintel.platforms.leetcode.rate-limit-ms}")
     private long rateLimitMs;
 
-    private WebClient client() {
-        return webClientBuilder
+    @PostConstruct
+    void init() {
+        client = platformWebClient.mutate()
             .baseUrl(graphqlUrl)
             .defaultHeader("Referer", "https://leetcode.com")
             .build();
     }
 
+    /** Waits for LeetCode's next slot on the shared timeline before handing back the client. */
+    private WebClient client() {
+        rateLimiter.acquire(PLATFORM, rateLimitMs, MAX_WAIT_MS);
+        return client;
+    }
+
     private <T> T query(String query, Map<String, Object> variables, Class<T> type) {
-        try { Thread.sleep(rateLimitMs); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
 
         Map<String, Object> body = variables != null
             ? Map.of("query", query, "variables", variables)

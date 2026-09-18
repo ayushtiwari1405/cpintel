@@ -80,11 +80,13 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <p className="text-center text-sm text-gray-400 mt-6">
-            Don't have an account?{' '}
-            <Link to="/register" className="text-indigo-400 hover:text-indigo-300 font-medium">
-              Create one
-            </Link>
+          {/*
+            No sign-up link, because there is no sign-up. Accounts are created by a super
+            admin, so the useful thing to tell someone without one is who to ask rather than
+            a button that would answer 403.
+          */}
+          <p className="text-center text-sm text-gray-500 mt-6">
+            Accounts are created by an administrator. Ask yours for access.
           </p>
         </div>
 

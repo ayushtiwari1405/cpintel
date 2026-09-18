@@ -7,7 +7,7 @@ pkill -f 'vite'         2>/dev/null || true
 sleep 2
 
 # Restart only databases (keep data)
-docker compose restart oracle mongodb redis
+docker compose restart postgres mongodb redis
 
 echo "Waiting for databases..."
 sleep 10

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { CfSessionCard } from '@/components/practice/CfSessionCard'
 import { useLinkedAccounts, useLinkAccount, useUnlinkAccount, useSyncAccount } from '@/hooks/usePlatforms'
 import { RefreshCw, Link2, Unlink, CheckCircle, Clock, AlertCircle, Loader2 } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
@@ -169,6 +170,13 @@ export default function PlatformsPage() {
                     </div>
                   )}
                 </div>
+
+                {/* Linking a handle is how CPIntel reads your history; connecting a session is
+                    how it submits for you. Two different things about one account, so they
+                    belong on one row rather than on a screen you have to know about. The
+                    practice workspace hides this once it is connected, which left no way to
+                    see who you are submitting as, or to drop the session. */}
+                {p.id === 'CODEFORCES' && <CfSessionCard variant="inline" />}
               </div>
             )
           })}
@@ -182,6 +190,8 @@ export default function PlatformsPage() {
           <li>• Incremental syncs run nightly at 02:00 UTC automatically</li>
           <li>• Manual sync fetches submissions since the last sync</li>
           <li>• Analytics update after each sync completes</li>
+          <li>• Linking a handle is what reads your history — submitting from Practice needs
+              the Codeforces session connected above, which is separate</li>
         </ul>
       </div>
     </div>

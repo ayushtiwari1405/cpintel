@@ -23,6 +23,19 @@ public class JwtService {
     private final RedisTemplate<String, Object> redisTemplate;
 
     private static final String BLACKLIST_PREFIX = "jwt:blacklist:";
+    private static final String USER_REVOKE_PREFIX = "jwt:user-revoked:";
+
+    /**
+     * Tokens issued within this long of a revocation are left alone.
+     *
+     * A JWT records its issue time to the second, so a token minted in the same second as a
+     * revocation cannot be told apart from one minted just before it. Erring towards keeping
+     * the newer token matters because the alternative is a login loop: sign in, get a token
+     * that is already considered dead, refresh, get another one. The window a revocation can
+     * miss is under a second, and the refresh tokens are revoked in the same breath, so the
+     * account still cannot mint anything new.
+     */
+    private static final long REVOCATION_GRACE_MS = 1000L;
 
     private SecretKey signingKey() {
         byte[] keyBytes = Decoders.BASE64.decode(
@@ -87,5 +100,48 @@ public class JwtService {
 
     private boolean isBlacklisted(String jti) {
         return Boolean.TRUE.equals(redisTemplate.hasKey(BLACKLIST_PREFIX + jti));
+    }
+
+    /**
+     * Retires every access token this user is currently holding.
+     *
+     * Revoking their refresh tokens stops them getting a new one, but an access token already
+     * in a browser stays valid until it expires on its own — which is how a deactivated account
+     * would keep working for another quarter of an hour. This closes that gap by remembering
+     * the moment of revocation and rejecting anything older.
+     *
+     * The marker only has to outlive the tokens it invalidates: anything issued before it is
+     * expired by then anyway, so it is given the access token lifetime and left to expire.
+     */
+    public void revokeUserTokens(Long userId) {
+        try {
+            redisTemplate.opsForValue().set(
+                USER_REVOKE_PREFIX + userId,
+                String.valueOf(System.currentTimeMillis()),
+                Duration.ofMillis(props.getExpiryMs() + REVOCATION_GRACE_MS)
+            );
+        } catch (Exception e) {
+            log.warn("Could not revoke access tokens for user {}: {}", userId, e.getMessage());
+        }
+    }
+
+    /**
+     * Whether this token predates a revocation of its user's sessions.
+     *
+     * Answers false when the marker cannot be read at all. That is a deliberate choice to keep
+     * an unreachable Redis from signing out every user of the deployment at once; the durable
+     * half of a revocation is the refresh token row in Postgres, which does not depend on this.
+     */
+    public boolean isRevokedForUser(Long userId, Date issuedAt) {
+        if (userId == null || issuedAt == null) return false;
+        try {
+            Object marker = redisTemplate.opsForValue().get(USER_REVOKE_PREFIX + userId);
+            if (marker == null) return false;
+            long revokedAt = Long.parseLong(marker.toString());
+            return issuedAt.getTime() + REVOCATION_GRACE_MS <= revokedAt;
+        } catch (Exception e) {
+            log.debug("Could not read revocation marker for user {}: {}", userId, e.getMessage());
+            return false;
+        }
     }
 }

@@ -2,6 +2,7 @@ package com.cpintel.dto;
 
 import jakarta.validation.constraints.*;
 import lombok.*;
+import lombok.extern.jackson.Jacksonized;
 
 public class AuthDto {
 
@@ -34,7 +35,7 @@ public class AuthDto {
         private String password;
     }
 
-    @Getter @Builder
+    @Getter @Builder @Jacksonized
     public static class AuthResponse {
         private String accessToken;
         private String refreshToken;

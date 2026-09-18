@@ -1,9 +1,10 @@
 package com.cpintel.dto;
 
 import lombok.*;
+import lombok.extern.jackson.Jacksonized;
 import java.time.Instant;
 
-@Getter @Builder
+@Getter @Builder @Jacksonized
 public class ContestSummaryDto {
     private Long contestId;
     private String platform;

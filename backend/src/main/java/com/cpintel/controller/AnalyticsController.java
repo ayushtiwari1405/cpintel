@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/analytics")
+@RequestMapping("/api/v1/analytics")
 @RequiredArgsConstructor
 @Tag(name = "Analytics", description = "Analytics and performance data")
 @SecurityRequirement(name = "bearerAuth")
@@ -44,6 +44,13 @@ public class AnalyticsController {
         @AuthenticationPrincipal Long userId
     ) {
         return ResponseEntity.ok(ApiResponse.ok(analyticsService.getContestAnalytics(userId)));
+    }
+
+    @GetMapping("/nodes")
+    @Operation(summary = "Mastery for every skill-tree node the user has evidence for")
+    public ResponseEntity<ApiResponse<List<AnalyticsDto.TopicSummary>>> nodes(
+        @AuthenticationPrincipal Long userId) {
+        return ResponseEntity.ok(ApiResponse.ok(analyticsService.getNodeAnalytics(userId)));
     }
 
     @GetMapping("/trends")

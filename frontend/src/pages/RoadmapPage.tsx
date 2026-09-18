@@ -38,7 +38,7 @@ export default function RoadmapPage() {
         <div>
           <h1 className="text-2xl font-semibold text-white">Learning roadmap</h1>
           <p className="text-gray-400 text-sm mt-0.5">
-            {stats.total} skills mapped from Codeforces tags and your solved problems
+            {stats.total} sub-skills, unlocked by what you have actually solved
           </p>
         </div>
         <button
@@ -85,22 +85,26 @@ export default function RoadmapPage() {
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div className="lg:col-span-2 card">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
+          <div className="lg:col-span-2">
             <RoadmapTree
               nodes={nodes}
               selectedKey={selectedKey}
               onSelect={setSelectedKey}
             />
           </div>
-          <div>
-            <NodeDetailPanel node={selectedNode} />
+          {/* The tree is now long enough to scroll well past the panel, and the panel is what
+              the user is reading while they scan it. */}
+          <div className="lg:sticky lg:top-4">
+            <NodeDetailPanel node={selectedNode} allNodes={nodes} />
           </div>
         </div>
       )}
 
       <p className="text-xs text-gray-600 text-center">
-        Click any unlocked node to see its recommended Codeforces problems · nodes unlock once prerequisites reach sufficient mastery
+        Pick any skill to see its problems and open them in the practice workspace ·
+        a skill unlocks once its prerequisites reach 35% mastery, and completes at 75% with
+        enough attempts behind it to trust the number
       </p>
     </div>
   )

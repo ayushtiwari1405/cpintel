@@ -42,6 +42,7 @@ public class CfModels {
         private Problem problem;
         private String verdict;
         private String programmingLanguage;
+        private Integer passedTestCount;
         private Integer timeConsumedMillis;
         private Long memoryConsumedBytes;
         private Author author;

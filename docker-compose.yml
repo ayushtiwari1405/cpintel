@@ -1,22 +1,28 @@
 services:
 
-  oracle:
-    image: gvenzl/oracle-xe:21-slim-faststart
-    container_name: cpintel-oracle
+  postgres:
+    image: postgres:16-alpine
+    container_name: cpintel-postgres
     environment:
-      ORACLE_PASSWORD: ${ORACLE_SYS_PASSWORD}
-      APP_USER: ${ORACLE_APP_USER}
-      APP_USER_PASSWORD: ${ORACLE_APP_PASSWORD}
+      POSTGRES_DB: cpintel
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
-      - "1521:1521"
+      # Host port is configurable: a system PostgreSQL on the dev box already owns 5432
+      # on many machines. Container-to-container traffic always uses 5432 regardless.
+      # Bound to loopback, not 0.0.0.0. These publishes exist so the backend can run on
+      # the host during development; nothing outside this machine has any reason to reach
+      # a datastore directly, and publishing them broadly put the database on the local
+      # network behind a password that lives in this repository.
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
-      - oracle_data:/opt/oracle/oradata
+      - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD", "healthcheck.sh"]
-      interval: 30s
-      timeout: 20s
-      retries: 10
-      start_period: 120s
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d cpintel"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     networks:
       - cpintel-net
     restart: unless-stopped
@@ -29,7 +35,11 @@ services:
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
       MONGO_INITDB_DATABASE: cpintel
     ports:
-      - "27017:27017"
+      # Bound to loopback, not 0.0.0.0. These publishes exist so the backend can run on
+      # the host during development; nothing outside this machine has any reason to reach
+      # a datastore directly, and publishing them broadly put the database on the local
+      # network behind a password that lives in this repository.
+      - "127.0.0.1:27017:27017"
     volumes:
       - mongo_data:/data/db
       - ./mongo-init.js:/docker-entrypoint-initdb.d/init.js:ro
@@ -52,7 +62,11 @@ services:
       --maxmemory-policy allkeys-lru
       --save 60 1
     ports:
-      - "6379:6379"
+      # Bound to loopback, not 0.0.0.0. These publishes exist so the backend can run on
+      # the host during development; nothing outside this machine has any reason to reach
+      # a datastore directly, and publishing them broadly put the database on the local
+      # network behind a password that lives in this repository.
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -70,9 +84,9 @@ services:
       dockerfile: Dockerfile
     container_name: cpintel-backend
     environment:
-      SPRING_DATASOURCE_URL: jdbc:oracle:thin:@oracle:1521/XEPDB1
-      SPRING_DATASOURCE_USERNAME: ${ORACLE_APP_USER}
-      SPRING_DATASOURCE_PASSWORD: ${ORACLE_APP_PASSWORD}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/cpintel
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
       SPRING_DATA_MONGODB_URI: mongodb://${MONGO_USER}:${MONGO_PASSWORD}@mongodb:27017/cpintel?authSource=admin
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
@@ -80,11 +94,28 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRY_MS: ${JWT_EXPIRY_MS}
       JWT_REFRESH_EXPIRY_MS: ${JWT_REFRESH_EXPIRY_MS}
+      # Required under the prod profile — SecretsCheck refuses to start without it, rather
+      # than falling back to a value published in this repository.
+      CPINTEL_SESSION_KEY: ${CPINTEL_SESSION_KEY}
+      CPINTEL_REGISTRATION_ENABLED: ${CPINTEL_REGISTRATION_ENABLED:-false}
+      CPINTEL_ADMIN_EMAIL: ${CPINTEL_ADMIN_EMAIL:-}
+      CPINTEL_ADMIN_PASSWORD: ${CPINTEL_ADMIN_PASSWORD:-}
+      CPINTEL_ADMIN_USERNAME: ${CPINTEL_ADMIN_USERNAME:-superadmin}
+      # DOMjudge, for contests run on a self-hosted judge. Blank leaves the arena
+      # Codeforces-only. The account needs admin rights on the instance: CPIntel submits on
+      # each team's behalf rather than holding every contestant's DOMjudge password.
+      CPINTEL_DOMJUDGE_URL: ${CPINTEL_DOMJUDGE_URL:-}
+      CPINTEL_DOMJUDGE_USER: ${CPINTEL_DOMJUDGE_USER:-}
+      CPINTEL_DOMJUDGE_PASSWORD: ${CPINTEL_DOMJUDGE_PASSWORD:-}
       SPRING_PROFILES_ACTIVE: prod
     ports:
-      - "8080:8080"
+      # Loopback only. nginx reaches the backend over the compose network, so publishing this
+      # broadly served no purpose except to offer a way around the edge rate limits and the
+      # security headers — and it made X-Forwarded-For spoofable, since a direct caller could
+      # set it themselves. With this closed, the header can be trusted.
+      - "127.0.0.1:8080:8080"
     depends_on:
-      oracle:
+      postgres:
         condition: service_healthy
       mongodb:
         condition: service_healthy
@@ -182,7 +213,7 @@ services:
     profiles: ["monitoring"]
 
 volumes:
-  oracle_data:
+  postgres_data:
   mongo_data:
   redis_data:
   prometheus_data:

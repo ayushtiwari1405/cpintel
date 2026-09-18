@@ -3,21 +3,30 @@ spring:
     name: cpintel-backend
 
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:oracle:thin:@localhost:1521/XEPDB1}
-    username: ${SPRING_DATASOURCE_USERNAME:cpintel}
-    password: ${SPRING_DATASOURCE_PASSWORD:CPIntelApp#2025}
-    driver-class-name: oracle.jdbc.OracleDriver
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:${POSTGRES_PORT:5432}/cpintel}
+    username: ${SPRING_DATASOURCE_USERNAME:${POSTGRES_USER:cpintel}}
+    # No default. Compose supplies SPRING_DATASOURCE_PASSWORD; the host dev path exports
+    # POSTGRES_PASSWORD from .env. Blank reaches SecretsCheck, which refuses to start prod.
+    password: ${SPRING_DATASOURCE_PASSWORD:${POSTGRES_PASSWORD:}}
+    driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 20
       minimum-idle: 5
-      connection-init-sql: "ALTER SESSION SET TIME_ZONE='UTC'"
+      connection-init-sql: "SET TIME ZONE 'UTC'"
       connection-timeout: 30000
       idle-timeout: 600000
       max-lifetime: 1800000
-      connection-test-query: SELECT 1 FROM DUAL
+      # No connection-test-query: the Postgres driver implements Connection.isValid(),
+      # which Hikari prefers and which costs less than a round-tripped SELECT.
 
   jpa:
-    database-platform: org.hibernate.dialect.OracleDialect
+    # Off. Left on, it holds the persistence context open through view rendering, so a mapper
+    # reading an association the query did not fetch gets a silent extra query per element
+    # instead of an error — which is how the dashboard came to depend on one. Off, that class
+    # of mistake fails loudly in a test rather than quietly in production.
+    open-in-view: false
+    # No database-platform: Hibernate resolves the PostgreSQL dialect from the connection,
+    # and setting it explicitly is deprecated (HHH90000025). Oracle needed it stated.
     hibernate:
       ddl-auto: none
     show-sql: false
@@ -29,26 +38,23 @@ spring:
           time_zone: UTC
         order_inserts: true
         order_updates: true
-        type:
-          preferred_instant_jdbc_type: TIMESTAMP
 
   flyway:
     enabled: true
     locations: classpath:db/migration
     baseline-on-migrate: false
     validate-on-migrate: true
-    oracle-sqlplus: false
     placeholder-replacement: false
 
   data:
     mongodb:
-      uri: ${SPRING_DATA_MONGODB_URI:mongodb://cpintel_mongo:CPIntelMongo#2025@localhost:27017/cpintel?authSource=admin}
+      uri: ${SPRING_DATA_MONGODB_URI:mongodb://${MONGO_USER:cpintel_mongo}:${MONGO_PASSWORD:}@localhost:27017/cpintel?authSource=admin}
       database: cpintel
       auto-index-creation: true
     redis:
       host: ${SPRING_DATA_REDIS_HOST:localhost}
       port: ${SPRING_DATA_REDIS_PORT:6379}
-      password: ${SPRING_DATA_REDIS_PASSWORD:CPIntelRedis#2025}
+      password: ${SPRING_DATA_REDIS_PASSWORD:${REDIS_PASSWORD:}}
       timeout: 2000ms
       lettuce:
         pool:
@@ -60,6 +66,14 @@ spring:
     redis:
       time-to-live: 3600000
 
+  servlet:
+    multipart:
+      # Personal files are reference material - templates, a snippets header, a scanned team
+      # notebook - not datasets. The service enforces its own per-file cap on top of this;
+      # these are the outer bound at which the container stops reading the body at all.
+      max-file-size: 4MB
+      max-request-size: 8MB
+
 server:
   port: 8080
   servlet:
@@ -69,7 +83,9 @@ server:
     mime-types: application/json,application/xml,text/html,text/plain
 
 jwt:
-  secret: ${JWT_SECRET:cpintel_super_secret_jwt_key_change_this_in_production_min64chars_ok}
+  # No default. HS256 needs at least 32 bytes; SecretsCheck enforces that at startup rather
+  # than letting Keys.hmacShaKeyFor throw on the first token minted.
+  secret: ${JWT_SECRET:}
   expiry-ms: ${JWT_EXPIRY_MS:900000}
   refresh-expiry-ms: ${JWT_REFRESH_EXPIRY_MS:604800000}
 
@@ -99,9 +115,40 @@ logging:
     org.springframework.security: INFO
     org.hibernate.SQL: INFO
   pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} [%X{requestId:-}] - %msg%n"
 
 cpintel:
+  desktop:
+    # Desktop builds older than this are told to update rather than left to fail on a route
+    # they no longer recognise. 0.0.0 accepts everything.
+    minimum-version: ${CPINTEL_MIN_DESKTOP_VERSION:0.0.0}
+  rate-limit:
+    # Ceilings on the handful of operations where one caller can spend a lot of somebody else's
+    # resources: Argon2id on sign-in, a compiler on a run, a shared third-party quota on a sync.
+    # Loose enough that no honest use reaches them. nginx also limits by address at the edge;
+    # these add the per-account limits the edge cannot express, and cover the dev deployment,
+    # which has no nginx in front of it at all.
+    enabled: ${CPINTEL_RATE_LIMIT_ENABLED:true}
+    login:    { limit: 20, window: 1m }    # per address
+    account:  { limit: 5,  window: 5m }    # per email — cleared on a successful sign-in
+    recovery: { limit: 5,  window: 15m }   # per address, on register and password reset
+    run:      { limit: 30, window: 1m }    # per user
+    sync:     { limit: 5,  window: 5m }    # per user
+  auth:
+    # Whether anyone may create their own account. Off: a super admin creates accounts from
+    # the console, so who is in this deployment is a decision rather than an accumulation.
+    # The endpoint stays mapped while this is false and answers 403 with a reason.
+    registration-enabled: ${CPINTEL_REGISTRATION_ENABLED:false}
+  admin:
+    # Names the super administrator — the only account that can assign roles or create others.
+    # An existing account with this address is promoted at startup. If none exists, one is
+    # created, but only when bootstrap-password is also set: there is deliberately no default
+    # administrator password anywhere in this deployment.
+    bootstrap-email: ${CPINTEL_ADMIN_EMAIL:}
+    # Only read when the address above matches no account. Leave unset on a deployment whose
+    # super admin already exists.
+    bootstrap-password: ${CPINTEL_ADMIN_PASSWORD:}
+    bootstrap-username: ${CPINTEL_ADMIN_USERNAME:superadmin}
   cors:
     allowed-origins:
       - http://localhost:5173
@@ -110,6 +157,7 @@ cpintel:
   platforms:
     codeforces:
       base-url: https://codeforces.com/api
+      web-url: https://codeforces.com
       rate-limit-ms: 500
     leetcode:
       base-url: https://leetcode.com
@@ -118,6 +166,19 @@ cpintel:
     codechef:
       base-url: https://www.codechef.com
       rate-limit-ms: 1500
+  groups:
+    # Live group boards are rebuilt on this interval. Unhurried on purpose: Codeforces only
+    # answers per handle, so one refresh of a thirty-person group is thirty rate-limited calls.
+    standings-refresh-ms: ${CPINTEL_STANDINGS_REFRESH_MS:180000}
+    standings-initial-delay-ms: 60000
+
+  domjudge:
+    # Self-hosted, so nothing here works until an operator points it at an instance. Leave the
+    # credentials empty for a contest whose scoreboard is public.
+    base-url: ${CPINTEL_DOMJUDGE_URL:}
+    username: ${CPINTEL_DOMJUDGE_USER:}
+    password: ${CPINTEL_DOMJUDGE_PASSWORD:}
+
   sync:
     initial-batch-size: 1000
     incremental-batch-size: 100
@@ -125,3 +186,65 @@ cpintel:
     analytics-ttl-seconds: 21600
     recommendations-ttl-seconds: 86400
     unified-score-ttl-seconds: 43200
+
+  runner:
+    # Compiles and executes user-supplied code on this machine so the editor can check a
+    # solution against the sample tests before it is spent on a real submission.
+    #
+    # This is arbitrary code execution by design. It is the right default for a desktop
+    # build or a single-user dev box, where the only code that runs is the code of the
+    # person sitting at the machine. It is NOT safe on a shared deployment, so the prod
+    # profile turns it off — turn it back on there only behind a real sandbox.
+    enabled: ${CPINTEL_RUNNER_ENABLED:true}
+    # Wall clock per test. Codeforces limits are usually 1-2s; the extra headroom accounts
+    # for a dev machine being slower and busier than a judge.
+    time-limit-ms: ${CPINTEL_RUNNER_TIME_LIMIT_MS:5000}
+    compile-time-limit-ms: ${CPINTEL_RUNNER_COMPILE_LIMIT_MS:20000}
+    memory-limit-mb: ${CPINTEL_RUNNER_MEMORY_MB:512}
+    # Per stream, per test. Truncation is reported rather than silently dropping output.
+    output-limit-bytes: 65536
+    cpp:
+      compiler: ${CPINTEL_RUNNER_CPP:g++}
+      standard: ${CPINTEL_RUNNER_CPP_STD:c++20}
+
+  files:
+    # Personal files the user can open from inside a running contest.
+    #
+    # Bounded three ways because this is user-controlled storage in a shared database: a file
+    # that will not fit is refused before the upload rather than halfway through a contest.
+    max-file-bytes: ${CPINTEL_FILES_MAX_FILE_BYTES:2097152}
+    max-total-bytes: ${CPINTEL_FILES_MAX_TOTAL_BYTES:33554432}
+    max-files: ${CPINTEL_FILES_MAX_FILES:100}
+    # Source, notes and printable reference material. Anything not listed is refused on
+    # upload - this is an allowlist rather than a blocklist because the vault is served back
+    # to a browser, and "everything except the extensions we thought of" is not a limit.
+    allowed-extensions: >-
+      cpp,cc,cxx,c,h,hpp,hxx,java,py,js,ts,rs,go,kt,kts,cs,rb,sh,sql,
+      txt,md,tex,json,yaml,yml,csv,xml,in,out,log,ini,cfg,conf,
+      pdf,png,jpg,jpeg,gif,webp
+    contest-access:
+      # Whether a contest offers the vault when no admin rule says otherwise. Enabled, so
+      # every contest allows personal files today; an admin closes a specific round through
+      # /api/admin/contest-files, which overrides this without a redeploy.
+      enabled-by-default: ${CPINTEL_FILES_IN_CONTEST:true}
+
+  practice:
+    # Master switch for the Codeforces submit path. Turn this off and the arena still fetches
+    # problems; the UI just tells users to submit on Codeforces themselves.
+    submit-enabled: ${CPINTEL_SUBMIT_ENABLED:true}
+    # AES-256-GCM key for the stored Codeforces session cookies. MUST be overridden in any
+    # real deployment - the default only exists so a dev box boots.
+    session-key: ${CPINTEL_SESSION_KEY:}
+    session-ttl-days: ${CPINTEL_SESSION_TTL_DAYS:14}
+    # Fallback programTypeId list used before a session is connected. Semicolon-separated
+    # because the labels contain commas. Once a session exists we scrape the real dropdown
+    # off the submit page, which is the only source that stays correct as CF changes
+    # compilers - treat these as a starting guess and verify against a live submit page.
+    # Verified against the live programTypeId dropdown on 2026-08-30 via CfProbeTest.
+    default-languages: >-
+      89:GNU G++20 13.2 (64 bit, winlibs);
+      91:GNU G++23 14.2 (64 bit, msys2);
+      54:GNU G++17 7.3.0;
+      87:Java 21 64bit;
+      31:Python 3.13.2;
+      70:PyPy 3.10 (7.3.15, 64bit)

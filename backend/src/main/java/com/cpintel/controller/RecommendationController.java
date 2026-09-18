@@ -1,7 +1,6 @@
 package com.cpintel.controller;
 
 import com.cpintel.common.ApiResponse;
-import com.cpintel.entity.RevisionSchedule;
 import com.cpintel.service.RecommendationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -14,7 +13,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/recommendations")
+@RequestMapping("/api/v1/recommendations")
 @RequiredArgsConstructor
 @Tag(name = "Recommendations")
 @SecurityRequirement(name = "bearerAuth")
@@ -40,7 +39,7 @@ public class RecommendationController {
 
     @GetMapping("/revision")
     @Operation(summary = "Get revision queue")
-    public ResponseEntity<ApiResponse<List<RevisionSchedule>>> getRevision(
+    public ResponseEntity<ApiResponse<List<RecommendationService.RevisionItem>>> getRevision(
         @AuthenticationPrincipal Long userId
     ) {
         return ResponseEntity.ok(ApiResponse.ok(recommendationService.getRevisionQueue(userId)));

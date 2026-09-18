@@ -3,6 +3,7 @@ package com.cpintel.dto;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.*;
+import lombok.extern.jackson.Jacksonized;
 
 import java.time.Instant;
 
@@ -15,7 +16,7 @@ public class PlatformDto {
         private String handle;
     }
 
-    @Getter @Builder
+    @Getter @Builder @Jacksonized
     public static class Summary {
         private Long accountId;
         private String platform;
@@ -26,7 +27,7 @@ public class PlatformDto {
         private String syncStatus;
     }
 
-    @Getter @Builder
+    @Getter @Builder @Jacksonized
     public static class SyncResponse {
         private Long jobId;
         private String platform;

@@ -36,13 +36,19 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                 Long userId = Long.parseLong(claims.getSubject());
                 String role = (String) claims.get("role");
 
-                var auth = new UsernamePasswordAuthenticationToken(
-                    userId,
-                    null,
-                    List.of(new SimpleGrantedAuthority("ROLE_" + role))
-                );
-                auth.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-                SecurityContextHolder.getContext().setAuthentication(auth);
+                // An admin who deactivates an account, or changes its role, expects that to
+                // take hold now rather than whenever the token in that browser happens to
+                // expire. A token older than the revocation is treated as absent, which sends
+                // the client through refresh — where the account state is checked properly.
+                if (!jwtService.isRevokedForUser(userId, claims.getIssuedAt())) {
+                    var auth = new UsernamePasswordAuthenticationToken(
+                        userId,
+                        null,
+                        List.of(new SimpleGrantedAuthority("ROLE_" + role))
+                    );
+                    auth.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                    SecurityContextHolder.getContext().setAuthentication(auth);
+                }
             } catch (Exception e) {
                 log.debug("JWT processing failed: {}", e.getMessage());
             }

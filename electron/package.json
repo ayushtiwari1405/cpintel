@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "concurrently \"tsc -w\" \"cross-env NODE_ENV=development electron .\"",
     "build": "tsc && electron-builder",
-    "pack": "electron-builder --dir"
+    "pack": "electron-builder --dir",
+    "test": "tsc && node --test dist"
   },
   "dependencies": {
     "electron-store": "^8.2.0"
@@ -27,6 +28,7 @@
     },
     "files": [
       "dist/**/*",
+      "!dist/**/*.test.js",
       "resources/**/*"
     ],
     "extraResources": [

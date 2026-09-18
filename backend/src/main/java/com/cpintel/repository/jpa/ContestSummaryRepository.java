@@ -21,7 +21,7 @@ public interface ContestSummaryRepository extends JpaRepository<ContestSummary, 
         SELECT cs.* FROM contest_summaries cs
         WHERE cs.user_id = :userId
         ORDER BY cs.contest_date DESC
-        FETCH FIRST :limit ROWS ONLY
+        LIMIT :limit
         """, nativeQuery = true)
     List<ContestSummary> findRecentContests(@Param("userId") Long userId, @Param("limit") int limit);
 

@@ -17,6 +17,7 @@ import com.cpintel.repository.jpa.*;
 import com.cpintel.repository.mongo.CcSubmissionRepository;
 import com.cpintel.repository.jpa.ContestSummaryRepository;
 import com.cpintel.repository.mongo.*;
+import com.cpintel.config.AppMetrics;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
@@ -24,6 +25,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -32,6 +34,7 @@ import java.util.List;
 @Slf4j
 public class SyncService {
 
+    private final AppMetrics metrics;
     private final UserRepository userRepository;
     private final PlatformAccountRepository platformAccountRepository;
     private final SyncJobRepository syncJobRepository;
@@ -116,8 +119,23 @@ public class SyncService {
         Long jobId = job.getJobId();
         String finalJobType = jobType;
 
-        // Run async
-        runSyncAsync(jobId, account.getAccountId(), userId, platform, finalJobType);
+        // Run async.
+        //
+        // The executor is deliberately bounded, so this can be refused when the queue is full.
+        // Left to propagate, the rejection reached the client as a 500 — "the server is broken"
+        // when the truth is "come back shortly". The job row is marked so it is not left showing
+        // QUEUED forever with nothing working on it.
+        try {
+            runSyncAsync(jobId, account.getAccountId(), userId, platform, finalJobType);
+        } catch (RejectedExecutionException e) {
+            job.setStatus("FAILED");
+            job.setErrorMsg("The sync queue is full. Try again shortly.");
+            syncJobRepository.save(job);
+            metrics.syncRejected(platform);
+            log.warn("Sync queue full — refused a {} sync for user {}", platform, userId);
+            throw ApiException.serviceUnavailable(
+                "Too many syncs are already running. Try again in a minute.");
+        }
 
         return PlatformDto.SyncResponse.builder()
             .jobId(jobId)
@@ -153,6 +171,8 @@ public class SyncService {
             syncJobRepository.save(job);
 
             platformAccountRepository.updateSyncStatus(accountId, "COMPLETED");
+            metrics.syncFinished(platform, true);
+            metrics.syncItemsStored(platform, synced);
             log.info("Sync completed for userId={} platform={} items={}", userId, platform, synced);
 
         } catch (Exception e) {
@@ -162,6 +182,7 @@ public class SyncService {
             job.setCompletedAt(Instant.now());
             syncJobRepository.save(job);
             platformAccountRepository.updateSyncStatus(accountId, "FAILED");
+            metrics.syncFinished(platform, false);
         }
     }
 

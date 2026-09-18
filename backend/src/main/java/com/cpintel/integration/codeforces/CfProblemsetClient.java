@@ -4,6 +4,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import com.cpintel.integration.OutboundRateLimiter;
+import jakarta.annotation.PostConstruct;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.util.retry.Retry;
 import java.time.Duration;
@@ -17,7 +19,16 @@ import java.util.concurrent.atomic.AtomicReference;
 @Slf4j
 public class CfProblemsetClient {
 
-    private final WebClient.Builder webClientBuilder;
+    // Shares codeforces' timeline: this hits the same host and the same quota.
+    private static final String PLATFORM = "codeforces";
+    private static final long MAX_WAIT_MS = 30_000;
+
+    private final WebClient platformWebClient;
+    private final OutboundRateLimiter rateLimiter;
+    private WebClient client;
+
+    @Value("${cpintel.platforms.codeforces.rate-limit-ms}")
+    private long rateLimitMs;
 
     @Value("${cpintel.platforms.codeforces.base-url}")
     private String baseUrl;
@@ -26,12 +37,18 @@ public class CfProblemsetClient {
     private volatile Instant cachedAt = Instant.EPOCH;
     private static final Duration TTL = Duration.ofHours(6);
 
+    @PostConstruct
+    void init() {
+        client = platformWebClient.mutate().baseUrl(baseUrl).build();
+    }
+
     public synchronized List<CfModels.Submission.Problem> getAllProblems() {
         if (Instant.now().isBefore(cachedAt.plus(TTL)) && !cache.get().isEmpty()) {
             return cache.get();
         }
         try {
-            CfProblemsetResponse resp = webClientBuilder.baseUrl(baseUrl).build()
+            rateLimiter.acquire(PLATFORM, rateLimitMs, MAX_WAIT_MS);
+            CfProblemsetResponse resp = client
                 .get().uri("/problemset.problems")
                 .retrieve()
                 .bodyToMono(CfProblemsetResponse.class)

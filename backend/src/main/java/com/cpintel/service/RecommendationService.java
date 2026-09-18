@@ -1,11 +1,12 @@
 package com.cpintel.service;
 
-import com.cpintel.analytics.OracleProcedureCaller;
+import com.cpintel.analytics.RecommendationEngine;
 import com.cpintel.entity.Recommendation;
 import com.cpintel.entity.RevisionSchedule;
 import com.cpintel.exception.ApiException;
 import com.cpintel.repository.jpa.RecommendationRepository;
 import com.cpintel.repository.jpa.RevisionScheduleRepository;
+import com.cpintel.roadmap.RoadmapTaxonomy;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.*;
@@ -24,26 +25,54 @@ public class RecommendationService {
 
     private final RecommendationRepository recommendationRepository;
     private final RevisionScheduleRepository revisionScheduleRepository;
-    private final OracleProcedureCaller oracle;
+    private final RecommendationEngine recommendationEngine;
     private final ObjectMapper objectMapper;
 
     @Cacheable(value = "recommendations", key = "'daily:' + #userId")
     public RecommendationPayload getDaily(Long userId) {
-        return getOrGenerate(userId, "DAILY", () -> oracle.generateDailySheet(userId));
+        return getOrGenerate(userId, "DAILY", () -> recommendationEngine.generateDailySheet(userId));
     }
 
     @Cacheable(value = "recommendations", key = "'weekly:' + #userId")
     public RecommendationPayload getWeekly(Long userId) {
-        return getOrGenerate(userId, "WEEKLY", () -> oracle.generateWeeklySheet(userId));
+        return getOrGenerate(userId, "WEEKLY", () -> recommendationEngine.generateWeeklySheet(userId));
     }
 
-    public List<RevisionSchedule> getRevisionQueue(Long userId) {
+    /**
+     * What is due for revision, as something a page can render.
+     *
+     * <p>The raw entity used to be returned straight out. Its {@code topic} column now holds a
+     * skill-tree node id rather than a display name, so a screen rendering it verbatim would
+     * show the user "dp-bitmask". Mapping here also gives each item a way into the workspace,
+     * which is the point of telling somebody a skill has gone stale.
+     */
+    public List<RevisionItem> getRevisionQueue(Long userId) {
         List<RevisionSchedule> due = revisionScheduleRepository.findDueRevisions(userId);
         if (due.isEmpty()) {
-            oracle.generateRevisionSchedule(userId);
+            recommendationEngine.generateRevisionSchedule(userId);
             due = revisionScheduleRepository.findDueRevisions(userId);
         }
-        return due;
+        return due.stream().map(RecommendationService::toRevisionItem).toList();
+    }
+
+    private static RevisionItem toRevisionItem(RevisionSchedule rs) {
+        RoadmapTaxonomy.NodeDef def = RoadmapTaxonomy.byId(rs.getTopic());
+        return new RevisionItem(
+            rs.getRevisionId(),
+            rs.getTopic(),
+            def == null ? rs.getTopic() : def.displayName(),
+            def == null ? null : def.track(),
+            def == null ? null : def.rollupTopic(),
+            rs.getNextRevisionAt(),
+            rs.getRevisionPriority(),
+            rs.getDecayScore(),
+            rs.getIntervalDays(),
+            rs.getRepetitionCount(),
+            rs.getEaseFactor(),
+            rs.getLastRevisedAt(),
+            // No specific problem named: the workspace opens on the skill itself and offers
+            // its problems, which is the right granularity for "this has gone stale".
+            def == null ? null : "/practice?node=" + def.id());
     }
 
     public void markRevisionDone(Long userId, Long revisionId) {
@@ -90,6 +119,23 @@ public class RecommendationService {
             return List.of();
         }
     }
+
+    /** One overdue skill, named the way a person would recognise it. */
+    public record RevisionItem(
+        Long revisionId,
+        String nodeKey,
+        String title,
+        String track,
+        String topic,
+        Instant nextRevisionAt,
+        Integer revisionPriority,
+        Double decayScore,
+        Integer intervalDays,
+        Integer repetitionCount,
+        Double easeFactor,
+        Instant lastRevisedAt,
+        String practicePath
+    ) {}
 
     public record RecommendationPayload(
         String type,

@@ -20,6 +20,9 @@
 
   <properties>
     <java.version>21</java.version>
+    <shedlock.version>5.13.0</shedlock.version>
+    <!-- Ratchet upward only. See the jacoco plugin below. -->
+    <jacoco.min.instruction>0.16</jacoco.min.instruction>
     <jjwt.version>0.12.5</jjwt.version>
   </properties>
 
@@ -47,20 +50,34 @@
       <artifactId>spring-boot-starter-aop</artifactId>
     </dependency>
 
-    <!-- Oracle JPA -->
+    <!--
+      Elects one runner for each scheduled job.
+
+      Spring's own scheduling runs every job on every instance, so a second replica silently
+      doubled the nightly analytics pass and raced the standings refresh writing the same rows.
+      The lock lives in Postgres, which is already the system of record and already has to be up
+      for any of these jobs to do anything.
+    -->
+    <dependency>
+      <groupId>net.javacrumbs.shedlock</groupId>
+      <artifactId>shedlock-spring</artifactId>
+      <version>${shedlock.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>net.javacrumbs.shedlock</groupId>
+      <artifactId>shedlock-provider-jdbc-template</artifactId>
+      <version>${shedlock.version}</version>
+    </dependency>
+
+    <!-- PostgreSQL JPA -->
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-data-jpa</artifactId>
     </dependency>
     <dependency>
-      <groupId>com.oracle.database.jdbc</groupId>
-      <artifactId>ojdbc11</artifactId>
-      <version>23.3.0.23.09</version>
-    </dependency>
-    <dependency>
-      <groupId>com.oracle.database.jdbc</groupId>
-      <artifactId>ucp</artifactId>
-      <version>23.3.0.23.09</version>
+      <groupId>org.postgresql</groupId>
+      <artifactId>postgresql</artifactId>
+      <scope>runtime</scope>
     </dependency>
 
     <!-- MongoDB -->
@@ -79,14 +96,12 @@
       <artifactId>spring-session-data-redis</artifactId>
     </dependency>
 
-    <!-- Flyway + Oracle support -->
+    <!-- Flyway. Oracle needed the separate flyway-database-oracle module; PostgreSQL
+         support ships inside flyway-core on the Flyway 9.x line Boot 3.2 pins, so there
+         is no companion artifact to add here. -->
     <dependency>
       <groupId>org.flywaydb</groupId>
       <artifactId>flyway-core</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.flywaydb</groupId>
-      <artifactId>flyway-database-oracle</artifactId>
     </dependency>
 
     <!-- JWT -->
@@ -180,11 +195,54 @@
 
   <build>
     <plugins>
+      <!--
+        Measures coverage and fails the build below a floor.
+
+        The floor is set just under where the suite currently sits, and is meant to ratchet
+        upward as tests are added — a gate that can only be raised. Set low enough that it does
+        not block ordinary work, high enough that deleting a test class is noticed.
+      -->
+      <plugin>
+        <groupId>org.jacoco</groupId>
+        <artifactId>jacoco-maven-plugin</artifactId>
+        <version>0.8.12</version>
+        <executions>
+          <execution>
+            <id>prepare-agent</id>
+            <goals><goal>prepare-agent</goal></goals>
+          </execution>
+          <execution>
+            <id>report</id>
+            <phase>test</phase>
+            <goals><goal>report</goal></goals>
+          </execution>
+          <execution>
+            <id>check-coverage</id>
+            <phase>verify</phase>
+            <goals><goal>check</goal></goals>
+            <configuration>
+              <rules>
+                <rule>
+                  <element>BUNDLE</element>
+                  <limits>
+                    <limit>
+                      <counter>INSTRUCTION</counter>
+                      <value>COVEREDRATIO</value>
+                      <minimum>${jacoco.min.instruction}</minimum>
+                    </limit>
+                  </limits>
+                </rule>
+              </rules>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
       <plugin>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-maven-plugin</artifactId>
         <configuration>
-          <jvmArguments>-Duser.timezone=UTC -Doracle.jdbc.timezoneAsRegion=false -Doracle.jdbc.J2EE13Compliant=true</jvmArguments>
+          <jvmArguments>-Duser.timezone=UTC</jvmArguments>
           <excludes>
             <exclude>
               <groupId>org.projectlombok</groupId>

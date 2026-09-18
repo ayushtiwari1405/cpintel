@@ -30,12 +30,13 @@ public class Recommendation extends BaseEntity {
     @Column(name = "rec_type", nullable = false, length = 20)
     private String recType;
 
-    @Lob
-    @Column(name = "problem_list", columnDefinition = "CLOB")
+    // Postgres TEXT rather than @Lob: Hibernate maps @Lob String onto a large-object
+    // OID, which needs an explicit transaction to stream and breaks in auto-commit.
+    // TEXT is an ordinary column and behaves like any other String.
+    @Column(name = "problem_list", columnDefinition = "TEXT")
     private String problemList;
 
-    @Lob
-    @Column(name = "metadata", columnDefinition = "CLOB")
+    @Column(name = "metadata", columnDefinition = "TEXT")
     private String metadata;
 
     @Column(name = "generated_at")

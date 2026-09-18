@@ -3,6 +3,7 @@ package com.cpintel.integration.codechef;
 import com.cpintel.exception.ApiException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import com.cpintel.integration.OutboundRateLimiter;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
@@ -18,6 +19,11 @@ import java.util.regex.Pattern;
 @Slf4j
 public class CodeChefClient {
 
+    private static final String PLATFORM = "codechef";
+    private static final long MAX_WAIT_MS = 30_000;
+
+    private final OutboundRateLimiter rateLimiter;
+
     @Value("${cpintel.platforms.codechef.base-url}")
     private String baseUrl;
 
@@ -29,11 +35,8 @@ public class CodeChefClient {
 
     public CcModels.UserProfile getUserProfile(String username) {
         log.debug("Scraping CC profile for: {}", username);
-        try {
-            Thread.sleep(rateLimitMs);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
+        // The limiter handles interruption itself, so there is nothing to catch here any more.
+        rateLimiter.acquire(PLATFORM, rateLimitMs, MAX_WAIT_MS);
 
         try {
             Document doc = Jsoup.connect(baseUrl + "/users/" + username)
