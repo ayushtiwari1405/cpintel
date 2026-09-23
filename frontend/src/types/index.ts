@@ -21,6 +21,13 @@ export interface User {
   role: Role
   isVerified: boolean
   createdAt: string
+  /**
+   * When you last set your own password, or null if you never have.
+   *
+   * Null is a fact rather than a gap: the first password on an account is chosen by whoever
+   * created it and handed over with the username, so until this is set somebody else knows it.
+   */
+  passwordChangedAt?: string | null
 }
 
 export interface PlatformAccount {
@@ -269,6 +276,85 @@ export interface ContestSubmission {
   url: string
 }
 
+/** One problem's state for one team, as the judge's scoreboard reports it. */
+export interface LeaderboardCell {
+  index: string
+  solved: boolean
+  attempts: number
+  /** Minutes from the contest start; null unless the problem is actually solved. */
+  minute: number | null
+}
+
+export interface LeaderboardRow {
+  rank: number | null
+  teamId: string
+  teamName: string
+  solved: number
+  penalty: number | null
+  /** True for the viewer's own team, so the board can pin and highlight it. */
+  mine: boolean
+  problems: LeaderboardCell[]
+}
+
+/**
+ * The contest's full board, plus the viewer's own team pulled out of it.
+ *
+ * `frozen` and `live` say different things and the page shows both. `frozen` means the contest
+ * has entered its freeze, which every contestant expects. `live` is false when CPIntel could
+ * only read the public board — a property of the credentials, not the contest. A frozen board
+ * presented as current looks exactly like a room where nobody is solving anything.
+ */
+export interface Leaderboard {
+  rows: LeaderboardRow[]
+  myTeamId: string | null
+  myTeamName: string | null
+  myTeam: LeaderboardRow | null
+  problemIndexes: string[]
+  frozen: boolean
+  live: boolean
+  fetchedAt: string
+}
+
+/**
+ * The DOMjudge account an admin attached.
+ *
+ * Two teams, deliberately not merged. `teamId` is the judge's own answer — where submissions
+ * made as this login actually land, which nothing in CPIntel can change. `assignedTeamId` is
+ * the team an admin decided this person belongs to, and drives CPIntel's grouping only.
+ * `teamMismatch` is true when they disagree, which is occasionally deliberate and usually a
+ * mistake; only the admin looking at it can tell which.
+ */
+export interface DomjudgeAccount {
+  linked: boolean
+  username: string | null
+  name: string | null
+  teamId: string | null
+  teamName: string | null
+  assignedTeamId: string | null
+  assignedTeamName: string | null
+  teamMismatch: boolean
+  provisioned: string | null
+  expiresInSeconds: number | null
+}
+
+/** One team an admin may put somebody in. */
+export interface DomjudgeTeamOption {
+  id: string
+  name: string
+}
+
+/** One contest the attached DOMjudge account may enter. */
+export interface DomjudgeContestSummary {
+  id: string
+  name: string
+  phase: 'BEFORE' | 'CODING' | 'FINISHED'
+  running: boolean
+  startsAt: string | null
+  endsAt: string | null
+  durationSeconds: number
+  secondsUntilStart: number
+}
+
 export interface RankInfo {
   rank: number | null
   points: number | null
@@ -322,6 +408,15 @@ export interface RunRequest {
   language: string
   source: string
   tests: RunTestCase[]
+  /**
+   * Which event this run belongs to, when it belongs to one.
+   *
+   * Both omitted on Practice. Sent by the contest and examination workspaces so an
+   * examination restricted to two languages restricts Run as well — otherwise the rule would
+   * hold at Submit and nowhere else, which is where candidates spend the least of their time.
+   */
+  platform?: string
+  contestId?: string
 }
 
 export interface RunnerRuntime {
@@ -493,6 +588,32 @@ export interface AdminUserRow {
   createdAt: string
   /** Read from the audit trail, so null means "not since auditing began", not "never". */
   lastLoginAt: string | null
+  /**
+   * When the owner last set this password themselves, or null if they never have.
+   *
+   * Null is a fact rather than a gap: until it is set, the password on the account is the one
+   * somebody else typed when they created it, and whoever that was still knows it.
+   */
+  passwordChangedAt: string | null
+}
+
+/**
+ * One language an event's submissions may be restricted to.
+ *
+ * Served by the backend rather than listed in the page, so the options an admin picks from are
+ * the same ones the server validates against — two copies would mean a language offered in the
+ * console and refused on save.
+ */
+export interface LanguageChoice {
+  id: string
+  label: string
+}
+
+/** A password an administrator just set. Shown once; the server keeps only a hash. */
+export interface GeneratedPassword {
+  userId: number
+  username: string
+  password: string
 }
 
 export interface AdminUserPage {
@@ -597,8 +718,11 @@ export interface GroupMember {
 
 export interface GroupContestSummary {
   contestId: number
-  groupId: number
-  groupName: string
+  /** CONTEST or EXAM — one row carries both, see the backend's GroupContest. */
+  kind: EventKind
+  /** Null for an examination set for named individuals, which belongs to no team. */
+  groupId: number | null
+  groupName: string | null
   platform: GroupPlatform
   externalId: string
   name: string
@@ -606,7 +730,10 @@ export interface GroupContestSummary {
   startsAt: string | null
   endsAt: string | null
   lockdownRequired: boolean
+  /** How long someone may be away before it is recorded, in seconds. */
+  awayThresholdSeconds: number
   status: GroupContestStatus
+  lifecycle: EventLifecycle
   standingsRefreshedAt: string | null
   standingsError: string | null
 }
@@ -685,4 +812,267 @@ export interface ViolationEvent {
   detail?: string
   durationMs?: number
   occurredAt: string
+}
+
+// ------------------------------------------------------ contests and exams
+
+export type EventKind = 'CONTEST' | 'EXAM'
+
+/**
+ * Where an event is in its own life.
+ *
+ * DRAFT and ARCHIVED are stored; the three in between are read from the window, so a client
+ * never has to work out for itself whether an examination has started.
+ */
+export type EventLifecycle = 'DRAFT' | 'SCHEDULED' | 'ACTIVE' | 'ENDED' | 'ARCHIVED'
+
+export type EventVisibility = 'PUBLIC' | 'TEAMS' | 'USERS'
+
+/**
+ * What an examination asks a locked-down desktop client to do.
+ *
+ * Requests rather than guarantees: the desktop applies what the operating system allows and
+ * reports what it could not, and a browser applies almost none of it — which is why an
+ * examination sat in a browser records that its monitoring was the weaker kind.
+ */
+export interface DesktopPolicy {
+  restrictWindowSwitching: boolean
+  blockNavigation: boolean
+  blockExternalApps: boolean
+  detectLeavingExam: boolean
+  detectAppTermination: boolean
+  clipboardGuard: boolean
+}
+
+export interface EventProblem {
+  problemId: number | null
+  label: string
+  title: string | null
+  externalId: string | null
+  ordering: number
+  /** Points in a contest, marks in an examination. */
+  points: number | null
+}
+
+export interface EventSummary {
+  eventId: number
+  kind: EventKind
+  platform: GroupPlatform
+  externalId: string
+  name: string
+  description: string | null
+  url: string | null
+  startsAt: string | null
+  endsAt: string | null
+  durationSeconds: number | null
+  lifecycle: EventLifecycle
+  visibility: EventVisibility
+  lockdownRequired: boolean
+  awayThresholdSeconds: number
+  teamId: number | null
+  teamName: string | null
+  assignedTeams: number
+  assignedUsers: number
+  participantCount: number
+  problemCount: number
+  standingsRefreshedAt: string | null
+  standingsError: string | null
+}
+
+export interface EventDetail {
+  event: EventSummary
+  rules: string | null
+  desktopPolicy: DesktopPolicy
+  allowedLanguages: string[]
+  problems: EventProblem[]
+  teams: { teamId: number; name: string; memberCount: number }[]
+  users: { userId: number; username: string; fullName: string | null; active: boolean }[]
+}
+
+/** An examination as the person sitting it sees it — their clock, their problems, their place. */
+export interface MyExam {
+  event: EventSummary
+  rules: string | null
+  problems: EventProblem[]
+  desktopPolicy: DesktopPolicy
+  allowedLanguages: string[]
+  secondsUntilStart: number
+  secondsRemaining: number
+  entered: boolean
+  mySubmissions: number
+  myRank: number | null
+  mySolved: number | null
+  /**
+   * Whether this paper asks for a password, and whether this device has given it.
+   *
+   * Both are needed and neither implies the other. A paper with no password is always
+   * unlocked; somebody who unlocked one on their own machine an hour ago still has to be told
+   * it is password-protected when they open it on another.
+   */
+  requiresPassword: boolean
+  unlocked: boolean
+  /**
+   * Which of the two the paper wants, separately.
+   *
+   * `requiresPassword` is the union and cannot stand in for either — a form with only the
+   * union would not know whether to draw one box or two, and would make a candidate guess how
+   * many secrets they were meant to have been handed.
+   */
+  needsExamPassword: boolean
+  /** True when a code was issued to this candidate personally, so they must present it too. */
+  needsPasscode: boolean
+  /** True once the paper has ended and they may read their own code back. */
+  canReviewSubmissions: boolean
+}
+
+/** What a candidate submitted into a past examination. Their own work, and nothing else. */
+export interface MyExamSubmission {
+  id: string
+  externalId: number | null
+  problemLabel: string | null
+  problemName: string | null
+  languageId: string | null
+  languageLabel: string | null
+  verdict: string | null
+  submittedAt: string
+  sourceBytes: number | null
+  /** Present only when one submission was asked for; the list never carries source. */
+  source: string | null
+}
+
+/** One candidate's examination code, as the screen that prints the desk slips sees it. */
+export interface IssuedPasscode {
+  userId: number
+  username: string
+  fullName: string | null
+  code: string
+  issuedAt: string
+  /** When this code first opened the paper, or null if it never has. */
+  firstUsedAt: string | null
+  useCount: number
+}
+
+/** How an examination's passwords stand, without saying what any of them are. */
+export interface ExamPasswordStatus {
+  /** False when CPINTEL_EXAM_PASSWORD_KEY is unset, so nothing can be generated. */
+  keyConfigured: boolean
+  examPasswordSet: boolean
+  examPasswordSetAt: string | null
+  examPasswordSetBy: string | null
+  /** Bumped by each rotation; every session opened under an older one is ended. */
+  generation: number
+  passcodesIssued: number
+  participantCount: number
+}
+
+/** Everything one examination session can produce. Matches the backend enum exactly. */
+export type ExamEventType =
+  | 'EXAM_STARTED' | 'EXAM_ENTERED' | 'PROBLEM_OPENED' | 'PROBLEM_SUBMITTED'
+  | 'SUBMISSION_RESULT' | 'FOCUS_LOST' | 'FOCUS_REGAINED' | 'AWAY_THRESHOLD_EXCEEDED'
+  | 'EXAM_EXITED' | 'EXAM_COMPLETED' | 'SESSION_TERMINATED' | 'LOCKDOWN_TRIGGERED'
+  | 'SUSPICIOUS_ACTIVITY'
+
+export interface ExamClientEvent {
+  /** Client-generated and stable across retries, so a dropped connection cannot inflate a log. */
+  eventId: string
+  type: ExamEventType
+  problemLabel?: string | null
+  durationMs?: number | null
+  detail?: string | null
+  occurredAt: string
+}
+
+export interface ExamLogEntry {
+  id: number
+  userId: number
+  username: string
+  type: ExamEventType
+  problemLabel: string | null
+  durationMs: number | null
+  detail: string | null
+  occurredAt: string
+  recordedAt: string
+}
+
+export interface ExamLogPage {
+  event: EventSummary
+  entries: ExamLogEntry[]
+  page: number
+  size: number
+  total: number
+  totalPages: number
+  types: ExamEventType[]
+  retentionDays: number
+}
+
+/** One candidate on the invigilator's dashboard. Every figure is an observation. */
+export interface ExamMonitorRow {
+  userId: number
+  username: string
+  fullName: string | null
+  status: 'NOT_STARTED' | 'ACTIVE' | 'AWAY' | 'SUBMITTED' | 'LEFT'
+  monitorAlive: boolean
+  focused: boolean
+  focusLosses: number
+  awayMs: number
+  lastActivityAt: string | null
+  submissions: number
+  currentProblem: string | null
+  problemsAttempted: number
+  events: number
+}
+
+export interface ExamMonitorSnapshot {
+  event: EventSummary
+  rows: ExamMonitorRow[]
+  generatedAt: string
+  expected: number
+  present: number
+  away: number
+  notStarted: number
+}
+
+export interface ParticipationRow {
+  eventId: number
+  kind: EventKind
+  name: string
+  platform: GroupPlatform
+  startsAt: string | null
+  endsAt: string | null
+  lifecycle: EventLifecycle
+  rank: number | null
+  groupSize: number | null
+  solved: number | null
+  penalty: number | null
+  score: number | null
+  entered: boolean
+  submissions: number
+  focusLosses: number
+}
+
+export interface TeamEventRow {
+  eventId: number
+  kind: EventKind
+  name: string
+  startsAt: string | null
+  lifecycle: EventLifecycle
+  ranked: number
+  averageSolved: number
+  bestRank: number | null
+  bestMember: string | null
+}
+
+export interface TeamAnalytics {
+  teamId: number
+  name: string
+  memberCount: number
+  events: number
+  contests: number
+  exams: number
+  participants: number
+  participationRate: number
+  averageSolved: number
+  averageScore: number
+  totalSolved: number
+  recent: TeamEventRow[]
 }

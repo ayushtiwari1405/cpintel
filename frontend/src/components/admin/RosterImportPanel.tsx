@@ -37,6 +37,7 @@ interface Props {
 
 export function RosterImportPanel({ groupId }: Props) {
   const [text, setText] = useState('')
+  const [teamName, setTeamName] = useState('')
   const [preview, setPreview] = useState<RosterImportResult | null>(null)
   const [committed, setCommitted] = useState<RosterImportResult | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -51,7 +52,7 @@ export function RosterImportPanel({ groupId }: Props) {
 
   const run = (dryRun: boolean) => {
     setError(null)
-    importRoster.mutate({ groupId, text, dryRun }, {
+    importRoster.mutate({ groupId, text, dryRun, teamName: teamName.trim() || undefined }, {
       onSuccess: result => {
         if (dryRun) { setPreview(result); setCommitted(null) }
         else { setCommitted(result); setPreview(null) }
@@ -116,6 +117,25 @@ export function RosterImportPanel({ groupId }: Props) {
           <span className="text-gray-500">teamName</span> are optional. Commas or tabs both
           work, so copying cells straight out of Excel or Sheets is fine.
         </p>
+
+        {/* The common roster has no team column at all and everybody on one team. Typing that
+            into two hundred rows is not a reasonable thing to ask, so it is asked once here. */}
+        <div className="flex flex-wrap items-center gap-2">
+          <label htmlFor="roster-team" className="text-xs text-gray-500">
+            Put everyone on team
+          </label>
+          <input
+            id="roster-team"
+            value={teamName}
+            onChange={e => { setTeamName(e.target.value); setPreview(null); setCommitted(null) }}
+            placeholder="optional"
+            className="w-44 rounded-md border border-gray-800 bg-gray-900 px-2 py-1 text-xs
+                       text-gray-200 placeholder-gray-700 outline-none focus:border-indigo-600"
+          />
+          <span className="text-[11px] text-gray-600">
+            a <span className="text-gray-500">teamName</span> on a row still wins
+          </span>
+        </div>
 
         <div className="flex flex-wrap items-center gap-2">
           <button

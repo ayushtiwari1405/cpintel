@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
-import { competeApi } from '@/api/competeApi'
+import { competeApi, domjudgeApi } from '@/api/competeApi'
 import { useToast } from '@/components/common/Toaster'
 import type { CompetePlatform, ContestInfo, ContestRef, ContestSubmission } from '@/types'
 
@@ -74,34 +74,56 @@ export function useContestStatement(ref?: ContestRef, index?: string, enabled = 
 }
 
 /**
- * The statement PDF as an object URL, for judges that publish one.
+ * The statement document, as an object URL plus what it actually is.
  *
  * Fetched rather than linked because the arena's routes need the bearer token an iframe would
  * not send. The URL is revoked when the problem changes, so switching between problems for an
  * hour does not accumulate blobs.
+ *
+ * **The type is read from the response, not assumed.** DOMjudge serves whatever the problem
+ * package holds, and a real contest mixes them — of one seven-problem set, four statements
+ * were PDFs and three were plain text. The text ones used to be handed to a PDF embed, which
+ * renders as an empty white rectangle and is indistinguishable from a statement that failed
+ * to load.
  */
 export function useStatementPdf(ref?: ContestRef, index?: string, enabled = true) {
   const [url, setUrl] = useState<string | null>(null)
+  const [text, setText] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!ref || !index || !enabled) {
       setUrl(null)
+      setText(null)
       return
     }
 
     let revoked = false
     let objectUrl: string | null = null
     setError(null)
+    setText(null)
 
     competeApi.statementPdf(ref, index)
-      .then(blob => {
+      .then(async blob => {
         if (revoked) return
+
+        // Text is read into a string and rendered by the app; anything else — a PDF, or a
+        // type nothing recognises — gets an object URL for the embed to open.
+        if ((blob.type || '').startsWith('text/plain')) {
+          const body = await blob.text()
+          if (!revoked) setText(body)
+          return
+        }
         objectUrl = URL.createObjectURL(blob)
         setUrl(objectUrl)
       })
-      .catch(() => {
-        if (!revoked) setError('No statement is attached to this problem on the judge.')
+      .catch((err: any) => {
+        if (revoked) return
+        // The server's own explanation where there is one: it distinguishes "this problem has
+        // no statement" from "this DOMjudge publishes statements somewhere CPIntel did not
+        // look", and those need different people to do something about them.
+        setError(err?.response?.data?.message
+          ?? 'The statement for this problem could not be read from the judge.')
       })
 
     return () => {
@@ -111,7 +133,7 @@ export function useStatementPdf(ref?: ContestRef, index?: string, enabled = true
     }
   }, [ref?.platform, ref?.id, index, enabled])
 
-  return { url, error }
+  return { url, text, error }
 }
 
 export function useContestLanguages(ref?: ContestRef, enabled = true) {
@@ -175,5 +197,55 @@ export function useContestSubmit(ref?: ContestRef) {
       // Archived before the attempt was made, so it is readable back even now.
       qc.invalidateQueries({ queryKey: ['archive'] })
     },
+  })
+}
+
+/**
+ * How often the open leaderboard re-reads the board.
+ *
+ * Only while the panel is actually on screen — the hook is disabled otherwise, so a contestant
+ * who never opens it costs nothing. On DOMjudge the backend answers from its contest cache, so
+ * the whole room watching the board still costs the judge one fetch every few seconds.
+ */
+const LEADERBOARD_INTERVAL_MS = 30 * 1000
+
+/**
+ * The contest's full board.
+ *
+ * `enabled` is the panel's own visibility rather than the contest's state: a finished contest
+ * still has a board worth looking at, and an open panel on a running one should keep moving.
+ */
+export function useLeaderboard(ref?: ContestRef, enabled = false) {
+  return useQuery({
+    queryKey: ['compete', 'leaderboard', ...keyOf(ref)],
+    queryFn: () => competeApi.leaderboard(ref!).then(r => r.data),
+    enabled: !!ref && enabled,
+    refetchInterval: enabled ? LEADERBOARD_INTERVAL_MS : false,
+  })
+}
+
+/** The DOMjudge account an admin attached to this user, if any. */
+export function useDomjudgeAccount(enabled = true) {
+  return useQuery({
+    queryKey: ['domjudge', 'account'],
+    queryFn: () => domjudgeApi.account().then(r => r.data),
+    enabled,
+    staleTime: 1000 * 60 * 5,
+  })
+}
+
+/**
+ * The contests this account may enter.
+ *
+ * Read from the judge under the contestant's own credentials, so it is DOMjudge's view of what
+ * they are registered for. Kept briefly fresh rather than cached hard: an admin adding a team
+ * to a contest minutes before it starts is the normal case, not the exception.
+ */
+export function useDomjudgeContests(enabled = true) {
+  return useQuery({
+    queryKey: ['domjudge', 'contests'],
+    queryFn: () => domjudgeApi.contests().then(r => r.data),
+    enabled,
+    staleTime: 1000 * 30,
   })
 }

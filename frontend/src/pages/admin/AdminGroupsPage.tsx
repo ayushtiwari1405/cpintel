@@ -7,7 +7,7 @@ import { Ago, EmptyRow, Panel, Pill } from '@/components/admin/AdminUi'
 /**
  * The groups an admin runs contests for.
  *
- * A group is the durable thing and contests come and go beneath it, so this list is short and
+ * A team is the durable thing and contests come and go beneath it, so this list is short and
  * changes rarely — which is why creating one lives inline here rather than behind its own page.
  */
 export default function AdminGroupsPage() {
@@ -27,12 +27,12 @@ export default function AdminGroupsPage() {
 
   return (
     <div className="space-y-4">
-      <Panel title="Groups" description="A named set of people, measured against each other">
+      <Panel title="Teams" description="A named set of people, measured against each other">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-800 text-left text-xs text-gray-500">
-                <th className="px-4 py-2 font-medium">Group</th>
+                <th className="px-4 py-2 font-medium">Team</th>
                 <th className="px-4 py-2 font-medium">Members</th>
                 <th className="px-4 py-2 font-medium">Contests</th>
                 <th className="px-4 py-2 font-medium">Created</th>
@@ -51,7 +51,7 @@ export default function AdminGroupsPage() {
                 <tr key={group.groupId} className="transition-colors hover:bg-gray-800/40">
                   <td className="px-4 py-2.5">
                     <Link
-                      to={`/admin/groups/${group.groupId}`}
+                      to={`/admin/teams/${group.groupId}`}
                       className="font-medium text-gray-200 hover:text-indigo-400"
                     >
                       {group.name}
@@ -68,7 +68,7 @@ export default function AdminGroupsPage() {
                   </td>
                   <td className="px-4 py-2.5 text-right">
                     <Link
-                      to={`/admin/groups/${group.groupId}`}
+                      to={`/admin/teams/${group.groupId}`}
                       className="inline-flex items-center gap-1 text-xs text-indigo-400
                                  hover:text-indigo-300"
                     >
@@ -82,7 +82,7 @@ export default function AdminGroupsPage() {
         </div>
       </Panel>
 
-      <Panel title="New group" description="Name it after the people in it — a class, a squad, a cohort">
+      <Panel title="New team" description="Name it after the people in it — a class, a squad, a cohort">
         <div className="flex flex-wrap items-end gap-2 p-4">
           <label className="flex min-w-[14rem] flex-1 flex-col gap-1">
             <span className="text-xs text-gray-500">Name</span>
@@ -123,7 +123,7 @@ export default function AdminGroupsPage() {
 
       <p className="flex items-start gap-2 px-1 text-xs text-gray-600">
         <Users size={13} className="mt-0.5 flex-shrink-0" />
-        CPIntel does not run the contest. Codeforces or DOMjudge does — a group is laid over
+        CPIntel does not run the contest. Codeforces or DOMjudge does — a team is laid over
         their contest to rank its own members against each other, out of a board that may hold
         thousands of people nobody here is measuring.
       </p>

@@ -102,26 +102,35 @@ public class AuthService {
         //
         // The address limit in RateLimitFilter stops one machine hammering the login, but says
         // nothing about a thousand machines each making four attempts against the same account,
-        // which is the shape credential stuffing actually takes. Counting against the email
+        // which is the shape credential stuffing actually takes. Counting against the identifier
         // closes that, and the counter is cleared on success below so an honest person who
         // mistyped their password several times is not left on the edge of a lockout.
-        String email = req.getEmail() == null ? "" : req.getEmail().trim().toLowerCase(Locale.ROOT);
-        if (!rateLimiter.tryAcquire(ACCOUNT_BUCKET, email, rateLimiter.rules().getAccount())) {
-            auditService.record(null, AuditService.LOGIN_THROTTLED, "EMAIL", email, httpReq);
+        //
+        // Keyed on the normalised identifier rather than on the resolved account, because the
+        // limit has to apply before anything is looked up — including to identifiers that
+        // match nothing, which is most of what an attacker sends. One consequence is worth
+        // naming: somebody guessing at an account can spend its username budget and its email
+        // budget separately. That halves the limit's strength and is still a great deal
+        // stronger than not counting per account at all, and closing it properly would mean
+        // resolving the account before deciding whether to rate-limit, which is the lookup the
+        // limit exists to protect.
+        String identifier = normalise(req.getIdentifier());
+        if (!rateLimiter.tryAcquire(ACCOUNT_BUCKET, identifier, rateLimiter.rules().getAccount())) {
+            auditService.record(null, AuditService.LOGIN_THROTTLED, "IDENTIFIER", identifier, httpReq);
             metrics.throttled(ACCOUNT_BUCKET);
             throw ApiException.tooManyRequests(
                 "Too many sign-in attempts for this account. Try again in "
-                + rateLimiter.retryAfterSeconds(ACCOUNT_BUCKET, email) + " seconds.");
+                + rateLimiter.retryAfterSeconds(ACCOUNT_BUCKET, identifier) + " seconds.");
         }
 
-        User user = userRepository.findByEmail(req.getEmail()).orElse(null);
+        User user = resolve(identifier);
 
-        // Failures are recorded against the email that was tried, not a user id, because the
-        // interesting case for an admin reading this back is exactly the one where no such
-        // account exists. The password is never part of the record.
+        // Failures are recorded against what was typed, not a user id, because the interesting
+        // case for an admin reading this back is exactly the one where no such account exists.
+        // The password is never part of the record.
         if (user == null) {
-            auditService.record(null, AuditService.LOGIN_FAILED, "EMAIL", req.getEmail(), httpReq);
-            throw ApiException.unauthorized("Invalid email or password");
+            auditService.record(null, AuditService.LOGIN_FAILED, "IDENTIFIER", identifier, httpReq);
+            throw ApiException.unauthorized("Invalid credentials");
         }
 
         if (!user.getIsActive()) {
@@ -133,10 +142,10 @@ public class AuthService {
         if (!passwordEncoder.matches(req.getPassword(), user.getPasswordHash())) {
             auditService.record(user.getUserId(), AuditService.LOGIN_FAILED, "USER",
                 "bad-password", httpReq);
-            throw ApiException.unauthorized("Invalid email or password");
+            throw ApiException.unauthorized("Invalid credentials");
         }
 
-        rateLimiter.reset(ACCOUNT_BUCKET, email);
+        rateLimiter.reset(ACCOUNT_BUCKET, identifier);
 
         log.info("User logged in: {}", user.getEmail());
         auditService.record(user.getUserId(), AuditService.LOGIN, "USER",
@@ -180,6 +189,38 @@ public class AuthService {
         refreshTokenRepository.revokeAllByUserId(userId);
         auditService.record(userId, AuditService.LOGOUT, "USER", String.valueOf(userId));
         log.info("User {} logged out", userId);
+    }
+
+    /**
+     * The account somebody meant by what they typed.
+     *
+     * <p>An address is tried first, then a username, and nothing about the request says which
+     * was intended — there is no mode switch on the sign-in box and no attempt to guess from
+     * the shape of the string. An "@" is legal in neither direction here: usernames are
+     * restricted to letters, digits and underscores, so an identifier containing one can only
+     * be an address, and one without can only be a username. Trying both anyway keeps that
+     * reasoning out of the security path, where it would silently become wrong the day the
+     * username rules change.
+     *
+     * <p>Both lookups are unique columns, so there is no ambiguity to resolve: no address can
+     * also be a username.
+     */
+    private User resolve(String identifier) {
+        if (identifier.isEmpty()) return null;
+        return userRepository.findByEmailIgnoreCase(identifier)
+            .or(() -> userRepository.findByUsernameIgnoreCase(identifier))
+            .orElse(null);
+    }
+
+    /**
+     * Trimmed and lower-cased, which is only the rate-limit key.
+     *
+     * The lookups themselves fold case in the query — see {@code findByEmailIgnoreCase} — so
+     * this exists to stop {@code Ada@x.com} and {@code ada@x.com} counting as two separate
+     * accounts' worth of guesses against the one account they both name.
+     */
+    private String normalise(String raw) {
+        return raw == null ? "" : raw.trim().toLowerCase(Locale.ROOT);
     }
 
     private AuthDto.AuthResponse buildAuthResponse(User user, HttpServletRequest req) {

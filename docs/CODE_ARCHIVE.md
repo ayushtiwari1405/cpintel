@@ -5,8 +5,8 @@ can be pulled back on demand — source, and what the judge did with it test by 
 is a contest that locks the app down: it cannot also expect the user to open codeforces.com to
 read code they already wrote.
 
-Reached from the **History** button in the editor panel, on Practice and Compete alike, and
-from a **See the test** link on the verdict badge.
+Reached from the **History** button in the editor panel, on Practice, Compete and examinations
+alike, and from a **See the test** link on the verdict badge.
 
 ---
 

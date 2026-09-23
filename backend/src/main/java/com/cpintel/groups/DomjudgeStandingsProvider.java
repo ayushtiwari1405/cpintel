@@ -80,8 +80,28 @@ public class DomjudgeStandingsProvider implements StandingsProvider {
         return results;
     }
 
+    /**
+     * One member's row, by exact team id where there is one and by name otherwise.
+     *
+     * The id comes from the DOMjudge account an admin attached, so it is the judge's own
+     * identifier rather than a string anybody typed. Preferring it matters most in the case
+     * name matching handles worst: a team renamed on the judge mid-setup, which silently stops
+     * matching and drops the member off the board with no error anywhere.
+     */
     private Result match(Competitor competitor, Map<String, String> teamIdByName,
                          Map<String, DjModels.Row> rowByTeamId) {
+        if (StringUtils.hasText(competitor.teamId())) {
+            DjModels.Row exact = rowByTeamId.get(competitor.teamId());
+            String label = StringUtils.hasText(competitor.handle())
+                ? competitor.handle() : competitor.teamId();
+            if (exact == null) {
+                // On the roster but with no row yet, or on a team not in this contest. Both
+                // read as not-found, which is the honest answer either way.
+                return new Result(competitor.userId(), label, false, 0, 0, null, null);
+            }
+            return scored(competitor, label, exact);
+        }
+
         if (!StringUtils.hasText(competitor.handle())) {
             return new Result(competitor.userId(), null, false, 0, 0, null, null);
         }
@@ -94,12 +114,17 @@ public class DomjudgeStandingsProvider implements StandingsProvider {
             return new Result(competitor.userId(), competitor.handle(), false, 0, 0, null, null);
         }
 
+        return scored(competitor, competitor.handle(), row);
+    }
+
+    /** The judge's own numbers for one row. */
+    private Result scored(Competitor competitor, String label, DjModels.Row row) {
         int solved = row.getScore() != null && row.getScore().getNum_solved() != null
             ? row.getScore().getNum_solved() : 0;
         int penalty = row.getScore() != null && row.getScore().getTotal_time() != null
             ? row.getScore().getTotal_time() : 0;
 
-        return new Result(competitor.userId(), competitor.handle(), true, solved, penalty,
+        return new Result(competitor.userId(), label, true, solved, penalty,
             (double) solved, detailOf(row));
     }
 

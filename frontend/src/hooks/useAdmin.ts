@@ -47,6 +47,16 @@ export function useAdminUsers(query: UserQuery) {
   })
 }
 
+/** What this account has been assigned, and how it went. */
+export function useUserParticipation(userId: number | null) {
+  const isAdmin = useIsAdmin()
+  return useQuery({
+    queryKey: ['admin', 'participation', userId],
+    queryFn: () => adminApi.participation(userId!).then(r => r.data),
+    enabled: isAdmin && userId != null,
+  })
+}
+
 export function useAdminUser(userId: number | null) {
   const isAdmin = useIsAdmin()
   return useQuery({
@@ -124,6 +134,31 @@ export function useRevokeSessions() {
   return useAdminMutation(
     ({ userId }: { userId: number }) => adminApi.revokeSessions(userId),
     () => 'Signed out of every device',
+  )
+}
+
+/**
+ * Setting a new password for somebody who has forgotten theirs.
+ *
+ * The success message is deliberately about handing it over rather than about the change: the
+ * password comes back once and is stored only as a hash, so an admin who closes the dialog
+ * without copying it has to do this again.
+ */
+export function useSetUserPassword() {
+  return useAdminMutation(
+    ({ userId, password, reason }:
+      { userId: number; password?: string; reason?: string }) =>
+      adminApi.setPassword(userId, password, reason),
+    () => 'Password set. Give it to them directly — it has not been emailed, and this is the '
+      + 'only time it is shown.',
+  )
+}
+
+/** Super admin only, and refused for anybody who has sat an examination. */
+export function useDeleteUser() {
+  return useAdminMutation(
+    ({ userId }: { userId: number }) => adminApi.deleteUser(userId),
+    () => 'The account and everything it owned have been deleted',
   )
 }
 

@@ -109,6 +109,13 @@ export function SubmissionHistory({
 
   const loading = scope === 'problem' ? problemQuery.isLoading : recentQuery.isLoading
 
+  // The source query is cached forever, so its verdict is whatever it was when first opened.
+  // The list refetches, so the header reads the verdict from there and follows judging.
+  const liveVerdict = (selected && attempts.find(a => selected.id
+    ? a.id === selected.id
+    : a.externalId === selected.externalId)?.verdict)
+    ?? source.data?.verdict ?? null
+
   // Reset the selection whenever the list underneath it changes, so the viewer can never show
   // one problem's code under another problem's heading.
   useEffect(() => { setSelected(null) }, [scope, contestId, problemIndex])
@@ -329,8 +336,8 @@ export function SubmissionHistory({
                       {source.data.problemName}
                     </span>
                   )}
-                  <span className={clsx('text-[11px]', verdictTone(source.data.verdict))}>
-                    {VERDICTS[source.data.verdict ?? ''] ?? source.data.verdict}
+                  <span className={clsx('text-[11px]', verdictTone(liveVerdict))}>
+                    {VERDICTS[liveVerdict ?? ''] ?? liveVerdict}
                   </span>
 
                   <div className="ml-auto flex items-center gap-1.5">

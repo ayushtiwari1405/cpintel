@@ -29,6 +29,7 @@ public class UserMapper {
             .role(user.getRole())
             .isVerified(user.getIsVerified())
             .createdAt(user.getCreatedAt())
+            .passwordChangedAt(user.getPasswordChangedAt())
             .platforms(platforms)
             .unifiedScore(toUnifiedScoreDto(user.getUnifiedScore()))
             .build();

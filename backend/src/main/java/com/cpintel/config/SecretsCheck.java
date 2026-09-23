@@ -72,6 +72,16 @@ public class SecretsCheck {
         check(problems, "REDIS_PASSWORD", "spring.data.redis.password", 1);
         checkMongoUri(problems);
 
+        // Warnings rather than refusals: these two make a feature weaker, not the deployment
+        // insecure, and a lab running examinations on a closed network with no SMTP is a real
+        // arrangement rather than a mistake. See the method for what each one costs.
+        List<String> warnings = advisories();
+
+        if (!warnings.isEmpty()) {
+            log.warn("This deployment will start, but with a feature turned off:\n  - {}",
+                String.join("\n  - ", warnings));
+        }
+
         if (problems.isEmpty()) {
             log.debug("Secrets check passed ({} profile)", isProd ? "prod" : "non-prod");
             return;
@@ -90,6 +100,42 @@ public class SecretsCheck {
         log.warn("Secrets check found {} problem(s). Startup continues because this is not the "
             + "prod profile, but a prod deployment would refuse to start:\n  - {}",
             problems.size(), detail);
+    }
+
+    /**
+     * Things that are missing without being wrong.
+     *
+     * <p>Neither of these makes a deployment insecure, which is why neither refuses to start.
+     * They make a feature quietly absent, which is worse than an error if nobody says so:
+     *
+     * <ul>
+     *   <li><b>No SMTP.</b> Password resets stop reaching anybody. The mail is logged instead,
+     *       so an operator can still finish what a user started, and on a closed exam-lab
+     *       network with no mail server to point at that is the correct arrangement rather
+     *       than a mistake. Refusing to start would make those deployments worse.</li>
+     *   <li><b>No examination password key.</b> Examination passwords cannot be generated, so
+     *       every paper opens for anyone assigned to it. That is only discovered at the moment
+     *       an admin tries to generate one, which on the morning of a sitting is the worst
+     *       time to discover it.</li>
+     * </ul>
+     */
+    private List<String> advisories() {
+        List<String> warnings = new ArrayList<>();
+
+        if (isBlank("spring.mail.host")) {
+            warnings.add("SMTP_HOST is not set, so no email is sent — password reset links are "
+                + "written to this log instead. Set it to deliver them.");
+        }
+        if (isBlank("cpintel.exams.password-key")) {
+            warnings.add("CPINTEL_EXAM_PASSWORD_KEY is not set, so examination passwords "
+                + "cannot be generated and every examination opens for anyone assigned to it.");
+        }
+        return warnings;
+    }
+
+    private boolean isBlank(String property) {
+        String value = env.getProperty(property);
+        return value == null || value.isBlank();
     }
 
     /**

@@ -1,5 +1,6 @@
 package com.cpintel.dto;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import jakarta.validation.constraints.*;
 import lombok.*;
 import lombok.extern.jackson.Jacksonized;
@@ -25,11 +26,26 @@ public class AuthDto {
         private String fullName;
     }
 
+    /**
+     * Signing in with an email address or a username.
+     *
+     * <p>One field for both, rather than two fields or a mode switch. People are given a
+     * username and a first password when their account is made, and the address on the account
+     * may well be one they never use — so insisting on the address at the sign-in box asks half
+     * of them for something they do not have to hand. Which of the two was typed is worked out
+     * by looking, in {@code AuthService}, and neither form is treated as more authoritative
+     * than the other.
+     *
+     * <p>{@code email} is accepted as an alias so that a client built against the older shape
+     * keeps working. It is not validated as an address any more, precisely because a username
+     * is now allowed to arrive in it.
+     */
     @Getter @Setter
     public static class LoginRequest {
-        @NotBlank(message = "Email is required")
-        @Email
-        private String email;
+        @NotBlank(message = "An email address or username is required")
+        @Size(max = 255)
+        @JsonAlias({"email", "username"})
+        private String identifier;
 
         @NotBlank(message = "Password is required")
         private String password;
@@ -56,11 +72,22 @@ public class AuthDto {
 
     @Getter @Setter
     public static class ResetPasswordRequest {
-        @NotBlank
+        @NotBlank(message = "The reset link is missing its token")
         private String token;
 
-        @NotBlank
-        @Size(min = 8)
+        @NotBlank(message = "A new password is required")
+        @Size(min = 8, max = 200, message = "A password has to be at least 8 characters")
+        private String newPassword;
+    }
+
+    /** Changing your own password while signed in, which needs the current one. */
+    @Getter @Setter
+    public static class ChangePasswordRequest {
+        @NotBlank(message = "Your current password is required")
+        private String currentPassword;
+
+        @NotBlank(message = "A new password is required")
+        @Size(min = 8, max = 200, message = "A password has to be at least 8 characters")
         private String newPassword;
     }
 }

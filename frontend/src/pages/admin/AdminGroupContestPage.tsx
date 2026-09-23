@@ -63,7 +63,7 @@ export default function AdminGroupContestPage() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-baseline gap-3">
         <Link
-          to={`/admin/groups/${contest.groupId}`}
+          to={`/admin/teams/${contest.groupId}`}
           className="text-xs text-gray-500 hover:text-gray-300"
         >
           ← {contest.groupName}
@@ -223,9 +223,11 @@ export default function AdminGroupContestPage() {
               <tbody className="divide-y divide-gray-800">
                 {(!violations || violations.entries.length === 0) && (
                   <EmptyRow colSpan={5}>
-                    Nothing reported. Either nobody was away for more than a few seconds, or
-                    the round was sat without the desktop app — those look different here,
-                    because a browser reports itself as the weaker kind of monitoring.
+                    Nothing reported, and nothing will be: a team contest is not monitored.
+                    Monitoring is what separates an examination from a contest — there is no
+                    away timer, no focus log and no password at the door on a round people
+                    entered voluntarily. To invigilate a round, create it as an examination
+                    under Administration → Examinations, where the session log lives.
                   </EmptyRow>
                 )}
                 {violations?.entries.map(entry => (
@@ -251,12 +253,14 @@ export default function AdminGroupContestPage() {
             </table>
           </div>
 
-          <p className="border-t border-gray-800 px-4 py-3 text-xs text-gray-500">
-            The monitor can see that someone left the contest window for longer than ten
-            seconds. It cannot see whether that was a second screen with the solution on it, a
-            notification, or someone answering the door. It does not stop anyone leaving, and it
-            cannot see a phone or a second machine at all, so a clean record is not proof of
-            anything either. Treat this as a place to start a conversation, not as a verdict.
+          <p className="border-t border-gray-800 px-4 py-3 text-xs leading-relaxed text-gray-500">
+            Rows here are from rounds sat while team contests were still monitored, and are kept
+            for the record. Where a round <em>is</em> monitored — an examination — the same
+            caveat applies to every line of it: a monitor can see that somebody left the window,
+            not whether that was a second screen with the solution on it, a notification, or
+            someone answering the door. It stops nobody leaving and cannot see a phone or a
+            second machine at all, so a clean record is not proof of anything either. Treat this
+            as a place to start a conversation, not as a verdict.
           </p>
         </Panel>
       )}

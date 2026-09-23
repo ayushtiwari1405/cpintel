@@ -5,9 +5,9 @@ import { useMyGroupContests, useMyGroups } from '@/hooks/useGroups'
 import { formatDistanceToNow } from 'date-fns'
 
 /**
- * A participant's own view of the groups they are in.
+ * A participant's own view of the teams they are on.
  *
- * Their placing and nothing about anyone else. Whether a group publishes its internal board to
+ * Their placing and nothing about anyone else. Whether a team publishes its internal board to
  * its members is the admin's call, and defaulting to "everyone sees everyone" would make that
  * decision for them.
  *
@@ -21,7 +21,7 @@ export default function GroupsPage() {
   if (groupsLoading || contestsLoading) {
     return (
       <div className="flex items-center justify-center gap-2 py-20 text-sm text-gray-500">
-        <Loader2 size={16} className="animate-spin" /> Loading your groups…
+        <Loader2 size={16} className="animate-spin" /> Loading your teams…
       </div>
     )
   }
@@ -30,9 +30,9 @@ export default function GroupsPage() {
     return (
       <div className="mx-auto max-w-lg py-20 text-center">
         <Users size={28} className="mx-auto text-gray-700" />
-        <p className="mt-3 text-sm text-gray-400">You are not in any groups yet.</p>
+        <p className="mt-3 text-sm text-gray-400">You are not on any teams yet.</p>
         <p className="mt-1 text-xs leading-relaxed text-gray-600">
-          Groups are set up by an admin. When you are added to one, the contests it sits appear
+          Teams are set up by an admin. When you are added to one, the contests it sits appear
           here along with where you placed among its members.
         </p>
       </div>
@@ -47,7 +47,7 @@ export default function GroupsPage() {
     <div className="space-y-6">
       <section>
         <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
-          Your groups
+          Your teams
         </h2>
         <div className="flex flex-wrap gap-2">
           {groups.map(group => (
@@ -69,7 +69,7 @@ export default function GroupsPage() {
 
       {contests?.length === 0 && (
         <p className="py-10 text-center text-sm text-gray-600">
-          No contests have been set for your groups yet.
+          No contests have been set for your teams yet.
         </p>
       )}
     </div>
@@ -98,7 +98,7 @@ function ContestSection({ title, contests }: {
                 <span
                   title="Leaving the contest window is noticed while this round is running.
                          You are warned after ten seconds away, and longer absences are
-                         reported to whoever runs the group."
+                         reported to whoever runs the team."
                   className="flex items-center gap-1 rounded bg-indigo-950/60 px-1.5 py-0.5
                              text-[11px] text-indigo-300"
                 >
@@ -140,7 +140,7 @@ function ContestSection({ title, contests }: {
                 <Trophy size={14} />
                 <span className="font-medium">
                   {myRank}
-                  {groupSize ? ` of ${groupSize}` : ''} in your group
+                  {groupSize ? ` of ${groupSize}` : ''} in your team
                 </span>
                 {mySolved != null && (
                   <span className="text-xs text-gray-600">{mySolved} solved</span>

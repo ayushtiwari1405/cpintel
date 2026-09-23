@@ -102,11 +102,38 @@ services:
       CPINTEL_ADMIN_PASSWORD: ${CPINTEL_ADMIN_PASSWORD:-}
       CPINTEL_ADMIN_USERNAME: ${CPINTEL_ADMIN_USERNAME:-superadmin}
       # DOMjudge, for contests run on a self-hosted judge. Blank leaves the arena
-      # Codeforces-only. The account needs admin rights on the instance: CPIntel submits on
-      # each team's behalf rather than holding every contestant's DOMjudge password.
+      # Codeforces-only. CPIntel competes as each contestant's own DOMjudge login, attached by
+      # an admin; the USER/PASSWORD pair below is an optional service account that buys the
+      # contest-wide reads the shared cache needs, and the CREDENTIAL_KEY is what encrypts the
+      # attached logins at rest.
       CPINTEL_DOMJUDGE_URL: ${CPINTEL_DOMJUDGE_URL:-}
       CPINTEL_DOMJUDGE_USER: ${CPINTEL_DOMJUDGE_USER:-}
       CPINTEL_DOMJUDGE_PASSWORD: ${CPINTEL_DOMJUDGE_PASSWORD:-}
+      CPINTEL_DOMJUDGE_CREDENTIAL_KEY: ${CPINTEL_DOMJUDGE_CREDENTIAL_KEY:-}
+      CPINTEL_DOMJUDGE_CREDENTIAL_TTL_DAYS: ${CPINTEL_DOMJUDGE_CREDENTIAL_TTL_DAYS:-30}
+      CPINTEL_EXAM_RETENTION_DAYS: ${CPINTEL_EXAM_RETENTION_DAYS:-365}
+      CPINTEL_RUNNER_CPP: ${CPINTEL_RUNNER_CPP:-g++}
+      CPINTEL_RUNNER_PYTHON: ${CPINTEL_RUNNER_PYTHON:-python3}
+      # Encrypts the two passwords that open an examination — the one read out to the room and
+      # each candidate's own code. Without it a paper opens for anyone assigned to it; the
+      # backend warns at startup rather than refusing, since that is a usable arrangement for a
+      # contest-only deployment.
+      CPINTEL_EXAM_PASSWORD_KEY: ${CPINTEL_EXAM_PASSWORD_KEY:-}
+      CPINTEL_EXAM_PASSWORD_LENGTH: ${CPINTEL_EXAM_PASSWORD_LENGTH:-8}
+      # Password resets and account notices. Nothing about an examination is ever mailed.
+      # Blank SMTP_HOST is supported: the message is logged instead, which is what a closed
+      # exam-lab network with no mail server needs.
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_AUTH: ${SMTP_AUTH:-true}
+      SMTP_STARTTLS: ${SMTP_STARTTLS:-true}
+      CPINTEL_MAIL_FROM: ${CPINTEL_MAIL_FROM:-CPIntel <no-reply@cpintel.local>}
+      # Where a link in an email points. Must be the address people open CPIntel at, not the
+      # backend's own — behind nginx these are not the same thing.
+      CPINTEL_PUBLIC_URL: ${CPINTEL_PUBLIC_URL:-http://localhost}
+      CPINTEL_RESET_TOKEN_MINUTES: ${CPINTEL_RESET_TOKEN_MINUTES:-60}
       SPRING_PROFILES_ACTIVE: prod
     ports:
       # Loopback only. nginx reaches the backend over the compose network, so publishing this

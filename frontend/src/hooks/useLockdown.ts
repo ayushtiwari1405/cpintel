@@ -1,11 +1,22 @@
 import { useEffect, useRef, useState } from 'react'
-import { desktopLockdown, isDesktop, type LockdownState } from '@/utils/desktopBridge'
+import {
+  desktopLockdown, isDesktop, type LockdownPolicyRequest, type LockdownState,
+} from '@/utils/desktopBridge'
 
 interface Options {
   /** True while the lock should be held — a contest that is actually running. */
   active: boolean
   /** Shown back to the user as the reason the machine is locked. */
   reason: string
+  /**
+   * What this event asks the client to do, when it has asked for anything.
+   *
+   * Sent with the engage call rather than configured on the installation, because the policy
+   * belongs to the examination: the same machine sits an open contest in the morning and a
+   * supervised paper in the afternoon. Omitted for an ordinary contest, which gets the
+   * client's defaults.
+   */
+  policy?: Partial<LockdownPolicyRequest>
 }
 
 /**
@@ -19,13 +30,18 @@ interface Options {
  * In the browser build every call is a no-op and `state` stays null — see useAwayMonitor,
  * which covers that case by watching the tab instead.
  */
-export function useLockdown({ active, reason }: Options): LockdownState | null {
+export function useLockdown({ active, reason, policy }: Options): LockdownState | null {
   const [state, setState] = useState<LockdownState | null>(null)
 
   // Held in a ref so the engage/release effect does not re-run when only the name changes —
   // re-engaging mid-contest would reset the away-time accounting.
   const reasonRef = useRef(reason)
   reasonRef.current = reason
+
+  // Same reasoning as the reason above: re-engaging mid-paper to pick up a changed policy
+  // would reset the away-time accounting, which is the one thing that must survive.
+  const policyRef = useRef(policy)
+  policyRef.current = policy
 
   useEffect(() => {
     if (!isDesktop()) return
@@ -37,7 +53,8 @@ export function useLockdown({ active, reason }: Options): LockdownState | null {
     let cancelled = false
 
     if (active) {
-      desktopLockdown.engage(reasonRef.current).then(s => { if (!cancelled) setState(s) })
+      desktopLockdown.engage(reasonRef.current, policyRef.current)
+        .then(s => { if (!cancelled) setState(s) })
     } else {
       desktopLockdown.release().then(s => { if (!cancelled) setState(s) })
     }

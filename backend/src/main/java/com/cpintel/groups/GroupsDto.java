@@ -65,8 +65,20 @@ public class GroupsDto {
     public record RosterImportRequest(
         @NotBlank @Size(max = 200_000) String text,
         /** True to report the plan and write nothing. */
-        Boolean dryRun
+        Boolean dryRun,
+        /**
+         * The team to put this whole import on, or null to take it from the paste.
+         *
+         * Applied only to rows that do not carry a team of their own, so a roster that already
+         * names teams per person keeps them. The common case is the opposite — a class list
+         * with no team column at all, every one of whom is on the same team — and typing that
+         * team into two hundred rows is not a reasonable thing to ask of anybody.
+         */
+        @Size(max = 100) String teamName
     ) {}
+
+    /** Where a member is moving to. The team they are leaving is in the path. */
+    public record MoveMemberRequest(@NotNull Long targetGroupId) {}
 
     public record MemberRequest(
         @NotNull Long userId,
@@ -77,6 +89,8 @@ public class GroupsDto {
 
     public record ContestSummary(
         Long contestId,
+        /** CONTEST or EXAM — the same row carries both, see {@code GroupContest}. */
+        String kind,
         Long groupId,
         String groupName,
         String platform,
@@ -86,8 +100,12 @@ public class GroupsDto {
         Instant startsAt,
         Instant endsAt,
         boolean lockdownRequired,
+        /** How long someone may be away before it is recorded, in seconds. */
+        int awayThresholdSeconds,
         /** SCHEDULED, LIVE or FINISHED, derived from the window rather than stored. */
         String status,
+        /** DRAFT, SCHEDULED, ACTIVE, ENDED or ARCHIVED — the event's own life. */
+        String lifecycle,
         Instant standingsRefreshedAt,
         String standingsError
     ) {}

@@ -3,6 +3,7 @@ package com.cpintel.controller;
 import com.cpintel.common.ApiResponse;
 import com.cpintel.groups.GroupService;
 import com.cpintel.groups.GroupsDto;
+import com.cpintel.groups.ContestMonitorRegistry;
 import com.cpintel.groups.ViolationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -33,6 +34,7 @@ public class GroupController {
 
     private final GroupService groups;
     private final ViolationService violations;
+    private final ContestMonitorRegistry monitors;
 
     @GetMapping
     @Operation(summary = "The groups you belong to")
@@ -62,6 +64,28 @@ public class GroupController {
         @RequestParam String platform,
         @RequestParam String externalId) {
         return ResponseEntity.ok(ApiResponse.ok(groups.activeFor(userId, platform, externalId)));
+    }
+
+    /**
+     * Says that this contestant's monitoring is still running.
+     *
+     * Separate from the violation report, which is a batched evidence trail and cannot answer
+     * "is the lock alive now" — the absence of violations is what a contestant who is behaving
+     * and a contestant who closed the monitor have in common. Membership is checked the same
+     * way violations check it, so nobody can keep somebody else's contest window looking alive.
+     *
+     * The reply carries the interval the client should use, so the timer and the server's
+     * tolerance cannot drift apart across a release.
+     */
+    @PostMapping("/contests/{contestId}/monitor/heartbeat")
+    @Operation(summary = "Report that your contest monitoring is still running")
+    public ResponseEntity<ApiResponse<Map<String, Long>>> heartbeat(
+        @AuthenticationPrincipal Long userId,
+        @PathVariable Long contestId) {
+        violations.requireParticipant(userId, contestId);
+        monitors.beat(userId, contestId);
+        return ResponseEntity.ok(ApiResponse.ok(
+            Map.of("intervalSeconds", monitors.intervalSeconds())));
     }
 
     @PostMapping("/contests/{contestId}/violations")

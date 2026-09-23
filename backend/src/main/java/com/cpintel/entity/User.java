@@ -54,6 +54,17 @@ public class User extends BaseEntity {
     @Builder.Default
     private Boolean isVerified = false;
 
+    /**
+     * When the owner last set this password themselves, or null if they never have.
+     *
+     * The first password on an account is handed over by whoever created it, so until this is
+     * set somebody other than the owner knows it. Null is therefore a fact worth showing an
+     * administrator rather than a missing value — it is the difference between a password that
+     * belongs to its owner and one that is still the one they were given.
+     */
+    @Column(name = "password_changed_at")
+    private Instant passwordChangedAt;
+
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @Builder.Default
     private List<PlatformAccount> platformAccounts = new ArrayList<>();

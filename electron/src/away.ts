@@ -47,9 +47,26 @@ export class AwayTracker {
   private countedLong = false
 
   constructor(
-    private readonly warnAfterMs: number = AWAY_WARN_MS,
+    private warnAfterMs: number = AWAY_WARN_MS,
     private readonly repeatMs: number = AWAY_REPEAT_MS,
   ) {}
+
+  /**
+   * Changes the threshold this tracker measures against.
+   *
+   * An examination carries its own — what counts as leaving a two-hour written paper is not
+   * what counts as leaving a five-hour round — and the client is told which when the paper is
+   * engaged. Applied only between sessions, since moving the line under an absence already in
+   * progress would make its accounting depend on when the change happened to land.
+   */
+  setWarnAfterMs(ms: number): void {
+    if (ms > 0) this.warnAfterMs = ms
+  }
+
+  /** What is currently being measured against, so the UI can quote the same number. */
+  warnAfter(): number {
+    return this.warnAfterMs
+  }
 
   /** Discards all accounting — called when a contest starts, not when one is paused. */
   reset(now: number, away: boolean): void {

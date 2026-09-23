@@ -37,6 +37,26 @@ public class AuditService {
     /** A sign-up attempt that arrived while self-registration was closed. */
     public static final String REGISTER_BLOCKED = "REGISTER_BLOCKED";
 
+    // Passwords. Recorded against the account in every case, because the interesting reading
+    // is a run of them: a reset asked for repeatedly, or a change nobody remembers making.
+    public static final String PASSWORD_RESET_REQUESTED = "PASSWORD_RESET_REQUESTED";
+    public static final String PASSWORD_RESET           = "PASSWORD_RESET";
+    public static final String PASSWORD_CHANGED         = "PASSWORD_CHANGED";
+    /** Somebody signed in gave the wrong current password while trying to change it. */
+    public static final String PASSWORD_CHANGE_FAILED   = "PASSWORD_CHANGE_FAILED";
+    /** An administrator set somebody else's password. Never records the password. */
+    public static final String PASSWORD_SET_BY_ADMIN    = "ADMIN_PASSWORD_SET";
+    /** A super admin deleted an account outright. */
+    public static final String USER_DELETED             = "ADMIN_USER_DELETED";
+
+    // Examination access. The passwords themselves never appear in any of these.
+    public static final String EXAM_PASSWORD_SET     = "ADMIN_EXAM_PASSWORD_SET";
+    public static final String EXAM_PASSWORD_CLEARED = "ADMIN_EXAM_PASSWORD_CLEARED";
+    public static final String EXAM_PASSCODES_ISSUED = "ADMIN_EXAM_PASSCODES_ISSUED";
+    public static final String EXAM_PASSCODES_READ   = "ADMIN_EXAM_PASSCODES_READ";
+    public static final String EXAM_UNLOCKED         = "EXAM_UNLOCKED";
+    public static final String EXAM_UNLOCK_REFUSED   = "EXAM_UNLOCK_REFUSED";
+
     // Admin actions on accounts
     public static final String ROLE_CHANGED       = "ADMIN_ROLE_CHANGED";
     public static final String USER_ACTIVATED     = "ADMIN_USER_ACTIVATED";
@@ -53,8 +73,19 @@ public class AuditService {
     public static final String GROUP_MEMBER_ADDED    = "ADMIN_GROUP_MEMBER_ADDED";
     public static final String GROUP_MEMBER_UPDATED  = "ADMIN_GROUP_MEMBER_UPDATED";
     public static final String GROUP_MEMBER_REMOVED  = "ADMIN_GROUP_MEMBER_REMOVED";
+    public static final String GROUP_MEMBER_MOVED    = "ADMIN_GROUP_MEMBER_MOVED";
+    public static final String USER_UPDATED          = "ADMIN_USER_UPDATED";
     public static final String GROUP_CONTEST_ADDED   = "ADMIN_GROUP_CONTEST_ADDED";
     public static final String GROUP_CONTEST_REMOVED = "ADMIN_GROUP_CONTEST_REMOVED";
+
+    // Admin actions on contests and examinations
+    public static final String EVENT_CREATED     = "ADMIN_EVENT_CREATED";
+    public static final String EVENT_UPDATED     = "ADMIN_EVENT_UPDATED";
+    public static final String EVENT_DELETED     = "ADMIN_EVENT_DELETED";
+    public static final String EVENT_LIFECYCLE   = "ADMIN_EVENT_LIFECYCLE";
+    public static final String EVENT_ASSIGNED    = "ADMIN_EVENT_ASSIGNED";
+    public static final String EVENT_UNASSIGNED  = "ADMIN_EVENT_UNASSIGNED";
+    public static final String EVENT_PROBLEMS    = "ADMIN_EVENT_PROBLEMS";
 
     // Admin actions on the contest file policy
     public static final String FILE_POLICY_DEFAULT = "ADMIN_FILE_POLICY_DEFAULT";

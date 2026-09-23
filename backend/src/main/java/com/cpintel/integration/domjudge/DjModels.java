@@ -33,6 +33,39 @@ public class DjModels {
         private String display_name;
     }
 
+    /**
+     * The account the current credentials belong to, from {@code /api/v4/user}.
+     *
+     * This is the keystone of the submit-as-the-contestant model. DOMjudge attributes a
+     * submission to the <em>team</em> behind the authenticated account, never to the account
+     * itself, so {@code team_id} here is the only thing that says where a contestant's
+     * submissions will actually land. A null {@code team_id} means the login is real but has
+     * no team — an admin or a jury account — and submitting as it would silently go nowhere,
+     * which is why provisioning checks this field rather than merely checking that the
+     * password works.
+     *
+     * <p>{@code roles} is read only to tell a team account apart from an admin one, so the
+     * arena can explain which reads it is allowed to make rather than discovering it in a 403.
+     */
+    @Data @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class User {
+        private String id;
+        private String username;
+        private String name;
+        private String email;
+        /**
+         * The team's id — present from DOMjudge 8.2 onwards, absent before it.
+         *
+         * 8.0 reports only {@link #team}, the name. Reading just this one is what made every
+         * team account on an 8.0 instance look like an admin account with no team, so both are
+         * carried and the caller decides which it can use.
+         */
+        private String team_id;
+        /** The team's name. Present on every version that reports a team at all. */
+        private String team;
+        private List<String> roles;
+    }
+
     @Data @JsonIgnoreProperties(ignoreUnknown = true)
     public static class Scoreboard {
         private List<Row> rows;

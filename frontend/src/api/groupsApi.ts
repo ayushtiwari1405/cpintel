@@ -26,4 +26,16 @@ export const groupsApi = {
   reportViolations: (contestId: number, events: ViolationEvent[]) =>
     apiClient.post<ApiResponse<{ stored: number }>>(
       `/groups/contests/${contestId}/violations`, { events }).then(r => r.data),
+
+  /**
+   * Says this contestant's monitoring is still running.
+   *
+   * Distinct from the violation report, which is a batched evidence trail and cannot answer
+   * "is the lock alive now" — the absence of violations is what a contestant who is behaving
+   * and one who closed the monitor have in common. The reply carries the interval to use, so
+   * the page's timer and the server's tolerance cannot drift apart.
+   */
+  heartbeat: (contestId: number) =>
+    apiClient.post<ApiResponse<{ intervalSeconds: number }>>(
+      `/groups/contests/${contestId}/monitor/heartbeat`, {}).then(r => r.data),
 }

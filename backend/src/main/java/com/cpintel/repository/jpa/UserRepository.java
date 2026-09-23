@@ -17,6 +17,22 @@ import java.util.Optional;
 public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificationExecutor<User> {
     Optional<User> findByEmail(String email);
     Optional<User> findByUsername(String username);
+
+    /**
+     * The two lookups sign-in uses, folding case.
+     *
+     * <p>Both columns are unique and case-sensitive in Postgres, and both hold values that
+     * arrived from a human typing them. An address is not case-sensitive by its own rules, and
+     * a person typing their username with a capital at the start of a sentence has not typed a
+     * different username. Matching exactly turns either into a support request, so sign-in
+     * folds case and the storage keeps whatever was entered.
+     *
+     * <p>They stay separate from the exact lookups above, which are what registration and the
+     * admin console use to refuse a duplicate — those genuinely mean "is this taken".
+     */
+    Optional<User> findByEmailIgnoreCase(String email);
+
+    Optional<User> findByUsernameIgnoreCase(String username);
     boolean existsByEmail(String email);
     boolean existsByUsername(String username);
 

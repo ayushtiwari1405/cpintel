@@ -3,7 +3,6 @@ package com.cpintel.runner;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
@@ -61,23 +60,5 @@ public class CppRuntime implements LanguageRuntime {
     @Override
     public List<String> runCommand(Path workDir) {
         return List.of("./program");
-    }
-
-    /** Small helper so every runtime probes for its toolchain the same way. */
-    static final class Toolchains {
-        private Toolchains() {}
-
-        /** True when {@code name} resolves to an executable on PATH (or is an absolute path). */
-        static boolean onPath(String name) {
-            if (name == null || name.isBlank()) return false;
-            if (name.contains("/")) return Files.isExecutable(Path.of(name));
-            String path = System.getenv("PATH");
-            if (path == null) return false;
-            for (String dir : path.split(":")) {
-                if (dir.isBlank()) continue;
-                if (Files.isExecutable(Path.of(dir, name))) return true;
-            }
-            return false;
-        }
     }
 }

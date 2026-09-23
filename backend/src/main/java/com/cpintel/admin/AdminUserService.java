@@ -4,7 +4,10 @@ import com.cpintel.entity.AuditLog;
 import com.cpintel.entity.User;
 import com.cpintel.exception.ApiException;
 import com.cpintel.mapper.UserMapper;
+import com.cpintel.mail.EmailTemplates;
+import com.cpintel.mail.MailService;
 import com.cpintel.repository.jpa.AuditLogRepository;
+import com.cpintel.repository.jpa.ExamEventRepository;
 import com.cpintel.repository.jpa.RefreshTokenRepository;
 import com.cpintel.repository.jpa.UserRepository;
 import com.cpintel.entity.UnifiedScore;
@@ -26,6 +29,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -43,10 +47,22 @@ import java.util.Set;
  * admin cannot be demoted or deactivated by anyone, which is the same failure with two people
  * involved instead of one.
  *
- * There is no delete. Removing an account would take its contests, submissions and files with
- * it by cascade, and no amount of confirmation makes that recoverable; deactivating stops
- * someone signing in and leaves the history intact, which is what "remove this person" almost
- * always means in practice.
+ * <p><b>What separates the two console tiers here.</b> An ADMIN runs the room: they create
+ * ordinary users, correct their details, activate and deactivate them, sign them out, and set
+ * a new password for somebody who has forgotten theirs. What an ADMIN cannot do is touch
+ * another console account. Every write below refuses when its target holds ADMIN or
+ * SUPER_ADMIN and the caller is not a super admin — because an admin who can deactivate,
+ * rename or re-password a peer can remove the person who would have stopped them, which is
+ * the same escalation the role-assignment rule already exists to prevent, spelled differently.
+ * A SUPER_ADMIN has no such limit: every account in the deployment, admins included, is
+ * theirs to change.
+ *
+ * <p><b>Delete is a super admin's, and it is the blunt instrument.</b> Removing an account
+ * takes its submissions, files, standings and examination events with it by cascade, and no
+ * amount of confirmation makes that recoverable — so it is refused for anybody who has sat an
+ * examination, whose session log is evidence about a paper somebody may still need to read.
+ * Deactivating stops a person signing in and leaves the history intact, which is what "remove
+ * this person" almost always means; delete is for the account created by a typo an hour ago.
  */
 @Service
 @RequiredArgsConstructor
@@ -67,6 +83,8 @@ public class AdminUserService {
     private final UserMapper userMapper;
     private final AuditService auditService;
     private final JwtService jwtService;
+    private final ExamEventRepository examEventRepository;
+    private final MailService mail;
 
     // ------------------------------------------------------------------ reads
 
@@ -184,16 +202,28 @@ public class AdminUserService {
      * alternatives here — a default password baked into the deployment, or an invite-mail
      * flow that this system has no mail transport for.
      *
-     * A new account may be created directly as an ADMIN. That is not a way around the rule
-     * that only super admins assign roles: creating one already requires SUPER_ADMIN, so
-     * allowing it here removes a pointless second step rather than a check.
+     * <p><b>Both console tiers may create accounts; only a super admin may create an ADMIN.</b>
+     * An admin running a contest needs to be able to add the people sitting it, and making that
+     * a super admin's job turns every new participant into a request to somebody else. Creating
+     * a participant hands out no privilege, so there is nothing for the higher tier to protect.
+     *
+     * <p>Creating an <em>admin</em> is the opposite, and stays reserved. An admin who could mint
+     * another admin could mint one for themselves and hold two accounts, which is the same
+     * self-promotion the role-assignment rule exists to prevent — just spelled differently. So
+     * the tier check is on the role being created rather than on the act of creating.
      */
     @Transactional
     public AdminDto.UserRow createUser(Long adminId, AdminDto.CreateUserRequest req,
-                                       HttpServletRequest httpReq) {
+                                       boolean callerIsSuperAdmin, HttpServletRequest httpReq) {
         String role = req.role() == null ? Roles.USER : req.role().trim().toUpperCase(Locale.ROOT);
         if (!ROLES.contains(role))
             throw ApiException.badRequest("Role must be USER or ADMIN");
+
+        if (!Roles.USER.equals(role) && !callerIsSuperAdmin) {
+            throw ApiException.forbidden(
+                "Only a super admin may create an " + role + " account. You can create "
+                    + "ordinary user accounts.");
+        }
 
         String email = req.email().trim().toLowerCase(Locale.ROOT);
         String username = req.username().trim();
@@ -221,22 +251,79 @@ public class AdminUserService {
 
         auditService.record(adminId, AuditService.USER_CREATED, "USER",
             user.getUserId() + ":" + role, httpReq);
-        log.info("Super admin {} created user {} ({}) as {}",
+        log.info("Admin {} created user {} ({}) as {}",
             adminId, user.getUserId(), email, role);
 
         return toRow(user, null);
     }
 
+    /**
+     * Corrects somebody's details.
+     *
+     * A changed email un-verifies the account, because the verification was evidence about the
+     * old address and says nothing about the new one. Nothing here can change what an account
+     * may do — role and activation have their own endpoints, with their own rules.
+     */
+    @Transactional
+    @CacheEvict(value = "user_profile", key = "#targetUserId")
+    public AdminDto.UserRow updateUser(Long adminId, Long targetUserId,
+                                       AdminDto.UpdateUserRequest req,
+                                       boolean callerIsSuperAdmin,
+                                       HttpServletRequest httpReq) {
+        User user = require(targetUserId);
+        requireMayTouch(user, callerIsSuperAdmin, "change the details of");
+
+        if (StringUtils.hasText(req.email())) {
+            String email = req.email().trim().toLowerCase(Locale.ROOT);
+            if (!email.equals(user.getEmail())) {
+                if (userRepository.existsByEmail(email)) {
+                    throw ApiException.conflict("Email already registered");
+                }
+                user.setEmail(email);
+                user.setIsVerified(false);
+            }
+        }
+        if (req.fullName() != null) {
+            user.setFullName(StringUtils.hasText(req.fullName()) ? req.fullName().trim() : null);
+        }
+        if (req.institution() != null) {
+            user.setInstitution(
+                StringUtils.hasText(req.institution()) ? req.institution().trim() : null);
+        }
+        if (req.country() != null) {
+            user.setCountry(StringUtils.hasText(req.country()) ? req.country().trim() : null);
+        }
+
+        userRepository.save(user);
+        auditService.record(adminId, AuditService.USER_UPDATED, "USER",
+            String.valueOf(targetUserId), httpReq);
+
+        return toRow(user, lastLogins(List.of(user)).get(targetUserId));
+    }
+
     @Transactional
     @CacheEvict(value = "user_profile", key = "#targetUserId")
     public AdminDto.UserRow setActive(Long adminId, Long targetUserId,
-                                      AdminDto.ActiveRequest req, HttpServletRequest httpReq) {
+                                      AdminDto.ActiveRequest req, boolean callerIsSuperAdmin,
+                                      HttpServletRequest httpReq) {
         boolean active = Boolean.TRUE.equals(req.active());
 
         if (!active && adminId != null && adminId.equals(targetUserId))
             throw ApiException.badRequest("You cannot deactivate your own account.");
 
         User user = require(targetUserId);
+        requireMayTouch(user, callerIsSuperAdmin, active ? "reactivate" : "deactivate");
+
+        // A super admin cannot be switched off from here, by anyone — including another super
+        // admin. The tier is the fixed point the rest of the permission system hangs from, and
+        // two people who can deactivate each other turn that into a race. Moving it means
+        // changing cpintel.admin.bootstrap-email and restarting, which is the same answer
+        // changeRole gives.
+        if (!active && Roles.SUPER_ADMIN.equals(user.getRole()))
+            throw ApiException.badRequest(
+                "A super admin cannot be deactivated here. Set cpintel.admin.bootstrap-email "
+                + "and restart to move that role.");
+
         if (Boolean.valueOf(active).equals(user.getIsActive()))
             return toRow(user, lastLogins(List.of(user)).get(targetUserId));
 
@@ -262,12 +349,157 @@ public class AdminUserService {
 
     /** Signs a user out of every device without touching their account otherwise. */
     @Transactional
-    public void revokeSessions(Long adminId, Long targetUserId, HttpServletRequest httpReq) {
-        require(targetUserId);
+    public void revokeSessions(Long adminId, Long targetUserId, boolean callerIsSuperAdmin,
+                               HttpServletRequest httpReq) {
+        requireMayTouch(require(targetUserId), callerIsSuperAdmin, "sign out");
         endSessions(targetUserId);
         auditService.record(adminId, AuditService.SESSIONS_REVOKED, "USER",
             String.valueOf(targetUserId), httpReq);
         log.info("Admin {} revoked sessions for user {}", adminId, targetUserId);
+    }
+
+    /**
+     * Sets a new password on somebody else's account.
+     *
+     * <p>For the person who has forgotten theirs and cannot reach their own mail, which on a
+     * deployment that hands out accounts on a printed sheet is a common enough morning. The
+     * self-service route — a link emailed to the address on the account — is the better one
+     * and is what {@code /auth/forgot-password} is for; this exists because it does not always
+     * work, and "ask an administrator" has to lead somewhere.
+     *
+     * <p><b>The password is returned once and never emailed.</b> It is handed over the same way
+     * the first one was. Mailing it would put a live credential in a mailbox, which is the
+     * thing the reset-link flow exists to avoid, and a deployment with no SMTP would have no
+     * path at all.
+     *
+     * <p>Everything the owner had open is closed, and they are told it happened — by mail if
+     * there is any, with no password and no link in it. An administrator quietly taking over
+     * an account should not be something only the audit log knows about.
+     */
+    @Transactional
+    @CacheEvict(value = "user_profile", key = "#targetUserId")
+    public AdminDto.GeneratedPassword setPassword(Long adminId, Long targetUserId,
+                                                  AdminDto.SetPasswordRequest req,
+                                                  boolean callerIsSuperAdmin,
+                                                  HttpServletRequest httpReq) {
+        User user = require(targetUserId);
+        requireMayTouch(user, callerIsSuperAdmin, "set the password of");
+
+        if (adminId != null && adminId.equals(targetUserId)) {
+            throw ApiException.badRequest(
+                "Change your own password from your profile, where the current one is asked "
+                + "for.");
+        }
+
+        String password = StringUtils.hasText(req.password())
+            ? req.password() : generatePassword();
+        if (password.length() < 8) {
+            throw ApiException.badRequest("A password has to be at least 8 characters.");
+        }
+
+        user.setPasswordHash(passwordEncoder.encode(password));
+        // Deliberately cleared rather than stamped. This password is not one the owner chose,
+        // so the account goes back to reading as "still the password somebody was given" —
+        // which is exactly what it is.
+        user.setPasswordChangedAt(null);
+        userRepository.save(user);
+        endSessions(targetUserId);
+
+        EmailTemplates.Message notice = EmailTemplates.passwordResetByAdmin(user.getFullName());
+        mail.send(user.getEmail(), notice.subject(), notice.text(), notice.html());
+
+        auditService.record(adminId, AuditService.PASSWORD_SET_BY_ADMIN, "USER",
+            StringUtils.hasText(req.reason())
+                ? targetUserId + ":" + req.reason() : String.valueOf(targetUserId),
+            httpReq);
+        log.info("Admin {} set a new password for user {}", adminId, targetUserId);
+
+        return new AdminDto.GeneratedPassword(targetUserId, user.getUsername(), password);
+    }
+
+    /**
+     * Deletes an account outright. Super admin only, and refused where it would lose evidence.
+     *
+     * <p>This is the blunt instrument and is meant to stay that way. The cascade takes the
+     * person's submissions, files, standings and examination events with them, and none of it
+     * comes back. Deactivating is what "remove this person" almost always means — they cannot
+     * sign in, and everything they did is still readable.
+     *
+     * <p>So delete is refused for anybody who has sat an examination. Their session log is
+     * evidence about a paper, possibly one still being marked or appealed, and an account
+     * deletion is not a decision that should also be a decision to destroy that. The account
+     * created by a typo an hour ago has none of it, which is the case this is for.
+     */
+    @Transactional
+    @CacheEvict(value = "user_profile", key = "#targetUserId")
+    public void deleteUser(Long adminId, Long targetUserId, HttpServletRequest httpReq) {
+        if (adminId != null && adminId.equals(targetUserId))
+            throw ApiException.badRequest("You cannot delete your own account.");
+
+        User user = require(targetUserId);
+
+        if (Roles.SUPER_ADMIN.equals(user.getRole()))
+            throw ApiException.badRequest(
+                "A super admin cannot be deleted here. Set cpintel.admin.bootstrap-email and "
+                + "restart to move that role first.");
+
+        if (Roles.ADMIN.equals(user.getRole())
+            && userRepository.countOtherActiveAdmins(targetUserId) == 0)
+            throw ApiException.badRequest(
+                "This is the only active admin left. Promote someone else first.");
+
+        long examEvents = examEventRepository.countByUserUserId(targetUserId);
+        if (examEvents > 0)
+            throw ApiException.badRequest(
+                "This person has sat an examination, and deleting the account would delete its "
+                + "session log with it. Deactivate them instead — they cannot sign in, and the "
+                + "record stays readable.");
+
+        endSessions(targetUserId);
+        userRepository.delete(user);
+
+        auditService.record(adminId, AuditService.USER_DELETED, "USER",
+            targetUserId + ":" + user.getUsername(), httpReq);
+        log.info("Super admin {} deleted user {} ({})", adminId, targetUserId,
+            user.getUsername());
+    }
+
+    /**
+     * Refuses an ordinary admin acting on another console account.
+     *
+     * <p>An admin who can deactivate, rename or re-password a peer can remove the person who
+     * would have stopped them, and an admin who can do it to a super admin can remove the tier
+     * that limits them at all. That is the same escalation {@code changeRole} is reserved for,
+     * arrived at from a different screen — so the check lives on every write rather than on the
+     * one that looks dangerous.
+     *
+     * <p>A super admin passes through unconditionally. Every account in the deployment, admins
+     * included, is theirs to change; that is what the tier is for.
+     */
+    private void requireMayTouch(User target, boolean callerIsSuperAdmin, String verb) {
+        if (callerIsSuperAdmin) return;
+        if (!Roles.isAdminLevel(target.getRole())) return;
+        throw ApiException.forbidden(
+            "Only a super admin may " + verb + " another administrator's account.");
+    }
+
+    /**
+     * A password that can be read off a screen and typed once.
+     *
+     * Four groups of four from an alphabet with no {@code O}, {@code 0}, {@code I} or
+     * {@code 1} in it, because this is read aloud or copied off a printout by somebody who is
+     * about to type it into a machine that will not tell them which character they got wrong.
+     */
+    private String generatePassword() {
+        final char[] alphabet = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789"
+            .toCharArray();
+        SecureRandom random = new SecureRandom();
+        StringBuilder out = new StringBuilder(19);
+        for (int i = 0; i < 16; i++) {
+            if (i > 0 && i % 4 == 0) out.append('-');
+            out.append(alphabet[random.nextInt(alphabet.length)]);
+        }
+        return out.toString();
     }
 
     /**
@@ -336,7 +568,8 @@ public class AdminUserService {
             Boolean.TRUE.equals(user.getIsActive()),
             Boolean.TRUE.equals(user.getIsVerified()),
             user.getCreatedAt(),
-            lastLoginAt);
+            lastLoginAt,
+            user.getPasswordChangedAt());
     }
 
     static AdminDto.AuditEntry toEntry(AuditLog entry, String username) {

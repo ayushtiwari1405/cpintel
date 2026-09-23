@@ -25,7 +25,19 @@ public interface StandingsProvider {
      * A null or blank handle means the group has no way to identify them on this judge, which
      * is a configuration problem rather than a zero score, and is reported as unmatched.
      */
-    record Competitor(Long userId, String handle) {}
+    /**
+     * One person to look up on the judge.
+     *
+     * <p>{@code handle} is what the judge knows them as, matched by name — a Codeforces handle,
+     * or a DOMjudge team name an admin typed. {@code teamId} is an <em>exact</em> DOMjudge team
+     * id and is null everywhere else.
+     *
+     * <p>Both exist because name matching is a guess and an id is not. Where an admin has
+     * attached a DOMjudge account, the team is known exactly and there is no reason to go back
+     * to comparing strings — which is the step that turns a renamed team into a member who
+     * silently drops off the board.
+     */
+    record Competitor(Long userId, String handle, String teamId) {}
 
     /**
      * What the judge says about one competitor.

@@ -20,10 +20,24 @@ public final class RunDto {
     ) {}
 
     public record RunRequest(
-        /** Runtime id from {@code GET /api/run/languages}, e.g. "cpp". */
+        /** Runtime id from {@code GET /api/run/languages}, e.g. "cpp" or "python3". */
         @NotBlank String language,
         @NotBlank @Size(max = 262_144, message = "Source must be under 256 KB") String source,
-        @NotNull @Size(max = 50, message = "At most 50 tests per run") List<TestCase> tests
+        @NotNull @Size(max = 50, message = "At most 50 tests per run") List<TestCase> tests,
+        /**
+         * Which event this run is part of, when it is part of one.
+         *
+         * <p>Both null on Practice, which is the common case and is unrestricted. Sent by the
+         * contest and examination workspaces so that an examination restricted to two languages
+         * restricts the Run button too — otherwise the rule would hold at the Submit button and
+         * nowhere else, which is where candidates spend the least of their time.
+         *
+         * <p>Untrusted, and it does not need to be trusted: naming an event is only ever a way
+         * to be held to <em>more</em> rules than the default, never fewer. A caller who omits
+         * it gets the unrestricted local runner, which is what Practice is anyway.
+         */
+        @Size(max = 20) String platform,
+        @Size(max = 100) String contestId
     ) {}
 
     /** What happened to one test. */

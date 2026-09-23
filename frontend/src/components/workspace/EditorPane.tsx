@@ -135,7 +135,20 @@ export function EditorPane({
 
   const run = useRunCode()
   const { data: runnerStatus } = useRunnerStatus()
-  const { data: runtimes } = useRunnerLanguages()
+
+  /*
+   * The runtimes offered here are scoped to the event, when there is one.
+   *
+   * An examination restricted to C++ and Python must restrict Run as well as Submit. Doing it
+   * only at Submit would leave the rule holding in the place a candidate touches once and not
+   * in the place they touch every two minutes — and `contest` is already threaded in for the
+   * history panel, so it costs nothing to ask with it. On Practice both are undefined and the
+   * server answers with everything it can build, which is what Practice has always been.
+   */
+  const runScope = useMemo(
+    () => (contest ? { platform: contest.platform, contestId: contest.id } : {}),
+    [contest])
+  const { data: runtimes } = useRunnerLanguages(runScope)
 
   /**
    * Reseed the cases from the statement's samples.
@@ -219,7 +232,7 @@ export function EditorPane({
       label: `Case ${i + 1}`,
     }))
     setConsoleTab('result')
-    run.mutate({ language: runtime.id, source, tests })
+    run.mutate({ language: runtime.id, source, tests, ...runScope })
   }
 
   const loadFile = async (file: File) => {

@@ -65,16 +65,27 @@ public class ViolationService {
      * nothing and is not an error, which is what lets the desktop client retry freely.
      */
     @Transactional
-    public int report(Long userId, Long contestId, GroupsDto.ViolationReport report) {
+    /**
+     * The contest, if this user is actually sitting it.
+     *
+     * Membership is the authorisation. Without it, anyone with a contest id could file reports
+     * against a round they are not in — or, once the monitor heartbeat started using the same
+     * check, keep somebody else's contest window looking alive from the other side of the
+     * room. Shared by both so the two can never disagree about who may speak for whom.
+     */
+    public GroupContest requireParticipant(Long userId, Long contestId) {
         GroupContest contest = contestRepository.findById(contestId)
             .orElseThrow(() -> ApiException.notFound("No such contest"));
 
-        // Membership is the authorisation. Without it, anyone with a contest id could file
-        // reports against a round they are not sitting.
         if (!memberRepository.existsByGroupGroupIdAndUserUserId(
                 contest.getGroup().getGroupId(), userId)) {
             throw ApiException.forbidden("You are not in the group running this contest.");
         }
+        return contest;
+    }
+
+    public int report(Long userId, Long contestId, GroupsDto.ViolationReport report) {
+        GroupContest contest = requireParticipant(userId, contestId);
 
         if (report.events() == null || report.events().isEmpty()) return 0;
         if (report.events().size() > MAX_EVENTS_PER_REPORT) {

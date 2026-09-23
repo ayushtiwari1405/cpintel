@@ -12,12 +12,13 @@ const PAGE_TITLES: Record<string, string> = {
   '/compete':         'Compete',
   '/platforms':       'Platforms',
   '/profile':         'Profile',
-  '/groups':          'Groups',
+  '/teams':           'Teams',
   '/admin':               'Admin',
   '/admin/users':         'Admin · Users',
   '/admin/audit':         'Admin · Audit trail',
   '/admin/contest-files': 'Admin · Contest files',
-  '/admin/groups':        'Admin · Groups',
+  '/admin/teams':         'Admin · Teams',
+  '/admin/exams':         'Admin · Examinations',
 }
 
 /**

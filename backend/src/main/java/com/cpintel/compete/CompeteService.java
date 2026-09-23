@@ -1,7 +1,10 @@
 package com.cpintel.compete;
 
+import com.cpintel.events.ExamSessionRecorder;
 import com.cpintel.exception.ApiException;
 import com.cpintel.files.ContestFilePolicy;
+import com.cpintel.groups.LanguagePolicy;
+import com.cpintel.groups.ProctoringGate;
 import com.cpintel.files.FilesDto;
 import com.cpintel.files.PersonalFileService;
 import com.cpintel.practice.PracticeDto;
@@ -13,6 +16,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * The compete arena, over whichever judge the contest is on.
@@ -36,6 +40,9 @@ public class CompeteService {
     private final List<CompeteProvider> providers;
     private final PersonalFileService personalFiles;
     private final ContestFilePolicy filePolicy;
+    private final ProctoringGate proctoring;
+    private final LanguagePolicy languagePolicy;
+    private final ExamSessionRecorder examSessions;
 
     private Map<String, CompeteProvider> byPlatform;
 
@@ -93,18 +100,66 @@ public class CompeteService {
         return provider(platform).statement(userId, contestId, index);
     }
 
-    public byte[] statementPdf(Long userId, String platform, String contestId, String index) {
-        return provider(platform).statementPdf(userId, contestId, index);
+    public CompeteDto.StatementDocument statementDocument(Long userId, String platform,
+                                                          String contestId, String index) {
+        return provider(platform).statementDocument(userId, contestId, index);
     }
 
+    /**
+     * The languages this contest will accept, as the editor's picker shows them.
+     *
+     * <p>The judge's own list, narrowed to what the event's administrator allowed. The
+     * narrowing is here rather than in a provider because it is a property of the event and not
+     * of the judge — see {@link LanguagePolicy} — so one rule covers both judges and cannot
+     * drift between them.
+     */
     public List<PracticeDto.LanguageOption> languages(Long userId, String platform,
                                                       String contestId) {
-        return provider(platform).languages(userId, contestId);
+        CompeteProvider target = provider(platform);
+        List<PracticeDto.LanguageOption> offered = target.languages(userId, contestId);
+
+        Set<String> allowed =
+            languagePolicy.restrictionFor(userId, target.platform(), contestId);
+        return languagePolicy.filter(offered, allowed);
     }
 
+    /**
+     * Sends a solution to the judge, once the round's own rules allow it.
+     *
+     * <p>The proctoring check sits here rather than inside a provider on purpose. It is a
+     * property of the <em>round</em> — an admin marked a group contest as monitored — and has
+     * nothing to do with which judge the contest happens to run on. Putting it in the DOMjudge
+     * provider would have left the identical Codeforces round ungated, and the second copy
+     * would have drifted from the first.
+     *
+     * <p>It runs before the provider is asked for anything, so a refused submission never
+     * reaches the judge and never lands in the archive.
+     */
     public CompeteDto.ContestSubmission submit(Long userId, String platform, String contestId,
                                                CompeteDto.ContestSubmitRequest req) {
-        return provider(platform).submit(userId, contestId, req);
+        CompeteProvider target = provider(platform);
+        proctoring.requireMonitored(userId, target.platform(), contestId);
+
+        // Only when an admin actually restricted this event. The check costs a call to the
+        // judge's language catalogue, which on Codeforces means scraping a page — so the
+        // unrestricted path, which is every contest and most examinations, does not pay for it.
+        Set<String> allowed =
+            languagePolicy.restrictionFor(userId, target.platform(), contestId);
+        if (!allowed.isEmpty()) {
+            languagePolicy.requireAllowed(allowed, req.languageId(),
+                languagePolicy.filter(target.languages(userId, contestId), allowed));
+        }
+
+        CompeteDto.ContestSubmission submission = target.submit(userId, contestId, req);
+
+        // Recorded here rather than left to the client: a submission passes through the server
+        // on its way to the judge, so it is one of the few parts of an examination session
+        // CPIntel knows first-hand and nobody can decline to report. Does nothing outside an
+        // examination, which is the common case.
+        examSessions.recordSubmission(userId, target.platform(), contestId, req.index(),
+            submission == null ? null : submission.id());
+
+        return submission;
     }
 
     public List<CompeteDto.ContestSubmission> submissions(Long userId, String platform,
@@ -114,6 +169,10 @@ public class CompeteService {
 
     public CompeteDto.RankInfo rank(Long userId, String platform, String contestId) {
         return provider(platform).rank(userId, contestId);
+    }
+
+    public CompeteDto.Leaderboard leaderboard(Long userId, String platform, String contestId) {
+        return provider(platform).leaderboard(userId, contestId);
     }
 
     // ---------------------------------------------------------- personal files

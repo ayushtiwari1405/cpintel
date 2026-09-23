@@ -28,6 +28,15 @@ public class RateLimitProperties {
     private Rule recovery = new Rule(5,  Duration.ofMinutes(15));
     private Rule run      = new Rule(30, Duration.ofMinutes(1));
     private Rule sync     = new Rule(5,  Duration.ofMinutes(5));
+    /**
+     * Guesses at an examination password, per candidate.
+     *
+     * Tighter than the others, because the thing being guessed at is short enough to be worth
+     * guessing at, and because a candidate reading a code off a slip on their own desk does
+     * not need ten attempts. Generous enough for somebody who mistypes it twice and cannot
+     * read their own handwriting the third time.
+     */
+    private Rule examUnlock = new Rule(10, Duration.ofMinutes(5));
 
     @Getter
     @Setter

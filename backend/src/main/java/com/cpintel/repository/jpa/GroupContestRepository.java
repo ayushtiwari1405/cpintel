@@ -18,33 +18,67 @@ public interface GroupContestRepository extends JpaRepository<GroupContest, Long
     Optional<GroupContest> findByGroupGroupIdAndPlatformAndExternalId(
         Long groupId, String platform, String externalId);
 
+    List<GroupContest> findByKindOrderByStartsAtDesc(String kind);
+
     /**
-     * The contest this person is sitting right now, if any.
+     * Everything one person may enter, whichever way they were given it.
      *
-     * Matched on the external contest rather than on a CPIntel id, because the compete page
-     * knows only which Codeforces round is open — it has no idea a group was laid over it.
-     * Membership is part of the query so that opening someone else's group contest finds
-     * nothing rather than reporting into it.
+     * Three routes, unioned: their team was assigned, they were named directly, or the event is
+     * public. Written as a union of three selects rather than as one join with a pile of ORs
+     * because each route has its own index and the planner can use all three; more importantly
+     * the three are genuinely different arrangements, and a single condition that happened to
+     * cover them would be one edit away from silently covering a fourth.
+     *
+     * <p>Drafts are excluded here rather than at the call site. A draft is an event nobody has
+     * finished writing, and the one thing that must never happen is a half-configured
+     * examination appearing on a candidate's screen because it was saved with today's date on
+     * it.
      */
     @Query("""
-        SELECT c FROM GroupContest c JOIN c.group g JOIN g.members m
-        WHERE m.user.userId = :userId
-          AND c.platform = :platform
-          AND c.externalId = :externalId
-          AND g.isActive = true
+        SELECT c FROM GroupContest c WHERE c.lifecycle <> 'DRAFT' AND (
+            EXISTS (SELECT 1 FROM ContestAssignment a JOIN a.group g JOIN g.members m
+                    WHERE a.contest = c AND m.user.userId = :userId AND g.isActive = true)
+         OR EXISTS (SELECT 1 FROM ContestAssignment a
+                    WHERE a.contest = c AND a.user.userId = :userId)
+         OR c.visibility = 'PUBLIC')
+        ORDER BY c.startsAt DESC
+        """)
+    List<GroupContest> findAllForParticipant(@Param("userId") Long userId);
+
+    /**
+     * The event this person is sitting right now, if any, matched on the external contest.
+     *
+     * The compete page knows only which round is open on the judge — it has no idea CPIntel laid
+     * an event over it — so this is how the monitor learns where to report. The participation
+     * check is part of the query so that opening somebody else's examination finds nothing
+     * rather than reporting into it.
+     */
+    @Query("""
+        SELECT c FROM GroupContest c
+        WHERE c.platform = :platform AND c.externalId = :externalId
+          AND c.lifecycle <> 'DRAFT' AND (
+            EXISTS (SELECT 1 FROM ContestAssignment a JOIN a.group g JOIN g.members m
+                    WHERE a.contest = c AND m.user.userId = :userId AND g.isActive = true)
+         OR EXISTS (SELECT 1 FROM ContestAssignment a
+                    WHERE a.contest = c AND a.user.userId = :userId)
+         OR c.visibility = 'PUBLIC')
         ORDER BY c.startsAt DESC
         """)
     List<GroupContest> findForParticipant(@Param("userId") Long userId,
                                           @Param("platform") String platform,
                                           @Param("externalId") String externalId);
 
-    /** Everything this person is enrolled in, for their own list. */
+    /** Whether this one event is open to this one person. */
     @Query("""
-        SELECT c FROM GroupContest c JOIN c.group g JOIN g.members m
-        WHERE m.user.userId = :userId AND g.isActive = true
-        ORDER BY c.startsAt DESC
+        SELECT COUNT(c) > 0 FROM GroupContest c
+        WHERE c.contestId = :contestId AND c.lifecycle <> 'DRAFT' AND (
+            EXISTS (SELECT 1 FROM ContestAssignment a JOIN a.group g JOIN g.members m
+                    WHERE a.contest = c AND m.user.userId = :userId AND g.isActive = true)
+         OR EXISTS (SELECT 1 FROM ContestAssignment a
+                    WHERE a.contest = c AND a.user.userId = :userId)
+         OR c.visibility = 'PUBLIC')
         """)
-    List<GroupContest> findAllForParticipant(@Param("userId") Long userId);
+    boolean isAssignedTo(@Param("contestId") Long contestId, @Param("userId") Long userId);
 
     /** Contests whose window is open, which are the ones worth refreshing often. */
     @Query("""

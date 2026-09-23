@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { runApi } from '@/api/runApi'
+import { runApi, type RunScope } from '@/api/runApi'
 import type { RunRequest } from '@/types'
 
 /**
@@ -16,11 +16,17 @@ export function useRunnerStatus() {
   })
 }
 
-/** Languages the backend can build here, with the reason for any that it cannot. */
-export function useRunnerLanguages() {
+/**
+ * Languages the backend can build here, with the reason for any that it cannot.
+ *
+ * Narrowed to what the event allows when one is named. Keyed on the scope so a candidate who
+ * leaves a restricted examination and opens Practice is not served the examination's shortened
+ * list out of the cache.
+ */
+export function useRunnerLanguages(scope: RunScope = {}) {
   return useQuery({
-    queryKey: ['runner', 'languages'],
-    queryFn: () => runApi.languages().then(r => r.data),
+    queryKey: ['runner', 'languages', scope.platform ?? null, scope.contestId ?? null],
+    queryFn: () => runApi.languages(scope).then(r => r.data),
     staleTime: 1000 * 60 * 30,
   })
 }

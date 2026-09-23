@@ -1,5 +1,6 @@
 package com.cpintel.groups;
 
+import com.cpintel.entity.ContestAssignment;
 import com.cpintel.entity.ContestGroup;
 import com.cpintel.entity.GroupContest;
 import com.cpintel.entity.GroupMember;
@@ -35,6 +36,7 @@ import java.util.Map;
 public class GroupService {
 
     private final ContestGroupRepository groupRepository;
+    private final ContestAssignmentRepository assignmentRepository;
     private final GroupMemberRepository memberRepository;
     private final GroupContestRepository contestRepository;
     private final GroupStandingRepository standingRepository;
@@ -45,7 +47,12 @@ public class GroupService {
     private final AuditService auditService;
 
     // ----------------------------------------------------------------- groups
+    //
+    // The reads below run in a transaction because a contest's team is a lazy association and
+    // every summary reads its name. Open-in-view is off, so without one each repository call
+    // gets its own session and the proxy is detached by the time the mapper touches it.
 
+    @Transactional(readOnly = true)
     public List<GroupsDto.GroupSummary> list() {
         return groupRepository.findAllByOrderByCreatedAtDesc().stream()
             .map(group -> GroupMapper.toGroupSummary(group,
@@ -54,6 +61,7 @@ public class GroupService {
             .toList();
     }
 
+    @Transactional(readOnly = true)
     public GroupsDto.GroupDetail detail(Long groupId) {
         ContestGroup group = require(groupId);
         List<GroupMember> members = memberRepository.findByGroup(groupId);
@@ -155,6 +163,51 @@ public class GroupService {
         return GroupMapper.toMember(member, codeforcesHandle(member));
     }
 
+    /**
+     * Moves somebody from one team to another, keeping the handle they are found under.
+     *
+     * <p>One call rather than a remove and an add, because the two are not the same thing when
+     * they are done separately: between them the person is on no team, which is the moment an
+     * examination assigned to their old team stops reaching them and the one assigned to their
+     * new team has not started to. It is also the moment a failure leaves them nowhere.
+     *
+     * <p>Their results stay where they are. A standings row belongs to the event it was
+     * computed for, not to whichever team the person is on today, and rewriting history to
+     * match a transfer would quietly restate who sat what.
+     */
+    @Transactional
+    public GroupsDto.Member moveMember(Long adminId, Long fromGroupId, Long userId,
+                                       Long toGroupId, HttpServletRequest httpReq) {
+        if (fromGroupId.equals(toGroupId)) {
+            throw ApiException.badRequest("That is the team they are already on.");
+        }
+        ContestGroup target = require(toGroupId);
+        GroupMember existing = memberRepository
+            .findByGroupGroupIdAndUserUserId(fromGroupId, userId)
+            .orElseThrow(() -> ApiException.notFound("That person is not in this group"));
+
+        if (memberRepository.existsByGroupGroupIdAndUserUserId(toGroupId, userId)) {
+            throw ApiException.conflict(
+                existing.getUser().getUsername() + " is already in " + target.getName() + ".");
+        }
+
+        String handle = existing.getExternalHandle();
+        User user = existing.getUser();
+        memberRepository.delete(existing);
+        memberRepository.flush();
+
+        GroupMember moved = memberRepository.save(GroupMember.builder()
+            .group(target)
+            .user(user)
+            .externalHandle(handle)
+            .joinedAt(Instant.now())
+            .build());
+
+        auditService.record(adminId, AuditService.GROUP_MEMBER_MOVED, "GROUP",
+            fromGroupId + "->" + toGroupId + ":" + userId, httpReq);
+        return GroupMapper.toMember(moved, codeforcesHandle(moved));
+    }
+
     @Transactional
     public void removeMember(Long adminId, Long groupId, Long userId, HttpServletRequest httpReq) {
         if (!memberRepository.existsByGroupGroupIdAndUserUserId(groupId, userId)) {
@@ -167,6 +220,15 @@ public class GroupService {
 
     // --------------------------------------------------------------- contests
 
+    /**
+     * Lays a contest over one team, from that team's own screen.
+     *
+     * <p>The row this writes is the same row {@code EventService} writes, and participation is
+     * read from the assignment either way — so a contest added here is reachable by exactly the
+     * rule that reaches an examination assigned to three classes. It is published rather than
+     * drafted, because on this screen an admin is adding a round that already exists on the
+     * judge, which is a different act from composing an examination.
+     */
     @Transactional
     public GroupsDto.ContestSummary addContest(Long adminId, Long groupId,
                                                GroupsDto.ContestRequest req,
@@ -187,13 +249,31 @@ public class GroupService {
 
         GroupContest contest = contestRepository.save(GroupContest.builder()
             .group(group)
+            .kind(GroupContest.Kind.CONTEST.name())
+            .lifecycle(GroupContest.Lifecycle.SCHEDULED.name())
+            .visibility(GroupContest.Visibility.TEAMS.name())
             .platform(platform)
             .externalId(externalId)
             .name(req.name().trim())
             .url(trimToNull(req.url()))
             .startsAt(req.startsAt())
             .endsAt(req.endsAt())
-            .lockdownRequired(req.lockdownRequired() == null || req.lockdownRequired())
+            // Never. A team contest is practice among people who chose to enter it, and
+            // monitoring is the thing that makes an examination an examination — see
+            // EventService.lockdownFor and ProctoringGate. A round that needs invigilating is
+            // created as an EXAM from /admin/exams, which is where the passwords, the away
+            // threshold, the desktop policy and the session log all live. The request field is
+            // kept so an older client does not fail validation; it no longer decides anything.
+            .lockdownRequired(false)
+            .build());
+
+        // Without this the round would exist and nobody would be able to enter it: since
+        // examinations arrived, who may sit an event is read from its assignments rather than
+        // from the team it happens to hang off.
+        assignmentRepository.save(ContestAssignment.builder()
+            .contest(contest)
+            .group(group)
+            .assignedBy(adminId)
             .build());
 
         auditService.record(adminId, AuditService.GROUP_CONTEST_ADDED, "CONTEST",
@@ -227,6 +307,7 @@ public class GroupService {
      * parameter rather than a field on the row so that the participant path cannot accidentally
      * carry conduct data about other people by forgetting to null something out.
      */
+    @Transactional(readOnly = true)
     public GroupsDto.Standings standings(Long contestId, boolean withViolations) {
         GroupContest contest = requireContest(contestId);
         List<GroupStanding> rows = standingRepository.findByContest(contestId);
@@ -249,6 +330,7 @@ public class GroupService {
             GroupMapper.unmatched(rows));
     }
 
+    @Transactional(readOnly = true)
     public GroupsDto.ViolationFeed violations(Long contestId, int limit) {
         return violationService.feed(requireContest(contestId), limit);
     }
@@ -256,6 +338,7 @@ public class GroupService {
     // ------------------------------------------------------ participant reads
 
     /** The groups this person is in, for their own screen. */
+    @Transactional(readOnly = true)
     public List<GroupsDto.GroupSummary> myGroups(Long userId) {
         return groupRepository.findForMember(userId).stream()
             .map(group -> GroupMapper.toGroupSummary(group,
@@ -271,9 +354,15 @@ public class GroupService {
      * members is the admin's decision to make, and defaulting to "everyone sees everyone" would
      * make that decision for them.
      */
+    @Transactional(readOnly = true)
     public List<GroupsDto.MyContest> myContests(Long userId) {
         List<GroupsDto.MyContest> result = new ArrayList<>();
         for (GroupContest contest : contestRepository.findAllForParticipant(userId)) {
+            // Examinations are not contests and do not belong on a team page: they are sat
+            // from the examinations side of the compete arena, where they arrive with their
+            // rules, their monitoring and their own clock. Listing them twice, in two places
+            // with two different sets of affordances, is how somebody enters the wrong one.
+            if (contest.isExam()) continue;
             List<GroupStanding> rows = standingRepository.findByContest(contest.getContestId());
             GroupStanding mine = rows.stream()
                 .filter(row -> row.getUser().getUserId().equals(userId))
@@ -295,6 +384,7 @@ public class GroupService {
      * laid over it — so this is how the lock learns where to report. Returns null when there is
      * nothing to report to, which is the normal case for ordinary practice.
      */
+    @Transactional(readOnly = true)
     public GroupsDto.ContestSummary activeFor(Long userId, String platform, String externalId) {
         List<GroupContest> candidates = contestRepository.findForParticipant(
             userId, platformOf(platform), externalId.trim());

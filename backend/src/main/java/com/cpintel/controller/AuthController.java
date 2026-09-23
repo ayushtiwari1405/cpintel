@@ -4,7 +4,9 @@ import com.cpintel.common.ApiResponse;
 import com.cpintel.dto.AuthDto;
 import com.cpintel.security.JwtService;
 import com.cpintel.service.AuthService;
+import com.cpintel.service.PasswordService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -22,6 +24,7 @@ import org.springframework.web.bind.annotation.*;
 public class AuthController {
 
     private final AuthService authService;
+    private final PasswordService passwordService;
     private final JwtService jwtService;
 
     @PostMapping("/register")
@@ -63,21 +66,63 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.message("Logged out successfully"));
     }
 
+    /**
+     * Asks for a reset link.
+     *
+     * <p>Answers the same way whatever happened — link sent, address unknown, account
+     * deactivated. This endpoint is open to the internet, and an answer that distinguished
+     * those cases would be a way to test a list of addresses against the roster of whoever is
+     * being examined here. The person who owns the address finds out by receiving the mail.
+     */
     @PostMapping("/forgot-password")
-    @Operation(summary = "Request password reset")
+    @Operation(summary = "Ask for a password reset link")
     public ResponseEntity<ApiResponse<Void>> forgotPassword(
-        @Valid @RequestBody AuthDto.ForgotPasswordRequest req
+        @Valid @RequestBody AuthDto.ForgotPasswordRequest req,
+        HttpServletRequest httpReq
     ) {
-        // Email sending deferred — returns success regardless to prevent enumeration
-        return ResponseEntity.ok(ApiResponse.message("If that email exists, a reset link has been sent"));
+        passwordService.requestReset(req.getEmail(), httpReq);
+        return ResponseEntity.ok(ApiResponse.message(
+            "If an account uses that address, a reset link is on its way to it."));
     }
 
+    /**
+     * Spends a reset link.
+     *
+     * <p>Unlike the request above this answers honestly, because somebody holding a link that
+     * has expired or been used needs to be told which, and a token that resolves to nothing
+     * says nothing about who owns any account.
+     */
     @PostMapping("/reset-password")
-    @Operation(summary = "Reset password using token")
+    @Operation(summary = "Set a new password using a reset link")
     public ResponseEntity<ApiResponse<Void>> resetPassword(
-        @Valid @RequestBody AuthDto.ResetPasswordRequest req
+        @Valid @RequestBody AuthDto.ResetPasswordRequest req,
+        HttpServletRequest httpReq
     ) {
-        return ResponseEntity.ok(ApiResponse.message("Password reset successfully"));
+        passwordService.completeReset(req.getToken(), req.getNewPassword(), httpReq);
+        return ResponseEntity.ok(ApiResponse.message(
+            "Your password has been changed. Sign in with it — every other device has been "
+            + "signed out."));
+    }
+
+    /**
+     * Changes your own password while signed in.
+     *
+     * <p>The current password is asked for even though the caller already holds a valid token,
+     * because a token can be an unlocked laptop and this check is what makes the person at the
+     * keyboard the owner rather than whoever sat down after them.
+     */
+    @PostMapping("/change-password")
+    @Operation(summary = "Change your own password")
+    @SecurityRequirement(name = "bearerAuth")
+    public ResponseEntity<ApiResponse<Void>> changePassword(
+        @AuthenticationPrincipal Long userId,
+        @Valid @RequestBody AuthDto.ChangePasswordRequest req,
+        HttpServletRequest httpReq
+    ) {
+        passwordService.change(userId, req.getCurrentPassword(), req.getNewPassword(), httpReq);
+        return ResponseEntity.ok(ApiResponse.message(
+            "Your password has been changed. Every device that was signed in has been signed "
+            + "out, including this one — sign in again with the new password."));
     }
 
     private String extractBearerToken(HttpServletRequest req) {

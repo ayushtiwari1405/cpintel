@@ -61,6 +61,25 @@ spring:
           max-active: 10
           min-idle: 2
 
+  # Mail. Only password resets and account notices use it, and a deployment that sets no host
+  # still works — MailService logs what it would have sent, which on a closed exam-lab network
+  # is how an operator finishes what the user started. Examination passwords are never sent
+  # here; see ExamPasswordService.
+  mail:
+    host: ${SMTP_HOST:}
+    port: ${SMTP_PORT:587}
+    username: ${SMTP_USER:}
+    password: ${SMTP_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: ${SMTP_AUTH:true}
+          starttls:
+            enable: ${SMTP_STARTTLS:true}
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
+
   cache:
     type: redis
     redis:
@@ -97,6 +116,12 @@ management:
   endpoint:
     health:
       show-details: when-authorized
+  health:
+    mail:
+      # Mail is optional (MailService logs instead of sending when SMTP_HOST is blank), but a
+      # blank host still creates a sender whose health check can't connect — which held
+      # /actuator/health at 503 and left start.sh waiting out its full timeout.
+      enabled: false
   metrics:
     export:
       prometheus:
@@ -118,6 +143,11 @@ logging:
     console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} [%X{requestId:-}] - %msg%n"
 
 cpintel:
+  mail:
+    # Who the mail comes from, and where a link in it points — the address people actually
+    # open CPIntel at, which is not the backend's own.
+    from: ${CPINTEL_MAIL_FROM:CPIntel <no-reply@cpintel.local>}
+    base-url: ${CPINTEL_PUBLIC_URL:http://localhost:5173}
   desktop:
     # Desktop builds older than this are told to update rather than left to fail on a route
     # they no longer recognise. 0.0.0 accepts everything.
@@ -129,16 +159,22 @@ cpintel:
     # these add the per-account limits the edge cannot express, and cover the dev deployment,
     # which has no nginx in front of it at all.
     enabled: ${CPINTEL_RATE_LIMIT_ENABLED:true}
-    login:    { limit: 20, window: 1m }    # per address
-    account:  { limit: 5,  window: 5m }    # per email — cleared on a successful sign-in
-    recovery: { limit: 5,  window: 15m }   # per address, on register and password reset
-    run:      { limit: 30, window: 1m }    # per user
-    sync:     { limit: 5,  window: 5m }    # per user
+    login:       { limit: 20, window: 1m }   # per address
+    account:     { limit: 5,  window: 5m }   # per identifier — cleared on a successful sign-in
+    recovery:    { limit: 5,  window: 15m }  # per address, on register and password reset
+    run:         { limit: 30, window: 1m }   # per user
+    sync:        { limit: 5,  window: 5m }   # per user
+    # Guesses at an examination password, per candidate rather than per address: a room full
+    # of people sitting the same paper shares one address.
+    exam-unlock: { limit: 10, window: 5m }
   auth:
     # Whether anyone may create their own account. Off: a super admin creates accounts from
     # the console, so who is in this deployment is a decision rather than an accumulation.
     # The endpoint stays mapped while this is false and answers 403 with a reason.
     registration-enabled: ${CPINTEL_REGISTRATION_ENABLED:false}
+    # How long a password reset link is worth. Long enough to go and find the mail, short
+    # enough that one left in an inbox is not a standing key to the account.
+    reset-token-minutes: ${CPINTEL_RESET_TOKEN_MINUTES:60}
   admin:
     # Names the super administrator — the only account that can assign roles or create others.
     # An existing account with this address is promoted at startup. If none exists, one is
@@ -176,8 +212,51 @@ cpintel:
     # Self-hosted, so nothing here works until an operator points it at an instance. Leave the
     # credentials empty for a contest whose scoreboard is public.
     base-url: ${CPINTEL_DOMJUDGE_URL:}
+    # Optional. A service account lets the group standings board and the shared contest cache
+    # make contest-wide reads, which a plain team account is refused. The compete arena works
+    # without it by reading as each contestant instead - at the cost of the fan-out.
     username: ${CPINTEL_DOMJUDGE_USER:}
     password: ${CPINTEL_DOMJUDGE_PASSWORD:}
+    # AES-256-GCM key for the per-contestant DOMjudge logins an admin attaches. Required
+    # before any account can be attached; without it the arena has nothing to compete as.
+    # Unlike the Codeforces session key this protects an actual password - see
+    # DomjudgeCredentialStore for why that is unavoidable and what bounds it.
+    credential-key: ${CPINTEL_DOMJUDGE_CREDENTIAL_KEY:}
+    # Attached credentials expire on their own, so a round nobody cleaned up after does not
+    # leave passwords on file indefinitely.
+    credential-ttl-days: ${CPINTEL_DOMJUDGE_CREDENTIAL_TTL_DAYS:30}
+
+  exams:
+    # How long an examination's session log is kept.
+    #
+    # That log is evidence about a person, and keeping it forever by default is a decision
+    # nobody made - so a deployment says how long it wants. Set to 0 to keep everything, which
+    # is a deliberate choice rather than an accident of the default. The sweep that enforces
+    # this runs daily; see ExamRetentionScheduler.
+    event-retention-days: ${CPINTEL_EXAM_RETENTION_DAYS:365}
+    retention-sweep-ms: ${CPINTEL_EXAM_RETENTION_SWEEP_MS:86400000}
+    # Not at startup: a deployment that had just lowered its retention would otherwise delete a
+    # year of sessions as a side effect of a restart, at a moment nobody is watching.
+    retention-initial-delay-ms: 3600000
+    # AES-256-GCM key for the examination passwords an admin generates — the one the
+    # invigilator gives the room, and each candidate's own code. Required before either can be
+    # generated; without it a paper simply runs unprotected, which is a visible state on the
+    # admin screen rather than a silent one.
+    #
+    # These are encrypted rather than hashed because somebody has to read them back: the desk
+    # slips are printed in the morning, and a code is re-read at eleven for the candidate whose
+    # slip went missing. See ExamPasswordService for the full argument and what bounds it.
+    password-key: ${CPINTEL_EXAM_PASSWORD_KEY:}
+    # Characters per generated code, grouped in fours for reading off paper.
+    password-length: ${CPINTEL_EXAM_PASSWORD_LENGTH:8}
+
+  proctoring:
+    # How long one heartbeat vouches for. Several times the send interval below, so a dropped
+    # request or a GC pause does not read as "the monitor stopped" and block a submission the
+    # contestant was entitled to make.
+    heartbeat-ttl-seconds: ${CPINTEL_PROCTOR_HEARTBEAT_TTL:45}
+    # Sent back to the client so the page's timer and the server's tolerance cannot drift.
+    heartbeat-interval-seconds: ${CPINTEL_PROCTOR_HEARTBEAT_INTERVAL:15}
 
   sync:
     initial-batch-size: 1000
@@ -206,6 +285,11 @@ cpintel:
     cpp:
       compiler: ${CPINTEL_RUNNER_CPP:g++}
       standard: ${CPINTEL_RUNNER_CPP_STD:c++20}
+    python:
+      # CPython. A language whose toolchain is missing is reported as unavailable with the
+      # reason, rather than hidden — somebody wondering why Python is not in the picker gets
+      # told to install it instead of guessing.
+      interpreter: ${CPINTEL_RUNNER_PYTHON:python3}
 
   files:
     # Personal files the user can open from inside a running contest.
