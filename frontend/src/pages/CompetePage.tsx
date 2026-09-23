@@ -392,7 +392,7 @@ export default function CompetePage() {
 
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="min-w-0">
-              <h1 className="truncate text-lg font-semibold text-white">{exam.event.name}</h1>
+              <h1 className="truncate text-lg font-semibold text-gray-50">{exam.event.name}</h1>
               <p className="text-xs text-gray-500">
                 This examination has ended. Below is the code you submitted.
               </p>

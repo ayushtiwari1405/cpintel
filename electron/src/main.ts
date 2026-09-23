@@ -1,6 +1,6 @@
 import {
   app, BrowserWindow, ipcMain, shell,
-  Menu, Tray, nativeImage, protocol
+  Menu, Tray, nativeImage, nativeTheme, protocol
 } from 'electron'
 import path from 'path'
 import { spawn, ChildProcess } from 'child_process'
@@ -76,7 +76,9 @@ function createWindow(): void {
     minWidth:  900,
     minHeight: 600,
     title: 'CPIntel',
-    backgroundColor: '#030712',
+    // Painted before the page loads; matches the page background the renderer will pick
+    // when the user has no saved theme (it follows the OS).
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#030712' : '#f4f5f7',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     webPreferences: {
       preload:          path.join(__dirname, 'preload.js'),

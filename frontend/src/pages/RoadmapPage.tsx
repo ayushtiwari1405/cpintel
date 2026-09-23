@@ -36,7 +36,7 @@ export default function RoadmapPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-white">Learning roadmap</h1>
+          <h1 className="text-2xl font-semibold text-gray-50">Learning roadmap</h1>
           <p className="text-gray-400 text-sm mt-0.5">
             {stats.total} sub-skills, unlocked by what you have actually solved
           </p>

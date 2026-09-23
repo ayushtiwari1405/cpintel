@@ -162,7 +162,7 @@ export function StatementView({ problem, isLoading, pdfUrl, pdfText, pdfError }:
             <p className="text-xs font-mono text-gray-500">
               {problem.contestId}{problem.index}
             </p>
-            <h2 className="text-lg font-semibold text-white mt-0.5">{problem.name}</h2>
+            <h2 className="text-lg font-semibold text-gray-50 mt-0.5">{problem.name}</h2>
           </div>
           <button
             // Marked as allowed during a contest: reading the problem on the judge's own site

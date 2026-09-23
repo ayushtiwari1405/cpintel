@@ -12,7 +12,7 @@ import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis,
   ResponsiveContainer, Tooltip
 } from 'recharts'
-import { tooltipStyle } from '@/charts/ChartTheme'
+import { tooltipStyle, CHROME } from '@/charts/ChartTheme'
 
 export default function DashboardPage() {
   const { user } = useAuth()
@@ -49,7 +49,7 @@ export default function DashboardPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-white">
+          <h1 className="text-2xl font-semibold text-gray-50">
             Welcome back, {user?.username} 👋
           </h1>
           <p className="text-gray-400 text-sm mt-0.5">Your CP intelligence overview</p>
@@ -76,7 +76,7 @@ export default function DashboardPage() {
               <div className="absolute left-0 top-5 z-10 hidden group-hover:block 
                       bg-gray-800 border border-gray-700 rounded-lg p-3 
                       w-56 text-xs text-gray-300 shadow-xl">
-                <p className="font-medium text-white mb-1">How it's calculated</p>
+                <p className="font-medium text-gray-50 mb-1">How it's calculated</p>
                 <p>Normalizes each platform's rating to a 0–1000 scale, then blends them:</p>
                 <ul className="mt-1.5 space-y-0.5 text-gray-400">
                   <li>Codeforces — 40%</li>
@@ -103,7 +103,7 @@ export default function DashboardPage() {
               <p className="card-header">{p.charAt(0) + p.slice(1).toLowerCase()}</p>
               {acc ? (
                 <>
-                  <p className="text-2xl font-semibold text-white">
+                  <p className="text-2xl font-semibold text-gray-50">
                     {acc.currentRating ?? '—'}
                   </p>
                   {acc.maxRating && (
@@ -139,8 +139,8 @@ export default function DashboardPage() {
             </div>
             <ResponsiveContainer width="100%" height={220}>
               <RadarChart data={radarData}>
-                <PolarGrid stroke="#1f2937" />
-                <PolarAngleAxis dataKey="topic" tick={{ fill: '#9ca3af', fontSize: 11 }} />
+                <PolarGrid stroke={CHROME.grid} />
+                <PolarAngleAxis dataKey="topic" tick={{ fill: CHROME.label, fontSize: 11 }} />
                 <Radar dataKey="mastery" stroke="#6366f1" fill="#6366f1" fillOpacity={0.25} />
                 <Tooltip
                   contentStyle={tooltipStyle}

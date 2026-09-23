@@ -2,7 +2,8 @@ import { useCallback, useRef } from 'react'
 import Editor, { type OnMount } from '@monaco-editor/react'
 import { Loader2 } from 'lucide-react'
 
-import { CPINTEL_DARK, monaco } from './monacoSetup'
+import { useTheme } from '@/contexts/ThemeContext'
+import { CPINTEL_DARK, CPINTEL_LIGHT, monaco } from './monacoSetup'
 
 interface Props {
   value: string
@@ -28,6 +29,7 @@ export function CodeEditor({
 }: Props) {
   // Held in refs so the keybindings, which are registered once on mount, always call the
   // current handler rather than the one captured at mount.
+  const { theme } = useTheme()
   const runRef = useRef(onRun)
   const submitRef = useRef(onSubmit)
   runRef.current = onRun
@@ -42,7 +44,7 @@ export function CodeEditor({
     <Editor
       value={value}
       language={language}
-      theme={CPINTEL_DARK}
+      theme={theme === 'dark' ? CPINTEL_DARK : CPINTEL_LIGHT}
       onChange={v => onChange(v ?? '')}
       onMount={handleMount}
       loading={

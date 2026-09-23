@@ -65,7 +65,7 @@ export default function PlatformsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-white">Platforms</h1>
+        <h1 className="text-2xl font-semibold text-gray-50">Platforms</h1>
         <p className="text-gray-400 text-sm mt-1">Link your competitive programming accounts to sync data</p>
       </div>
 
@@ -88,7 +88,7 @@ export default function PlatformsPage() {
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <h2 className={clsx('font-semibold text-base', account ? p.color : 'text-white')}>
+                      <h2 className={clsx('font-semibold text-base', account ? p.color : 'text-gray-50')}>
                         {p.name}
                       </h2>
                       {account && (
@@ -109,7 +109,7 @@ export default function PlatformsPage() {
                         {account.currentRating != null && (
                           <div>
                             <p className="text-xs text-gray-500">Rating</p>
-                            <p className="text-sm font-semibold text-white">{account.currentRating}</p>
+                            <p className="text-sm font-semibold text-gray-50">{account.currentRating}</p>
                           </div>
                         )}
                         {account.maxRating != null && (

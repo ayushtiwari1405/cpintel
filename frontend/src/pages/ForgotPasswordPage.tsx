@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { ArrowLeft, MailCheck, Zap } from 'lucide-react'
 
 import { useForgotPassword } from '@/hooks/useAuth'
+import { ThemeToggle } from '@/components/common/ThemeToggle'
 
 /**
  * Asking for a reset link.
@@ -29,14 +30,15 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
+    <div className="relative min-h-screen bg-gray-950 flex items-center justify-center p-4">
+      <ThemeToggle className="absolute top-4 right-4" />
       <div className="w-full max-w-md">
 
         <div className="flex items-center gap-3 mb-8 justify-center">
           <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center">
             <Zap size={20} className="text-white" />
           </div>
-          <span className="text-xl font-semibold text-white">CPIntel</span>
+          <span className="text-xl font-semibold text-gray-50">CPIntel</span>
         </div>
 
         <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8">
@@ -46,7 +48,7 @@ export default function ForgotPasswordPage() {
                 flex items-center justify-center">
                 <MailCheck size={20} className="text-indigo-400" />
               </div>
-              <h1 className="text-xl font-semibold text-white mt-4">Check your email</h1>
+              <h1 className="text-xl font-semibold text-gray-50 mt-4">Check your email</h1>
               <p className="text-sm leading-relaxed text-gray-400 mt-2">
                 If an account uses <span className="text-gray-300">{email}</span>, a link to set
                 a new password is on its way to it. The link works once and expires within the
@@ -59,7 +61,7 @@ export default function ForgotPasswordPage() {
             </div>
           ) : (
             <>
-              <h1 className="text-2xl font-semibold text-white mb-1">Forgot your password?</h1>
+              <h1 className="text-2xl font-semibold text-gray-50 mb-1">Forgot your password?</h1>
               <p className="text-gray-400 text-sm mb-6">
                 Give us the email address on your account and we will send you a link to set a
                 new password.

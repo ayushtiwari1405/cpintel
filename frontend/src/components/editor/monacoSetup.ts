@@ -49,8 +49,9 @@ window.MonacoEnvironment = {
 
 loader.config({ monaco })
 
-/** CPIntel's palette, so the editor is not a bright rectangle in a dark app. */
+/** CPIntel's palettes, so the editor matches the surrounding cards in either theme. */
 export const CPINTEL_DARK = 'cpintel-dark'
+export const CPINTEL_LIGHT = 'cpintel-light'
 
 monaco.editor.defineTheme(CPINTEL_DARK, {
   base: 'vs-dark',
@@ -67,6 +68,24 @@ monaco.editor.defineTheme(CPINTEL_DARK, {
     'editorWidget.background': '#111827',
     'editorWidget.border': '#1f2937',
     'editorSuggestWidget.background': '#111827',
+  },
+})
+
+monaco.editor.defineTheme(CPINTEL_LIGHT, {
+  base: 'vs',
+  inherit: true,
+  rules: [],
+  colors: {
+    'editor.background': '#ffffff',          // light-mode card surface
+    'editorGutter.background': '#ffffff',
+    'editorLineNumber.foreground': '#aeb4bd',
+    'editorLineNumber.activeForeground': '#4b5563',
+    'editor.lineHighlightBackground': '#f4f5f7',
+    'editor.selectionBackground': '#c7d2fe',
+    'editorIndentGuide.background1': '#e5e7eb',
+    'editorWidget.background': '#ffffff',
+    'editorWidget.border': '#e5e7eb',
+    'editorSuggestWidget.background': '#ffffff',
   },
 })
 

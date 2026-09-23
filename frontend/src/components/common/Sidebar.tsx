@@ -4,6 +4,7 @@ import {
   ChevronRight, LogOut, Code2, Swords, Shield, Users, ScrollText, FolderCog,
   UsersRound, FileText } from 'lucide-react'
 import { useLogout } from '@/hooks/useAuth'
+import { ThemeToggle } from './ThemeToggle'
 import { useAuth } from '@/contexts/AuthContext'
 import { isAdmin, isSuperAdmin, roleLabel } from '@/utils/roles'
 import { clsx } from 'clsx'
@@ -59,7 +60,7 @@ export function Sidebar({ open, onToggle }: Props) {
         <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center flex-shrink-0">
           <Zap size={16} className="text-white" />
         </div>
-        {open && <span className="font-semibold text-white text-sm">CPIntel</span>}
+        {open && <span className="font-semibold text-gray-50 text-sm">CPIntel</span>}
       </div>
 
       {/* Nav */}
@@ -120,6 +121,7 @@ export function Sidebar({ open, onToggle }: Props) {
           <LogOut size={18} className="flex-shrink-0" />
           {open && <span>Logout</span>}
         </button>
+        <ThemeToggle showLabel={open} className="mt-0.5" />
         <button
           onClick={onToggle}
           className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-500

@@ -57,7 +57,7 @@ export default function RecommendationsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-white">Recommendations</h1>
+        <h1 className="text-2xl font-semibold text-gray-50">Recommendations</h1>
         <p className="text-gray-400 text-sm mt-0.5">
           Practice plans built from your per-skill mastery, with the problems to solve
         </p>

@@ -9,7 +9,7 @@ import {
   Cell
 } from 'recharts'
 import { RefreshCw, Loader2, TrendingUp, Target} from 'lucide-react'
-import { tooltipStyle, axisStyle, PLATFORM_COLORS, MASTERY_COLORS } from '@/charts/ChartTheme'
+import { tooltipStyle, axisStyle, CHROME, PLATFORM_COLORS, MASTERY_COLORS } from '@/charts/ChartTheme'
 import { clsx } from 'clsx'
 
 const TABS = ['Overview', 'Topics', 'Contests'] as const
@@ -23,7 +23,7 @@ export default function AnalyticsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-white">Analytics</h1>
+          <h1 className="text-2xl font-semibold text-gray-50">Analytics</h1>
           <p className="text-gray-400 text-sm mt-0.5">Deep dive into your CP performance</p>
         </div>
         <button
@@ -78,7 +78,7 @@ function OverviewTab() {
                 {p.totalContests} contests
               </span>
             </div>
-            <p className="text-2xl font-bold text-white">{p.currentRating ?? '—'}</p>
+            <p className="text-2xl font-bold text-gray-50">{p.currentRating ?? '—'}</p>
             <p className="text-xs text-gray-500 mt-1">Peak: {p.maxRating ?? '—'}</p>
             <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
               <div>
@@ -108,11 +108,11 @@ function OverviewTab() {
         </div>
         <div className="card">
           <p className="card-header">Total solved</p>
-          <p className="text-3xl font-bold text-white">{overview?.totalSolved ?? 0}</p>
+          <p className="text-3xl font-bold text-gray-50">{overview?.totalSolved ?? 0}</p>
         </div>
         <div className="card">
           <p className="card-header">Total contests</p>
-          <p className="text-3xl font-bold text-white">{overview?.totalContests ?? 0}</p>
+          <p className="text-3xl font-bold text-gray-50">{overview?.totalContests ?? 0}</p>
         </div>
         <div className="card">
           <p className="card-header">Consistency</p>
@@ -143,10 +143,10 @@ function TopicsTab() {
         <ResponsiveContainer width="100%" height={300}>
           <BarChart data={barData} layout="vertical"
             margin={{ top: 0, right: 20, bottom: 0, left: 100 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" horizontal={false} />
+            <CartesianGrid strokeDasharray="3 3" stroke={CHROME.grid} horizontal={false} />
             <XAxis type="number" domain={[0, 100]} {...axisStyle} />
             <YAxis type="category" dataKey="topic" width={95}
-              tick={{ fill: '#9ca3af', fontSize: 11 }} />
+              tick={{ fill: CHROME.label, fontSize: 11 }} />
             <Tooltip
               contentStyle={tooltipStyle}
               formatter={(v: any) => [`${Number(v).toFixed(1)}%`, 'Mastery']}
@@ -246,7 +246,7 @@ function ContestsTab() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="card">
           <p className="card-header">Peak rating</p>
-          <p className="text-2xl font-bold text-white">{contests.peakRating ?? '—'}</p>
+          <p className="text-2xl font-bold text-gray-50">{contests.peakRating ?? '—'}</p>
         </div>
         <div className="card">
           <p className="card-header">Avg Δ rating</p>
@@ -278,8 +278,8 @@ function ContestsTab() {
         </p>
         <ResponsiveContainer width="100%" height={280}>
           <LineChart data={chartData} margin={{ top: 5, right: 10, bottom: 5, left: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
-            <XAxis dataKey="name" {...axisStyle} tick={{ fill: '#6b7280', fontSize: 10 }} />
+            <CartesianGrid strokeDasharray="3 3" stroke={CHROME.grid} />
+            <XAxis dataKey="name" {...axisStyle} tick={{ fill: CHROME.mutedTick, fontSize: 10 }} />
             <YAxis {...axisStyle} />
             <Tooltip
               contentStyle={tooltipStyle}

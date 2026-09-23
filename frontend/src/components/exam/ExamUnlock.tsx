@@ -68,7 +68,7 @@ export function ExamUnlock({ exam, onLeave }: Props) {
             <Lock size={18} className="text-indigo-400" />
           </div>
           <div className="min-w-0">
-            <h1 className="truncate text-lg font-semibold text-white">{exam.event.name}</h1>
+            <h1 className="truncate text-lg font-semibold text-gray-50">{exam.event.name}</h1>
             <p className="text-xs text-gray-500">
               {live
                 ? exam.event.endsAt

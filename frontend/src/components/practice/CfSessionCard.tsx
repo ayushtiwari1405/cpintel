@@ -84,7 +84,7 @@ function ConnectedRow(
         <ShieldCheck size={15} className="text-green-400 flex-shrink-0" />
         <div className="min-w-0">
           <p className="text-sm text-gray-200 truncate">
-            Submitting as <span className="font-medium text-white">{handle}</span>
+            Submitting as <span className="font-medium text-gray-50">{handle}</span>
           </p>
           {expiresAt && (
             <p className="text-[11px] text-gray-500">

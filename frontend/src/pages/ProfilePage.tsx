@@ -34,7 +34,7 @@ export default function ProfilePage() {
   return (
     <div className="space-y-6 max-w-xl">
       <div>
-        <h1 className="text-2xl font-semibold text-white">Profile</h1>
+        <h1 className="text-2xl font-semibold text-gray-50">Profile</h1>
         <p className="text-gray-400 text-sm mt-0.5">Manage your account details</p>
       </div>
 
@@ -45,7 +45,7 @@ export default function ProfilePage() {
           {user?.username?.[0]?.toUpperCase()}
         </div>
         <div>
-          <p className="text-white font-medium">{user?.username}</p>
+          <p className="text-gray-50 font-medium">{user?.username}</p>
           <p className="text-gray-400 text-sm">{user?.email}</p>
           <div className="flex gap-2 mt-1">
             <span className="badge badge-blue">{user?.role}</span>

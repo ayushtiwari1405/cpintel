@@ -22,16 +22,26 @@ export const PLATFORM_COLORS: Record<string, string> = {
   CODECHEF:   '#f97316',
 }
 
+// Chrome colours follow the light/dark theme through the palette variables defined in
+// tailwind.config.ts, so charts restyle on toggle without re-rendering.
+const gray = (shade: number) => `rgb(var(--c-gray-${shade}))`
+
+export const CHROME = {
+  grid:      gray(800),
+  label:     gray(400),
+  mutedTick: gray(500),
+}
+
 export const tooltipStyle = {
-  backgroundColor: '#111827',
-  border: '1px solid #1f2937',
+  backgroundColor: gray(900),
+  border: `1px solid ${gray(800)}`,
   borderRadius: '8px',
-  color: '#f9fafb',
+  color: gray(50),
   fontSize: 12,
 }
 
 export const axisStyle = {
-  tick: { fill: '#6b7280', fontSize: 11 },
-  axisLine: { stroke: '#1f2937' },
-  tickLine: { stroke: '#1f2937' },
+  tick: { fill: CHROME.mutedTick, fontSize: 11 },
+  axisLine: { stroke: CHROME.grid },
+  tickLine: { stroke: CHROME.grid },
 }

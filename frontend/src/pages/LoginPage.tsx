@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useLogin } from '@/hooks/useAuth'
 import { Eye, EyeOff, Zap } from 'lucide-react'
+import { ThemeToggle } from '@/components/common/ThemeToggle'
 
 export default function LoginPage() {
   const [identifier, setIdentifier] = useState('')
@@ -15,7 +16,8 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
+    <div className="relative min-h-screen bg-gray-950 flex items-center justify-center p-4">
+      <ThemeToggle className="absolute top-4 right-4" />
       <div className="w-full max-w-md">
 
         {/* Logo */}
@@ -23,12 +25,12 @@ export default function LoginPage() {
           <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center">
             <Zap size={20} className="text-white" />
           </div>
-          <span className="text-xl font-semibold text-white">CPIntel</span>
+          <span className="text-xl font-semibold text-gray-50">CPIntel</span>
         </div>
 
         {/* Card */}
         <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8">
-          <h1 className="text-2xl font-semibold text-white mb-1">Welcome back</h1>
+          <h1 className="text-2xl font-semibold text-gray-50 mb-1">Welcome back</h1>
           <p className="text-gray-400 text-sm mb-6">Sign in to your account</p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
