@@ -154,6 +154,9 @@ jobs:
     # Reports rather than blocks: a new advisory is not a reason a pull request cannot merge,
     # but it is something somebody should see this week.
     continue-on-error: true
+    # Job-level so the steps' if: conditions can see it; secrets cannot be tested in if: directly.
+    env:
+      NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
     steps:
       - uses: actions/checkout@v4
 
@@ -164,10 +167,31 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
-      - name: Audit backend dependencies
-        working-directory: backend
-        run: ./mvnw org.owasp:dependency-check-maven:check -DfailBuildOnCVSS=9 -q
+      # The NVD feed is ~300k records and takes many minutes to pull from scratch. Each run
+      # restores the newest copy, updates it incrementally, and saves it under its own key.
+      - name: Cache NVD data
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository/org/owasp/dependency-check-data
+          key: nvd-${{ github.run_id }}
+          restore-keys: nvd-
 
+      # NVD refuses anonymous API access, so without a key dependency-check aborts before it
+      # scans anything. Add an NVD_API_KEY repository secret (free, from
+      # https://nvd.nist.gov/developers/request-an-api-key) to enable this step.
+      - name: Audit backend dependencies
+        if: env.NVD_API_KEY != ''
+        working-directory: backend
+        run: >
+          ./mvnw org.owasp:dependency-check-maven:13.0.0:check -q
+          -DfailBuildOnCVSS=9 -DnvdApiKey="$NVD_API_KEY"
+
+      - name: Backend audit skipped
+        if: env.NVD_API_KEY == ''
+        run: echo "::warning::NVD_API_KEY secret is not set; backend dependency audit skipped."
+
+      # always(): a backend finding should not hide the frontend's.
       - name: Audit frontend dependencies
+        if: always()
         working-directory: frontend
         run: npm audit --audit-level=high

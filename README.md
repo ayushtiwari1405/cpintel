@@ -618,6 +618,22 @@ cd frontend && npm run type-check
 The frontend has no test runner yet; `npm run lint` is defined but has no ESLint config, so it
 currently fails. Both are known gaps rather than oversights.
 
+### Running CI before pushing
+
+`scripts/ci-local.sh` runs the same stages as `.github/workflows/ci.yml` — workflow lint, backend
+tests with the coverage gate, frontend type check and build, and both Docker images — against a
+clean snapshot of the repo, so local `node_modules`, `target/` or `public/mathjax` cannot hide a
+failure the CI runner would hit. It takes about two minutes warm.
+
+```bash
+./scripts/ci-local.sh               # working tree, uncommitted changes included
+./scripts/ci-local.sh --no-docker   # skip the image builds
+./scripts/ci-local.sh --no-cache    # cold Docker build, as a fresh runner does
+./scripts/ci-local.sh --audit       # add the dependency audits (backend needs NVD_API_KEY)
+
+git config core.hooksPath .githooks # run it on every git push (skip once: git push --no-verify)
+```
+
 ## Desktop app
 
 Electron dev mode does **not** spawn its own backend or bundle the frontend — it opens a window

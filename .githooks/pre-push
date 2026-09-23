@@ -1,0 +1,28 @@
+#!/bin/bash
+# Runs the local CI (scripts/ci-local.sh) against the commit being pushed.
+#
+# Enable once per clone:   git config core.hooksPath .githooks
+# Skip for one push:       git push --no-verify
+# Skip the Docker builds:  CI_LOCAL_ARGS=--no-docker git push
+#
+# stdin carries one "<local ref> <local sha> <remote ref> <remote sha>" line per ref pushed.
+# Each distinct commit is checked once; deletions (all-zero sha) have nothing to build.
+set -euo pipefail
+
+REPO="$(git rev-parse --show-toplevel)"
+ZERO="0000000000000000000000000000000000000000"
+checked=" "
+
+while read -r _local_ref local_sha _remote_ref _remote_sha; do
+  [[ "$local_sha" == "$ZERO" ]] && continue
+  [[ "$checked" == *" $local_sha "* ]] && continue
+  checked+="$local_sha "
+
+  # shellcheck disable=SC2086  # CI_LOCAL_ARGS is a flag list, word-splitting intended
+  if ! "$REPO/scripts/ci-local.sh" --ref "$local_sha" ${CI_LOCAL_ARGS:-}; then
+    echo ""
+    echo "pre-push: local CI failed for $(git rev-parse --short "$local_sha"); push aborted."
+    echo "          Fix it, or push anyway with: git push --no-verify"
+    exit 1
+  fi
+done
