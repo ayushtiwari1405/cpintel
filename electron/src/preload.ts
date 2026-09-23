@@ -46,7 +46,11 @@ contextBridge.exposeInMainWorld('cpintelDesktop', {
 
   // Contest lockdown
   lockdown: {
-    engage:   (reason: string) => ipcRenderer.invoke('lockdown:engage', reason),
+    // The policy travels with the request, because it belongs to the examination being sat
+    // rather than to this installation — the same machine sits an open contest in the morning
+    // and a supervised paper in the afternoon.
+    engage:   (reason: string, policy?: Record<string, unknown>) =>
+      ipcRenderer.invoke('lockdown:engage', reason, policy),
     release:  ()               => ipcRenderer.invoke('lockdown:release'),
     getState: ()               => ipcRenderer.invoke('lockdown:state'),
 

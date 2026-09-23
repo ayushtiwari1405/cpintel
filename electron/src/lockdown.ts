@@ -21,6 +21,42 @@ import { AwayTracker, AWAY_REPEAT_MS, AWAY_WARN_MS } from './away'
  * contest on screen rather than about keystrokes.
  */
 
+/**
+ * What one event asks this client to do.
+ *
+ * <p>Sent by the page when monitoring is engaged, because the policy belongs to the examination
+ * rather than to the installation: the same machine sits an open-book contest in the morning and
+ * a supervised paper in the afternoon, and only the server knows which is which.
+ *
+ * <p>Every field is a <em>request</em>. What is actually applied depends on what the operating
+ * system allows, and the state reports back what happened rather than claiming success. The
+ * defaults below are the old hard-coded behaviour, so a client engaged without a policy — an
+ * older page, or an ordinary contest — behaves exactly as it did before.
+ */
+export interface LockdownPolicy {
+  /** How long someone may be away before it is worth warning them and recording it. */
+  awayWarnMs: number
+  /** Keep the examination window above everything else. */
+  restrictWindowSwitching: boolean
+  /** Refuse navigation out of the examination interface. */
+  blockNavigation: boolean
+  /** Refuse to open other applications and unrelated sites through the app. */
+  blockExternalApps: boolean
+  /** Notice and report an attempt to close the examination. */
+  detectAppTermination: boolean
+  /** Discard clipboard content that arrived from outside while the window was away. */
+  clipboardGuard: boolean
+}
+
+export const DEFAULT_POLICY: LockdownPolicy = {
+  awayWarnMs: AWAY_WARN_MS,
+  restrictWindowSwitching: false,
+  blockNavigation: true,
+  blockExternalApps: true,
+  detectAppTermination: false,
+  clipboardGuard: true,
+}
+
 export interface LockdownState {
   engaged: boolean
   /** What engaged it — a contest name, shown back to the user. */
@@ -61,6 +97,9 @@ export class Lockdown {
   private clipboardWipes = 0
   private blocked = 0
 
+  /** What the current session asked for. Reset to the defaults on release. */
+  private policy: LockdownPolicy = { ...DEFAULT_POLICY }
+
   /** What the clipboard held when focus left, so a change while away can be spotted. */
   private clipboardOnBlur: string | null = null
 
@@ -80,9 +119,27 @@ export class Lockdown {
     // Navigating the window elsewhere would take the contest page — and the monitor with it —
     // off the screen entirely. Refused from the moment the window exists, not on engage.
     win.webContents.on('will-navigate', (event, url) => {
-      if (this.engaged && !this.isInternal(url)) {
+      if (this.engaged && this.policy.blockNavigation && !this.isInternal(url)) {
         event.preventDefault()
         this.blocked++
+        this.emit()
+      }
+    })
+
+    /*
+     * Closing the window during a monitored examination.
+     *
+     * Noticed and counted rather than prevented. A close that cannot be refused — the window
+     * manager, a power failure, the power button — looks identical to the server either way:
+     * the heartbeat stops and the dashboard shows the candidate as having left. What an
+     * examination can honestly ask for is that the attempt is recorded, which is what
+     * detectAppTermination means; pretending the window cannot be closed would be a promise
+     * this cannot keep.
+     */
+    win.on('close', () => {
+      if (this.engaged && this.policy.detectAppTermination) {
+        this.blocked++
+        console.log('[monitor] the examination window was closed while the paper was open')
         this.emit()
       }
     })
@@ -108,7 +165,7 @@ export class Lockdown {
       warnings: snapshot.warnings,
       clipboardWipes: this.clipboardWipes,
       blocked: this.blocked,
-      warnAfterMs: AWAY_WARN_MS,
+      warnAfterMs: this.tracker.warnAfter(),
     }
   }
 
@@ -117,12 +174,28 @@ export class Lockdown {
     return this.engaged
   }
 
+  /**
+   * Whether this session refuses links out of the app.
+   *
+   * Asked by main before opening one. Kept here rather than read from the policy directly so
+   * that a session with no policy — an ordinary contest — still gets the old behaviour without
+   * main having to know what the default is.
+   */
+  blocksExternalApps(): boolean {
+    return this.engaged && this.policy.blockExternalApps
+  }
+
+  /** Whether an attempt to close the window should be noticed and reported. */
+  detectsTermination(): boolean {
+    return this.engaged && this.policy.detectAppTermination
+  }
+
   countBlocked(): void {
     this.blocked++
     this.emit()
   }
 
-  engage(reason: string): LockdownState {
+  engage(reason: string, policy?: Partial<LockdownPolicy>): LockdownState {
     if (this.engaged || !this.win) return this.state()
 
     this.engaged = true
@@ -130,12 +203,23 @@ export class Lockdown {
     this.since = Date.now()
     this.clipboardWipes = 0
     this.blocked = 0
+    // Merged over the defaults rather than replacing them, so a page that sends half a policy
+    // — or an older one that sends none — still gets sensible behaviour for the rest.
+    this.policy = { ...DEFAULT_POLICY, ...(policy ?? {}) }
+    this.tracker.setWarnAfterMs(this.policy.awayWarnMs)
     // A contest that starts while the window is in the background is already an absence.
     this.tracker.reset(Date.now(), !this.win.isFocused())
 
     const win = this.win
     win.on('blur', this.handleBlur)
     win.on('focus', this.handleFocus)
+
+    // Holding the window in front is the strongest thing this can honestly do about switching
+    // applications, and it is off unless an examination asked for it: an always-on-top window
+    // over somebody's whole desktop is disruptive enough that it must be a deliberate choice.
+    if (this.policy.restrictWindowSwitching) {
+      win.setAlwaysOnTop(true, 'screen-saver')
+    }
 
     // Nothing on this screen has any business asking for a camera or a microphone, and a
     // permission sheet is a modal window over the contest.
@@ -167,7 +251,12 @@ export class Lockdown {
     if (win && !win.isDestroyed()) {
       win.off('blur', this.handleBlur)
       win.off('focus', this.handleFocus)
+      // Always released, whether or not this session took it: leaving a window pinned over
+      // somebody's desktop after their examination has ended would be a bug they cannot fix.
+      win.setAlwaysOnTop(false)
     }
+    this.policy = { ...DEFAULT_POLICY }
+    this.tracker.setWarnAfterMs(DEFAULT_POLICY.awayWarnMs)
 
     session.defaultSession.setPermissionRequestHandler(null)
 
@@ -204,7 +293,7 @@ export class Lockdown {
 
     // Copy and paste inside the app are untouched — that is how code gets written. What is
     // refused is content that arrived from outside while the contestant was elsewhere.
-    const now = safeReadClipboard()
+    const now = this.policy.clipboardGuard ? safeReadClipboard() : null
     if (now !== null && now !== '' && now !== this.clipboardOnBlur) {
       clipboard.clear()
       this.clipboardWipes++

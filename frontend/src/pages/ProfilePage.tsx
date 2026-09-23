@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { userApi } from '@/api/userApi'
 import { useToast } from '@/components/common/Toaster'
 import { Save, Loader2 } from 'lucide-react'
+import { ChangePasswordCard } from '@/components/common/ChangePasswordCard'
 
 export default function ProfilePage() {
   const { user } = useAuth()
@@ -86,6 +87,15 @@ export default function ProfilePage() {
           }
         </button>
       </div>
+
+      {/*
+        Changing your own password.
+        
+        On this page rather than on a settings screen of its own, because the account is what
+        this page is about and "where do I change my password" should not be a question
+        anybody has to ask twice.
+      */}
+      <ChangePasswordCard neverChanged={user?.passwordChangedAt == null} />
 
       {/* Account info */}
       <div className="card space-y-3 text-sm">

@@ -49,4 +49,22 @@ public final class Roles {
      */
     public static final String HAS_CONSOLE = "hasAnyRole('ADMIN', 'SUPER_ADMIN')";
     public static final String HAS_SUPER   = "hasRole('SUPER_ADMIN')";
+
+    /**
+     * Whether the caller holds SUPER_ADMIN, read from the token they were authorised with.
+     *
+     * Read from the authorities rather than by re-loading the user row, because that is the
+     * same source the filter chain made its decision against — the two cannot disagree about
+     * who the caller is, and a role changed mid-session does not take effect until the token
+     * carrying it does.
+     *
+     * <p>Used where a single endpoint is open to both console tiers but does something
+     * <em>more</em> for a super admin. An endpoint that is simply super-admin-only should say
+     * so with {@link #HAS_SUPER} instead, so the restriction is visible on the method.
+     */
+    public static boolean isSuperAdmin(org.springframework.security.core.Authentication auth) {
+        return auth != null && auth.getAuthorities().stream()
+            .map(org.springframework.security.core.GrantedAuthority::getAuthority)
+            .anyMatch(a -> ("ROLE_" + SUPER_ADMIN).equals(a));
+    }
 }

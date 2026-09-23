@@ -19,9 +19,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 /**
  * The split that the three-tier role model exists to enforce.
  *
- * <p>An ADMIN runs the console. Only a SUPER_ADMIN may change what somebody else <em>is</em>, or
- * create somebody new — because a role that can hand out privilege can hand itself more of it,
- * and that has to sit above the tier that merely uses the console.
+ * <p>An ADMIN runs the console, and may create ordinary users — somebody running a contest has
+ * to be able to add the people sitting it. Only a SUPER_ADMIN may change what somebody else
+ * <em>is</em>, because a role that can hand out privilege can hand itself more of it, and that
+ * has to sit above the tier that merely uses the console.
+ *
+ * <p>Creating an ADMIN is the same escalation spelled differently, so it is reserved too — but
+ * that check is on the <em>role being created</em> and therefore lives in the service rather
+ * than on the route. {@code AdminUserServiceTest} is where it is pinned; this file can only see
+ * that the route itself is open to both tiers.
  *
  * <p>Until this file existed the rule was verified by hand once and then guarded by nothing.
  */
@@ -31,6 +37,9 @@ class AdminUserAuthorizationTest extends AuthorizationTestBase {
     @MockBean
     private AdminUserService users;
 
+    @MockBean
+    private com.cpintel.events.EventAnalyticsService analytics;
+
     private static final String ROLE_BODY   = "{\"role\":\"ADMIN\"}";
     private static final String CREATE_BODY = """
         {"username":"newbie","email":"newbie@example.com","password":"password123","role":"USER"}
@@ -38,7 +47,7 @@ class AdminUserAuthorizationTest extends AuthorizationTestBase {
 
     private AdminDto.UserRow row() {
         return new AdminDto.UserRow(1L, "someone", "someone@example.com", null,
-            "USER", true, true, Instant.now(), null);
+            "USER", true, true, Instant.now(), null, null);
     }
 
     @Nested
@@ -127,18 +136,35 @@ class AdminUserAuthorizationTest extends AuthorizationTestBase {
         }
 
         @Test
-        @DisplayName("an admin is refused, so the console cannot be used to mint more admins")
-        void adminRefused() throws Exception {
+        @DisplayName("an admin may create an ordinary user, and the service is told their tier")
+        void adminAllowedForPlainUser() throws Exception {
+            when(users.createUser(anyLong(), any(), anyBoolean(), any())).thenReturn(row());
+
             mvc.perform(post("/api/v1/admin/users").with(asAdmin())
                     .contentType(MediaType.APPLICATION_JSON).content(CREATE_BODY))
-                .andExpect(status().isForbidden());
-            verifyNoInteractions(users);
+                .andExpect(status().isCreated());
+
+            // false, not merely "some boolean": the service refuses an ADMIN on the strength of
+            // this flag, so a route that passed true would hand every admin the higher tier.
+            verify(users).createUser(anyLong(), any(), eq(false), any());
+        }
+
+        @Test
+        @DisplayName("a super admin is reported as one, so the service lets them create an ADMIN")
+        void superAdminTierIsPassedThrough() throws Exception {
+            when(users.createUser(anyLong(), any(), anyBoolean(), any())).thenReturn(row());
+
+            mvc.perform(post("/api/v1/admin/users").with(asSuperAdmin())
+                    .contentType(MediaType.APPLICATION_JSON).content(CREATE_BODY))
+                .andExpect(status().isCreated());
+
+            verify(users).createUser(anyLong(), any(), eq(true), any());
         }
 
         @Test
         @DisplayName("a super admin may do it, and gets 201")
         void superAdminAllowed() throws Exception {
-            when(users.createUser(anyLong(), any(), any())).thenReturn(row());
+            when(users.createUser(anyLong(), any(), anyBoolean(), any())).thenReturn(row());
 
             mvc.perform(post("/api/v1/admin/users").with(asSuperAdmin())
                     .contentType(MediaType.APPLICATION_JSON).content(CREATE_BODY))
@@ -153,7 +179,8 @@ class AdminUserAuthorizationTest extends AuthorizationTestBase {
         @Test
         @DisplayName("an admin may do it, unlike role assignment")
         void adminAllowed() throws Exception {
-            when(users.setActive(anyLong(), anyLong(), any(), any())).thenReturn(row());
+            when(users.setActive(anyLong(), anyLong(), any(), anyBoolean(), any()))
+                .thenReturn(row());
 
             mvc.perform(put("/api/v1/admin/users/7/active").with(asAdmin())
                     .contentType(MediaType.APPLICATION_JSON).content("{\"active\":false}"))

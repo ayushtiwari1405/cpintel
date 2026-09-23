@@ -2,6 +2,7 @@ package com.cpintel.groups;
 
 import com.cpintel.entity.ContestGroup;
 import com.cpintel.entity.GroupContest;
+import com.cpintel.integration.domjudge.DomjudgeCredentialStore;
 import com.cpintel.entity.GroupMember;
 import com.cpintel.entity.GroupStanding;
 import com.cpintel.entity.PlatformAccount;
@@ -46,7 +47,8 @@ class StandingsServiceTest {
             mock(GroupMemberRepository.class),
             mock(GroupStandingRepository.class),
             accounts,
-            List.of());
+            List.of(),
+            mock(DomjudgeCredentialStore.class));
 
         ContestGroup group = ContestGroup.builder().groupId(1L).name("Squad").build();
         contest = GroupContest.builder()

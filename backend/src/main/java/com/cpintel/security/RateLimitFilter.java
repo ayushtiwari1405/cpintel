@@ -39,6 +39,8 @@ public class RateLimitFilter extends OncePerRequestFilter {
     public static final String RECOVERY = "recovery";
     public static final String RUN      = "run";
     public static final String SYNC     = "sync";
+    /** Guesses at an examination password, counted against the candidate. */
+    public static final String EXAM_UNLOCK = "exam-unlock";
 
     private final RateLimitService rateLimiter;
     private final RateLimitProperties props;
@@ -49,7 +51,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
                                     HttpServletResponse response,
                                     FilterChain chain) throws ServletException, IOException {
 
-        String path = request.getRequestURI();
+        String path = route(request);
         String method = request.getMethod();
 
         String bucket = null;
@@ -57,24 +59,33 @@ public class RateLimitFilter extends OncePerRequestFilter {
         RateLimitProperties.Rule rule = null;
 
         if ("POST".equals(method)) {
-            if (path.endsWith("/api/auth/login")) {
+            if (path.equals("/auth/login")) {
                 bucket = LOGIN_IP;
                 key = clientAddress(request);
                 rule = props.getLogin();
 
-            } else if (path.endsWith("/api/auth/forgot-password")
-                    || path.endsWith("/api/auth/reset-password")
-                    || path.endsWith("/api/auth/register")) {
+            } else if (path.equals("/auth/forgot-password")
+                    || path.equals("/auth/reset-password")
+                    || path.equals("/auth/change-password")
+                    || path.equals("/auth/register")) {
                 bucket = RECOVERY;
                 key = clientAddress(request);
                 rule = props.getRecovery();
 
-            } else if (path.endsWith("/api/run")) {
+            } else if (path.startsWith("/exams/") && path.endsWith("/unlock")) {
+                // Keyed on the candidate rather than the address, because a room full of people
+                // sitting the same paper shares one address and one of them typing their code
+                // wrongly must not lock out the other two hundred.
+                bucket = EXAM_UNLOCK;
+                key = principal();
+                rule = props.getExamUnlock();
+
+            } else if (path.equals("/run")) {
                 bucket = RUN;
                 key = principal();
                 rule = props.getRun();
 
-            } else if (path.contains("/api/integrations/") && path.endsWith("/sync")) {
+            } else if (path.startsWith("/integrations/") && path.endsWith("/sync")) {
                 bucket = SYNC;
                 key = principal();
                 rule = props.getSync();
@@ -102,6 +113,36 @@ public class RateLimitFilter extends OncePerRequestFilter {
         response.getWriter().write(
             "{\"code\":\"TOO_MANY_REQUESTS\",\"message\":\"Too many attempts. Try again in "
             + retryAfter + " seconds.\"}");
+    }
+
+    /**
+     * The request path with the API prefix taken off, so the rules below name routes.
+     *
+     * <p>They used to be written as {@code path.endsWith("/api/auth/login")} against a URI of
+     * {@code /api/v1/auth/login}, which matches nothing — so every limit in this filter was
+     * silently inert from the day the API was versioned. Matching the route rather than a
+     * guess at the whole URI is what stops that recurring: a second version prefix changes
+     * nothing here, and the comparisons are exact rather than suffix tests, so a new endpoint
+     * cannot fall into somebody else's bucket by ending in the same word.
+     */
+    private String route(HttpServletRequest request) {
+        String path = request.getRequestURI();
+        String context = request.getContextPath();
+        if (context != null && !context.isEmpty() && path.startsWith(context)) {
+            path = path.substring(context.length());
+        }
+        if (!path.startsWith("/api/")) return path;
+        path = path.substring(4);                       // drop "/api"
+        // Drop a version segment if there is one: /v1, /v2...
+        int next = path.indexOf('/', 1);
+        String head = next < 0 ? path.substring(1) : path.substring(1, next);
+        if (head.length() > 1 && head.charAt(0) == 'v'
+                && head.chars().skip(1).allMatch(Character::isDigit)) {
+            path = next < 0 ? "/" : path.substring(next);
+        }
+        // A trailing slash is the same route.
+        if (path.length() > 1 && path.endsWith("/")) path = path.substring(0, path.length() - 1);
+        return path;
     }
 
     /**

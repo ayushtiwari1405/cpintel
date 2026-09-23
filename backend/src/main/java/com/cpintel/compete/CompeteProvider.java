@@ -55,14 +55,37 @@ public interface CompeteProvider {
     CompeteDto.RankInfo rank(Long userId, String contestId);
 
     /**
-     * The statement as a PDF, for judges that publish one instead of a web page.
+     * The contest's whole board, for judges that will publish one.
      *
-     * Only DOMjudge implements this. Codeforces renders statements as HTML and the arena shows
-     * them inline, so asking it for a PDF is a programming error rather than a missing feature
-     * — hence a thrown exception rather than a null that would render as a blank pane.
+     * Default-throws rather than returning an empty board, because the two mean different
+     * things to the page: an empty board is a contest nobody has scored on yet, and this is a
+     * judge that will not show one at all. Codeforces locks its standings endpoint down for
+     * exactly the contests the arena runs, so {@link #rank} there is derived per contestant and
+     * a full board is not available at any price — a caller must be able to tell that apart
+     * from a quiet contest and hide the panel instead of rendering an empty table.
      */
-    default byte[] statementPdf(Long userId, String contestId, String index) {
+    default CompeteDto.Leaderboard leaderboard(Long userId, String contestId) {
         throw ApiException.badRequest(
-            platform() + " statements are read as HTML, not PDF.");
+            platform() + " does not publish a full contest board to contestants.");
+    }
+
+    /**
+     * One problem's statement as a document, for judges that publish a file instead of a page.
+     *
+     * <p>Only DOMjudge implements this. Codeforces renders statements as HTML and the arena
+     * shows them inline, so asking it for a document is a programming error rather than a
+     * missing feature — hence a thrown exception rather than a null that would render as a
+     * blank pane.
+     *
+     * <p><b>The type travels with the bytes.</b> This used to return a bare {@code byte[]} and
+     * the route above it declared {@code application/pdf}, which was true of most DOMjudge
+     * statements and not all of them: a real seven-problem contest measured while fixing this
+     * served four PDFs and three {@code text/plain} files. The three arrived at the browser
+     * labelled as PDFs and rendered as an empty pane.
+     */
+    default CompeteDto.StatementDocument statementDocument(Long userId, String contestId,
+                                                           String index) {
+        throw ApiException.badRequest(
+            platform() + " statements are read as HTML, not as a document.");
     }
 }

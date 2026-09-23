@@ -23,6 +23,62 @@ export function useLogin() {
   })
 }
 
+/**
+ * Asking for a reset link.
+ *
+ * Deliberately shows the same message however it goes, including when the address belongs to
+ * nobody — the server answers identically, and a screen that drew a distinction would put the
+ * enumeration back that the endpoint removed.
+ */
+export function useForgotPassword() {
+  return useMutation({
+    mutationFn: authApi.forgotPassword,
+  })
+}
+
+export function useResetPassword() {
+  const toast = useToast()
+  const navigate = useNavigate()
+
+  return useMutation({
+    mutationFn: authApi.resetPassword,
+    onSuccess: (res) => {
+      toast.push('success', res.message ?? 'Your password has been changed.')
+      navigate('/login')
+    },
+    onError: (err: any) => {
+      toast.push('error', err.response?.data?.message ?? 'That reset link did not work.')
+    },
+  })
+}
+
+/**
+ * Changing your own password.
+ *
+ * Succeeding ends every session, including this one, so the local tokens are dropped and the
+ * user is sent back to sign in. Leaving them on a page whose next request would 401 would look
+ * like the change had failed.
+ */
+export function useChangePassword() {
+  const { logout } = useAuthStore()
+  const queryClient = useQueryClient()
+  const toast = useToast()
+  const navigate = useNavigate()
+
+  return useMutation({
+    mutationFn: authApi.changePassword,
+    onSuccess: (res) => {
+      toast.push('success', res.message ?? 'Your password has been changed.')
+      logout()
+      queryClient.clear()
+      navigate('/login')
+    },
+    onError: (err: any) => {
+      toast.push('error', err.response?.data?.message ?? 'Could not change your password.')
+    },
+  })
+}
+
 export function useLogout() {
   const { logout } = useAuthStore()
   const queryClient = useQueryClient()

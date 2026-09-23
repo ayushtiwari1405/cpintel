@@ -35,7 +35,16 @@ public class AdminDto {
         boolean active,
         boolean verified,
         Instant createdAt,
-        Instant lastLoginAt
+        Instant lastLoginAt,
+        /**
+         * When the owner last set this password themselves, or null if they never have.
+         *
+         * Shown because null is a fact rather than a gap: until it is set, the password on the
+         * account is the one somebody else typed when they created it, and whoever that was
+         * still knows it. An admin looking at a roster of nulls is looking at a room that has
+         * not been asked to change its passwords.
+         */
+        Instant passwordChangedAt
     ) {}
 
     public record UserPage(
@@ -84,10 +93,46 @@ public class AdminDto {
         String role
     ) {}
 
+    /**
+     * The parts of somebody's profile an admin may correct.
+     *
+     * Deliberately not the password, the role or the active flag: each of those has its own
+     * endpoint with its own rules, and folding them into a general profile update would put
+     * "promote to admin" one forgotten field away from "fix a typo in a surname".
+     */
+    public record UpdateUserRequest(
+        @Size(max = 100) String fullName,
+        @Email @Size(max = 255) String email,
+        @Size(max = 200) String institution,
+        @Size(max = 100) String country
+    ) {}
+
     public record ActiveRequest(
         @NotNull Boolean active,
         @Size(max = 200) String reason
     ) {}
+
+    /**
+     * An administrator setting somebody else's password for them.
+     *
+     * <p>For the person who has forgotten theirs and cannot reach their own mail, which on a
+     * deployment handing out accounts on a sheet of paper is a common enough morning. The
+     * password is chosen or generated here and handed over the same way the first one was; it
+     * is never emailed, because a live credential in a mailbox is exactly what the reset-link
+     * flow exists to avoid.
+     *
+     * <p>Leave {@code password} blank to have one generated, which is the better path — a
+     * generated password is returned once and is not one the administrator was already
+     * thinking of.
+     */
+    public record SetPasswordRequest(
+        @Size(min = 8, max = 200, message = "A password has to be at least 8 characters")
+        String password,
+        @Size(max = 200) String reason
+    ) {}
+
+    /** The password an administrator just set, shown once and stored only as a hash. */
+    public record GeneratedPassword(Long userId, String username, String password) {}
 
     // --------------------------------------------------------------- overview
 

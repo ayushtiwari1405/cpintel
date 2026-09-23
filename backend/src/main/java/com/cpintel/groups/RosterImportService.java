@@ -16,6 +16,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
@@ -45,11 +46,21 @@ import java.util.regex.Pattern;
  *
  * <h2>Who may create accounts</h2>
  *
- * <p>The group console is open to {@code ADMIN}, but creating accounts is deliberately reserved
- * to {@code SUPER_ADMIN} — the tier that hands out access sits above the tier that uses it. A
- * bulk endpoint that created accounts for any admin would be a way around that rule, so an
- * import that would create anybody is refused for a plain admin, naming the rows responsible.
- * Adding people who already have accounts stays an ordinary admin action.
+ * <p>Either console tier may run an import, including one that creates accounts. An admin
+ * running a contest has to be able to add the people sitting it, and routing every new
+ * participant through a super admin makes a class list an escalation request.
+ *
+ * <p>That is safe here for one specific reason, and it is a property of this code rather than
+ * of the permission: every account created by an import is a {@code USER}, always, with no way
+ * to say otherwise — see the {@code role(Roles.USER)} below. A spreadsheet column cannot hand
+ * out console access, so a bulk import cannot be used to manufacture privilege, and the rule
+ * that only a super admin assigns roles is untouched. If that line ever becomes settable from
+ * a row, this permission has to move back.
+ *
+ * <h2>Teams</h2>
+ *
+ * <p>An import may name one team for everybody, which is what a class list normally wants. A
+ * team named on a row still wins over it, so a mixed roster keeps its own assignments.
  */
 @Service
 @RequiredArgsConstructor
@@ -129,7 +140,13 @@ public class RosterImportService {
         int alreadyMembers,
         int duplicates,
         int invalid,
-        /** True when the caller may create the accounts this import needs. */
+        /**
+         * True when the caller may create the accounts this import needs.
+         *
+         * Always true as things stand — both console tiers may, because every account an
+         * import creates is an ordinary USER. Kept because it is the screen's answer to
+         * "offer the create step or not", and that should not become a role check in the UI.
+         */
         boolean mayCreateAccounts,
         /** Set when the import cannot proceed as a whole, explaining why. */
         String blockedReason
@@ -138,12 +155,17 @@ public class RosterImportService {
     /**
      * Work out what a paste would do, or do it.
      *
-     * @param dryRun true to write nothing and only report the plan
+     * @param dryRun             true to write nothing and only report the plan
+     * @param callerIsSuperAdmin unused for permission — both console tiers may run any import,
+     *                           because every account created here is an ordinary USER. Kept
+     *                           on the signature so that reinstating a tier rule is a change
+     *                           to this method rather than to every caller.
+     * @param defaultTeam        the team to put rows on when they name none, or null
      */
     @Transactional
     public ImportResult importRoster(Long adminId, Long groupId, String text,
                                      boolean dryRun, boolean callerIsSuperAdmin,
-                                     HttpServletRequest httpReq) {
+                                     String defaultTeam, HttpServletRequest httpReq) {
 
         ContestGroup group = groupRepository.findById(groupId)
             .filter(g -> Boolean.TRUE.equals(g.getIsActive()))
@@ -164,25 +186,22 @@ public class RosterImportService {
         Set<String> plannedUsernames = new HashSet<>();
         Set<String> seenIdentities = new LinkedHashSet<>();
 
+        String fallbackTeam = StringUtils.hasText(defaultTeam) ? defaultTeam.trim() : null;
+
         List<RowOutcome> outcomes = new ArrayList<>(parsed.size());
 
         for (RosterParser.Row row : parsed) {
-            outcomes.add(plan(group, row, plannedUsernames, seenIdentities));
+            outcomes.add(plan(group, withTeam(row, fallbackTeam),
+                plannedUsernames, seenIdentities));
         }
 
         int toCreate = (int) outcomes.stream()
             .filter(o -> o.status() == RowStatus.CREATE_AND_ADD).count();
 
-        // The permission check happens against the plan, before anything is written, so an
-        // admin is told what the import needs rather than getting halfway and stopping.
-        String blocked = null;
-        if (toCreate > 0 && !callerIsSuperAdmin) {
-            blocked = toCreate + " of these rows would create a new account, which only a super "
-                + "admin may do. Remove those rows, or ask a super admin to run this import.";
-        }
-
-        if (dryRun || blocked != null) {
-            return summarise(outcomes, true, callerIsSuperAdmin, blocked);
+        // Nothing here is refused by tier any more: every account an import creates is a
+        // USER, so there is no privilege for the higher tier to be guarding.
+        if (dryRun) {
+            return summarise(outcomes, true, null);
         }
 
         List<RowOutcome> committed = new ArrayList<>(outcomes.size());
@@ -195,7 +214,20 @@ public class RosterImportService {
         log.info("Admin {} bulk-imported {} rows into group {} ({} accounts created)",
             adminId, committed.size(), groupId, toCreate);
 
-        return summarise(committed, false, callerIsSuperAdmin, null);
+        return summarise(committed, false, null);
+    }
+
+    /**
+     * The row, with the import's team filled in where it named none.
+     *
+     * Per-row wins on purpose. The import-wide team is a convenience for the common roster
+     * that has no team column at all; where somebody has gone to the trouble of naming teams
+     * per person, silently overwriting them would be the more surprising behaviour.
+     */
+    private RosterParser.Row withTeam(RosterParser.Row row, String fallbackTeam) {
+        if (fallbackTeam == null || StringUtils.hasText(row.teamName())) return row;
+        return new RosterParser.Row(row.lineNumber(), row.email(), row.username(),
+            row.fullName(), row.cfHandle(), fallbackTeam);
     }
 
     // -- planning ----------------------------------------------------------
@@ -386,8 +418,7 @@ public class RosterImportService {
             row.cfHandle(), row.teamName(), status, message, userId, password);
     }
 
-    private ImportResult summarise(List<RowOutcome> rows, boolean dryRun,
-                                   boolean mayCreate, String blocked) {
+    private ImportResult summarise(List<RowOutcome> rows, boolean dryRun, String blocked) {
         return new ImportResult(
             dryRun,
             rows,
@@ -397,7 +428,9 @@ public class RosterImportService {
             (int) rows.stream().filter(r -> r.status() == RowStatus.ALREADY_MEMBER).count(),
             (int) rows.stream().filter(r -> r.status() == RowStatus.DUPLICATE).count(),
             (int) rows.stream().filter(r -> r.status() == RowStatus.INVALID).count(),
-            mayCreate,
+            // Always true now that both console tiers may create. Kept in the response so the
+            // screen need not know the caller's role to decide what to offer.
+            true,
             blocked);
     }
 }

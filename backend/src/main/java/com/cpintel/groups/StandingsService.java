@@ -5,6 +5,7 @@ import com.cpintel.entity.GroupMember;
 import com.cpintel.entity.GroupStanding;
 import com.cpintel.entity.User;
 import com.cpintel.exception.ApiException;
+import com.cpintel.integration.domjudge.DomjudgeCredentialStore;
 import com.cpintel.repository.jpa.GroupMemberRepository;
 import com.cpintel.repository.jpa.GroupStandingRepository;
 import com.cpintel.repository.jpa.PlatformAccountRepository;
@@ -45,6 +46,7 @@ public class StandingsService {
     private final GroupStandingRepository standingRepository;
     private final PlatformAccountRepository platformAccountRepository;
     private final List<StandingsProvider> providers;
+    private final DomjudgeCredentialStore domjudgeCredentials;
 
     /**
      * Rebuilds the cached board for one contest.
@@ -65,7 +67,8 @@ public class StandingsService {
         StandingsProvider provider = providerFor(contest.getPlatform());
         List<StandingsProvider.Competitor> competitors = members.stream()
             .map(member -> new StandingsProvider.Competitor(
-                member.getUser().getUserId(), handleFor(contest, member)))
+                member.getUser().getUserId(), handleFor(contest, member),
+                teamIdFor(contest, member)))
             .toList();
 
         List<StandingsProvider.Result> results;
@@ -172,6 +175,25 @@ public class StandingsService {
             if (StringUtils.hasText(linked)) return linked;
         }
         return StringUtils.hasText(member.getExternalHandle()) ? member.getExternalHandle() : null;
+    }
+
+    /**
+     * The exact DOMjudge team to measure this member on, when one is known.
+     *
+     * Comes from the account an admin attached — their assigned team if they chose one, the
+     * judge's otherwise. This is what makes the admin's choice mean something: without it the
+     * board would fall back to matching {@code externalHandle} against team names, and the
+     * assignment would be a field nothing reads.
+     *
+     * Null for Codeforces, and for a DOMjudge member with no account attached, both of which
+     * fall back to name matching as before.
+     */
+    private String teamIdFor(GroupContest contest, GroupMember member) {
+        if (!GroupContest.Platform.DOMJUDGE.name().equals(contest.getPlatform())) return null;
+
+        DomjudgeCredentialStore.Stored stored =
+            domjudgeCredentials.find(member.getUser().getUserId());
+        return stored == null ? null : stored.effectiveTeamId();
     }
 
     private StandingsProvider providerFor(String platform) {

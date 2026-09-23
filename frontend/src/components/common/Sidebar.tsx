@@ -2,7 +2,7 @@ import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard, BarChart2, Lightbulb, Map, Link2, User, Zap, ChevronLeft,
   ChevronRight, LogOut, Code2, Swords, Shield, Users, ScrollText, FolderCog,
-  UsersRound } from 'lucide-react'
+  UsersRound, FileText } from 'lucide-react'
 import { useLogout } from '@/hooks/useAuth'
 import { useAuth } from '@/contexts/AuthContext'
 import { isAdmin, isSuperAdmin, roleLabel } from '@/utils/roles'
@@ -15,7 +15,7 @@ const navItems = [
   { to: '/roadmap',         icon: Map,              label: 'Roadmap' },
   { to: '/practice',        icon: Code2,            label: 'Practice' },
   { to: '/compete',         icon: Swords,           label: 'Compete' },
-  { to: '/groups',          icon: UsersRound,       label: 'Groups' },
+  { to: '/teams',           icon: UsersRound,       label: 'Teams' },
   { to: '/platforms',       icon: Link2,            label: 'Platforms' },
   { to: '/profile',         icon: User,             label: 'Profile' },
 ]
@@ -25,7 +25,8 @@ const navItems = [
 const adminItems = [
   { to: '/admin',               icon: Shield,     label: 'Overview' },
   { to: '/admin/users',         icon: Users,      label: 'Users' },
-  { to: '/admin/groups',        icon: UsersRound, label: 'Groups' },
+  { to: '/admin/teams',         icon: UsersRound, label: 'Teams' },
+  { to: '/admin/exams',         icon: FileText,   label: 'Examinations' },
   { to: '/admin/audit',         icon: ScrollText, label: 'Audit trail' },
   { to: '/admin/contest-files', icon: FolderCog,  label: 'Contest files' },
 ]

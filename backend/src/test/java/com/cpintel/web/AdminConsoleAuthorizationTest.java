@@ -4,8 +4,15 @@ import com.cpintel.admin.AdminAuditService;
 import com.cpintel.admin.AdminOverviewService;
 import com.cpintel.controller.AdminContestFileController;
 import com.cpintel.controller.AdminGroupController;
+import com.cpintel.controller.AdminEventController;
 import com.cpintel.controller.AdminOverviewController;
+import com.cpintel.events.EventAnalyticsService;
+import com.cpintel.events.EventService;
+import com.cpintel.events.ExamEventService;
+import com.cpintel.events.ExamMonitorService;
+import com.cpintel.events.ExamPasswordService;
 import com.cpintel.files.ContestFilePolicy;
+import com.cpintel.repository.jpa.GroupMemberRepository;
 import com.cpintel.groups.GroupService;
 import com.cpintel.groups.RosterImportService;
 import com.cpintel.service.AuditService;
@@ -36,6 +43,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
     AdminOverviewController.class,
     AdminGroupController.class,
     AdminContestFileController.class,
+    AdminEventController.class,
 })
 class AdminConsoleAuthorizationTest extends AuthorizationTestBase {
 
@@ -45,17 +53,27 @@ class AdminConsoleAuthorizationTest extends AuthorizationTestBase {
     @MockBean private RosterImportService rosterImport;
     @MockBean private ContestFilePolicy policy;
     @MockBean private AuditService auditService;
+    @MockBean private EventAnalyticsService eventAnalytics;
+    @MockBean private EventService events;
+    @MockBean private ExamEventService examEvents;
+    @MockBean private ExamMonitorService examMonitor;
+    @MockBean private ExamPasswordService examPasswords;
+    @MockBean private GroupMemberRepository members;
 
     private static final String[] ROUTES = {
         "/api/v1/admin/overview",
         "/api/v1/admin/audit",
         "/api/v1/admin/groups",
         "/api/v1/admin/contest-files",
+        // Examinations: the roster of who is sitting one, and the session log of how they sat
+        // it, are the most sensitive things the console holds.
+        "/api/v1/admin/events",
     };
 
     @ParameterizedTest(name = "USER is refused {0}")
     @ValueSource(strings = {
-        "/api/v1/admin/overview", "/api/v1/admin/audit", "/api/v1/admin/groups", "/api/v1/admin/contest-files"
+        "/api/v1/admin/overview", "/api/v1/admin/audit", "/api/v1/admin/groups",
+        "/api/v1/admin/contest-files", "/api/v1/admin/events"
     })
     @DisplayName("no part of the console is reachable by an ordinary user")
     void userRefusedEverywhere(String route) throws Exception {
@@ -65,7 +83,8 @@ class AdminConsoleAuthorizationTest extends AuthorizationTestBase {
 
     @ParameterizedTest(name = "anonymous gets 401 on {0}")
     @ValueSource(strings = {
-        "/api/v1/admin/overview", "/api/v1/admin/audit", "/api/v1/admin/groups", "/api/v1/admin/contest-files"
+        "/api/v1/admin/overview", "/api/v1/admin/audit", "/api/v1/admin/groups",
+        "/api/v1/admin/contest-files", "/api/v1/admin/events"
     })
     @DisplayName("an anonymous caller is asked to authenticate, not refused outright")
     void anonymousUnauthorizedEverywhere(String route) throws Exception {
@@ -89,6 +108,17 @@ class AdminConsoleAuthorizationTest extends AuthorizationTestBase {
             mvc.perform(get(route).with(asSuperAdmin()))
                 .andExpect(status().is(not403()));
         }
+    }
+
+    @Test
+    @DisplayName("an ordinary user cannot read an examination's monitoring or session log")
+    void userRefusedExamSurfaces() throws Exception {
+        // The two routes that carry other people's conduct. Worth naming rather than trusting
+        // the blanket rule above: these are the ones where a slip would be worst.
+        mvc.perform(get("/api/v1/admin/events/1/monitor").with(asUser()))
+            .andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/admin/events/1/logs").with(asUser()))
+            .andExpect(status().isForbidden());
     }
 
     @Test

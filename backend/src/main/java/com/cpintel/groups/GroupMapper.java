@@ -40,11 +40,19 @@ public final class GroupMapper {
             member.getJoinedAt());
     }
 
+    /**
+     * One event, in the shape the group screens speak.
+     *
+     * The owning team is optional — an examination set for named individuals belongs to no team
+     * — so both team fields are null rather than the call failing. Anything that needs the
+     * roster reads the assignments instead.
+     */
     public static GroupsDto.ContestSummary toContestSummary(GroupContest contest) {
         return new GroupsDto.ContestSummary(
             contest.getContestId(),
-            contest.getGroup().getGroupId(),
-            contest.getGroup().getName(),
+            contest.getKind(),
+            contest.getGroup() == null ? null : contest.getGroup().getGroupId(),
+            contest.getGroup() == null ? null : contest.getGroup().getName(),
             contest.getPlatform(),
             contest.getExternalId(),
             contest.getName(),
@@ -52,7 +60,9 @@ public final class GroupMapper {
             contest.getStartsAt(),
             contest.getEndsAt(),
             Boolean.TRUE.equals(contest.getLockdownRequired()),
+            contest.getAwayThresholdSeconds() == null ? 10 : contest.getAwayThresholdSeconds(),
             statusOf(contest, Instant.now()),
+            contest.effectiveLifecycle(Instant.now()).name(),
             contest.getStandingsRefreshedAt(),
             contest.getStandingsError());
     }

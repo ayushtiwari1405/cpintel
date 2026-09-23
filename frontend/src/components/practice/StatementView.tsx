@@ -131,10 +131,12 @@ interface Props {
    * while it is still being fetched.
    */
   pdfUrl?: string | null
+  /** A statement the judge served as plain text rather than as a PDF. */
+  pdfText?: string | null
   pdfError?: string | null
 }
 
-export function StatementView({ problem, isLoading, pdfUrl, pdfError }: Props) {
+export function StatementView({ problem, isLoading, pdfUrl, pdfText, pdfError }: Props) {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full text-gray-600">
@@ -198,7 +200,7 @@ export function StatementView({ problem, isLoading, pdfUrl, pdfError }: Props) {
       </div>
 
       {problem.statementPdfUrl ? (
-        <PdfStatement url={pdfUrl ?? null} error={pdfError ?? null} />
+        <PdfStatement url={pdfUrl ?? null} text={pdfText ?? null} error={pdfError ?? null} />
       ) : !problem.statementAvailable && (
         <MissingStatement issue={problem.statementIssue} />
       )}
@@ -234,14 +236,23 @@ export function StatementView({ problem, isLoading, pdfUrl, pdfError }: Props) {
 }
 
 /**
- * A PDF statement, embedded.
+ * A statement the judge published as a document.
  *
- * Given a generous fixed height rather than the pane's full height: the samples and the
- * problem metadata sit below it and have to stay reachable by scrolling, which they would not
- * be if the document filled the pane exactly. A contestant who wants the PDF full-size opens
- * it on the judge with the link in the header.
+ * <p>Two shapes, because DOMjudge has two. A PDF is embedded; a plain-text statement is
+ * rendered as preformatted text. Handing the text one to the embed — which is what happened
+ * until the types were carried through — produces an empty white rectangle that looks exactly
+ * like a PDF that failed to load, and sends people to debug the wrong thing.
+ *
+ * <p>The embed gets a generous fixed height rather than the pane's full height: the samples
+ * and the problem metadata sit below it and have to stay reachable by scrolling, which they
+ * would not be if the document filled the pane exactly. A contestant who wants it full-size
+ * opens it on the judge with the link in the header.
  */
-function PdfStatement({ url, error }: { url: string | null; error: string | null }) {
+function PdfStatement({ url, text, error }: {
+  url: string | null
+  text: string | null
+  error: string | null
+}) {
   if (error) {
     return (
       <div className="flex gap-2 p-3 rounded-lg bg-amber-950/40 border border-amber-900
@@ -249,6 +260,16 @@ function PdfStatement({ url, error }: { url: string | null; error: string | null
         <AlertTriangle size={14} className="flex-shrink-0 mt-0.5" />
         <p>{error} You can still write and submit from here.</p>
       </div>
+    )
+  }
+
+  if (text !== null) {
+    return (
+      <pre className="mb-4 max-h-[70vh] overflow-auto whitespace-pre-wrap break-words
+                      rounded-lg border border-gray-800 bg-gray-950 p-4 text-xs
+                      leading-relaxed text-gray-200">
+        {text}
+      </pre>
     )
   }
 

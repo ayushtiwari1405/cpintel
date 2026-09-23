@@ -75,21 +75,42 @@ public class CompeteController {
      * contest is watching — which the lockdown would then report as leaving.
      */
     @GetMapping("/{platform}/{contestId}/problems/{index}/statement.pdf")
-    @Operation(summary = "The statement PDF, proxied from the judge")
+    @Operation(summary = "The statement document, proxied from the judge")
     public ResponseEntity<byte[]> statementPdf(
         @AuthenticationPrincipal Long userId,
         @PathVariable String platform,
         @PathVariable String contestId,
         @PathVariable String index) {
-        byte[] pdf = competeService.statementPdf(userId, platform, contestId, index);
+        CompeteDto.StatementDocument doc =
+            competeService.statementDocument(userId, platform, contestId, index);
+
+        // The judge's own type, not a guess. This route declared application/pdf for every
+        // response, which was right for most DOMjudge problems and wrong for the ones whose
+        // package holds a .txt — those reached the browser labelled as PDFs and rendered as an
+        // empty pane, which is indistinguishable from a statement that failed to load.
+        MediaType type;
+        try {
+            type = MediaType.parseMediaType(doc.contentType());
+        } catch (Exception e) {
+            type = MediaType.APPLICATION_OCTET_STREAM;
+        }
+
         return ResponseEntity.ok()
-            .contentType(MediaType.APPLICATION_PDF)
+            .contentType(type)
             .header(HttpHeaders.CONTENT_DISPOSITION,
-                "inline; filename=\"" + index.toUpperCase() + ".pdf\"")
+                "inline; filename=\"" + index.toUpperCase() + extensionFor(type) + "\"")
             // Statements do not change mid-contest, and 200 contestants each opening four
             // problems is 800 fetches of the same handful of documents otherwise.
             .header(HttpHeaders.CACHE_CONTROL, "private, max-age=600")
-            .body(pdf);
+            .body(doc.bytes());
+    }
+
+    /** Names the download after what it actually is, for the "open in a new tab" case. */
+    private String extensionFor(MediaType type) {
+        if (MediaType.APPLICATION_PDF.isCompatibleWith(type)) return ".pdf";
+        if (MediaType.TEXT_HTML.isCompatibleWith(type)) return ".html";
+        if (MediaType.TEXT_PLAIN.isCompatibleWith(type)) return ".txt";
+        return "";
     }
 
     @GetMapping("/{platform}/{contestId}/languages")
@@ -153,6 +174,24 @@ public class CompeteController {
         @PathVariable String fileId) {
         return PersonalFileController.asDownload(
             competeService.fileDownload(userId, platform, contestId, fileId));
+    }
+
+    /**
+     * The whole board, for the leaderboard panel in the arena's sidebar.
+     *
+     * Separate from {@code /rank} rather than folded into it. The rank is polled continuously
+     * by the header for every contestant in the room; the board is read only while somebody
+     * has the panel open. Serving both from one endpoint would have made the expensive one as
+     * frequent as the cheap one.
+     */
+    @GetMapping("/{platform}/{contestId}/leaderboard")
+    @Operation(summary = "The contest's full board, with this contestant's team marked")
+    public ResponseEntity<ApiResponse<CompeteDto.Leaderboard>> leaderboard(
+        @AuthenticationPrincipal Long userId,
+        @PathVariable String platform,
+        @PathVariable String contestId) {
+        return ResponseEntity.ok(ApiResponse.ok(
+            competeService.leaderboard(userId, platform, contestId)));
     }
 
     @GetMapping("/{platform}/{contestId}/rank")

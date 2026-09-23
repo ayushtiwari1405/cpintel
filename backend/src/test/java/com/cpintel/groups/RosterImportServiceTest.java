@@ -2,6 +2,7 @@ package com.cpintel.groups;
 
 import com.cpintel.entity.ContestGroup;
 import com.cpintel.entity.GroupMember;
+import com.cpintel.security.Roles;
 import com.cpintel.entity.User;
 import com.cpintel.exception.ApiException;
 import com.cpintel.repository.jpa.ContestGroupRepository;
@@ -13,6 +14,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.List;
@@ -73,7 +75,7 @@ class RosterImportServiceTest {
     }
 
     private RosterImportService.ImportResult run(String text, boolean dryRun, boolean superAdmin) {
-        return service.importRoster(ADMIN_ID, GROUP_ID, text, dryRun, superAdmin, null);
+        return service.importRoster(ADMIN_ID, GROUP_ID, text, dryRun, superAdmin, null, null);
     }
 
     private User existing(Long id, String username, String email) {
@@ -129,17 +131,28 @@ class RosterImportServiceTest {
     class Permission {
 
         @Test
-        @DisplayName("a plain admin cannot create accounts, even in bulk")
-        void plainAdminBlockedFromCreating() {
-            // Creating accounts is SUPER_ADMIN-only by design, so that the tier handing out
-            // access sits above the tier using it. A bulk endpoint that ignored this would be
-            // a way straight around the rule.
+        @DisplayName("a plain admin may create accounts in bulk")
+        void plainAdminMayCreate() {
+            // Running a contest means adding the people sitting it, and routing every new
+            // participant through a super admin turns a class list into an escalation request.
             var result = run("email\nbrand.new@uni.edu\n", false, false);
 
-            assertNotNull(result.blockedReason());
-            assertFalse(result.mayCreateAccounts());
-            verify(users, never()).save(any());
-            verify(members, never()).save(any());
+            assertNull(result.blockedReason());
+            assertEquals(1, result.toCreate());
+            verify(users).save(any());
+        }
+
+        @Test
+        @DisplayName("a bulk-created account is always a USER, whoever ran the import")
+        void bulkCreatedAccountsAreNeverPrivileged() {
+            // This is the property the permission above rests on. If a row could ever set a
+            // role, a bulk import would become a way to manufacture console access and the
+            // permission would have to move back to SUPER_ADMIN.
+            run("email\nbrand.new@uni.edu\n", false, false);
+
+            ArgumentCaptor<User> saved = ArgumentCaptor.forClass(User.class);
+            verify(users).save(saved.capture());
+            assertEquals(Roles.USER, saved.getValue().getRole());
         }
 
         @Test
@@ -156,17 +169,42 @@ class RosterImportServiceTest {
             verify(members).save(any(GroupMember.class));
             verify(users, never()).save(any());
         }
+    }
+
+    @Nested
+    @DisplayName("the import-wide team")
+    class DefaultTeam {
+
+        private RosterImportService.ImportResult runWithTeam(String text, String team) {
+            return service.importRoster(ADMIN_ID, GROUP_ID, text, false, false, team, null);
+        }
 
         @Test
-        @DisplayName("a blocked import writes nothing at all, not even the addable rows")
-        void blockedImportIsAllOrNothing() {
-            when(users.findByEmail("known@uni.edu"))
-                .thenReturn(Optional.of(existing(11L, "known", "known@uni.edu")));
+        @DisplayName("fills in rows that name no team, which is the whole point")
+        void appliesToRowsWithoutATeam() {
+            // A class list with no team column at all, everyone on one team. Typing that into
+            // two hundred rows is not a reasonable thing to ask of anybody.
+            var result = runWithTeam("email\nbrand.new@uni.edu\n", "Team 01");
 
-            var result = run("email\nknown@uni.edu\nbrand.new@uni.edu\n", false, false);
+            assertEquals("Team 01", result.rows().get(0).teamName());
+        }
 
-            assertNotNull(result.blockedReason());
-            verify(members, never()).save(any());
+        @Test
+        @DisplayName("a team named on the row wins, so a mixed roster keeps its own")
+        void perRowWins() {
+            var result = runWithTeam(
+                "email,teamName\nbrand.new@uni.edu,Their Own Team\n", "Team 01");
+
+            assertEquals("Their Own Team", result.rows().get(0).teamName(),
+                "silently overwriting a team somebody typed would be the surprising behaviour");
+        }
+
+        @Test
+        @DisplayName("blank is the same as not given")
+        void blankIsIgnored() {
+            var result = runWithTeam("email\nbrand.new@uni.edu\n", "   ");
+
+            assertNull(result.rows().get(0).teamName());
         }
     }
 

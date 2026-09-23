@@ -1,7 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { isDesktop, type LockdownState } from '@/utils/desktopBridge'
 
-/** Matches AWAY_WARN_MS in the desktop build, so both say the same number. */
+/**
+ * The default threshold, matching AWAY_WARN_MS in the desktop build so both say the same number.
+ *
+ * An examination overrides it with its own: what counts as leaving a two-hour written paper is
+ * not what counts as leaving a five-hour team contest, and the admin who set the examination is
+ * the one who gets to decide.
+ */
 export const AWAY_WARN_MS = 10_000
 const AWAY_REPEAT_MS = 30_000
 const TICK_MS = 1_000
@@ -26,7 +32,8 @@ const TICK_MS = 1_000
  * in a browser also reports LOCKDOWN_UNAVAILABLE — an admin sees the weaker kind of monitoring
  * rather than a suspiciously clean record.
  */
-export function useAwayMonitor(active: boolean): LockdownState | null {
+export function useAwayMonitor(active: boolean,
+                               warnAfterMs: number = AWAY_WARN_MS): LockdownState | null {
   const [state, setState] = useState<LockdownState | null>(null)
 
   const awaySince = useRef<number | null>(null)
@@ -41,6 +48,10 @@ export function useAwayMonitor(active: boolean): LockdownState | null {
   useEffect(() => {
     if (!active || isDesktop()) return
 
+    // Guarded rather than trusted: a threshold of zero from a misconfigured event would warn
+    // continuously and report an absence for every glance away.
+    const threshold = warnAfterMs > 0 ? warnAfterMs : AWAY_WARN_MS
+
     originalTitle.current = document.title
 
     const hiddenNow = () =>
@@ -53,7 +64,7 @@ export function useAwayMonitor(active: boolean): LockdownState | null {
       focusLosses.current = 0
       longAbsences.current = 0
       warnings.current = 0
-      nextWarningAt.current = away ? Date.now() + AWAY_WARN_MS : null
+      nextWarningAt.current = away ? Date.now() + threshold : null
       countedLong.current = false
     }
     reset()
@@ -73,7 +84,7 @@ export function useAwayMonitor(active: boolean): LockdownState | null {
         warnings: warnings.current,
         clipboardWipes: 0,
         blocked: 0,
-        warnAfterMs: AWAY_WARN_MS,
+        warnAfterMs: threshold,
       })
     }
 
@@ -126,7 +137,7 @@ export function useAwayMonitor(active: boolean): LockdownState | null {
       if (awaySince.current !== null) return
       awaySince.current = Date.now()
       focusLosses.current++
-      nextWarningAt.current = Date.now() + AWAY_WARN_MS
+      nextWarningAt.current = Date.now() + threshold
       countedLong.current = false
       publish()
     }
@@ -137,7 +148,7 @@ export function useAwayMonitor(active: boolean): LockdownState | null {
       completedMs.current += duration
       awaySince.current = null
       nextWarningAt.current = null
-      if (duration >= AWAY_WARN_MS && !countedLong.current) {
+      if (duration >= threshold && !countedLong.current) {
         longAbsences.current++
         countedLong.current = true
       }
@@ -174,7 +185,7 @@ export function useAwayMonitor(active: boolean): LockdownState | null {
       }
 
       // Starts at the threshold and keeps going, so the countdown in the tab strip is live.
-      if (now - awaySince.current >= AWAY_WARN_MS) showAwayTitle(seconds)
+      if (now - awaySince.current >= threshold) showAwayTitle(seconds)
       publish()
     }, TICK_MS)
 
@@ -190,7 +201,7 @@ export function useAwayMonitor(active: boolean): LockdownState | null {
       restoreTitle()
       setState(null)
     }
-  }, [active])
+  }, [active, warnAfterMs])
 
   return state
 }

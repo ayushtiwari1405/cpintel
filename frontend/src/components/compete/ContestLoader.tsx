@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Loader2, Swords } from 'lucide-react'
+import { DomjudgeContestPicker } from './DomjudgeContestPicker'
 import type { CompetePlatform } from '@/types'
 
 interface Props {
@@ -25,9 +26,9 @@ export function ContestLoader({ onLoad, loading }: Props) {
       <p className="text-sm text-gray-500 leading-relaxed">
         {platform === 'DOMJUDGE' ? (
           <>
-            Paste the DOMjudge contest id, or a link to it. Your team is already registered by
-            whoever set the round up, so there is nothing to connect — the statements, an
-            editor, your submissions and your live rank all appear here once it starts.
+            Pick the contest you are sitting. Your DOMjudge account is attached by whoever set
+            the round up, so there is nothing to connect — the statements, an editor, your
+            submissions, your live rank and the board all appear here once it starts.
           </>
         ) : (
           <>
@@ -39,24 +40,26 @@ export function ContestLoader({ onLoad, loading }: Props) {
         )}
       </p>
 
-      <div className="flex gap-2">
-        <select
-          value={platform}
-          onChange={e => setPlatform(e.target.value as CompetePlatform)}
-          className="input py-2 text-sm w-40 flex-shrink-0"
-        >
-          <option value="CODEFORCES">Codeforces</option>
-          <option value="DOMJUDGE">DOMjudge</option>
-          <option value="CODECHEF" disabled>CodeChef (soon)</option>
-        </select>
+      <select
+        value={platform}
+        onChange={e => setPlatform(e.target.value as CompetePlatform)}
+        className="input py-2 text-sm w-40 flex-shrink-0"
+      >
+        <option value="CODEFORCES">Codeforces</option>
+        <option value="DOMJUDGE">DOMjudge</option>
+        <option value="CODECHEF" disabled>CodeChef (soon)</option>
+      </select>
 
+      {platform === 'DOMJUDGE' ? (
+        <DomjudgeContestPicker onPick={id => onLoad('DOMJUDGE', id)} loading={loading} />
+      ) : (
+      <>
+      <div className="flex gap-2">
         <input
           value={url}
           onChange={e => setUrl(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter') submit() }}
-          placeholder={platform === 'DOMJUDGE'
-            ? 'nwerc18, or https://judge.example.edu/contests/3'
-            : 'https://codeforces.com/contest/2259'}
+          placeholder="https://codeforces.com/contest/2259"
           className="input py-2 text-sm flex-1"
         />
 
@@ -73,6 +76,8 @@ export function ContestLoader({ onLoad, loading }: Props) {
       <p className="text-[11px] text-gray-600">
         A contest id works too, as does a link to a problem inside the contest.
       </p>
+      </>
+      )}
     </div>
   )
 }

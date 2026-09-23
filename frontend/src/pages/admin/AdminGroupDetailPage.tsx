@@ -3,14 +3,70 @@ import { Link, useParams } from 'react-router-dom'
 import {
   AlertTriangle, ArrowRight, Loader2, Plus, Trash2, UserPlus,
 } from 'lucide-react'
+import { DomjudgeAccountCell } from '@/components/admin/DomjudgeAccountCell'
 import {
-  useAddGroupContest, useAddMember, useAdminGroup, useRemoveGroupContest, useRemoveMember,
-  useUpdateMember,
+  useAddGroupContest, useAddMember, useAdminGroup, useAdminGroups, useMoveMember,
+  useRemoveGroupContest, useRemoveMember, useUpdateMember,
 } from '@/hooks/useGroups'
 import { useAdminUsers } from '@/hooks/useAdmin'
-import { Ago, EmptyRow, Panel, Pill } from '@/components/admin/AdminUi'
+import { useTeamAnalytics } from '@/hooks/useExams'
+import { Ago, EmptyRow, Panel, Pill, StatCard } from '@/components/admin/AdminUi'
 import { RosterImportPanel } from '@/components/admin/RosterImportPanel'
 import type { GroupContestStatus } from '@/types'
+
+/**
+ * How this team has done, across everything it was given.
+ *
+ * Participation is the figure worth reading first, and it is deliberately people-who-turned-up
+ * over people-assigned rather than anything about scores: a team whose average looks respectable
+ * because a third of it never sat the paper is precisely what this panel exists to show.
+ */
+function TeamAnalyticsPanel({ teamId }: { teamId: number }) {
+  const { data, isLoading } = useTeamAnalytics(teamId)
+  if (isLoading || !data) return null
+
+  return (
+    <Panel
+      title="How this team has done"
+      description="Across every contest and examination it was assigned"
+    >
+      <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-4">
+        <StatCard label="Events" value={data.events}
+          hint={`${data.contests} contest(s), ${data.exams} examination(s)`} />
+        <StatCard label="Turned up" value={`${Math.round(data.participationRate * 100)}%`}
+          tone={data.participationRate >= 0.9 ? 'good'
+            : data.participationRate >= 0.6 ? 'warn' : 'danger'}
+          hint={`${data.participants} of the people assigned`} />
+        <StatCard label="Average solved" value={data.averageSolved.toFixed(1)}
+          hint="Per ranked member, per event" />
+        <StatCard label="Problems solved" value={data.totalSolved} hint="All events together" />
+      </div>
+
+      {data.recent.length > 0 && (
+        <ul className="divide-y divide-gray-800 border-t border-gray-800">
+          {data.recent.map(row => (
+            <li key={row.eventId} className="flex flex-wrap items-center justify-between gap-2
+              px-4 py-2 text-sm">
+              <span className="text-gray-300">
+                {row.name}
+                <Pill tone={row.kind === 'EXAM' ? 'indigo' : 'gray'}>
+                  {row.kind === 'EXAM' ? 'exam' : 'contest'}
+                </Pill>
+              </span>
+              <span className="text-xs text-gray-500">
+                {row.ranked} ranked · {row.averageSolved.toFixed(1)} solved on average
+                {row.bestRank != null && row.bestMember && (
+                  <> · best {row.bestMember} at {row.bestRank}</>
+                )}
+                {row.startsAt && <> · <Ago at={row.startsAt} /></>}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Panel>
+  )
+}
 
 const STATUS_TONE: Record<GroupContestStatus, 'gray' | 'green' | 'indigo'> = {
   SCHEDULED: 'indigo',
@@ -34,6 +90,8 @@ export default function AdminGroupDetailPage() {
   const addMember = useAddMember()
   const updateMember = useUpdateMember()
   const removeMember = useRemoveMember()
+  const moveMember = useMoveMember()
+  const { data: allTeams } = useAdminGroups()
   const addContest = useAddGroupContest()
   const removeContest = useRemoveGroupContest()
 
@@ -53,7 +111,7 @@ export default function AdminGroupDetailPage() {
   if (isLoading || !data) {
     return (
       <div className="flex items-center justify-center gap-2 py-20 text-sm text-gray-500">
-        <Loader2 size={16} className="animate-spin" /> Loading the group…
+        <Loader2 size={16} className="animate-spin" /> Loading the team…
       </div>
     )
   }
@@ -80,8 +138,8 @@ export default function AdminGroupDetailPage() {
   return (
     <div className="space-y-4">
       <div className="flex items-baseline gap-3">
-        <Link to="/admin/groups" className="text-xs text-gray-500 hover:text-gray-300">
-          ← All groups
+        <Link to="/admin/teams" className="text-xs text-gray-500 hover:text-gray-300">
+          ← All teams
         </Link>
         <h1 className="text-lg font-semibold text-gray-100">{data.group.name}</h1>
         {!data.group.active && <Pill tone="gray">retired</Pill>}
@@ -101,13 +159,15 @@ export default function AdminGroupDetailPage() {
                 <th className="px-4 py-2 font-medium">User</th>
                 <th className="px-4 py-2 font-medium">Codeforces</th>
                 <th className="px-4 py-2 font-medium">Handle on the judge</th>
+                <th className="px-4 py-2 font-medium">DOMjudge account</th>
                 <th className="px-4 py-2 font-medium">Joined</th>
+                <th className="px-4 py-2 font-medium">Move to</th>
                 <th className="px-4 py-2 font-medium text-right">Remove</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-800">
               {data.members.length === 0 && (
-                <EmptyRow colSpan={5}>Nobody yet. Add people below.</EmptyRow>
+                <EmptyRow colSpan={7}>Nobody yet. Add people below.</EmptyRow>
               )}
               {data.members.map(member => (
                 <tr key={member.userId} className="transition-colors hover:bg-gray-800/40">
@@ -136,8 +196,36 @@ export default function AdminGroupDetailPage() {
                                  outline-none focus:border-indigo-600"
                     />
                   </td>
+                  <td className="px-4 py-2.5">
+                    <DomjudgeAccountCell
+                      userId={member.userId}
+                      username={member.username}
+                    />
+                  </td>
                   <td className="px-4 py-2.5 text-xs text-gray-500">
                     <Ago at={member.joinedAt} />
+                  </td>
+                  <td className="px-4 py-2.5">
+                    {/* One action rather than a remove and an add: between those two this
+                        person is on no team, which is when an examination set for their old
+                        team stops reaching them and the new one has not started to. */}
+                    <select
+                      value=""
+                      onChange={e => {
+                        const target = Number(e.target.value)
+                        if (!target) return
+                        moveMember.mutate({
+                          groupId: id, userId: member.userId, targetGroupId: target,
+                        })
+                      }}
+                      className="w-36 rounded-md border border-gray-800 bg-gray-900 px-2 py-1
+                                 text-xs text-gray-400 outline-none focus:border-indigo-600"
+                    >
+                      <option value="">Move…</option>
+                      {allTeams?.filter(team => team.groupId !== id).map(team => (
+                        <option key={team.groupId} value={team.groupId}>{team.name}</option>
+                      ))}
+                    </select>
                   </td>
                   <td className="px-4 py-2.5 text-right">
                     <button
@@ -193,7 +281,9 @@ export default function AdminGroupDetailPage() {
 
       <RosterImportPanel groupId={id} />
 
-      <Panel title="Contests" description="Rounds this group has sat, on Codeforces or DOMjudge">
+      <TeamAnalyticsPanel teamId={id} />
+
+      <Panel title="Contests" description="Rounds this team has sat, on Codeforces or DOMjudge">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>

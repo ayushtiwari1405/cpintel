@@ -51,6 +51,9 @@ public class DomjudgeSampleClient {
     /** Samples do not change during a contest, so the first successful read is the last. */
     private static final Duration TTL = Duration.ofHours(6);
 
+    /** An empty answer is held only briefly — it may be a permission, not an absence. */
+    private static final Duration EMPTY_TTL = Duration.ofSeconds(60);
+
     private final DomjudgeClient domjudge;
 
     private final Map<String, Entry> cache = new ConcurrentHashMap<>();
@@ -83,26 +86,42 @@ public class DomjudgeSampleClient {
     /**
      * Samples for one problem, newest-cached-first, never throwing.
      *
-     * An empty list is a legitimate answer — a problem can genuinely have no sample flagged —
-     * and is treated the same as "could not read them". The arena shows an empty console
+     * <p>An empty list is a legitimate answer — a problem can genuinely have no sample flagged
+     * — and is treated much the same as "could not read them". The arena shows an empty console
      * either way, which the contestant can still type their own cases into.
+     *
+     * <p><b>Read as whoever is asking.</b> On a deployment with no service account there is no
+     * other identity available, and the sample routes are as permission-sensitive as everything
+     * else on the judge — a null here would fetch anonymously and quietly return nothing for
+     * every problem in the contest.
+     *
+     * <p>The cache stays keyed on the problem rather than on the caller, because sample data is
+     * the same document for anyone allowed to read it and a per-contestant copy would multiply
+     * by the size of the room. What that costs is the case where one account cannot read what
+     * another can, and {@link #EMPTY_TTL} is the answer to it: a successful read is held for
+     * hours, an empty one for a minute. Long enough to stop four routes being probed on every
+     * statement open, short enough that one refused account cannot suppress a contest's samples
+     * for everybody for the rest of the round.
      */
-    public List<PracticeDto.Sample> samples(String contestId, String problemId) {
+    public List<PracticeDto.Sample> samples(DomjudgeCredentialStore.Stored as, String contestId,
+                                            String problemId) {
         String key = contestId + "/" + problemId;
         Entry hit = cache.get(key);
-        if (hit != null && Instant.now().isBefore(hit.at().plus(TTL))) {
-            return hit.samples();
+        if (hit != null) {
+            Duration ttl = hit.samples().isEmpty() ? EMPTY_TTL : TTL;
+            if (Instant.now().isBefore(hit.at().plus(ttl))) return hit.samples();
         }
 
-        List<PracticeDto.Sample> found = fetch(contestId, problemId);
+        List<PracticeDto.Sample> found = fetch(as, contestId, problemId);
         cache.put(key, new Entry(found, Instant.now()));
         return found;
     }
 
-    private List<PracticeDto.Sample> fetch(String contestId, String problemId) {
+    private List<PracticeDto.Sample> fetch(DomjudgeCredentialStore.Stored as, String contestId,
+                                           String problemId) {
         Route remembered = known.get();
         if (remembered != null) {
-            List<PracticeDto.Sample> viaKnown = tryRoute(remembered, contestId, problemId);
+            List<PracticeDto.Sample> viaKnown = tryRoute(as, remembered, contestId, problemId);
             if (!viaKnown.isEmpty()) return viaKnown;
             // The remembered route stopped working — fall through and probe again rather than
             // reporting no samples, since a contest can hold problems imported different ways.
@@ -110,7 +129,7 @@ public class DomjudgeSampleClient {
 
         for (Route route : Route.values()) {
             if (route == remembered) continue;
-            List<PracticeDto.Sample> found = tryRoute(route, contestId, problemId);
+            List<PracticeDto.Sample> found = tryRoute(as, route, contestId, problemId);
             if (!found.isEmpty()) {
                 if (known.compareAndSet(remembered, route)) {
                     log.info("DOMjudge sample data resolved via {} — using it for later problems",
@@ -126,17 +145,18 @@ public class DomjudgeSampleClient {
         return List.of();
     }
 
-    private List<PracticeDto.Sample> tryRoute(Route route, String contestId, String problemId) {
+    private List<PracticeDto.Sample> tryRoute(DomjudgeCredentialStore.Stored as, Route route,
+                                              String contestId, String problemId) {
         try {
             return switch (route) {
-                case API_CONTEST_TESTCASES -> viaTestcaseApi(
+                case API_CONTEST_TESTCASES -> viaTestcaseApi(as,
                     "/contests/" + contestId + "/problems/" + problemId + "/testcases",
                     contestId, problemId);
-                case API_PROBLEM_TESTCASES -> viaTestcaseApi(
+                case API_PROBLEM_TESTCASES -> viaTestcaseApi(as,
                     "/problems/" + problemId + "/testcases", contestId, problemId);
-                case WEB_TEAM_SAMPLES_ZIP -> viaZip(
+                case WEB_TEAM_SAMPLES_ZIP -> viaZip(as,
                     "/team/problems/" + problemId + "/samples.zip");
-                case WEB_PUBLIC_SAMPLES_ZIP -> viaZip(
+                case WEB_PUBLIC_SAMPLES_ZIP -> viaZip(as,
                     "/public/problems/" + problemId + "/samples.zip");
             };
         } catch (Exception e) {
@@ -155,9 +175,10 @@ public class DomjudgeSampleClient {
      * or behind a per-file endpoint. Both are handled, inline first because it costs no extra
      * request.
      */
-    private List<PracticeDto.Sample> viaTestcaseApi(String path, String contestId,
+    private List<PracticeDto.Sample> viaTestcaseApi(DomjudgeCredentialStore.Stored as,
+                                                    String path, String contestId,
                                                     String problemId) {
-        WebClient api = apiClient();
+        WebClient api = domjudge.apiClient(as);
         List<DjModels.Testcase> testcases = api.get()
             .uri(path)
             .retrieve()
@@ -242,8 +263,9 @@ public class DomjudgeSampleClient {
      * the archive orders them. Both {@code .ans} and {@code .out} are accepted because problem
      * packages in the wild use each.
      */
-    private List<PracticeDto.Sample> viaZip(String path) throws Exception {
-        byte[] archive = domjudge.webClient().get()
+    private List<PracticeDto.Sample> viaZip(DomjudgeCredentialStore.Stored as, String path)
+            throws Exception {
+        byte[] archive = domjudge.webClient(as).get()
             .uri(path)
             .retrieve()
             .bodyToMono(byte[].class)
@@ -283,7 +305,5 @@ public class DomjudgeSampleClient {
     }
 
     /** The API client, reached through the same credentials the rest of the integration uses. */
-    private WebClient apiClient() {
-        return domjudge.apiClient();
-    }
+
 }

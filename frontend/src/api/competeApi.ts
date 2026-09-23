@@ -1,7 +1,8 @@
 import { apiClient } from './client'
 import type {
   ApiResponse, CompetePlatform, ContestInfo, ContestRef, ContestSubmission,
-  LanguageOption, ProblemDetail, RankInfo,
+  DomjudgeAccount, DomjudgeContestSummary, LanguageOption, Leaderboard, ProblemDetail,
+  RankInfo,
 } from '@/types'
 
 /**
@@ -42,6 +43,15 @@ export const competeApi = {
     apiClient.get<ApiResponse<RankInfo>>(`${base(ref)}/rank`).then(r => r.data),
 
   /**
+   * The whole board, read only while the leaderboard panel is open.
+   *
+   * Separate from `rank`, which the header polls for every contestant in the room. Folding the
+   * two together would have made the expensive call as frequent as the cheap one.
+   */
+  leaderboard: (ref: ContestRef) =>
+    apiClient.get<ApiResponse<Leaderboard>>(`${base(ref)}/leaderboard`).then(r => r.data),
+
+  /**
    * The statement PDF, as bytes.
    *
    * Fetched through the API client rather than pointed at with an `<iframe src>` so the
@@ -50,5 +60,30 @@ export const competeApi = {
    */
   statementPdf: (ref: ContestRef, index: string) =>
     apiClient.get<Blob>(`${base(ref)}/problems/${index}/statement.pdf`,
-      { responseType: 'blob' }).then(r => r.data),
+      { responseType: 'blob' }).then(r => r.data).catch(async err => {
+        // With responseType 'blob' the error body arrives as a Blob too, so the server's
+        // explanation is unreadable as err.response.data.message until it is decoded.
+        const data = err?.response?.data
+        if (data instanceof Blob) {
+          try { err.response.data = JSON.parse(await data.text()) } catch { /* not JSON */ }
+        }
+        throw err
+      }),
+
+}
+
+/**
+ * The DOMjudge account a contestant competes as.
+ *
+ * Not under `/compete/{platform}/{contestId}` because both of these are properties of an
+ * account rather than of a contest — and the contest list in particular has to be answerable
+ * before a contest has been picked, which is exactly when there is no contest id for the path.
+ */
+export const domjudgeApi = {
+  account: () =>
+    apiClient.get<ApiResponse<DomjudgeAccount>>('/domjudge/account').then(r => r.data),
+
+  contests: () =>
+    apiClient.get<ApiResponse<DomjudgeContestSummary[]>>('/domjudge/contests')
+      .then(r => r.data),
 }

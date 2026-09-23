@@ -4,6 +4,7 @@ import com.cpintel.controller.AuthController;
 import com.cpintel.dto.AuthDto;
 import com.cpintel.exception.ApiException;
 import com.cpintel.service.AuthService;
+import com.cpintel.service.PasswordService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -23,6 +24,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class AuthEndpointAuthorizationTest extends AuthorizationTestBase {
 
     @MockBean private AuthService authService;
+    @MockBean private PasswordService passwordService;
 
     private static final String REGISTER = """
         {"username":"someone","email":"someone@example.com","password":"password123"}

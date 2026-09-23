@@ -4,14 +4,14 @@ import { useLogin } from '@/hooks/useAuth'
 import { Eye, EyeOff, Zap } from 'lucide-react'
 
 export default function LoginPage() {
-  const [email, setEmail]       = useState('')
-  const [password, setPassword] = useState('')
-  const [showPass, setShowPass] = useState(false)
+  const [identifier, setIdentifier] = useState('')
+  const [password, setPassword]     = useState('')
+  const [showPass, setShowPass]     = useState(false)
   const login = useLogin()
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    login.mutate({ email, password })
+    login.mutate({ identifier, password })
   }
 
   return (
@@ -32,14 +32,24 @@ export default function LoginPage() {
           <p className="text-gray-400 text-sm mb-6">Sign in to your account</p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
+            {/*
+              One field for both forms of identifier, and type="text" rather than "email" —
+              accounts here are handed out with a username and a first password, and the
+              address on the account may be one the person never uses. A browser refusing to
+              submit "ada" because it is not an address would be the product telling half the
+              room they typed their own name wrongly.
+            */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1.5">Email</label>
+              <label className="block text-sm font-medium text-gray-300 mb-1.5">
+                Email or username
+              </label>
               <input
-                type="email"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
+                type="text"
+                value={identifier}
+                onChange={e => setIdentifier(e.target.value)}
                 className="input"
-                placeholder="you@example.com"
+                placeholder="you@example.com or yourname"
+                autoComplete="username"
                 required
                 autoFocus
               />
@@ -54,6 +64,7 @@ export default function LoginPage() {
                   onChange={e => setPassword(e.target.value)}
                   className="input pr-10"
                   placeholder="••••••••"
+                  autoComplete="current-password"
                   required
                 />
                 <button
@@ -86,7 +97,8 @@ export default function LoginPage() {
             a button that would answer 403.
           */}
           <p className="text-center text-sm text-gray-500 mt-6">
-            Accounts are created by an administrator. Ask yours for access.
+            Accounts are created by an administrator, who gives you your username and first
+            password. You can change it once you are in.
           </p>
         </div>
 

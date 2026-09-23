@@ -26,7 +26,10 @@ const RULES: Array<{ pattern: RegExp; match: LanguageMatch }> = [
   { pattern: /\bG\+\+|\bclang\+\+|\bC\+\+/i, match: { monaco: 'cpp', runner: 'cpp' } },
   // Must come after C++: "GNU GCC C11" contains no '+', but plain /C\b/ would over-match.
   { pattern: /\bGCC C\d|\bGNU GCC\b/i,       match: { monaco: 'c', runner: null } },
-  { pattern: /\bPyPy\b|\bPython\b/i,         match: { monaco: 'python', runner: null } },
+  // PyPy runs here as CPython, which is a deliberate approximation. The two agree on what a
+  // program computes and disagree on how fast; the local runner checks answers against samples
+  // and has never claimed to predict a judge's timing, so the useful thing is to run it.
+  { pattern: /\bPyPy\b|\bPython\b/i,         match: { monaco: 'python', runner: 'python3' } },
   { pattern: /\bKotlin\b/i,                  match: { monaco: 'kotlin', runner: null } },
   // Before Java: "Java 21" and "JavaScript" both contain "Java".
   { pattern: /\bJavaScript\b|\bNode\.js\b/i, match: { monaco: 'javascript', runner: null } },

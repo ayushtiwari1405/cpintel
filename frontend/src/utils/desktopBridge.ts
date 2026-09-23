@@ -28,6 +28,22 @@ export interface LockdownState {
   warnAfterMs: number
 }
 
+/**
+ * What an examination asks the desktop client to do while it is being sat.
+ *
+ * Mirrors LockdownPolicy in the desktop build. Every field is a request rather than a
+ * guarantee: the client applies what the operating system allows and reports what it could
+ * not, and the browser build applies almost none of it.
+ */
+export interface LockdownPolicyRequest {
+  awayWarnMs: number
+  restrictWindowSwitching: boolean
+  blockNavigation: boolean
+  blockExternalApps: boolean
+  detectAppTermination: boolean
+  clipboardGuard: boolean
+}
+
 declare global {
   interface Window {
     cpintelDesktop?: {
@@ -45,7 +61,8 @@ declare global {
         forget: () => Promise<void>
       }
       lockdown: {
-        engage:   (reason: string) => Promise<LockdownState>
+        engage:   (reason: string, policy?: Partial<LockdownPolicyRequest>)
+          => Promise<LockdownState>
         release:  () => Promise<LockdownState>
         getState: () => Promise<LockdownState>
         onChange: (callback: (state: LockdownState) => void) => () => void
@@ -117,8 +134,9 @@ export const desktopCf = {
  * should not have to branch on which build they are in.
  */
 export const desktopLockdown = {
-  engage: async (reason: string): Promise<LockdownState | null> =>
-    isDesktop() ? window.cpintelDesktop!.lockdown.engage(reason) : null,
+  engage: async (reason: string,
+                 policy?: Partial<LockdownPolicyRequest>): Promise<LockdownState | null> =>
+    isDesktop() ? window.cpintelDesktop!.lockdown.engage(reason, policy) : null,
 
   release: async (): Promise<LockdownState | null> =>
     isDesktop() ? window.cpintelDesktop!.lockdown.release() : null,

@@ -132,9 +132,9 @@ export function useImportRoster() {
   const qc = useQueryClient()
   const toast = useToast()
   return useMutation({
-    mutationFn: ({ groupId, text, dryRun }: {
-      groupId: number; text: string; dryRun: boolean
-    }) => adminApi.importRoster(groupId, { text, dryRun }).then(r => r.data),
+    mutationFn: ({ groupId, text, dryRun, teamName }: {
+      groupId: number; text: string; dryRun: boolean; teamName?: string
+    }) => adminApi.importRoster(groupId, { text, dryRun, teamName }).then(r => r.data),
     onSuccess: (result, vars) => {
       if (vars.dryRun) return
       qc.invalidateQueries({ queryKey: ['admin', 'group', vars.groupId] })
@@ -156,6 +156,23 @@ export function useUpdateMember() {
       { groupId: number; userId: number; externalHandle?: string }) =>
       adminApi.updateMember(groupId, userId, { userId, externalHandle }),
     () => 'Handle updated — refresh the standings to use it',
+  )
+}
+
+/**
+ * Moves somebody to another team, keeping the handle they are found under.
+ *
+ * One call rather than a remove and an add, because the two are not the same when done
+ * separately: between them the person is on no team, which is the moment an examination
+ * assigned to their old team stops reaching them and the one assigned to their new team has
+ * not started to.
+ */
+export function useMoveMember() {
+  return useGroupMutation(
+    ({ groupId, userId, targetGroupId }:
+      { groupId: number; userId: number; targetGroupId: number }) =>
+      adminApi.moveMember(groupId, userId, targetGroupId),
+    () => 'Moved — their past results stay with the events they were computed for',
   )
 }
 

@@ -1,8 +1,10 @@
 import { apiClient } from './client'
 import type {
-  AdminOverview, AdminUserDetail, AdminUserPage, ApiResponse, AuditPage,
+  AdminOverview, AdminUserDetail, AdminUserPage, ApiResponse, AuditPage, ParticipationRow,
   AdminUserRow, AssignableRole, ContestFilePolicy, ContestFileRule, GroupContestSummary,
-  GroupDetail, GroupMember, GroupStandings, GroupSummary, Role, ViolationFeed,
+  DomjudgeAccount, DomjudgeTeamOption, GroupDetail, GroupMember, GroupStandings, GroupSummary,
+  GeneratedPassword, Role,
+  ViolationFeed,
 } from '@/types'
 
 export interface CreateUserBody {
@@ -72,6 +74,21 @@ export interface RosterImportResult {
 }
 
 export const adminApi = {
+  /** Moves a member to another team in one action, keeping their judge handle. */
+  moveMember: (groupId: number, userId: number, targetGroupId: number) =>
+    apiClient.post<ApiResponse<GroupMember>>(
+      `/admin/groups/${groupId}/members/${userId}/move`, { targetGroupId }).then(r => r.data),
+
+  /**
+   * Every contest and examination this person was assigned, and how they did.
+   *
+   * Includes the ones they never entered, which is usually why an admin opened the account:
+   * somebody who did not sit an examination is invisible in any list built from results.
+   */
+  participation: (userId: number) =>
+    apiClient.get<ApiResponse<ParticipationRow[]>>(`/admin/users/${userId}/participation`)
+      .then(r => r.data),
+
   overview: () =>
     apiClient.get<ApiResponse<AdminOverview>>('/admin/overview').then(r => r.data),
 
@@ -106,6 +123,31 @@ export const adminApi = {
   revokeSessions: (userId: number) =>
     apiClient.post<ApiResponse<void>>(`/admin/users/${userId}/revoke-sessions`)
       .then(r => r.data),
+
+  /**
+   * Sets a new password on somebody's account, for the person who cannot reach their own mail.
+   *
+   * The self-service route is better and lives on the sign-in page; this exists because it
+   * does not always work, and "ask an administrator" has to lead somewhere. Leave `password`
+   * out to have one generated.
+   *
+   * The password comes back in the response and that is the only copy — it is stored hashed
+   * and is never emailed, because a live credential in a mailbox is what the reset-link flow
+   * exists to avoid.
+   */
+  setPassword: (userId: number, password?: string, reason?: string) =>
+    apiClient.post<ApiResponse<GeneratedPassword>>(
+      `/admin/users/${userId}/password`, { password, reason }).then(r => r.data),
+
+  /**
+   * Deletes an account and everything it owns. Super admin only.
+   *
+   * The blunt instrument, and refused server-side for anybody who has sat an examination:
+   * their session log is evidence about a paper, and deleting an account should not also be a
+   * decision to destroy that. Deactivating is what "remove this person" almost always means.
+   */
+  deleteUser: (userId: number) =>
+    apiClient.delete<ApiResponse<void>>(`/admin/users/${userId}`).then(r => r.data),
 
   // ------------------------------------------------------------------ audit
 
@@ -169,7 +211,8 @@ export const adminApi = {
    * Send `dryRun: true` first. It writes nothing and returns what each row would do, which is
    * the only chance to catch a mis-read column before it becomes hundreds of wrong accounts.
    */
-  importRoster: (groupId: number, body: { text: string; dryRun: boolean }) =>
+  importRoster: (groupId: number,
+                 body: { text: string; dryRun: boolean; teamName?: string }) =>
     apiClient.post<ApiResponse<RosterImportResult>>(
       `/admin/groups/${groupId}/members/import`, body).then(r => r.data),
 
@@ -209,4 +252,35 @@ export const adminApi = {
   violations: (contestId: number, limit = 200) =>
     apiClient.get<ApiResponse<ViolationFeed>>(
       `/admin/groups/contests/${contestId}/violations`, { params: { limit } }).then(r => r.data),
+}
+
+/**
+ * Attaching contestants' DOMjudge accounts.
+ *
+ * Admin-only, and deliberately not something a contestant can do for themselves: an account
+ * they had the password to could be a teammate's, and every submission made afterwards would
+ * be attributed to that team by the judge itself.
+ *
+ * Nothing here ever reads a password back. `status` reports the username and the resolved
+ * team so an admin can confirm they wired up the right one; re-attaching is how a wrong or
+ * changed password is corrected.
+ */
+export const adminDomjudgeApi = {
+  status: (userId: number) =>
+    apiClient.get<ApiResponse<DomjudgeAccount>>(`/admin/domjudge/credentials/${userId}`)
+      .then(r => r.data),
+
+  teams: () =>
+    apiClient.get<ApiResponse<DomjudgeTeamOption[]>>('/admin/domjudge/teams')
+      .then(r => r.data),
+
+  attach: (body: {
+    userId: number; username: string; password: string; name?: string; teamId?: string
+  }) =>
+    apiClient.post<ApiResponse<DomjudgeAccount>>('/admin/domjudge/credentials', body)
+      .then(r => r.data),
+
+  detach: (userId: number) =>
+    apiClient.delete<ApiResponse<void>>(`/admin/domjudge/credentials/${userId}`)
+      .then(r => r.data),
 }

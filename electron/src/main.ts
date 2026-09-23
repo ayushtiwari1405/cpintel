@@ -5,7 +5,7 @@ import {
 import path from 'path'
 import { spawn, ChildProcess } from 'child_process'
 import Store from 'electron-store'
-import { Lockdown, disposeOnQuit, type LockdownState } from './lockdown'
+import { Lockdown, disposeOnQuit, type LockdownPolicy, type LockdownState } from './lockdown'
 import { connectCodeforces, forgetCodeforces } from './cfSession'
 
 const store = new Store()
@@ -163,7 +163,9 @@ ipcMain.handle('store:set', (_e, key: string, value: unknown) => {
 ipcMain.handle('shell:openExternal', (_e, url: string, allowedInLockdown = false) => {
   // The renderer marks the few links that stay open during a contest — the problem on the
   // judge's own site, which a contestant is entitled to read. Everything else is refused.
-  if (lockdown.isEngaged() && !allowedInLockdown) {
+  // An examination that did not ask for external applications to be refused does not get them
+  // refused: the restriction belongs to the paper, not to the installation.
+  if (lockdown.blocksExternalApps() && !allowedInLockdown) {
     lockdown.countBlocked()
     return
   }
@@ -205,6 +207,7 @@ ipcMain.handle('cf:forget', () => forgetCodeforces())
 
 // ── Lockdown ──────────────────────────────────────────────────
 
-ipcMain.handle('lockdown:engage', (_e, reason: string) => lockdown.engage(reason))
+ipcMain.handle('lockdown:engage', (_e, reason: string, policy?: Partial<LockdownPolicy>) =>
+  lockdown.engage(reason, policy))
 ipcMain.handle('lockdown:release', () => lockdown.release())
 ipcMain.handle('lockdown:state', () => lockdown.state())

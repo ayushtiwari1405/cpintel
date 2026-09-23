@@ -26,7 +26,7 @@ export function ProblemNav({ problems, selected, onSelect, submissions }: Props)
   if (problems.length === 0) {
     return (
       <div className="text-xs text-gray-600 p-2 leading-relaxed">
-        Codeforces has not published the problem list yet. It appears when the contest starts.
+        The judge has not published the problem list yet. It appears when the contest starts.
       </div>
     )
   }

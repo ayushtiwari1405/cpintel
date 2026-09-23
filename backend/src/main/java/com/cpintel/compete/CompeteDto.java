@@ -21,6 +21,23 @@ import java.util.List;
  */
 public class CompeteDto {
 
+    /**
+     * A problem statement as the judge published it: the bytes, and what they are.
+     *
+     * <p>{@code contentType} is whatever the judge served — {@code application/pdf} for most
+     * DOMjudge problems, {@code text/plain} or {@code text/html} for ones whose package holds
+     * a text statement instead. Carried rather than assumed, because assuming PDF is what made
+     * text statements render as a blank pane.
+     */
+    public record StatementDocument(byte[] bytes, String contentType) {
+
+        /** True when this is a PDF, which is the only type the arena embeds rather than renders. */
+        public boolean isPdf() {
+            return contentType != null
+                && contentType.toLowerCase(java.util.Locale.ROOT).startsWith("application/pdf");
+        }
+    }
+
     /** Platform selector. CODEFORCES and DOMJUDGE are wired up; CODECHEF is the next one in. */
     public enum Platform { CODEFORCES, CODECHEF, DOMJUDGE }
 
@@ -93,6 +110,56 @@ public class CompeteDto {
         Instant createdAt,
         boolean finished,
         String url
+    ) {}
+
+    /**
+     * One problem's state for one team, as the judge's scoreboard reports it.
+     *
+     * {@code minute} is minutes from the contest start at which the problem was solved, and is
+     * null when it has not been. Attempts are counted whether or not they succeeded, because
+     * that is what the penalty is computed from and what a contestant is comparing against.
+     */
+    public record LeaderboardCell(
+        String index,
+        boolean solved,
+        int attempts,
+        Integer minute
+    ) {}
+
+    /** One team's row on the board. */
+    public record LeaderboardRow(
+        Integer rank,
+        String teamId,
+        String teamName,
+        int solved,
+        Integer penalty,
+        /** True for the viewer's own team, so the page can pin and highlight it. */
+        boolean mine,
+        List<LeaderboardCell> problems
+    ) {}
+
+    /**
+     * The contest's full board, plus the viewer's own team pulled out of it.
+     *
+     * <p>{@code frozen} and {@code live} are two different things and the page must say both.
+     * {@code frozen} means the contest has entered its freeze, so the board is deliberately
+     * not showing the last hour — normal, and every contestant expects it. {@code live} is
+     * false when CPIntel could not read the judge's own view at all and fell back to the
+     * public one, which is a property of the credentials rather than of the contest. Showing a
+     * frozen board as though it were current is the specific failure worth avoiding: it looks
+     * exactly like a room where nobody is solving anything.
+     */
+    public record Leaderboard(
+        List<LeaderboardRow> rows,
+        String myTeamId,
+        String myTeamName,
+        /** The viewer's own row, repeated here so the page need not search for it. */
+        LeaderboardRow myTeam,
+        /** The problem labels, in board order, for the column headers. */
+        List<String> problemIndexes,
+        boolean frozen,
+        boolean live,
+        Instant fetchedAt
     ) {}
 
     /**

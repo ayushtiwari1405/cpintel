@@ -21,6 +21,13 @@ public class UserDto {
         private String role;
         private Boolean isVerified;
         private Instant createdAt;
+        /**
+         * When the owner last set this password themselves, or null if they never have.
+         *
+         * Returned so their own profile can tell them they are still using the password they
+         * were given — which, until this is set, somebody else also knows.
+         */
+        private Instant passwordChangedAt;
         private List<PlatformDto.Summary> platforms;
         private UnifiedScoreDto unifiedScore;
     }

@@ -2,6 +2,7 @@ package com.cpintel.compete;
 
 import com.cpintel.integration.domjudge.DjModels;
 import com.cpintel.integration.domjudge.DomjudgeClient;
+import com.cpintel.integration.domjudge.DomjudgeCredentialStore;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -18,7 +19,7 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
 
 /**
- * One read of the judge, fanned out to every contestant.
+ * One read of the judge, fanned out to every contestant who is allowed to share it.
  *
  * <p>This class exists because of a specific, measured failure on the Codeforces side of the
  * arena: every contestant's page polled for its own verdicts, so 200 people cost 200 calls
@@ -27,10 +28,19 @@ import java.util.function.Supplier;
  * because the thing being flooded is the same machine that is compiling and running everyone's
  * submissions. A judge that is busy answering the scoreboard is a judge that is slow to judge.
  *
- * <p>So the arena never calls DOMjudge per user. It calls this, which holds one copy of each
- * resource per contest and refreshes it on a timer sized to how fast that resource actually
- * changes. 200 contestants polling every five seconds produce, between them, one submissions
- * fetch per live-TTL window.
+ * <p>So the arena never calls DOMjudge per user where it can avoid it. It calls this, which
+ * holds one copy of each resource and refreshes it on a timer sized to how fast that resource
+ * actually changes.
+ *
+ * <p><b>Every key is scoped to the credentials that filled it, and that is not optional.</b>
+ * When the deployment has a service account, every contestant shares one entry and the fan-out
+ * is total — 200 contestants cost one fetch. When it does not, reads are made as each
+ * contestant, and two contestants' answers are <em>not interchangeable</em>: DOMjudge filters
+ * a team account's view of {@code /submissions} to its own team, so a cache keyed on the
+ * contest alone would hand one team's submissions to another. That is a correctness bug and a
+ * disclosure bug at once, and it would surface as contestants seeing each other's verdicts
+ * during a live round. Scoping costs the fan-out exactly when there is no service account to
+ * provide it, which is the honest trade rather than a silent one.
  *
  * <p><b>Single-flight and stale-serving.</b> A plain "refresh when expired" cache turns 200
  * simultaneous readers into 200 simultaneous fetches the instant the entry expires — the
@@ -80,19 +90,38 @@ public class DomjudgeContestCache {
         this.staticTtl = staticTtl;
     }
 
+    /**
+     * Which identity a cached entry was filled by.
+     *
+     * Null means the deployment's own service account, whose answers every contestant may
+     * share. Anything else is one contestant, and its entries are theirs alone. The username
+     * rather than the CPIntel user id, because two CPIntel accounts pointed at the same
+     * DOMjudge login genuinely do see the same thing and may share.
+     */
+    private String scope(DomjudgeCredentialStore.Stored as) {
+        return as == null ? "svc" : "u/" + as.username();
+    }
+
+    /** Keys end in the contest id so {@link #evict} can still find every entry for one contest. */
+    private String key(String name, DomjudgeCredentialStore.Stored as, String contestId) {
+        return name + ":" + scope(as) + ":" + contestId;
+    }
+
     // ------------------------------------------------------------------ reads
 
-    public DjModels.Contest contest(String contestId) {
-        return get("contest:" + contestId, staticTtl, () -> domjudge.getContest(contestId));
+    public DjModels.Contest contest(DomjudgeCredentialStore.Stored as, String contestId) {
+        return get(key("contest", as, contestId), staticTtl,
+            () -> domjudge.getContest(as, contestId));
     }
 
-    public DjModels.State state(String contestId) {
-        return get("state:" + contestId, liveTtl, () -> domjudge.getState(contestId));
+    public DjModels.State state(DomjudgeCredentialStore.Stored as, String contestId) {
+        return get(key("state", as, contestId), liveTtl, () -> domjudge.getState(as, contestId));
     }
 
-    public List<DjModels.ContestProblem> problems(String contestId) {
-        List<DjModels.ContestProblem> problems = get("problems:" + contestId, staticTtl,
-            () -> domjudge.getProblems(contestId));
+    public List<DjModels.ContestProblem> problems(DomjudgeCredentialStore.Stored as,
+                                                  String contestId) {
+        List<DjModels.ContestProblem> problems = get(key("problems", as, contestId), staticTtl,
+            () -> domjudge.getProblems(as, contestId));
         if (problems == null) return List.of();
 
         List<DjModels.ContestProblem> ordered = new ArrayList<>(problems);
@@ -101,22 +130,23 @@ public class DomjudgeContestCache {
         return ordered;
     }
 
-    public List<DjModels.Language> languages(String contestId) {
-        List<DjModels.Language> languages = get("languages:" + contestId, staticTtl,
-            () -> domjudge.getLanguages(contestId));
+    public List<DjModels.Language> languages(DomjudgeCredentialStore.Stored as, String contestId) {
+        List<DjModels.Language> languages = get(key("languages", as, contestId), staticTtl,
+            () -> domjudge.getLanguages(as, contestId));
         return languages == null ? List.of() : languages;
     }
 
-    public List<DjModels.Team> teams(String contestId) {
-        List<DjModels.Team> teams = get("teams:" + contestId, staticTtl,
-            () -> domjudge.getTeams(contestId));
+    public List<DjModels.Team> teams(DomjudgeCredentialStore.Stored as, String contestId) {
+        List<DjModels.Team> teams = get(key("teams", as, contestId), staticTtl,
+            () -> domjudge.getTeams(as, contestId));
         return teams == null ? List.of() : teams;
     }
 
     /** Verdict code to its meaning, e.g. {@code AC -> solved}. */
-    public Map<String, DjModels.JudgementType> judgementTypes(String contestId) {
-        List<DjModels.JudgementType> types = get("jtypes:" + contestId, staticTtl,
-            () -> domjudge.getJudgementTypes(contestId));
+    public Map<String, DjModels.JudgementType> judgementTypes(DomjudgeCredentialStore.Stored as,
+                                                              String contestId) {
+        List<DjModels.JudgementType> types = get(key("jtypes", as, contestId), staticTtl,
+            () -> domjudge.getJudgementTypes(as, contestId));
 
         Map<String, DjModels.JudgementType> byId = new HashMap<>();
         if (types != null) {
@@ -131,15 +161,20 @@ public class DomjudgeContestCache {
      * The judge's own scoreboard, shared by every contestant asking for their rank.
      *
      * One fetch serves the whole room, which is the only reason a live rank is affordable at
-     * all — the Codeforces equivalent has to scrape a page per contestant.
+     * all — the Codeforces equivalent has to scrape a page per contestant. Unlike submissions,
+     * a scoreboard is the same document for everyone who can read it, so the only reason this
+     * is scoped at all is that a team account may be served the frozen view where the service
+     * account is served the live one.
      */
-    public DjModels.Scoreboard scoreboard(String contestId) {
-        return get("scoreboard:" + contestId, liveTtl, () -> domjudge.getScoreboard(contestId));
+    public DjModels.Scoreboard scoreboard(DomjudgeCredentialStore.Stored as, String contestId) {
+        return get(key("scoreboard", as, contestId), liveTtl,
+            () -> domjudge.getScoreboard(as, contestId));
     }
 
-    public List<DjModels.Submission> submissions(String contestId) {
-        List<DjModels.Submission> subs = get("subs:" + contestId, liveTtl,
-            () -> domjudge.getSubmissions(contestId));
+    public List<DjModels.Submission> submissions(DomjudgeCredentialStore.Stored as,
+                                                 String contestId) {
+        List<DjModels.Submission> subs = get(key("subs", as, contestId), liveTtl,
+            () -> domjudge.getSubmissions(as, contestId));
         return subs == null ? List.of() : subs;
     }
 
@@ -150,9 +185,10 @@ public class DomjudgeContestCache {
      * {@code valid=false}, and showing a contestant the verdict their code used to get would be
      * worse than showing none. Where several valid judgements exist the last one wins.
      */
-    public Map<String, DjModels.Judgement> judgementsBySubmission(String contestId) {
-        List<DjModels.Judgement> judgements = get("judgements:" + contestId, liveTtl,
-            () -> domjudge.getJudgements(contestId));
+    public Map<String, DjModels.Judgement> judgementsBySubmission(
+            DomjudgeCredentialStore.Stored as, String contestId) {
+        List<DjModels.Judgement> judgements = get(key("judgements", as, contestId), liveTtl,
+            () -> domjudge.getJudgements(as, contestId));
 
         Map<String, DjModels.Judgement> current = new HashMap<>();
         if (judgements != null) {
@@ -172,11 +208,12 @@ public class DomjudgeContestCache {
      * {@code display_name}, exactly as the standings provider does — an admin who typed a
      * member's team name into one feature should not find it works there and not here.
      */
-    public String teamIdByName(String contestId, String teamName) {
+    public String teamIdByName(DomjudgeCredentialStore.Stored as, String contestId,
+                               String teamName) {
         if (teamName == null || teamName.isBlank()) return null;
         String wanted = normalise(teamName);
 
-        for (DjModels.Team team : teams(contestId)) {
+        for (DjModels.Team team : teams(as, contestId)) {
             if (team.getId() == null) continue;
             if (wanted.equals(normalise(team.getName()))
                 || wanted.equals(normalise(team.getDisplay_name()))) {
@@ -186,7 +223,14 @@ public class DomjudgeContestCache {
         return null;
     }
 
-    /** Drops everything held for one contest, so the next read is authoritative. */
+    /**
+     * Drops everything held for one contest, across every identity that cached it.
+     *
+     * Contest-wide on purpose. The caller evicting is usually a contestant who has just
+     * submitted, and the entry their own next read will hit is only one of several — leaving
+     * the others in place would make a submission appear for its author several seconds before
+     * anybody else, including on a shared service-account entry.
+     */
     public void evict(String contestId) {
         slots.keySet().removeIf(key -> key.endsWith(":" + contestId));
     }

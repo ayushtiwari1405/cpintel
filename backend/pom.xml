@@ -45,6 +45,15 @@
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-actuator</artifactId>
     </dependency>
+    <!--
+      Mail. Only the password-reset and account-notice paths use it, and a deployment with no
+      SMTP host configured still starts: MailService logs what it would have sent instead of
+      failing, so a lab with no mail server keeps working. See cpintel.mail in application.yml.
+    -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-mail</artifactId>
+    </dependency>
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-aop</artifactId>

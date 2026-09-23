@@ -40,7 +40,7 @@ export function SubmissionsList({ submissions, isLoading }: Props) {
           <Loader2 size={16} className="animate-spin text-gray-600" />
         ) : (
           <p className="max-w-xs text-xs leading-relaxed text-gray-600">
-            Nothing submitted yet. Anything you send from here goes to Codeforces as a real
+            Nothing submitted yet. Anything you send from here goes to the judge as a real
             contest submission.
           </p>
         )}
@@ -90,7 +90,7 @@ export function SubmissionsList({ submissions, isLoading }: Props) {
                     href={s.url}
                     target="_blank"
                     rel="noreferrer"
-                    title="Open on Codeforces"
+                    title="Open on the judge"
                     className="text-gray-700 transition-colors hover:text-gray-400"
                   >
                     <ExternalLink size={11} />
