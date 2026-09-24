@@ -11,11 +11,40 @@ RUN mvn -B dependency:go-offline -q
 COPY src ./src
 RUN mvn -B clean package -DskipTests -q
 
-FROM eclipse-temurin:21-jre-alpine
+# ── the code runner ─────────────────────────────────────────────────────────
+# Same jar, different entry point (com.cpintel.runner.RunnerServer): compiles and runs users'
+# code for the Run button, and nothing else. Its own image because it needs the toolchains and
+# bubblewrap, and because it must carry none of the backend's configuration. Built with
+# `--target runner`; see the runner service in docker-compose.yml for how it is locked down.
+#
+# Ubuntu rather than Alpine so programs build against glibc and a current g++, as they will on
+# the judge — musl differs in small ways that would make Run and Submit disagree.
+FROM eclipse-temurin:21-jre-noble AS runner
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends bubblewrap g++ python3 \
+ && rm -rf /var/lib/apt/lists/* \
+ && useradd --uid 10001 --no-create-home --shell /usr/sbin/nologin runner
+WORKDIR /app
+COPY --from=builder /app/target/*.jar app.jar
+USER 10001
+EXPOSE 8090
+ENTRYPOINT ["java", \
+  "-XX:+UseContainerSupport", \
+  "-XX:MaxRAMPercentage=15.0", \
+  "-Dloader.main=com.cpintel.runner.RunnerServer", \
+  "-cp", "app.jar", \
+  "org.springframework.boot.loader.launch.PropertiesLauncher"]
+
+# ── the backend (default target) ────────────────────────────────────────────
+# glibc, not Alpine: password hashing is argon2-jvm, which loads a native libargon2 built for
+# glibc through JNA. On musl that library segfaults the JVM the first time anybody signs in.
+FROM eclipse-temurin:21-jre-noble
 WORKDIR /app
 
-RUN addgroup -S cpintel && adduser -S cpintel -G cpintel
-RUN apk add --no-cache curl
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends curl \
+ && rm -rf /var/lib/apt/lists/* \
+ && groupadd --system cpintel && useradd --system --gid cpintel --no-create-home cpintel
 
 COPY --from=builder /app/target/*.jar app.jar
 RUN chown cpintel:cpintel app.jar

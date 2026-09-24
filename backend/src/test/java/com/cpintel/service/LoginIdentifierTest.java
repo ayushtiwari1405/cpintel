@@ -39,6 +39,8 @@ class LoginIdentifierTest {
     private UserRepository users;
     private PasswordEncoder encoder;
     private AuthService service;
+    private final com.cpintel.events.ExamLoginService examLogin =
+        mock(com.cpintel.events.ExamLoginService.class);
 
     private User ada;
 
@@ -52,12 +54,15 @@ class LoginIdentifierTest {
         when(limiter.rules()).thenReturn(new RateLimitProperties());
 
         JwtService jwt = mock(JwtService.class);
-        when(jwt.generateAccessToken(any(), any(), any())).thenReturn("access");
+        when(jwt.generateAccessToken(any(), any(), any(), any())).thenReturn("access");
         when(jwt.generateRefreshToken()).thenReturn("refresh");
 
         service = new AuthService(users, mock(RefreshTokenRepository.class),
             mock(UnifiedScoreRepository.class), encoder, jwt, new UserMapper(),
-            mock(AuditService.class), limiter, mock(AppMetrics.class));
+            mock(AuditService.class), limiter, mock(AppMetrics.class),
+            examLogin,
+            mock(com.cpintel.events.ExamAccessService.class),
+            mock(com.cpintel.repository.jpa.GroupContestRepository.class));
 
         ada = User.builder().userId(42L).username("Ada").email("ada@example.com")
             .passwordHash("hash").role("USER").isActive(true).isVerified(false).build();
@@ -143,5 +148,30 @@ class LoginIdentifierTest {
         // be decided rather than discovered. The address is the one people type deliberately.
         assertDoesNotThrow(() -> signIn("ada@example.com", "correct"));
         verify(users).findByEmailIgnoreCase("ada@example.com");
+    }
+
+    @Test
+    @DisplayName("an examination password signs in to examination mode for that paper only")
+    void examPasswordOpensExamMode() {
+        com.cpintel.entity.GroupContest paper = com.cpintel.entity.GroupContest.builder()
+            .contestId(7L).kind("EXAM")
+            .startsAt(java.time.Instant.now().minusSeconds(60))
+            .endsAt(java.time.Instant.now().plusSeconds(3600)).build();
+        when(examLogin.match(42L, "K7FQ-M2XB")).thenReturn(Optional.of(paper));
+
+        AuthDto.AuthResponse exam = signIn("ada", "K7FQ-M2XB");
+        assertEquals("EXAM", exam.getMode());
+        assertEquals(7L, exam.getExamId());
+
+        AuthDto.AuthResponse normal = signIn("ada", "correct");
+        assertEquals("NORMAL", normal.getMode());
+        assertNull(normal.getExamId());
+    }
+
+    @Test
+    @DisplayName("neither password is still a failed sign-in")
+    void neitherPasswordFails() {
+        when(examLogin.match(any(), any())).thenReturn(Optional.empty());
+        assertThrows(com.cpintel.exception.ApiException.class, () -> signIn("ada", "wrong"));
     }
 }

@@ -33,6 +33,8 @@ export interface EventBody {
   teamIds?: number[]
   userIds?: number[]
   problems?: Omit<EventProblem, 'problemId'>[]
+  /** Decided with the event and fixed once it starts. */
+  personalFilesAllowed?: boolean
 }
 
 export interface LogQuery {

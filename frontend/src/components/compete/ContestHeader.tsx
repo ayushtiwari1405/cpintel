@@ -28,7 +28,8 @@ interface Props {
   /** Seconds since this contest payload was received, so the clock ticks between refetches. */
   elapsed: number
   rank?: RankInfo
-  onClose: () => void
+  /** Absent in examination mode, where there is no other contest to go to. */
+  onClose?: () => void
   /** Undefined when this contest does not allow personal files — the button then stays away. */
   onOpenFiles?: () => void
   /** Null in the browser build, which has nothing to lock. */
@@ -122,13 +123,15 @@ export function ContestHeader({ contest, elapsed, rank, onClose, onOpenFiles, lo
         </button>
       )}
 
-      <button
-        onClick={onClose}
-        title="Load a different contest"
-        className="text-gray-600 hover:text-gray-300 transition-colors flex-shrink-0"
-      >
-        <X size={16} />
-      </button>
+      {onClose && (
+        <button
+          onClick={onClose}
+          title="Load a different contest"
+          className="text-gray-600 hover:text-gray-300 transition-colors flex-shrink-0"
+        >
+          <X size={16} />
+        </button>
+      )}
     </div>
   )
 }

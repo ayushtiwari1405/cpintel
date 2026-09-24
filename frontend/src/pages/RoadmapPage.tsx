@@ -1,12 +1,15 @@
 import { useState, useMemo } from 'react'
-import { useRoadmap, useRegenerateRoadmap } from '@/hooks/useRoadmap'
+import { Link } from 'react-router-dom'
+import { useGauntlet, useRoadmap, useRegenerateRoadmap } from '@/hooks/useRoadmap'
 import { RoadmapTree } from '@/components/roadmap/RoadmapTree'
 import { NodeDetailPanel } from '@/components/roadmap/NodeDetailPanel'
-import { RefreshCw, Loader2 } from 'lucide-react'
+import { ArrowRight, RefreshCw, Loader2, Swords } from 'lucide-react'
 
 export default function RoadmapPage() {
   const { data: nodes = [], isLoading } = useRoadmap()
   const regenerate = useRegenerateRoadmap()
+  const { data: gauntlet } = useGauntlet()
+  const placement = gauntlet?.lastResult ?? null
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
 
   const selectedNode = useMemo(
@@ -50,6 +53,43 @@ export default function RoadmapPage() {
           Update from progress
         </button>
       </div>
+
+      {/* The tree starts everyone at the first node until solve history says otherwise, which
+          is the wrong first screen for anybody who can already solve things. The gauntlet is
+          how they say so. */}
+      <Link
+        to="/roadmap/gauntlet"
+        className="card flex items-center gap-4 transition-colors hover:border-indigo-800"
+      >
+        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl
+                        bg-indigo-600/15 text-indigo-300">
+          <Swords size={18} />
+        </div>
+        <div className="min-w-0 flex-1">
+          {placement ? (
+            <>
+              <p className="text-sm font-medium text-gray-200">
+                Placed at ~{placement.overallRating} by the gauntlet
+              </p>
+              <p className="text-xs text-gray-500">
+                {new Date(placement.takenAt).toLocaleDateString()} · retake it any time — it
+                only ever moves your roadmap forward
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="text-sm font-medium text-gray-200">
+                Not a beginner? Take the gauntlet
+              </p>
+              <p className="text-xs text-gray-500">
+                Ten minutes across six areas, and your roadmap starts at your level instead of
+                at Input &amp; Output
+              </p>
+            </>
+          )}
+        </div>
+        <ArrowRight size={16} className="flex-shrink-0 text-gray-600" />
+      </Link>
 
       <div className="card">
         <div className="flex items-center justify-between mb-2">

@@ -52,7 +52,10 @@ class ExamAccessServiceTest {
 
         passwords = mock(ExamPasswordService.class);
         service = new ExamAccessService(redis, passwords,
-            mock(ExamEventService.class), mock(AuditService.class));
+            mock(ExamEventService.class), mock(AuditService.class),
+            mock(com.cpintel.repository.jpa.RefreshTokenRepository.class),
+            mock(com.cpintel.security.JwtService.class));
+        signedInFor(EXAM);
 
         redisStore.clear();
         exam = GroupContest.builder()
@@ -62,6 +65,19 @@ class ExamAccessServiceTest {
             .endsAt(Instant.now().plusSeconds(3600))
             .examPasswordGen(1)
             .build();
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void clearSession() {
+        org.springframework.web.context.request.RequestContextHolder.resetRequestAttributes();
+    }
+
+    /** This request is an examination session for that paper (null: an ordinary session). */
+    private static void signedInFor(Long examId) {
+        var request = new org.springframework.mock.web.MockHttpServletRequest();
+        if (examId != null) request.setAttribute(com.cpintel.security.SessionMode.EXAM_ATTRIBUTE, examId);
+        org.springframework.web.context.request.RequestContextHolder.setRequestAttributes(
+            new org.springframework.web.context.request.ServletRequestAttributes(request));
     }
 
     private void paperAsksForAPassword() {
@@ -79,11 +95,32 @@ class ExamAccessServiceTest {
          * over a setting nobody touched.
          */
         @Test
-        @DisplayName("an examination with no passwords is always unlocked")
-        void alwaysOpen() {
+        @DisplayName("with no room password, signing in with the slip is all it takes")
+        void openOnSignIn() {
             assertFalse(service.requiresUnlock(exam, USER));
+            service.onExamSignIn(exam, USER);
             assertTrue(service.isUnlocked(exam, USER));
             assertDoesNotThrow(() -> service.requireUnlocked(exam, USER));
+        }
+
+        @Test
+        @DisplayName("an ordinary session is never inside an examination")
+        void ordinarySessionShut() {
+            service.onExamSignIn(exam, USER);
+            signedInFor(null);
+
+            assertFalse(service.isUnlocked(exam, USER));
+            assertThrows(ApiException.class, () -> service.requireUnlocked(exam, USER));
+            assertThrows(ApiException.class, () -> service.unlock(exam, USER, null, null, null));
+        }
+
+        @Test
+        @DisplayName("a session for another examination is not inside this one")
+        void otherExamSessionShut() {
+            service.onExamSignIn(exam, USER);
+            signedInFor(8L);
+
+            assertFalse(service.isUnlocked(exam, USER));
         }
 
         @Test
@@ -106,7 +143,7 @@ class ExamAccessServiceTest {
         @DisplayName("the right password lets them in for the rest of the sitting")
         void correctPasswordGrants() {
             paperAsksForAPassword();
-            when(passwords.verify(exam, USER, "K7FQ-M2XB", null)).thenReturn(true);
+            when(passwords.matchesExamPassword(exam, "K7FQ-M2XB")).thenReturn(true);
 
             assertFalse(service.isUnlocked(exam, USER));
             service.unlock(exam, USER, "K7FQ-M2XB", null, null);
@@ -116,21 +153,16 @@ class ExamAccessServiceTest {
         }
 
         @Test
-        @DisplayName("a wrong password is refused without saying which half was wrong")
+        @DisplayName("a wrong room password is refused, and nothing is granted")
         void wrongPasswordRefused() {
             paperAsksForAPassword();
-            when(passwords.verify(any(), any(), any(), any())).thenReturn(false);
+            when(passwords.matchesExamPassword(any(), any())).thenReturn(false);
 
             ApiException e = assertThrows(ApiException.class,
                 () -> service.unlock(exam, USER, "NOPE", "NOPE", null));
 
-            String message = e.getMessage().toLowerCase();
+            assertTrue(e.getMessage().toLowerCase().contains("did not match"));
             assertFalse(service.isUnlocked(exam, USER));
-            // Telling somebody who has one of the two which one they are missing turns the
-            // pair into two independent guesses.
-            assertFalse(message.contains("examination password was")
-                || message.contains("your code was"),
-                "the refusal must not name which half failed");
         }
 
         @Test
@@ -138,7 +170,7 @@ class ExamAccessServiceTest {
         void notYetOpen() {
             paperAsksForAPassword();
             exam.setStartsAt(Instant.now().plusSeconds(600));
-            when(passwords.verify(any(), any(), any(), any())).thenReturn(true);
+            when(passwords.matchesExamPassword(any(), any())).thenReturn(true);
 
             ApiException e = assertThrows(ApiException.class,
                 () -> service.unlock(exam, USER, "right", null, null));
@@ -146,7 +178,7 @@ class ExamAccessServiceTest {
             // Somebody who got hold of the password early must not be able to read the paper
             // before the room does.
             assertTrue(e.getMessage().toLowerCase().contains("not open"));
-            verify(passwords, never()).verify(any(), any(), any(), any());
+            verify(passwords, never()).matchesExamPassword(any(), any());
         }
 
         @Test
@@ -186,7 +218,7 @@ class ExamAccessServiceTest {
         @DisplayName("rotating the password ends the sessions it opened")
         void rotationEndsGrants() {
             paperAsksForAPassword();
-            when(passwords.verify(any(), any(), any(), any())).thenReturn(true);
+            when(passwords.matchesExamPassword(any(), any())).thenReturn(true);
             service.unlock(exam, USER, "first", null, null);
             assertTrue(service.isUnlocked(exam, USER));
 
@@ -199,7 +231,7 @@ class ExamAccessServiceTest {
         @DisplayName("revoking one candidate leaves everybody else inside")
         void revokeIsPerCandidate() {
             paperAsksForAPassword();
-            when(passwords.verify(any(), any(), any(), any())).thenReturn(true);
+            when(passwords.matchesExamPassword(any(), any())).thenReturn(true);
             service.unlock(exam, USER, "right", null, null);
             service.unlock(exam, 99L, "right", null, null);
 
@@ -213,7 +245,7 @@ class ExamAccessServiceTest {
         @DisplayName("a grant from a different examination does not open this one")
         void grantsArePerExamination() {
             paperAsksForAPassword();
-            when(passwords.verify(any(), any(), any(), any())).thenReturn(true);
+            when(passwords.matchesExamPassword(any(), any())).thenReturn(true);
             service.unlock(exam, USER, "right", null, null);
 
             GroupContest other = GroupContest.builder()

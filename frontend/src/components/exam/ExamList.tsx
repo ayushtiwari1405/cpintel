@@ -41,14 +41,46 @@ export function ExamList({ exams, isLoading, onEnter, entering }: Props) {
     )
   }
 
+  // Upcoming and running papers first, then the ones that are over — "Past examinations",
+  // where the code submitted into each is read back.
+  const isOver = (e: EventSummary) => e.lifecycle === 'ENDED' || e.lifecycle === 'ARCHIVED'
+  const current = exams.filter(e => !isOver(e))
+  const past = exams.filter(isOver)
+
   return (
+    <div className="space-y-6">
+      {current.length > 0 && (
+        <section className="space-y-2">
+          <h2 className="px-1 text-xs font-semibold uppercase tracking-wider text-gray-500">
+            Upcoming and running
+          </h2>
+          <p className="px-1 text-xs leading-relaxed text-gray-500">
+            Sat in examination mode: sign in with your username and the examination password on
+            your slip. This session can see a paper's details but cannot open or change it.
+          </p>
+          {renderList(current)}
+        </section>
+      )}
+      {past.length > 0 && (
+        <section className="space-y-2">
+          <h2 className="px-1 text-xs font-semibold uppercase tracking-wider text-gray-500">
+            Past examinations
+          </h2>
+          {renderList(past)}
+        </section>
+      )}
+    </div>
+  )
+
+  function renderList(list: EventSummary[]) {
+    return (
     <div className="space-y-2">
-      {exams.map(exam => {
+      {list.map(exam => {
         // An ended paper opens too, onto the code this candidate submitted into it. Only a
         // draft is genuinely nothing to open — and a candidate is never shown one.
         const openable = exam.lifecycle !== 'DRAFT'
         const over = exam.lifecycle === 'ENDED' || exam.lifecycle === 'ARCHIVED'
-        const label = exam.lifecycle === 'ACTIVE' ? 'Enter' : over ? 'Your code' : 'Open'
+        const label = over ? 'Your code' : 'Details'
         return (
           <article
             key={exam.eventId}
@@ -131,6 +163,7 @@ export function ExamList({ exams, isLoading, onEnter, entering }: Props) {
       })}
     </div>
   )
+  }
 }
 
 function when(exam: EventSummary): string {

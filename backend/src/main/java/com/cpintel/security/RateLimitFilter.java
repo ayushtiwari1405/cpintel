@@ -12,6 +12,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.List;
+import org.springframework.security.web.util.matcher.IpAddressMatcher;
 
 /**
  * Puts a ceiling on the endpoints where one caller can spend a lot of somebody else's resources.
@@ -46,6 +48,9 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private final RateLimitProperties props;
     private final AppMetrics metrics;
 
+    /** Built once from {@link RateLimitProperties#getSharedNetworks()}. */
+    private volatile List<IpAddressMatcher> shared;
+
     @Override
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
@@ -62,7 +67,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
             if (path.equals("/auth/login")) {
                 bucket = LOGIN_IP;
                 key = clientAddress(request);
-                rule = props.getLogin();
+                rule = sharedNetwork(key) ? props.getSharedLogin() : props.getLogin();
 
             } else if (path.equals("/auth/forgot-password")
                     || path.equals("/auth/reset-password")
@@ -70,7 +75,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
                     || path.equals("/auth/register")) {
                 bucket = RECOVERY;
                 key = clientAddress(request);
-                rule = props.getRecovery();
+                rule = sharedNetwork(key) ? props.getSharedLogin() : props.getRecovery();
 
             } else if (path.startsWith("/exams/") && path.endsWith("/unlock")) {
                 // Keyed on the candidate rather than the address, because a room full of people
@@ -154,6 +159,27 @@ public class RateLimitFilter extends OncePerRequestFilter {
      */
     private String clientAddress(HttpServletRequest request) {
         return request.getRemoteAddr();
+    }
+
+    /** Whether this address is inside a range many people share — see the properties. */
+    boolean sharedNetwork(String address) {
+        List<IpAddressMatcher> matchers = shared;
+        if (matchers == null) {
+            matchers = props.getSharedNetworks().stream()
+                .map(String::trim).filter(s -> !s.isEmpty())
+                .map(IpAddressMatcher::new)
+                .toList();
+            shared = matchers;
+        }
+        if (address == null || matchers.isEmpty()) return false;
+        for (IpAddressMatcher m : matchers) {
+            try {
+                if (m.matches(address)) return true;
+            } catch (IllegalArgumentException ignored) {
+                // An address in a family the range is not (IPv6 against an IPv4 range).
+            }
+        }
+        return false;
     }
 
     /** The authenticated user id, or the address when there is no authentication yet. */

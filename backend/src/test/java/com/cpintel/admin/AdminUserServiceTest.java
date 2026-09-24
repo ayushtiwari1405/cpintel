@@ -61,7 +61,8 @@ class AdminUserServiceTest {
         passwordEncoder = mock(PasswordEncoder.class);
         examEvents = mock(ExamEventRepository.class);
         service = new AdminUserService(users, auditLog, refreshTokens, files, unifiedScores,
-            passwordEncoder, new UserMapper(), audit, jwt, examEvents, mock(MailService.class));
+            passwordEncoder, new UserMapper(), audit, jwt, examEvents, mock(MailService.class),
+            mock(com.cpintel.repository.mongo.CfSubmissionRepository.class));
 
         when(passwordEncoder.encode(any())).thenReturn("hashed");
 

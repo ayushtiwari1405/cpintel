@@ -41,7 +41,7 @@ mkdir -p "$SRC" "$LOGS"
 TAG="cpintel-ci-local-$$"
 cleanup() {
   rm -rf "$WORK"
-  docker rmi -f "$TAG-backend" "$TAG-frontend" >/dev/null 2>&1 || true
+  docker rmi -f "$TAG-backend" "$TAG-frontend" "$TAG-runner" "$TAG-nginx" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
 
@@ -96,11 +96,13 @@ backend_tests() (
 )
 
 frontend_build() (
-  cd "$SRC/frontend" && npm ci --no-audit --no-fund && npm run type-check && npm run build
+  cd "$SRC/frontend" && npm ci --no-audit --no-fund && npm run type-check && npm run lint && npm run build
 )
 
 docker_backend()  { docker build "${NO_CACHE[@]}" -t "$TAG-backend"  "$SRC/backend"; }
 docker_frontend() { docker build "${NO_CACHE[@]}" -t "$TAG-frontend" "$SRC/frontend"; }
+docker_runner()   { docker build "${NO_CACHE[@]}" --target runner -t "$TAG-runner" "$SRC/backend"; }
+docker_nginx()    { docker build "${NO_CACHE[@]}" -t "$TAG-nginx" "$SRC/nginx"; }
 
 audit_backend() (
   cd "$SRC/backend" && ./mvnw -B org.owasp:dependency-check-maven:13.0.0:check -q \
@@ -131,6 +133,8 @@ if [[ $DOCKER -eq 0 ]]; then
 elif have_docker; then
   stage "docker: backend image" docker_backend
   stage "docker: frontend image" docker_frontend
+  stage "docker: runner image" docker_runner
+  stage "docker: nginx image" docker_nginx
 else
   skip "docker: backend image" "docker not available"
   skip "docker: frontend image" "docker not available"

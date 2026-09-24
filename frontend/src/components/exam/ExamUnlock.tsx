@@ -7,7 +7,8 @@ import type { MyExam } from '@/types'
 
 interface Props {
   exam: MyExam
-  onLeave: () => void
+  /** Absent in examination mode, where this paper is the only place to be. */
+  onLeave?: () => void
 }
 
 /**
@@ -54,12 +55,14 @@ export function ExamUnlock({ exam, onLeave }: Props) {
 
   return (
     <div className="mx-auto max-w-lg py-10">
-      <button
-        onClick={onLeave}
-        className="mb-5 flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-300"
-      >
-        <ArrowLeft size={14} /> Back to your examinations
-      </button>
+      {onLeave && (
+        <button
+          onClick={onLeave}
+          className="mb-5 flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-300"
+        >
+          <ArrowLeft size={14} /> Back to your examinations
+        </button>
+      )}
 
       <div className="rounded-2xl border border-gray-800 bg-gray-900 p-7">
         <div className="flex items-center gap-3">
@@ -81,12 +84,10 @@ export function ExamUnlock({ exam, onLeave }: Props) {
         </div>
 
         <p className="mt-5 text-sm leading-relaxed text-gray-400">
-          {wantsShared && wantsPersonal
-            ? 'This paper needs two things: the examination password your invigilator gives '
-              + 'the room, and the personal code printed on your own slip.'
-            : wantsPersonal
-              ? 'This paper needs the personal code printed on your own slip.'
-              : 'This paper needs the examination password your invigilator gives the room.'}
+          {wantsPersonal
+            ? 'This paper needs the personal code printed on your own slip.'
+            : 'You are signed in for this paper. It also needs the password your invigilator '
+              + 'reads out to the room when it starts.'}
         </p>
 
         {!live && (

@@ -28,6 +28,7 @@ public class RunController {
 
     private final CodeRunnerService runner;
     private final LanguagePolicy languagePolicy;
+    private final com.cpintel.events.ExamSessionGuard examGuard;
 
     /**
      * Languages this deployment can build and run, narrowed to what the event allows.
@@ -48,6 +49,7 @@ public class RunController {
         @RequestParam(required = false) String platform,
         @RequestParam(required = false) String contestId) {
 
+        examGuard.requireRunScope(platform, contestId);
         Set<String> allowed = restriction(userId, platform, contestId);
         List<RunDto.RuntimeInfo> all = runner.languages();
         if (allowed.isEmpty()) return ResponseEntity.ok(ApiResponse.ok(all));
@@ -73,6 +75,7 @@ public class RunController {
         @AuthenticationPrincipal Long userId,
         @Valid @RequestBody RunDto.RunRequest request) {
 
+        examGuard.requireRunScope(request.platform(), request.contestId());
         Set<String> allowed =
             restriction(userId, request.platform(), request.contestId());
         if (!allowed.isEmpty() && !allowed.contains(request.language())) {

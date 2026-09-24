@@ -3,10 +3,29 @@ import { platformApi } from '@/api/platformApi'
 import { useToast } from '@/components/common/Toaster'
 import {  useRef } from 'react'
 
+const IN_FLIGHT = new Set(['PENDING', 'QUEUED', 'RUNNING'])
+
+/**
+ * Linked accounts. Refetched every few seconds while any of them is still syncing: a sync runs
+ * in the background after the link request returns, so without this the page would sit on
+ * "pending" until reloaded.
+ */
 export function useLinkedAccounts() {
+  const queryClient = useQueryClient()
   return useQuery({
     queryKey: ['platforms'],
-    queryFn: () => platformApi.getLinked().then(r => r.data),
+    queryFn: async () => {
+      const accounts = await platformApi.getLinked().then(r => r.data)
+      // Everything derived from synced history moves when a sync lands.
+      if (!accounts?.some((a: any) => IN_FLIGHT.has(a.syncStatus))) {
+        queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+        queryClient.invalidateQueries({ queryKey: ['analytics'] })
+      }
+      return accounts
+    },
+    refetchInterval: query =>
+      (query.state.data as any[] | undefined)?.some(a => IN_FLIGHT.has(a.syncStatus))
+        ? 3000 : false,
   })
 }
 
@@ -63,7 +82,9 @@ export function useSyncAccount() {
           delete pollingRef.current[jobId]
           toast.push('error', `${platform} sync failed: ${job.errorMsg}`)
         }
-      } catch {}
+      } catch {
+        // A failed poll is retried on the next tick; the job's own status is what matters.
+      }
     }, 3000)
     pollingRef.current[jobId] = interval
   }

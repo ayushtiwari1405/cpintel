@@ -50,6 +50,56 @@ export interface RoadmapNodeData {
   problems: RoadmapProblem[]
 }
 
+// ── placement gauntlet ─────────────────────────────────────────────────────
+
+export interface GauntletQuestion {
+  id: string
+  tier: number
+  prompt: string
+  code: string | null
+  /** Already shuffled; nothing says which is right until the answer is checked. */
+  options: string[]
+}
+
+export interface GauntletSection {
+  id: string
+  title: string
+  blurb: string
+  questions: GauntletQuestion[]
+}
+
+export interface GauntletSectionResult {
+  section: string
+  title: string
+  tiersPassed: number
+  rating: number
+}
+
+export interface GauntletResult {
+  overallRating: number
+  sections: GauntletSectionResult[]
+  nodesPlaced: number
+  takenAt: string
+}
+
+export interface GauntletPaper {
+  sections: GauntletSection[]
+  tierRatings: number[]
+  lastResult: GauntletResult | null
+  /** When another attempt may start; null when one may start now. */
+  nextAttemptAt: string | null
+}
+
+export interface GauntletChecked {
+  id: string
+  correct: boolean
+  correctIndex: number
+  explanation: string
+}
+
+/** Question id → picked option index as served; -1 for "not sure yet". */
+export type GauntletAnswers = Record<string, number>
+
 export const roadmapApi = {
   getCurrent: () =>
     apiClient.get<ApiResponse<RoadmapNodeData[]>>('/roadmaps/current').then(r => r.data),
@@ -71,4 +121,21 @@ export const roadmapApi = {
     apiClient.patch<ApiResponse<RoadmapNodeData>>(
       `/roadmaps/nodes/${nodeId}?status=${status}`
     ).then(r => r.data),
+
+  gauntlet: () =>
+    apiClient.get<ApiResponse<GauntletPaper>>('/roadmaps/gauntlet').then(r => r.data),
+
+  /** Opens an attempt. Each answer is recorded against it the first time it is checked. */
+  startGauntlet: () =>
+    apiClient.post<ApiResponse<{ attemptId: string }>>('/roadmaps/gauntlet/start')
+      .then(r => r.data),
+
+  checkGauntlet: (attemptId: string, answers: GauntletAnswers) =>
+    apiClient.post<ApiResponse<GauntletChecked[]>>('/roadmaps/gauntlet/check',
+      { attemptId, answers }).then(r => r.data),
+
+  /** Placed from what the attempt recorded — nothing sent here changes the answers. */
+  submitGauntlet: (attemptId: string) =>
+    apiClient.post<ApiResponse<GauntletResult>>('/roadmaps/gauntlet/submit', { attemptId })
+      .then(r => r.data),
 }

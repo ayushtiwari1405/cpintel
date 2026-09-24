@@ -19,9 +19,8 @@ import java.util.Set;
  * reverse also happened: re-submitting an already-accepted solution incremented {@code solved}
  * again, inflating the volume term. A problem is counted once here, whatever it took.
  *
- * <p><b>Every judge, not just Codeforces.</b> Attribution takes normalised tags, so LeetCode
- * and CodeChef history reaches the tree through {@link PlatformTagVocabulary} rather than being
- * silently discarded.
+ * <p>Attribution takes tags normalised by {@link PlatformTagVocabulary}, so another judge's
+ * history could reach the tree by adding its vocabulary there.
  *
  * <p>Everything in this class is a pure function over its inputs, so the attribution rules can
  * be tested without a database, a Spring context or a judge.

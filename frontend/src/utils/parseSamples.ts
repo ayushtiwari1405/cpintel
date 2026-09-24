@@ -45,9 +45,10 @@ export function parseSamples(text: string | null | undefined): ProblemSample[] {
 
     const inputLine = INPUT_LINE.exec(line)
     if (inputLine && (inExamples || /sample|example/i.test(line))) {
-      // "Input: RD   Output: Radiant" — both on one line.
-      const both = /^(.*?)\s{2,}(?:sample\s+|example\s+)?output(?:\s*#?\d+)?\s*:\s*(.*)$/i
-        .exec(inputLine[1] ?? '')
+      // "Input: RD   Output: Radiant" — both on one line, split by spacing or by an arrow
+      // ("Input: 12345 → Output: 54321"). LaTeX's \rightarrow comes out of many PDFs as "!",
+      // since its font maps the glyph there.
+      const both = BOTH_ON_ONE_LINE.exec(inputLine[1] ?? '')
       if (both) {
         samples.push({ input: both[1].trim() + '\n', output: both[2].trim() + '\n' })
         i++
@@ -69,6 +70,9 @@ export function parseSamples(text: string | null | undefined): ProblemSample[] {
   }
   return samples
 }
+
+const BOTH_ON_ONE_LINE =
+  /^(.*?)\s*(?:→|⇒|->|=>|[!,;|])?\s+(?:sample\s+|example\s+)?output(?:\s*#?\d+)?\s*:\s*(.*)$/i
 
 /** "Input:" and "Output:" as headings on one line, optionally "Sample Input 1" and the like. */
 const SIDE_BY_SIDE = /^(\s*(?:sample\s+|example\s+)?input\b[^:\n]*:?)\s+((?:sample\s+|example\s+)?output\b[^:\n]*:?)\s*$/i

@@ -1,10 +1,7 @@
 package com.cpintel.integration;
 
 import com.cpintel.entity.mongo.CfSubmission;
-import com.cpintel.entity.mongo.LcSubmission;
-import com.cpintel.entity.mongo.CcSubmission;
 import com.cpintel.integration.codeforces.CfModels;
-import com.cpintel.integration.leetcode.LcModels;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -30,21 +27,6 @@ public class PlatformNormalizer {
             .memoryConsumedBytes(s.getMemoryConsumedBytes())
             .submittedAt(s.getCreationTimeSeconds() != null
                 ? Instant.ofEpochSecond(s.getCreationTimeSeconds()) : null)
-            .createdAt(Instant.now())
-            .normalized(true)
-            .build();
-    }
-
-    public LcSubmission normalizeLc(Long userId, LcModels.Submission s) {
-        return LcSubmission.builder()
-            .userId(userId)
-            .lcSubmissionId(s.getId() != null ? Long.parseLong(s.getId()) : null)
-            .titleSlug(s.getTitleSlug())
-            .problemTitle(s.getTitle())
-            .status("Accepted")
-            .language(s.getLang())
-            .submittedAt(s.getTimestamp() != null
-                ? Instant.ofEpochSecond(Long.parseLong(s.getTimestamp())) : null)
             .createdAt(Instant.now())
             .normalized(true)
             .build();

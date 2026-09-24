@@ -3,6 +3,7 @@ import { practiceApi, type ProblemQuery } from '@/api/practiceApi'
 import { useToast } from '@/components/common/Toaster'
 import { useEffect, useRef, useState } from 'react'
 import type { VerdictResponse } from '@/types'
+import { browserLanguages, browserStatement, browserSubmit, cfRelay } from '@/api/cfBrowser'
 
 export function useProblemSearch(query: ProblemQuery, enabled = true) {
   return useQuery({
@@ -21,19 +22,47 @@ export function useProblemTags() {
   })
 }
 
+/**
+ * A problem's statement.
+ *
+ * With a browser route to Codeforces (the extension, or the desktop app) the server is asked
+ * for its cache only, and a miss is fetched by this browser — a hosted server's own fetch
+ * would only reach Cloudflare's challenge. Without one, the server fetches as it always has.
+ */
 export function useProblem(contestId?: number, index?: string) {
   return useQuery({
     queryKey: ['practice', 'problem', contestId, index],
-    queryFn: () => practiceApi.getProblem(contestId!, index!).then(r => r.data),
+    queryFn: async () => {
+      const relay = cfRelay()
+      const detail = (await practiceApi.getProblem(contestId!, index!, !!relay)).data
+      if (detail.statementAvailable || !relay) return detail
+      try {
+        return await browserStatement(contestId!, index!, false)
+      } catch (e: any) {
+        // The browser check, or no answer: keep the metadata and say what happened.
+        return { ...detail,
+          statementIssue: e?.browserCheck ? 'BROWSER_CHECK' as const : 'UNAVAILABLE' as const }
+      }
+    },
     enabled: !!contestId && !!index,
     staleTime: 1000 * 60 * 60,
   })
 }
 
+/**
+ * The compilers Codeforces offers. Read off the submit page by this browser when it can —
+ * Codeforces renumbers them as compilers come and go — else from the server.
+ */
 export function useLanguages() {
   return useQuery({
-    queryKey: ['practice', 'languages'],
-    queryFn: () => practiceApi.languages().then(r => r.data),
+    queryKey: ['practice', 'languages', cfRelay()],
+    queryFn: async () => {
+      if (cfRelay()) {
+        const scraped = await browserLanguages(undefined, false).catch(() => [])
+        if (scraped.length > 0) return scraped
+      }
+      return practiceApi.languages().then(r => r.data)
+    },
     staleTime: 1000 * 60 * 60,
   })
 }
@@ -120,9 +149,20 @@ export function useSubmitSolution() {
   }
 
   const mutation = useMutation({
-    mutationFn: (body: {
+    mutationFn: async (body: {
       contestId: number; index: string; languageId: string; source: string
-    }) => practiceApi.submit(body),
+    }) => {
+      if (!cfRelay()) return practiceApi.submit(body)
+      // Posted from this browser; the verdict is then polled from the public API as usual.
+      const submissionId = await browserSubmit({ ...body, contest: false })
+      return {
+        data: {
+          submissionId, verdict: 'TESTING', passedTestCount: undefined,
+          timeConsumedMillis: undefined, memoryConsumedBytes: undefined,
+          message: 'Submitted to Codeforces from this browser',
+        },
+      } as Awaited<ReturnType<typeof practiceApi.submit>>
+    },
     onMutate: () => {
       stopPolling()
       setVerdict(null)
@@ -145,7 +185,7 @@ export function useSubmitSolution() {
       poll(data.submissionId)
     },
     onError: (err: any) => {
-      const message = err.response?.data?.message ?? 'Submission failed'
+      const message = err.response?.data?.message ?? err.message ?? 'Submission failed'
       toast.push('error', message)
       // A dead session is dropped server-side, so refresh the badge rather than leaving
       // the UI claiming the account is still connected.

@@ -123,6 +123,114 @@ public class CfWebSubmitClient {
     @Value("${cpintel.practice.submit-enabled:true}")
     private boolean submitEnabled;
 
+    // ------------------------------------------------ pieces the browser can carry
+    //
+    // A server cannot fetch Codeforces' website: Cloudflare ties the clearance a browser earns
+    // to that browser, so the same cookies replayed from a server's address get the challenge
+    // page. The user's own browser (the extension, or the desktop app) can. So the requests are
+    // made there, and everything that knows what Codeforces' pages look like stays here: the
+    // browser fetches a page and hands it over, and these read it or say what to post next.
+
+    /** A form for the user's browser to post to Codeforces, as multipart/form-data. */
+    public record BrowserForm(String url, Map<String, String> fields) {}
+
+    /** The page a submission form is read from. */
+    public String submitPageUrl(int contestId, boolean contest) {
+        return contest ? webUrl + "/contest/" + contestId + "/submit"
+                       : webUrl + "/problemset/submit";
+    }
+
+    /** The signed-in handle on any Codeforces page, or null when signed out. */
+    public String handleOn(String html) {
+        return loggedInHandle(html);
+    }
+
+    /** The compilers a submit page offers; empty when the page is the sign-in form. */
+    public List<PracticeDto.LanguageOption> languagesOn(String submitPageHtml) {
+        if (submitPageHtml == null || isLoginPage(submitPageHtml)) return List.of();
+        List<PracticeDto.LanguageOption> out = new ArrayList<>();
+        for (Element opt : Jsoup.parse(submitPageHtml).select("select[name=programTypeId] option")) {
+            String value = opt.attr("value").trim();
+            String label = opt.text().trim();
+            if (!value.isEmpty() && !label.isEmpty()) {
+                out.add(new PracticeDto.LanguageOption(value, label));
+            }
+        }
+        return out;
+    }
+
+    /**
+     * The submission form to post, read off the submit page.
+     *
+     * <p>The contest form is not the problemset form: it names the problem with a
+     * {@code submittedProblemIndex} select rather than a {@code submittedProblemCode} input, and
+     * posting the problemset shape during a contest lands the solution as a PRACTICE
+     * submission, which scores nothing.
+     */
+    public BrowserForm submitForm(String submitPageHtml, int contestId, String index,
+                                  boolean contest, String programTypeId, String source) {
+        assertEnabled();
+        if (submitPageHtml == null || isLoginPage(submitPageHtml)) {
+            throw new ApiException(HttpStatus.UNAUTHORIZED, "CF_SESSION_INVALID",
+                "You are not signed in to Codeforces. Sign in at codeforces.com and try again.");
+        }
+
+        String wanted = index.toUpperCase();
+        if (contest) {
+            // No problem select means Codeforces is not offering this contest to this account:
+            // not registered, or it has not started yet.
+            List<String> indexes = problemIndexesOn(submitPageHtml);
+            if (indexes.isEmpty()) {
+                throw new ApiException(HttpStatus.FORBIDDEN, "CF_CONTEST_UNAVAILABLE",
+                    "Codeforces is not accepting submissions for contest " + contestId
+                        + " on this account. Check you are registered and the contest has started.");
+            }
+            if (!indexes.contains(wanted)) {
+                throw ApiException.badRequest("Contest " + contestId + " has no problem "
+                    + wanted + ". It offers: " + String.join(", ", indexes));
+            }
+        }
+
+        String csrf = csrfToken(submitPageHtml);
+        if (csrf == null) {
+            throw new ApiException(HttpStatus.BAD_GATEWAY, "CF_SUBMIT_FAILED",
+                "Could not read the CSRF token from the Codeforces submit page.");
+        }
+
+        Map<String, String> form = new LinkedHashMap<>();
+        form.put("csrf_token", csrf);
+        form.put("ftaa", randomString(18, ALNUM));
+        form.put("bfaa", randomString(32, HEX));
+        form.put("action", "submitSolutionFormSubmitted");
+        if (contest) form.put("submittedProblemIndex", wanted);
+        else form.put("submittedProblemCode", contestId + wanted);
+        form.put("programTypeId", programTypeId);
+        form.put("source", source);
+        form.put("tabSize", "4");
+        form.put("sourceFile", "");
+
+        return new BrowserForm(submitPageUrl(contestId, contest)
+            + "?csrf_token=" + URLEncoder.encode(csrf, StandardCharsets.UTF_8), form);
+    }
+
+    /** The new submission's id, read off the page Codeforces answered the post with. */
+    public long submittedId(String resultHtml, boolean contest) {
+        String error = resultHtml == null ? null : firstError(resultHtml);
+        if (error != null) {
+            throw ApiException.badRequest("Codeforces refused the submission: " + error);
+        }
+        Long id = resultHtml == null ? null : firstSubmissionId(resultHtml);
+        if (id == null) {
+            // We ended up somewhere unexpected. The submission may well have landed, so say
+            // that rather than implying it failed and inviting a duplicate.
+            throw new ApiException(HttpStatus.BAD_GATEWAY, "CF_SUBMIT_UNCONFIRMED",
+                "The submission was posted but Codeforces did not return a submission id. "
+                    + "Check your " + (contest ? "contest submissions" : "submissions page")
+                    + " before resubmitting.");
+        }
+        return id;
+    }
+
     // ------------------------------------------------------------ public API
 
     /**
@@ -142,48 +250,11 @@ public class CfWebSubmitClient {
                        String programTypeId, String source) {
         assertEnabled();
 
-        String submitUrl = webUrl + "/problemset/submit";
-        String page = get(cookieHeader, userAgent, submitUrl);
-        if (isLoginPage(page)) {
-            throw new ApiException(HttpStatus.UNAUTHORIZED, "CF_SESSION_INVALID",
-                "Your Codeforces session has expired. Reconnect your account and try again.");
-        }
-
-        String csrf = csrfToken(page);
-        if (csrf == null) {
-            throw new ApiException(HttpStatus.BAD_GATEWAY, "CF_SUBMIT_FAILED",
-                "Could not read the CSRF token from the Codeforces submit page.");
-        }
-
-        Map<String, String> form = new LinkedHashMap<>();
-        form.put("csrf_token", csrf);
-        form.put("ftaa", randomString(18, ALNUM));
-        form.put("bfaa", randomString(32, HEX));
-        form.put("action", "submitSolutionFormSubmitted");
-        form.put("submittedProblemCode", contestId + index.toUpperCase());
-        form.put("programTypeId", programTypeId);
-        form.put("source", source);
-        form.put("tabSize", "4");
-        form.put("sourceFile", "");
-
-        String result = postMultipart(cookieHeader, userAgent,
-            submitUrl + "?csrf_token=" + URLEncoder.encode(csrf, StandardCharsets.UTF_8),
-            form, submitUrl);
-
-        String error = firstError(result);
-        if (error != null) {
-            throw ApiException.badRequest("Codeforces refused the submission: " + error);
-        }
-
-        Long id = firstSubmissionId(result);
-        if (id == null) {
-            // We ended up somewhere unexpected. The submission may well have landed, so say
-            // that rather than implying it failed and inviting a duplicate.
-            throw new ApiException(HttpStatus.BAD_GATEWAY, "CF_SUBMIT_UNCONFIRMED",
-                "The submission was posted but Codeforces did not return a submission id. "
-                    + "Check your submissions page before resubmitting.");
-        }
-        return id;
+        String page = get(cookieHeader, userAgent, submitPageUrl(contestId, false));
+        BrowserForm form = submitForm(page, contestId, index, false, programTypeId, source);
+        String result = postMultipart(cookieHeader, userAgent, form.url(), form.fields(),
+            submitPageUrl(contestId, false));
+        return submittedId(result, false);
     }
 
     /**
@@ -192,18 +263,7 @@ public class CfWebSubmitClient {
      * retired.
      */
     public List<PracticeDto.LanguageOption> scrapeLanguages(String cookieHeader, String userAgent) {
-        String page = get(cookieHeader, userAgent, webUrl + "/problemset/submit");
-        if (isLoginPage(page)) return List.of();
-
-        List<PracticeDto.LanguageOption> out = new ArrayList<>();
-        for (Element opt : Jsoup.parse(page).select("select[name=programTypeId] option")) {
-            String value = opt.attr("value").trim();
-            String label = opt.text().trim();
-            if (!value.isEmpty() && !label.isEmpty()) {
-                out.add(new PracticeDto.LanguageOption(value, label));
-            }
-        }
-        return out;
+        return languagesOn(get(cookieHeader, userAgent, webUrl + "/problemset/submit"));
     }
 
     // ------------------------------------------------------- contest variants
@@ -221,60 +281,11 @@ public class CfWebSubmitClient {
                                 String programTypeId, String source) {
         assertEnabled();
 
-        String submitUrl = webUrl + "/contest/" + contestId + "/submit";
-        String page = get(cookieHeader, userAgent, submitUrl);
-        if (isLoginPage(page)) {
-            throw new ApiException(HttpStatus.UNAUTHORIZED, "CF_SESSION_INVALID",
-                "Your Codeforces session has expired. Reconnect your account and try again.");
-        }
-
-        // No problem select means Codeforces is not offering this contest to this account:
-        // not registered, or it has not started yet.
-        List<String> indexes = problemIndexesOn(page);
-        if (indexes.isEmpty()) {
-            throw new ApiException(HttpStatus.FORBIDDEN, "CF_CONTEST_UNAVAILABLE",
-                "Codeforces is not accepting submissions for contest " + contestId
-                    + " on this account. Check you are registered and the contest has started.");
-        }
-        String wanted = index.toUpperCase();
-        if (!indexes.contains(wanted)) {
-            throw ApiException.badRequest("Contest " + contestId + " has no problem "
-                + wanted + ". It offers: " + String.join(", ", indexes));
-        }
-
-        String csrf = csrfToken(page);
-        if (csrf == null) {
-            throw new ApiException(HttpStatus.BAD_GATEWAY, "CF_SUBMIT_FAILED",
-                "Could not read the CSRF token from the Codeforces contest submit page.");
-        }
-
-        Map<String, String> form = new LinkedHashMap<>();
-        form.put("csrf_token", csrf);
-        form.put("ftaa", randomString(18, ALNUM));
-        form.put("bfaa", randomString(32, HEX));
-        form.put("action", "submitSolutionFormSubmitted");
-        form.put("submittedProblemIndex", wanted);
-        form.put("programTypeId", programTypeId);
-        form.put("source", source);
-        form.put("tabSize", "4");
-        form.put("sourceFile", "");
-
-        String result = postMultipart(cookieHeader, userAgent,
-            submitUrl + "?csrf_token=" + URLEncoder.encode(csrf, StandardCharsets.UTF_8),
-            form, submitUrl);
-
-        String error = firstError(result);
-        if (error != null) {
-            throw ApiException.badRequest("Codeforces refused the submission: " + error);
-        }
-
-        Long id = firstSubmissionId(result);
-        if (id == null) {
-            throw new ApiException(HttpStatus.BAD_GATEWAY, "CF_SUBMIT_UNCONFIRMED",
-                "The submission was posted but Codeforces did not return a submission id. "
-                    + "Check your contest submissions before resubmitting.");
-        }
-        return id;
+        String page = get(cookieHeader, userAgent, submitPageUrl(contestId, true));
+        BrowserForm form = submitForm(page, contestId, index, true, programTypeId, source);
+        String result = postMultipart(cookieHeader, userAgent, form.url(), form.fields(),
+            submitPageUrl(contestId, true));
+        return submittedId(result, true);
     }
 
     /**
@@ -283,18 +294,7 @@ public class CfWebSubmitClient {
      */
     public List<PracticeDto.LanguageOption> scrapeContestLanguages(String cookieHeader, String userAgent,
                                                                    int contestId) {
-        String page = get(cookieHeader, userAgent, webUrl + "/contest/" + contestId + "/submit");
-        if (isLoginPage(page)) return List.of();
-
-        List<PracticeDto.LanguageOption> out = new ArrayList<>();
-        for (Element opt : Jsoup.parse(page).select("select[name=programTypeId] option")) {
-            String value = opt.attr("value").trim();
-            String label = opt.text().trim();
-            if (!value.isEmpty() && !label.isEmpty()) {
-                out.add(new PracticeDto.LanguageOption(value, label));
-            }
-        }
-        return out;
+        return languagesOn(get(cookieHeader, userAgent, webUrl + "/contest/" + contestId + "/submit"));
     }
 
     /**

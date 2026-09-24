@@ -39,7 +39,8 @@ public class SyncScheduler {
             batch = platformAccountRepository.findActiveAccounts(PageRequest.of(page++, BATCH_SIZE));
             for (var account : batch) {
                 try {
-                    syncService.triggerSync(account.getUserId(), account.getPlatform(), "INCREMENTAL");
+                    // On this thread, one after another — see SyncService.syncNow.
+                    syncService.syncNow(account.getUserId(), account.getPlatform(), "INCREMENTAL");
                     count++;
                 } catch (Exception e) {
                     log.warn("Nightly sync failed for account {}: {}",
@@ -48,7 +49,7 @@ public class SyncScheduler {
             }
         } while (batch.hasNext());
 
-        log.info("Nightly sync triggered for {} accounts", count);
+        log.info("Nightly sync finished for {} accounts", count);
     }
 
     /**

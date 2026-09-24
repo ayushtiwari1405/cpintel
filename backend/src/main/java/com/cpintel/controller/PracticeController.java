@@ -48,9 +48,11 @@ public class PracticeController {
     public ResponseEntity<ApiResponse<PracticeDto.ProblemDetail>> problem(
         @AuthenticationPrincipal Long userId,
         @PathVariable int contestId,
-        @PathVariable String index) {
+        @PathVariable String index,
+        // Set by a page that will fetch through the user's browser on a miss.
+        @RequestParam(defaultValue = "false") boolean cachedOnly) {
         return ResponseEntity.ok(ApiResponse.ok(
-            practiceService.getProblem(userId, contestId, index)));
+            practiceService.getProblem(userId, contestId, index, cachedOnly)));
     }
 
     @GetMapping("/languages")

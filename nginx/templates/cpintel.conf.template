@@ -1,0 +1,140 @@
+# Rendered at container start: ${CPINTEL_DOMAIN} is filled in from the environment.
+
+# ── rate limits ──────────────────────────────────────────────────────────────
+#
+# Keyed by address, which is right for the internet and wrong for a lab whose two hundred
+# machines reach this server through one NAT address: to these limits the whole room is one
+# very busy user. Addresses in CPINTEL_LAB_NETWORKS (written to lab-networks.inc at start) are
+# held to the generous *_lab zones instead. The backend applies the same distinction to its
+# own sign-in limit, and its per-account limits apply to everyone either way.
+geo $lab_network {
+    default 0;
+    include /etc/nginx/lab-networks.inc;
+}
+map $lab_network $public_addr { 0 $binary_remote_addr; default ""; }
+map $lab_network $lab_addr    { 0 "";                  default $binary_remote_addr; }
+
+# An empty key is not limited, so each request is counted by exactly one of each pair.
+# 429 rather than nginx's default 503: "slow down", which the frontend already handles, not
+# "the server is broken".
+limit_req_status 429;
+limit_req_zone $public_addr zone=api:10m      rate=30r/s;
+limit_req_zone $lab_addr    zone=api_lab:10m  rate=1000r/s;
+limit_req_zone $public_addr zone=auth:10m     rate=5r/s;
+limit_req_zone $lab_addr    zone=auth_lab:10m rate=100r/s;
+
+upstream backend {
+    server backend:8080;
+    keepalive 32;
+}
+
+upstream frontend {
+    server frontend:80;
+    keepalive 16;
+}
+
+# ── :80 ──────────────────────────────────────────────────────────────────────
+# Only three things: Let's Encrypt's challenge files, the health check Docker polls, and a
+# redirect to https. Nothing with a password in it is ever served here.
+server {
+    listen 80;
+    listen [::]:80;
+    server_name _;
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location = /health {
+        access_log off;
+        default_type text/plain;
+        return 200 "OK\n";
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+# ── :443 ─────────────────────────────────────────────────────────────────────
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
+    server_name ${CPINTEL_DOMAIN};
+
+    # Chosen at start by docker-entrypoint.d/40-cpintel-tls.sh: Let's Encrypt, a certificate
+    # mounted at /etc/nginx/certs, or a temporary self-signed one until one of those exists.
+    ssl_certificate     /etc/nginx/tls/fullchain.pem;
+    ssl_certificate_key /etc/nginx/tls/privkey.pem;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+    ssl_session_cache   shared:TLS:10m;
+    ssl_session_timeout 1d;
+    ssl_session_tickets off;
+
+    # A year of https-only. Not includeSubDomains: a campus domain may have sibling hosts that
+    # still serve plain http, and this server has no business deciding for them.
+    add_header Strict-Transport-Security "max-age=31536000" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    # What the page may load. The access token lives in the page's memory, so a script injected
+    # into it is the one way left to take a session; this limits scripts to CPIntel's own files.
+    # style 'unsafe-inline' is for Monaco and statement markup; img https: for Codeforces
+    # statement images and avatars; fonts from Google Fonts; MathJax is served locally.
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self'; worker-src 'self' blob:; frame-ancestors 'self'; base-uri 'self'; form-action 'self'; object-src 'none'" always;
+
+    # Auth endpoints — stricter rate limit
+    location ~ ^/api/v1/auth/(login|register|refresh) {
+        limit_req zone=auth burst=10 nodelay;
+        limit_req zone=auth_lab burst=400 nodelay;
+        proxy_pass         http://backend;
+        proxy_http_version 1.1;
+        proxy_set_header   Connection "";
+        proxy_set_header   Host $host;
+        proxy_set_header   X-Real-IP $remote_addr;
+        proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+        proxy_connect_timeout 10s;
+        proxy_read_timeout    30s;
+    }
+
+    # All other API endpoints
+    location /api/ {
+        limit_req zone=api burst=50 nodelay;
+        limit_req zone=api_lab burst=2000 nodelay;
+        proxy_pass         http://backend;
+        proxy_http_version 1.1;
+        proxy_set_header   Connection "";
+        proxy_set_header   Host $host;
+        proxy_set_header   X-Real-IP $remote_addr;
+        proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+        proxy_connect_timeout 10s;
+        # Long enough for a Run that queued for a runner slot and then compiled.
+        proxy_read_timeout    120s;
+    }
+
+    # Actuator — internal only
+    location /actuator/ {
+        allow 172.16.0.0/12;
+        allow 10.0.0.0/8;
+        deny  all;
+        proxy_pass http://backend;
+    }
+
+    # Frontend SPA
+    location / {
+        proxy_pass         http://frontend;
+        proxy_http_version 1.1;
+        proxy_set_header   Connection "";
+        proxy_set_header   Host $host;
+    }
+
+    location = /health {
+        access_log off;
+        default_type text/plain;
+        return 200 "OK\n";
+    }
+}

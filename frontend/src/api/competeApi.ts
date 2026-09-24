@@ -70,6 +70,10 @@ export const competeApi = {
         throw err
       }),
 
+  /** The statement's text, extracted server-side from a PDF — read only for its examples. */
+  statementText: (ref: ContestRef, index: string) =>
+    apiClient.get<string>(`${base(ref)}/problems/${index}/statement.txt`,
+      { responseType: 'text' }).then(r => r.data),
 }
 
 /**

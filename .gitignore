@@ -68,3 +68,9 @@ venv/
 # Misc
 *.swp
 *.swo
+# TLS certificates dropped in for nginx; never committed.
+nginx/certs/*
+!nginx/certs/README.md
+
+# deploy.sh bookkeeping: which version is running and which came before.
+.deploy/

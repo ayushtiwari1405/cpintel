@@ -51,11 +51,16 @@ public class AuthDto {
         private String password;
     }
 
-    @Getter @Builder @Jacksonized
+    @Getter @Setter @Builder @Jacksonized
     public static class AuthResponse {
         private String accessToken;
+        /** Null in responses to the browser; it travels as an HttpOnly cookie instead. */
         private String refreshToken;
         private UserDto.Profile user;
+        /** NORMAL, or EXAM for a session signed in with an examination password. */
+        private String mode;
+        /** The examination an EXAM session is for; null otherwise. */
+        private Long examId;
     }
 
     @Getter @Setter

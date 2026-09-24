@@ -24,6 +24,13 @@ function timeOf(iso: string | null): string {
 interface Props {
   submissions: ContestSubmission[]
   isLoading?: boolean
+  /**
+   * Opens a row: its problem, with that submission's code in the editor. Rows the caller
+   * cannot open (no problem index) are left inert rather than failing on click.
+   */
+  onOpen?: (submission: ContestSubmission) => void
+  /** The submission currently being fetched to open, so its row can say so. */
+  opening?: string | null
 }
 
 /**
@@ -32,7 +39,7 @@ interface Props {
  * Lives as a tab in the workspace's left pane, so it fills the pane rather than carrying a
  * card and a heading of its own — the tab it sits behind already says what this is.
  */
-export function SubmissionsList({ submissions, isLoading }: Props) {
+export function SubmissionsList({ submissions, isLoading, onOpen, opening }: Props) {
   if (submissions.length === 0) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center">
@@ -64,9 +71,21 @@ export function SubmissionsList({ submissions, isLoading }: Props) {
           {submissions.map(s => {
             const accepted = s.verdict === 'OK'
             const pending = !s.finished
+            const openable = !!onOpen && !!s.index
             return (
-              <tr key={s.id} className="transition-colors hover:bg-gray-900/60">
-                <td className="px-3 py-2 font-mono text-gray-300">{s.index ?? '?'}</td>
+              <tr
+                key={s.id}
+                onClick={openable ? () => onOpen!(s) : undefined}
+                title={openable ? 'Open this problem with this code in the editor' : undefined}
+                className={clsx('transition-colors hover:bg-gray-900/60',
+                  openable && 'cursor-pointer')}
+              >
+                <td className="px-3 py-2 font-mono text-gray-300">
+                  <span className="flex items-center gap-1.5">
+                    {s.index ?? '?'}
+                    {opening === s.id && <Loader2 size={10} className="animate-spin" />}
+                  </span>
+                </td>
                 <td className="px-2 py-2 tabular-nums text-gray-600">{timeOf(s.createdAt)}</td>
                 <td className={clsx(
                   'px-2 py-2 font-medium',
@@ -91,6 +110,8 @@ export function SubmissionsList({ submissions, isLoading }: Props) {
                     target="_blank"
                     rel="noreferrer"
                     title="Open on the judge"
+                    // The row itself opens the code here; the icon is the way out to the judge.
+                    onClick={e => e.stopPropagation()}
                     className="text-gray-700 transition-colors hover:text-gray-400"
                   >
                     <ExternalLink size={11} />

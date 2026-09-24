@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from 'react'
 import {
   AlertTriangle, Check, Download, Eye, Loader2, ShieldAlert, Upload, UserPlus, X,
 } from 'lucide-react'
+import { downloadSpreadsheet } from '@/utils/spreadsheet'
 import { clsx } from 'clsx'
 import { useImportRoster } from '@/hooks/useGroups'
 import type { RosterImportResult, RosterRowOutcome, RosterRowStatus } from '@/api/adminApi'
@@ -75,18 +76,12 @@ export function RosterImportPanel({ groupId }: Props) {
   const downloadCredentials = () => {
     // Built here rather than fetched: these values exist only in the response that created
     // them, and asking the server for them again is deliberately impossible.
-    const header = 'username,email,fullName,password,teamName\n'
-    const body = credentials.map(r => [
-      r.username, r.email, r.fullName ?? '', r.generatedPassword, r.teamName ?? '',
-    ].map(csvCell).join(',')).join('\n')
-
-    const blob = new Blob([header + body + '\n'], { type: 'text/csv;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `cpintel-group-${groupId}-credentials.csv`
-    a.click()
-    URL.revokeObjectURL(url)
+    // A spreadsheet rather than CSV, so each value is its own column in any program.
+    downloadSpreadsheet(`cpintel-group-${groupId}-credentials.xlsx`,
+      ['Username', 'Email', 'Full name', 'Password', 'Team'],
+      credentials.map(r => [
+        r.username, r.email, r.fullName ?? '', r.generatedPassword, r.teamName ?? '',
+      ]))
   }
 
   const result = committed ?? preview
@@ -219,7 +214,7 @@ export function RosterImportPanel({ groupId }: Props) {
                              text-xs font-medium text-white transition-colors
                              hover:bg-green-600"
                 >
-                  <Download size={13} /> Download credentials CSV
+                  <Download size={13} /> Download credentials spreadsheet
                 </button>
               </div>
             </div>
@@ -304,8 +299,3 @@ function RowTable({ rows }: { rows: RosterRowOutcome[] }) {
   )
 }
 
-/** Quote a CSV cell so a name containing a comma survives the round trip. */
-function csvCell(value: string | null | undefined): string {
-  const v = value ?? ''
-  return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v
-}

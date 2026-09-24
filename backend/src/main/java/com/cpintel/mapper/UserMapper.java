@@ -52,12 +52,7 @@ public class UserMapper {
         if (us == null) return null;
         return UnifiedScoreDto.builder()
             .cfScore(us.getCfScore())
-            .lcScore(us.getLcScore())
-            .ccScore(us.getCcScore())
             .unifiedScore(us.getUnifiedScore())
-            .cfWeight(us.getCfWeight())
-            .lcWeight(us.getLcWeight())
-            .ccWeight(us.getCcWeight())
             .computedAt(us.getComputedAt())
             .build();
     }

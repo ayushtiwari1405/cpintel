@@ -39,7 +39,7 @@ public class PythonRuntime implements LanguageRuntime {
 
     /** Where to find the interpreter. Overridable for a pyenv or a non-standard install. */
     @Value("${cpintel.runner.python.interpreter:python3}")
-    private String interpreter;
+    private String interpreter = "python3";
 
     @Override public String id() { return "python3"; }
     @Override public String displayName() { return "Python 3"; }

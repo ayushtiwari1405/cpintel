@@ -27,7 +27,9 @@ class SecretsCheckTest {
             "cpintel.practice.session-key",  GOOD_SESSION,
             "spring.datasource.password",    "realpassword",
             "spring.data.redis.password",    "realpassword",
-            "spring.data.mongodb.uri",       GOOD_MONGO
+            "spring.data.mongodb.uri",       GOOD_MONGO,
+            "cpintel.runner.url",            "http://runner:8090",
+            "cpintel.runner.token",          "a-long-enough-runner-token"
         ).forEach(e::setProperty);
         return e;
     }
@@ -44,6 +46,36 @@ class SecretsCheckTest {
         @DisplayName("a fully configured deployment starts")
         void goodConfigStarts() {
             assertDoesNotThrow(() -> verify(env("prod")));
+        }
+
+        @Test
+        @DisplayName("running code inside the backend is refused — it must go to the runner")
+        void runnerMustBeRemote() {
+            MockEnvironment e = env("prod");
+            e.setProperty("cpintel.runner.url", "");
+
+            var ex = assertThrows(IllegalStateException.class, () -> verify(e));
+            assertTrue(ex.getMessage().contains("CPINTEL_RUNNER_URL"), ex.getMessage());
+        }
+
+        @Test
+        @DisplayName("the runner needs its token")
+        void runnerNeedsToken() {
+            MockEnvironment e = env("prod");
+            e.setProperty("cpintel.runner.token", "");
+
+            var ex = assertThrows(IllegalStateException.class, () -> verify(e));
+            assertTrue(ex.getMessage().contains("CPINTEL_RUNNER_TOKEN"), ex.getMessage());
+        }
+
+        @Test
+        @DisplayName("turning the runner off entirely is allowed")
+        void runnerOffStarts() {
+            MockEnvironment e = env("prod");
+            e.setProperty("cpintel.runner.enabled", "false");
+            e.setProperty("cpintel.runner.url", "");
+
+            assertDoesNotThrow(() -> verify(e));
         }
 
         @Test

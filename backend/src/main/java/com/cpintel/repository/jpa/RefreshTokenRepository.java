@@ -25,4 +25,10 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long
     @Modifying
     @Query("UPDATE RefreshToken rt SET rt.revoked = true WHERE rt.user.userId = :userId")
     void revokeAllByUserId(@Param("userId") Long userId);
+
+    /** Ends one candidate's examination sessions for one paper, and nothing else of theirs. */
+    @Modifying
+    @Query("UPDATE RefreshToken rt SET rt.revoked = true "
+        + "WHERE rt.user.userId = :userId AND rt.examId = :examId")
+    void revokeExamSessions(@Param("userId") Long userId, @Param("examId") Long examId);
 }

@@ -147,7 +147,7 @@ class OutboundRateLimiterTest {
 
             long before = System.currentTimeMillis();
             var a = new Thread(() -> limiter.acquire("codeforces", 300, 30_000));
-            var b = new Thread(() -> limiter.acquire("leetcode", 300, 30_000));
+            var b = new Thread(() -> limiter.acquire("domjudge", 300, 30_000));
             a.start(); b.start();
             a.join(); b.join();
 

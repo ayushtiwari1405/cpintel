@@ -105,6 +105,23 @@ public class CompeteController {
             .body(doc.bytes());
     }
 
+    /**
+     * The statement's text, read out of the PDF when it is one — what the arena parses the
+     * examples from. The PDF itself is still what the contestant reads.
+     */
+    @GetMapping(value = "/{platform}/{contestId}/problems/{index}/statement.txt",
+                produces = MediaType.TEXT_PLAIN_VALUE + ";charset=UTF-8")
+    @Operation(summary = "The statement as plain text, for reading its examples")
+    public ResponseEntity<String> statementText(
+        @AuthenticationPrincipal Long userId,
+        @PathVariable String platform,
+        @PathVariable String contestId,
+        @PathVariable String index) {
+        return ResponseEntity.ok()
+            .header(HttpHeaders.CACHE_CONTROL, "private, max-age=600")
+            .body(competeService.statementText(userId, platform, contestId, index));
+    }
+
     /** Names the download after what it actually is, for the "open in a new tab" case. */
     private String extensionFor(MediaType type) {
         if (MediaType.APPLICATION_PDF.isCompatibleWith(type)) return ".pdf";

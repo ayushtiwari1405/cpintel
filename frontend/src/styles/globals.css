@@ -73,14 +73,14 @@
    inside the dark shell instead of inheriting CF's white-page styling.
    --------------------------------------------------------------------------- */
 @layer components {
-  .cf-statement p { @apply my-2; }
+  .cf-statement p { @apply my-3 first:mt-0; }
   .cf-statement ul,
   .cf-statement ol { @apply my-2 pl-5 space-y-1; }
   .cf-statement ul { @apply list-disc; }
   .cf-statement ol { @apply list-decimal; }
 
   .cf-statement pre {
-    @apply bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 my-2
+    @apply bg-gray-900/50 border border-gray-800 rounded-lg px-3 py-2 my-3
            text-xs font-mono overflow-x-auto;
   }
   .cf-statement code { @apply font-mono text-[0.9em] text-indigo-300; }

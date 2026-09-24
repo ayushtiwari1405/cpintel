@@ -122,4 +122,28 @@ class RateLimitRouteTest {
 
         verify(limiter).tryAcquire(eq(RateLimitFilter.LOGIN_IP), eq("10.0.0.1"), any());
     }
+
+    @Test
+    @DisplayName("a lab behind one NAT address gets the shared allowance, others the normal one")
+    void labNetworkGetsSharedAllowance() throws Exception {
+        RateLimitProperties props = new RateLimitProperties();
+        props.setSharedNetworks(java.util.List.of("10.20.0.0/16", " 192.168.5.0/24 "));
+        filter = new RateLimitFilter(limiter, props, mock(AppMetrics.class));
+
+        MockHttpServletRequest lab = new MockHttpServletRequest("POST", "/api/v1/auth/login");
+        lab.setRemoteAddr("10.20.3.4");
+        invoke(lab);
+        verify(limiter).tryAcquire(eq(RateLimitFilter.LOGIN_IP), eq("10.20.3.4"),
+            same(props.getSharedLogin()));
+
+        MockHttpServletRequest outside = new MockHttpServletRequest("POST", "/api/v1/auth/login");
+        outside.setRemoteAddr("10.21.0.1");
+        invoke(outside);
+        verify(limiter).tryAcquire(eq(RateLimitFilter.LOGIN_IP), eq("10.21.0.1"),
+            same(props.getLogin()));
+
+        // An IPv6 caller against IPv4 ranges is simply not in them, not an error.
+        assertFalse(filter.sharedNetwork("2001:db8::1"));
+        assertTrue(filter.sharedNetwork("192.168.5.77"));
+    }
 }

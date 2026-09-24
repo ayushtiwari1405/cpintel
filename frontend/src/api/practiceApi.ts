@@ -20,8 +20,13 @@ export const practiceApi = {
   tags: () =>
     apiClient.get<ApiResponse<string[]>>('/practice/tags').then(r => r.data),
 
-  getProblem: (contestId: number, index: string) =>
-    apiClient.get<ApiResponse<ProblemDetail>>(`/practice/problems/${contestId}/${index}`)
+  /**
+   * @param cachedOnly answer from the server's cache or not at all — for a page that will
+   *                   fetch the statement through the browser on a miss.
+   */
+  getProblem: (contestId: number, index: string, cachedOnly = false) =>
+    apiClient.get<ApiResponse<ProblemDetail>>(`/practice/problems/${contestId}/${index}`,
+      { params: cachedOnly ? { cachedOnly: true } : undefined })
       .then(r => r.data),
 
   languages: () =>

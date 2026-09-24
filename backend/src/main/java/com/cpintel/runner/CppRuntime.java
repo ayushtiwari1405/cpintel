@@ -18,11 +18,11 @@ public class CppRuntime implements LanguageRuntime {
 
     /** Where to find the compiler. Overridable for a non-standard toolchain. */
     @Value("${cpintel.runner.cpp.compiler:g++}")
-    private String compiler;
+    private String compiler = "g++";
 
     /** Language standard. Codeforces' most-used option is GNU G++20. */
     @Value("${cpintel.runner.cpp.standard:c++20}")
-    private String standard;
+    private String standard = "c++20";
 
     @Override public String id() { return "cpp"; }
     @Override public String displayName() { return "C++ (g++)"; }

@@ -39,6 +39,8 @@ public class CompeteService {
 
     private final List<CompeteProvider> providers;
     private final PersonalFileService personalFiles;
+    /** Ordinary sessions out of running examinations; examination sessions inside theirs. */
+    private final com.cpintel.events.ExamSessionGuard examGuard;
     private final ContestFilePolicy filePolicy;
     private final ProctoringGate proctoring;
     private final LanguagePolicy languagePolicy;
@@ -64,8 +66,8 @@ public class CompeteService {
     /**
      * The provider for a platform, or a message naming the ones that exist.
      *
-     * CodeChef is a declared platform with no provider behind it, so this is the single place
-     * that says so — rather than each endpoint discovering it separately.
+     * A platform with no provider behind it is refused here, in one place, rather than by each
+     * endpoint discovering it separately.
      */
     public CompeteProvider provider(String platform) {
         String key = platform == null ? "" : platform.trim().toUpperCase(Locale.ROOT);
@@ -92,17 +94,42 @@ public class CompeteService {
     }
 
     public CompeteDto.ContestInfo contestInfo(Long userId, String platform, String contestId) {
+        examGuard.requireContestAccess(userId, platform, contestId);
         return provider(platform).contestInfo(userId, contestId);
     }
 
     public PracticeDto.ProblemDetail statement(Long userId, String platform, String contestId,
                                                String index) {
+        examGuard.requireContestAccess(userId, platform, contestId);
         return provider(platform).statement(userId, contestId, index);
     }
 
     public CompeteDto.StatementDocument statementDocument(Long userId, String platform,
                                                           String contestId, String index) {
+        examGuard.requireContestAccess(userId, platform, contestId);
         return provider(platform).statementDocument(userId, contestId, index);
+    }
+
+    /**
+     * The statement as plain text, whatever it was published as.
+     *
+     * <p>A PDF is shown to the contestant as the PDF, but nothing can read its examples out of
+     * the embed, so a problem uploaded as a PDF opened with an empty test case. The text is what
+     * the arena's sample parser reads, exactly as it reads a statement published as .txt.
+     */
+    public String statementText(Long userId, String platform, String contestId, String index) {
+        CompeteDto.StatementDocument doc = statementDocument(userId, platform, contestId, index);
+        if (!doc.isPdf()) return new String(doc.bytes(), java.nio.charset.StandardCharsets.UTF_8);
+        try (var pdf = org.apache.pdfbox.Loader.loadPDF(doc.bytes())) {
+            var stripper = new org.apache.pdfbox.text.PDFTextStripper();
+            // Keeps columns apart with runs of spaces, so side-by-side examples stay split.
+            stripper.setSortByPosition(true);
+            return stripper.getText(pdf);
+        } catch (java.io.IOException e) {
+            throw new com.cpintel.exception.ApiException(
+                org.springframework.http.HttpStatus.UNPROCESSABLE_ENTITY, "STATEMENT_UNREADABLE",
+                "The statement PDF has no readable text.");
+        }
     }
 
     /**
@@ -115,6 +142,7 @@ public class CompeteService {
      */
     public List<PracticeDto.LanguageOption> languages(Long userId, String platform,
                                                       String contestId) {
+        examGuard.requireContestAccess(userId, platform, contestId);
         CompeteProvider target = provider(platform);
         List<PracticeDto.LanguageOption> offered = target.languages(userId, contestId);
 
@@ -137,6 +165,7 @@ public class CompeteService {
      */
     public CompeteDto.ContestSubmission submit(Long userId, String platform, String contestId,
                                                CompeteDto.ContestSubmitRequest req) {
+        examGuard.requireContestAccess(userId, platform, contestId);
         CompeteProvider target = provider(platform);
         proctoring.requireMonitored(userId, target.platform(), contestId);
 
@@ -164,14 +193,17 @@ public class CompeteService {
 
     public List<CompeteDto.ContestSubmission> submissions(Long userId, String platform,
                                                           String contestId) {
+        examGuard.requireContestAccess(userId, platform, contestId);
         return provider(platform).submissions(userId, contestId);
     }
 
     public CompeteDto.RankInfo rank(Long userId, String platform, String contestId) {
+        examGuard.requireContestAccess(userId, platform, contestId);
         return provider(platform).rank(userId, contestId);
     }
 
     public CompeteDto.Leaderboard leaderboard(Long userId, String platform, String contestId) {
+        examGuard.requireContestAccess(userId, platform, contestId);
         return provider(platform).leaderboard(userId, contestId);
     }
 
@@ -185,18 +217,21 @@ public class CompeteService {
      * stops the contest page serving files, it does not take away someone's own storage.
      */
     public FilesDto.Vault files(Long userId, String platform, String contestId) {
+        examGuard.requireContestAccess(userId, platform, contestId);
         requireFilesEnabled(platform, contestId);
         return personalFiles.vault(userId);
     }
 
     public FilesDto.FileContent file(Long userId, String platform, String contestId,
                                      String fileId) {
+        examGuard.requireContestAccess(userId, platform, contestId);
         requireFilesEnabled(platform, contestId);
         return personalFiles.content(userId, fileId);
     }
 
     public FilesDto.Download fileDownload(Long userId, String platform, String contestId,
                                           String fileId) {
+        examGuard.requireContestAccess(userId, platform, contestId);
         requireFilesEnabled(platform, contestId);
         return personalFiles.download(userId, fileId);
     }

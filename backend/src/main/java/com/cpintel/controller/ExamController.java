@@ -42,6 +42,8 @@ public class ExamController {
     private final EventService events;
     private final ExamEventService examEvents;
     private final ContestMonitorRegistry monitors;
+    /** Entering, unlocking and reporting belong to an examination session only. */
+    private final com.cpintel.events.ExamSessionGuard examGuard;
 
     @GetMapping
     @Operation(summary = "The examinations assigned to you")
@@ -63,6 +65,7 @@ public class ExamController {
     public ResponseEntity<ApiResponse<EventsDto.MyExam>> enter(
         @AuthenticationPrincipal Long userId,
         @PathVariable Long examId) {
+        examGuard.requireExamSession(examId);
         return ResponseEntity.ok(ApiResponse.ok(events.enter(userId, examId)));
     }
 
@@ -86,6 +89,7 @@ public class ExamController {
         @PathVariable Long examId,
         @Valid @RequestBody EventsDto.UnlockRequest req,
         HttpServletRequest httpReq) {
+        examGuard.requireExamSession(examId);
         return ResponseEntity.ok(ApiResponse.ok(events.unlock(userId, examId, req, httpReq)));
     }
 
@@ -133,6 +137,7 @@ public class ExamController {
         @AuthenticationPrincipal Long userId,
         @PathVariable Long examId,
         @Valid @RequestBody EventsDto.EventReport report) {
+        examGuard.requireExamSession(examId);
         int stored = examEvents.report(userId, examId, report);
         return ResponseEntity.ok(ApiResponse.ok(Map.of("stored", stored)));
     }
@@ -149,6 +154,7 @@ public class ExamController {
     public ResponseEntity<ApiResponse<Map<String, Long>>> heartbeat(
         @AuthenticationPrincipal Long userId,
         @PathVariable Long examId) {
+        examGuard.requireExamSession(examId);
         events.requireAssigned(userId, examId);
         monitors.beat(userId, examId);
         return ResponseEntity.ok(ApiResponse.ok(

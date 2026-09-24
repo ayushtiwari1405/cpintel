@@ -157,18 +157,14 @@ public final class ScoringFormulas {
     /**
      * Rating-change spread at which consistency reaches zero, per platform.
      *
-     * <p>Consistency was a single {@code 100 - stddev/2} over every contest the user had ever
-     * sat, on any judge. That mixes scales: Codeforces deltas run to a few hundred points and
-     * LeetCode's to a few dozen, so a user active on both was scored as wildly inconsistent for
-     * the ordinary reason that their two judges do not use the same units. Each platform now
-     * gets its own divisor and the results are combined afterwards.
+     * <p>Per platform because judges do not share units: a rating change of 100 means different
+     * things on different scales. Only Codeforces is synced today, and anything else falls back
+     * to its scale.
      */
     public static double ratingChangeScale(String platform) {
         if (platform == null) return 150.0;
         return switch (platform.toUpperCase(Locale.ROOT)) {
             case "CODEFORCES" -> 150.0;
-            case "LEETCODE"   -> 80.0;
-            case "CODECHEF"   -> 120.0;
             default           -> 150.0;
         };
     }
@@ -201,40 +197,18 @@ public final class ScoringFormulas {
 
     // ── Unified rating ─────────────────────────────────────────────────────
 
-    /**
-     * Rating range used to map each platform onto the shared 0-1000 scale. LeetCode starts at
-     * 1400 because that is roughly where its contest rating floor sits, so a new LeetCode
-     * account is not treated as equivalent to an unrated Codeforces one.
-     */
+    /** Rating range used to map a platform's rating onto the 0-1000 scale. */
     public static double normalizeRating(String platform, Integer rating) {
         if (rating == null || rating <= 0) return 0.0;
 
         int min, max;
         switch (platform == null ? "" : platform) {
             case "CODEFORCES" -> { min = 0;    max = 4000; }
-            case "LEETCODE"   -> { min = 1400; max = 4000; }
-            case "CODECHEF"   -> { min = 0;    max = 3500; }
             default           -> { min = 0;    max = 3000; }
         }
 
         double normalized = ((double) (rating - min) / Math.max(max - min, 1)) * 1000.0;
         return round2(clamp(normalized, 0, 1000));
-    }
-
-    /**
-     * Weighted mean of the normalized per-platform scores, re-normalized by the weights of the
-     * platforms actually linked. A user with only Codeforces linked is scored on Codeforces
-     * alone rather than being penalised for the two missing platforms.
-     *
-     * @return 0 when no platform contributes any weight.
-     */
-    public static double unifiedScore(double cfNorm, double cfWeight,
-                                      double lcNorm, double lcWeight,
-                                      double ccNorm, double ccWeight,
-                                      double totalWeight) {
-        if (totalWeight <= 0) return 0.0;
-        double weighted = (cfNorm * cfWeight) + (lcNorm * lcWeight) + (ccNorm * ccWeight);
-        return round2(weighted / totalWeight);
     }
 
     // ── Recommendation fit ─────────────────────────────────────────────────

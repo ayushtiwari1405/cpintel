@@ -189,6 +189,18 @@ public class GroupContest extends BaseEntity {
         return !now.isBefore(startsAt) && now.isBefore(endsAt);
     }
 
+    /**
+     * Whether it has started, as far as anyone sitting it is concerned.
+     *
+     * A draft never has — nobody could see it — whatever its start time says. Anything else has
+     * once its start time passes, and stays started through ending and archiving: that is when
+     * its settings stop being a plan and become the conditions people sat it under.
+     */
+    public boolean hasStarted(Instant now) {
+        if (lifecycleOrDefault() == Lifecycle.DRAFT) return false;
+        return startsAt != null && !now.isBefore(startsAt);
+    }
+
     public boolean isExam() {
         return Kind.EXAM.name().equals(kind);
     }

@@ -44,7 +44,12 @@ apiClient.interceptors.response.use(
   async (error: AxiosError) => {
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean }
 
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    // A 401 from signing in is a wrong password, not an expired session; renewing would turn
+    // the message into a bounce back to the login page.
+    const signingIn = /\/auth\/(login|register|refresh|forgot-password|reset-password)/
+      .test(originalRequest?.url ?? '')
+
+    if (error.response?.status === 401 && !originalRequest._retry && !signingIn) {
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject })
@@ -58,17 +63,23 @@ apiClient.interceptors.response.use(
       isRefreshing = true
 
       try {
-        const refreshToken = useAuthStore.getState().refreshToken
-        const response = await axios.post(`${BASE_URL}/auth/refresh`, { refreshToken })
-        const { accessToken, refreshToken: newRefresh } = response.data.data
-        useAuthStore.getState().setTokens(accessToken, newRefresh)
+        // The refresh token is an HttpOnly cookie the browser sends by itself; this page never
+        // sees it. The answer carries a new access token and rotates the cookie. An empty JSON
+        // object rather than no body: with none, axios labels the request form-encoded, which
+        // the endpoint does not read.
+        const response = await axios.post(`${BASE_URL}/auth/refresh`, {},
+          { withCredentials: true })
+        const { accessToken } = response.data.data
+        useAuthStore.getState().setAccessToken(accessToken)
         processQueue(null, accessToken)
         originalRequest.headers.Authorization = `Bearer ${accessToken}`
         return apiClient(originalRequest)
       } catch (refreshError) {
         processQueue(refreshError, null)
+        // An examination session stops renewing when its paper ends; say so on the way out.
+        const examOver = useAuthStore.getState().mode === 'EXAM'
         useAuthStore.getState().logout()
-        window.location.href = '/login'
+        window.location.href = examOver ? '/login?exam-ended=1' : '/login'
         return Promise.reject(refreshError)
       } finally {
         isRefreshing = false

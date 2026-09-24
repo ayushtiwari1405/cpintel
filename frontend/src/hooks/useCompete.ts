@@ -4,6 +4,17 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { competeApi, domjudgeApi } from '@/api/competeApi'
 import { useToast } from '@/components/common/Toaster'
 import type { CompetePlatform, ContestInfo, ContestRef, ContestSubmission } from '@/types'
+import { browserLanguages, browserStatement, browserSubmit, cfRelay } from '@/api/cfBrowser'
+
+/**
+ * Whether a Codeforces round's pages go through this browser.
+ *
+ * A hosted server cannot fetch Codeforces' website (its browser check refuses a server), so
+ * statements, compilers and submissions for a Codeforces round are fetched by the extension or
+ * the desktop app when either is present. DOMjudge is the deployment's own judge and always
+ * goes through the server.
+ */
+const viaBrowser = (ref?: ContestRef) => ref?.platform === 'CODEFORCES' && !!cfRelay()
 
 /** How often the live rank is re-read when nothing else prompts it. */
 const RANK_INTERVAL_MS = 15 * 60 * 1000
@@ -67,7 +78,16 @@ export function useContest(ref?: ContestRef) {
 export function useContestStatement(ref?: ContestRef, index?: string, enabled = true) {
   return useQuery({
     queryKey: ['compete', 'statement', ...keyOf(ref), index],
-    queryFn: () => competeApi.statement(ref!, index!).then(r => r.data),
+    queryFn: async () => {
+      const detail = (await competeApi.statement(ref!, index!)).data
+      if (detail.statementAvailable || !viaBrowser(ref)) return detail
+      try {
+        return await browserStatement(Number(ref!.id), index!, true)
+      } catch (e: any) {
+        return { ...detail,
+          statementIssue: e?.browserCheck ? 'BROWSER_CHECK' as const : 'UNAVAILABLE' as const }
+      }
+    },
     enabled: !!ref && !!index && enabled,
     staleTime: 1000 * 60 * 60,
   })
@@ -116,6 +136,14 @@ export function useStatementPdf(ref?: ContestRef, index?: string, enabled = true
         }
         objectUrl = URL.createObjectURL(blob)
         setUrl(objectUrl)
+
+        // The embed is for reading; the examples in it are only reachable as text. Best
+        // effort — a scanned PDF has none, and the statement is on screen either way.
+        if ((blob.type || '').startsWith('application/pdf')) {
+          competeApi.statementText(ref, index)
+            .then(body => { if (!revoked) setText(body) })
+            .catch(() => { /* no examples to seed from; the cases start empty */ })
+        }
       })
       .catch((err: any) => {
         if (revoked) return
@@ -131,6 +159,8 @@ export function useStatementPdf(ref?: ContestRef, index?: string, enabled = true
       if (objectUrl) URL.revokeObjectURL(objectUrl)
       setUrl(null)
     }
+    // Keyed on the contest's identity, not the ref object, which is rebuilt on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ref?.platform, ref?.id, index, enabled])
 
   return { url, text, error }
@@ -139,7 +169,13 @@ export function useStatementPdf(ref?: ContestRef, index?: string, enabled = true
 export function useContestLanguages(ref?: ContestRef, enabled = true) {
   return useQuery({
     queryKey: ['compete', 'languages', ...keyOf(ref)],
-    queryFn: () => competeApi.languages(ref!).then(r => r.data),
+    queryFn: async () => {
+      if (viaBrowser(ref)) {
+        const scraped = await browserLanguages(Number(ref!.id), true).catch(() => [])
+        if (scraped.length > 0) return scraped
+      }
+      return competeApi.languages(ref!).then(r => r.data)
+    },
     enabled: !!ref && enabled,
     staleTime: 1000 * 60 * 60,
   })
@@ -183,15 +219,21 @@ export function useContestSubmit(ref?: ContestRef) {
   const toast = useToast()
 
   return useMutation({
-    mutationFn: (body: { index: string; languageId: string; source: string }) =>
-      competeApi.submit(ref!, body),
+    mutationFn: async (body: { index: string; languageId: string; source: string }) => {
+      if (!viaBrowser(ref)) return competeApi.submit(ref!, body)
+      const submissionId = await browserSubmit({
+        contestId: Number(ref!.id), contest: true, ...body })
+      // The submissions list reads the verdict from the public API; this is enough to say so.
+      return { data: { id: String(submissionId), index: body.index.toUpperCase() } } as
+        Awaited<ReturnType<typeof competeApi.submit>>
+    },
     onSuccess: (res) => {
       toast.push('info', `Submitted ${res.data.index ?? ''} to the contest`)
       qc.invalidateQueries({ queryKey: ['compete', 'submissions', ...keyOf(ref)] })
       qc.invalidateQueries({ queryKey: ['archive'] })
     },
     onError: (err: any) => {
-      toast.push('error', err.response?.data?.message ?? 'Submission failed')
+      toast.push('error', err.response?.data?.message ?? err.message ?? 'Submission failed')
       qc.invalidateQueries({ queryKey: ['practice', 'cf-session'] })
       qc.invalidateQueries({ queryKey: ['compete', 'contest', ...keyOf(ref)] })
       // Archived before the attempt was made, so it is readable back even now.

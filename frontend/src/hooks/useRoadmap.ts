@@ -53,3 +53,27 @@ export function useUpdateRoadmapNode() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['roadmap'] }),
   })
 }
+
+/** The gauntlet's questions and the last placement. Questions never change mid-session. */
+export function useGauntlet() {
+  return useQuery({
+    queryKey: ['roadmap', 'gauntlet'],
+    queryFn: () => roadmapApi.gauntlet().then(r => r.data),
+    staleTime: Infinity,
+  })
+}
+
+/**
+ * Places the user and moves their roadmap. Everything derived from the tree is stale after it,
+ * so all roadmap queries are dropped.
+ */
+export function useSubmitGauntlet() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (attemptId: string) =>
+      roadmapApi.submitGauntlet(attemptId).then(r => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['roadmap'] })
+    },
+  })
+}

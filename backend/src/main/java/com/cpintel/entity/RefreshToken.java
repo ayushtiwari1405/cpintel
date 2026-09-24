@@ -32,6 +32,13 @@ public class RefreshToken {
     @Column(name = "ip_address", length = 45)
     private String ipAddress;
 
+    /**
+     * The examination this token's session was signed in for, or null for an ordinary one.
+     * Renewing keeps the session what it was; see V13__exam_mode_sessions.sql.
+     */
+    @Column(name = "exam_id")
+    private Long examId;
+
     @Column(name = "expires_at", nullable = false)
     private Instant expiresAt;
 

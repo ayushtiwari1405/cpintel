@@ -112,12 +112,16 @@ services:
       CPINTEL_DOMJUDGE_CREDENTIAL_KEY: ${CPINTEL_DOMJUDGE_CREDENTIAL_KEY:-}
       CPINTEL_DOMJUDGE_CREDENTIAL_TTL_DAYS: ${CPINTEL_DOMJUDGE_CREDENTIAL_TTL_DAYS:-30}
       CPINTEL_EXAM_RETENTION_DAYS: ${CPINTEL_EXAM_RETENTION_DAYS:-365}
-      CPINTEL_RUNNER_CPP: ${CPINTEL_RUNNER_CPP:-g++}
-      CPINTEL_RUNNER_PYTHON: ${CPINTEL_RUNNER_PYTHON:-python3}
-      # Encrypts the two passwords that open an examination — the one read out to the room and
-      # each candidate's own code. Without it a paper opens for anyone assigned to it; the
-      # backend warns at startup rather than refusing, since that is a usable arrangement for a
-      # contest-only deployment.
+      # Run goes to the runner container below; the backend never executes submitted code.
+      CPINTEL_RUNNER_URL: http://runner:8090
+      CPINTEL_RUNNER_TOKEN: ${CPINTEL_RUNNER_TOKEN}
+      # The backend sizes its wait for a run from this, so it must match the runner's.
+      CPINTEL_RUNNER_TIME_LIMIT_MS: ${CPINTEL_RUNNER_TIME_LIMIT_MS:-5000}
+      # Lab networks behind one NAT address; the same list nginx gets.
+      CPINTEL_LAB_NETWORKS: ${CPINTEL_LAB_NETWORKS:-}
+      # Encrypts each candidate's examination sign-in password and the optional room password.
+      # Without it no examination can be sat; the backend warns at startup rather than
+      # refusing, since a contest-only deployment does not need it.
       CPINTEL_EXAM_PASSWORD_KEY: ${CPINTEL_EXAM_PASSWORD_KEY:-}
       CPINTEL_EXAM_PASSWORD_LENGTH: ${CPINTEL_EXAM_PASSWORD_LENGTH:-8}
       # Password resets and account notices. Nothing about an examination is ever mailed.
@@ -150,11 +154,56 @@ services:
         condition: service_healthy
     networks:
       - cpintel-net
+      - runner-net
     restart: unless-stopped
     deploy:
       resources:
         limits:
           memory: 1g
+
+  # Compiles and runs users' code for the Run button. Everything here is about containment:
+  #   - no secrets: its only configuration is the token the backend uses to call it;
+  #   - no internet: runner-net is internal, and the backend is the only other thing on it;
+  #   - read-only filesystem, no Linux capabilities, no privilege escalation, capped pids,
+  #     CPU and memory — one runaway program cannot take the server down with it;
+  #   - every run in its own bubblewrap sandbox (no /home, /etc or network, own PID space),
+  #     so concurrent runs cannot see each other's files — in an examination, the next
+  #     candidate's solution.
+  # Bubblewrap needs unprivileged user namespaces. The seccomp profile is Docker's default
+  # plus exactly the five calls that takes (see deploy/runner-seccomp.json), and AppArmor's
+  # docker-default profile forbids the mounts bubblewrap makes inside that namespace, hence
+  # apparmor:unconfined. If the sandbox still cannot be built, the runner refuses every run
+  # rather than running code unsandboxed, and the editor says running is paused.
+  runner:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: runner
+    container_name: cpintel-runner
+    environment:
+      RUNNER_TOKEN: ${CPINTEL_RUNNER_TOKEN}
+      # Runs at once; the rest queue for up to 20 seconds. About one per core.
+      RUNNER_CONCURRENCY: ${CPINTEL_RUNNER_CONCURRENCY:-4}
+      RUNNER_TIME_LIMIT_MS: ${CPINTEL_RUNNER_TIME_LIMIT_MS:-5000}
+      RUNNER_MEMORY_LIMIT_MB: ${CPINTEL_RUNNER_MEMORY_MB:-512}
+    read_only: true
+    tmpfs:
+      - /tmp:rw,exec,nosuid,nodev,size=1g
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+      - seccomp:./deploy/runner-seccomp.json
+      - apparmor:unconfined
+    networks:
+      - runner-net
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "${CPINTEL_RUNNER_CPUS:-4}"
+          memory: ${CPINTEL_RUNNER_MEMORY:-4g}
+          pids: 1024
 
   frontend:
     build:
@@ -167,13 +216,23 @@ services:
       - cpintel-net
     restart: unless-stopped
 
+  # The edge. HTTPS on 443; port 80 only redirects, answers Let's Encrypt and serves /health.
+  # Certificate: Let's Encrypt (run with --profile letsencrypt), or your own in ./nginx/certs,
+  # or a temporary self-signed one until either exists — see nginx/cpintel-cert.sh.
   nginx:
-    image: nginx:1.25-alpine
+    build:
+      context: ./nginx
     container_name: cpintel-nginx
+    environment:
+      CPINTEL_DOMAIN: ${CPINTEL_DOMAIN:-localhost}
+      CPINTEL_LAB_NETWORKS: ${CPINTEL_LAB_NETWORKS:-}
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - letsencrypt:/etc/letsencrypt:ro
+      - certbot_www:/var/www/certbot
+      - ./nginx/certs:/etc/nginx/certs:ro
     ports:
       - "80:80"
+      - "443:443"
     depends_on:
       - backend
       - frontend
@@ -185,6 +244,34 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
+
+  # Issues and renews the Let's Encrypt certificate for CPINTEL_DOMAIN. Only for a server the
+  # internet can reach on port 80:  docker compose --profile letsencrypt up -d
+  # nginx picks the certificate up within a minute of it appearing, and after each renewal.
+  certbot:
+    image: certbot/certbot:v2.11.0
+    container_name: cpintel-certbot
+    profiles: ["letsencrypt"]
+    environment:
+      CPINTEL_DOMAIN: ${CPINTEL_DOMAIN:-}
+      CPINTEL_ACME_EMAIL: ${CPINTEL_ACME_EMAIL:-}
+    volumes:
+      - letsencrypt:/etc/letsencrypt
+      - certbot_www:/var/www/certbot
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        trap exit TERM
+        until certbot certonly --webroot -w /var/www/certbot -d "$$CPINTEL_DOMAIN" \
+            --email "$$CPINTEL_ACME_EMAIL" --agree-tos --non-interactive --keep-until-expiring; do
+          echo "certbot: not issued yet; retrying in 5 minutes"; sleep 300
+        done
+        while :; do certbot renew --webroot -w /var/www/certbot --quiet; sleep 12h & wait $$!; done
+    depends_on:
+      - nginx
+    networks:
+      - cpintel-net
+    restart: unless-stopped
 
   prometheus:
     image: prom/prometheus:v2.51.0
@@ -198,7 +285,7 @@ services:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
     ports:
-      - "9090:9090"
+      - "127.0.0.1:9090:9090"
     networks:
       - cpintel-net
     restart: unless-stopped
@@ -217,7 +304,7 @@ services:
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     depends_on:
       - prometheus
     networks:
@@ -233,13 +320,15 @@ services:
       - ./monitoring/loki/loki.yml:/etc/loki/loki.yml:ro
       - loki_data:/loki
     ports:
-      - "3100:3100"
+      - "127.0.0.1:3100:3100"
     networks:
       - cpintel-net
     restart: unless-stopped
     profiles: ["monitoring"]
 
 volumes:
+  letsencrypt:
+  certbot_www:
   postgres_data:
   mongo_data:
   redis_data:
@@ -248,6 +337,9 @@ volumes:
   loki_data:
 
 networks:
+  # The runner's only network. Internal: nothing on it can reach the internet.
+  runner-net:
+    internal: true
   cpintel-net:
     driver: bridge
     ipam:

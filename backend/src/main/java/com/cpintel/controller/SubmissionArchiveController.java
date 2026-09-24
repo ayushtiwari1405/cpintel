@@ -3,6 +3,7 @@ package com.cpintel.controller;
 import com.cpintel.archive.ArchiveDto;
 import com.cpintel.archive.SubmissionArchive;
 import com.cpintel.common.ApiResponse;
+import com.cpintel.events.LiveExamGuard;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -28,6 +29,8 @@ import java.util.List;
 public class SubmissionArchiveController {
 
     private final SubmissionArchive archive;
+    /** Scopes all of this to the paper while an examination is running. */
+    private final LiveExamGuard exams;
 
     @GetMapping("/problem/{platform}/{contestId}/{index}")
     @Operation(summary = "Every attempt at one problem — CPIntel's archive, merged with "
@@ -37,8 +40,10 @@ public class SubmissionArchiveController {
         @PathVariable String platform,
         @PathVariable String contestId,
         @PathVariable String index) {
+        String judge = platform.toUpperCase(java.util.Locale.ROOT);
+        exams.requireContestAllowed(userId, judge, contestId);
         return ResponseEntity.ok(ApiResponse.ok(archive.attemptsForProblem(
-            userId, platform.toUpperCase(java.util.Locale.ROOT), contestId, index)));
+            userId, judge, contestId, index)));
     }
 
     @GetMapping("/recent")
@@ -46,7 +51,17 @@ public class SubmissionArchiveController {
     public ResponseEntity<ApiResponse<List<ArchiveDto.Attempt>>> recent(
         @AuthenticationPrincipal Long userId,
         @RequestParam(defaultValue = "50") int limit) {
-        return ResponseEntity.ok(ApiResponse.ok(archive.recent(userId, limit)));
+        List<ArchiveDto.Attempt> all = archive.recent(userId, limit);
+        // Mid-examination, "everything I have written" is only this paper's code.
+        var live = exams.liveExamFor(userId);
+        if (live.isPresent()) {
+            var exam = live.get();
+            all = all.stream()
+                .filter(a -> exam.getPlatform().equalsIgnoreCase(a.platform())
+                    && exam.getExternalId().equals(a.contestId()))
+                .toList();
+        }
+        return ResponseEntity.ok(ApiResponse.ok(all));
     }
 
     @GetMapping("/{archiveId}/source")
@@ -54,7 +69,7 @@ public class SubmissionArchiveController {
     public ResponseEntity<ApiResponse<ArchiveDto.Source>> source(
         @AuthenticationPrincipal Long userId,
         @PathVariable String archiveId) {
-        return ResponseEntity.ok(ApiResponse.ok(archive.source(userId, archiveId)));
+        return ResponseEntity.ok(ApiResponse.ok(scoped(userId, archiveId)));
     }
 
     @GetMapping("/{archiveId}/tests")
@@ -63,6 +78,7 @@ public class SubmissionArchiveController {
     public ResponseEntity<ApiResponse<ArchiveDto.TestReport>> tests(
         @AuthenticationPrincipal Long userId,
         @PathVariable String archiveId) {
+        scoped(userId, archiveId);
         return ResponseEntity.ok(ApiResponse.ok(archive.testReport(userId, archiveId)));
     }
 
@@ -73,7 +89,15 @@ public class SubmissionArchiveController {
         @AuthenticationPrincipal Long userId,
         @PathVariable int contestId,
         @PathVariable long submissionId) {
+        exams.requireContestAllowed(userId, "CODEFORCES", String.valueOf(contestId));
         return ResponseEntity.ok(ApiResponse.ok(
             archive.codeforcesSource(userId, contestId, submissionId)));
+    }
+
+    /** Reads an archived source, refusing it when a live examination puts it out of bounds. */
+    private ArchiveDto.Source scoped(Long userId, String archiveId) {
+        ArchiveDto.Source source = archive.source(userId, archiveId);
+        exams.requireContestAllowed(userId, source.platform(), source.contestId());
+        return source;
     }
 }

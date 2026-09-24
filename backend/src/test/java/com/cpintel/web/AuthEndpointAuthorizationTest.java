@@ -12,6 +12,7 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -25,6 +26,12 @@ class AuthEndpointAuthorizationTest extends AuthorizationTestBase {
 
     @MockBean private AuthService authService;
     @MockBean private PasswordService passwordService;
+    @MockBean private com.cpintel.security.JwtProperties jwtProperties;
+
+    @org.junit.jupiter.api.BeforeEach
+    void refreshLifetime() {
+        when(jwtProperties.getRefreshExpiryMs()).thenReturn(604_800_000L);
+    }
 
     private static final String REGISTER = """
         {"username":"someone","email":"someone@example.com","password":"password123"}
@@ -59,7 +66,57 @@ class AuthEndpointAuthorizationTest extends AuthorizationTestBase {
 
         mvc.perform(post("/api/v1/auth/login")
                 .contentType(MediaType.APPLICATION_JSON).content(LOGIN))
-            .andExpect(status().isOk());
+            .andExpect(status().isOk())
+            // The refresh token is in an HttpOnly cookie a page script cannot read — never in
+            // the body, where anything running on the page could.
+            .andExpect(jsonPath("$.data.refreshToken").doesNotExist())
+            .andExpect(jsonPath("$.data.accessToken").value("t"))
+            .andExpect(cookie().value("cpintel_refresh", "r"))
+            .andExpect(cookie().httpOnly("cpintel_refresh", true))
+            .andExpect(cookie().path("cpintel_refresh", "/api/v1/auth"));
+    }
+
+    @Test
+    @DisplayName("refresh works from the cookie alone, and rotates it")
+    void refreshFromCookie() throws Exception {
+        when(authService.refresh(argThat(r -> "r".equals(r.getRefreshToken())), any()))
+            .thenReturn(AuthDto.AuthResponse.builder().accessToken("t2").refreshToken("r2").build());
+
+        mvc.perform(post("/api/v1/auth/refresh")
+                .cookie(new jakarta.servlet.http.Cookie("cpintel_refresh", "r")))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.accessToken").value("t2"))
+            .andExpect(cookie().value("cpintel_refresh", "r2"));
+    }
+
+    @Test
+    @DisplayName("refresh from the cookie with an empty JSON body, as the web app sends it")
+    void refreshFromCookieWithEmptyJson() throws Exception {
+        when(authService.refresh(argThat(r -> "r".equals(r.getRefreshToken())), any()))
+            .thenReturn(AuthDto.AuthResponse.builder().accessToken("t2").refreshToken("r2").build());
+
+        mvc.perform(post("/api/v1/auth/refresh")
+                .contentType("application/json").content("{}")
+                .cookie(new jakarta.servlet.http.Cookie("cpintel_refresh", "r")))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.accessToken").value("t2"));
+    }
+
+    @Test
+    @DisplayName("a body the endpoint cannot read is a 415, not a server error")
+    void unreadableBodyIsAClientError() throws Exception {
+        mvc.perform(post("/api/v1/auth/refresh")
+                .contentType("application/x-www-form-urlencoded")
+                .cookie(new jakarta.servlet.http.Cookie("cpintel_refresh", "r")))
+            .andExpect(status().isUnsupportedMediaType());
+    }
+
+    @Test
+    @DisplayName("refresh with neither a cookie nor a token is refused")
+    void refreshWithNothing() throws Exception {
+        mvc.perform(post("/api/v1/auth/refresh"))
+            .andExpect(status().isUnauthorized());
+        verify(authService, never()).refresh(any(), any());
     }
 
     @Test

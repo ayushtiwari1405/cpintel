@@ -71,6 +71,7 @@ public class SecretsCheck {
         check(problems, "POSTGRES_PASSWORD", "spring.datasource.password", 1);
         check(problems, "REDIS_PASSWORD", "spring.data.redis.password", 1);
         checkMongoUri(problems);
+        checkRunner(problems, isProd);
 
         // Warnings rather than refusals: these two make a feature weaker, not the deployment
         // insecure, and a lab running examinations on a closed network with no SMTP is a real
@@ -113,10 +114,11 @@ public class SecretsCheck {
      *       so an operator can still finish what a user started, and on a closed exam-lab
      *       network with no mail server to point at that is the correct arrangement rather
      *       than a mistake. Refusing to start would make those deployments worse.</li>
-     *   <li><b>No examination password key.</b> Examination passwords cannot be generated, so
-     *       every paper opens for anyone assigned to it. That is only discovered at the moment
-     *       an admin tries to generate one, which on the morning of a sitting is the worst
-     *       time to discover it.</li>
+     *   <li><b>No examination password key.</b> Examination sign-in passwords cannot be
+     *       issued, and an examination can only be sat in examination mode, which is entered
+     *       with one — so no examination can be sat at all. That is only discovered at the
+     *       moment an admin tries to issue them, which on the morning of a sitting is the
+     *       worst time to discover it. A contest-only deployment does not need the key.</li>
      * </ul>
      */
     private List<String> advisories() {
@@ -127,8 +129,9 @@ public class SecretsCheck {
                 + "written to this log instead. Set it to deliver them.");
         }
         if (isBlank("cpintel.exams.password-key")) {
-            warnings.add("CPINTEL_EXAM_PASSWORD_KEY is not set, so examination passwords "
-                + "cannot be generated and every examination opens for anyone assigned to it.");
+            warnings.add("CPINTEL_EXAM_PASSWORD_KEY is not set, so examination sign-in "
+                + "passwords cannot be issued and nobody can sit an examination. Set it before "
+                + "scheduling one.");
         }
         return warnings;
     }
@@ -160,6 +163,26 @@ public class SecretsCheck {
             problems.add(envVar + " is " + value.length() + " characters; at least " + minBytes
                 + " are required");
         }
+    }
+
+    /**
+     * Code execution on a shared server must go to the isolated runner, with its token.
+     *
+     * <p>In prod a runner that is on with no url would execute every user's code inside this
+     * process, next to the database credentials — the one arrangement the runner container
+     * exists to prevent. Outside prod a blank url is the ordinary local mode.
+     */
+    private void checkRunner(List<String> problems, boolean isProd) {
+        if (!"true".equalsIgnoreCase(env.getProperty("cpintel.runner.enabled", "true"))) return;
+        if (isBlank("cpintel.runner.url")) {
+            if (isProd) {
+                problems.add("CPINTEL_RUNNER_URL is blank, which would run submitted code inside "
+                    + "the backend. Point it at the runner container, or set "
+                    + "CPINTEL_RUNNER_ENABLED=false");
+            }
+            return;
+        }
+        check(problems, "CPINTEL_RUNNER_TOKEN", "cpintel.runner.token", 16);
     }
 
     /**

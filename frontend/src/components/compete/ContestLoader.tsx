@@ -47,7 +47,6 @@ export function ContestLoader({ onLoad, loading }: Props) {
       >
         <option value="CODEFORCES">Codeforces</option>
         <option value="DOMJUDGE">DOMjudge</option>
-        <option value="CODECHEF" disabled>CodeChef (soon)</option>
       </select>
 
       {platform === 'DOMJUDGE' ? (

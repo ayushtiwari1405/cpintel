@@ -41,6 +41,12 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                 // expire. A token older than the revocation is treated as absent, which sends
                 // the client through refresh — where the account state is checked properly.
                 if (!jwtService.isRevokedForUser(userId, claims.getIssuedAt())) {
+                    // An examination session reaches one paper and nothing else; the request
+                    // carries which, and ExamModeFilter holds it to that.
+                    Object exam = claims.get(JwtService.EXAM_CLAIM);
+                    if (exam instanceof Number examId) {
+                        request.setAttribute(SessionMode.EXAM_ATTRIBUTE, examId.longValue());
+                    }
                     var auth = new UsernamePasswordAuthenticationToken(
                         userId,
                         null,

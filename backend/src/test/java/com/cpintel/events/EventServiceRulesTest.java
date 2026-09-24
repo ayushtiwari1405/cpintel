@@ -3,6 +3,7 @@ package com.cpintel.events;
 import com.cpintel.entity.ContestGroup;
 import com.cpintel.entity.GroupContest;
 import com.cpintel.exception.ApiException;
+import com.cpintel.files.ContestFilePolicy;
 import com.cpintel.repository.jpa.*;
 import com.cpintel.repository.mongo.CodeSubmissionRepository;
 import com.cpintel.service.AuditService;
@@ -41,6 +42,7 @@ class EventServiceRulesTest {
     private ContestAssignmentRepository assignments;
     private ContestProblemRepository problems;
     private ExamEventRepository examEventRepository;
+    private ContestFilePolicy filePolicy;
     private EventService service;
 
     @BeforeEach
@@ -50,6 +52,7 @@ class EventServiceRulesTest {
         assignments = mock(ContestAssignmentRepository.class);
         problems = mock(ContestProblemRepository.class);
         examEventRepository = mock(ExamEventRepository.class);
+        filePolicy = mock(ContestFilePolicy.class);
 
         service = new EventService(
             events, teams, assignments, problems,
@@ -63,6 +66,7 @@ class EventServiceRulesTest {
             mock(ExamAccessService.class),
             mock(ExamPasswordService.class),
             mock(AuditService.class),
+            filePolicy,
             new ObjectMapper());
 
         when(teams.findById(TEAM)).thenReturn(Optional.of(
@@ -87,7 +91,7 @@ class EventServiceRulesTest {
             kind, platform, "midsem", "Mid-semester practical", null, null, null,
             Instant.now().plus(Duration.ofDays(1)),
             Instant.now().plus(Duration.ofDays(1)).plus(Duration.ofHours(2)),
-            visibility, null, null, null, null, TEAM, null, null, null);
+            visibility, null, null, null, null, TEAM, null, null, null, null);
     }
 
     private GroupContest created() {
@@ -167,7 +171,7 @@ class EventServiceRulesTest {
         void thresholdIsBounded() {
             EventsDto.EventRequest req = new EventsDto.EventRequest(
                 "EXAM", "DOMJUDGE", "midsem", "Paper", null, null, null,
-                null, null, null, null, 0, null, null, TEAM, null, null, null);
+                null, null, null, null, 0, null, null, TEAM, null, null, null, null);
 
             assertThrows(ApiException.class, () -> service.create(ADMIN, req, null));
         }
@@ -179,9 +183,129 @@ class EventServiceRulesTest {
             EventsDto.EventRequest req = new EventsDto.EventRequest(
                 "EXAM", "DOMJUDGE", "midsem", "Paper", null, null, null,
                 start, start.minus(Duration.ofHours(1)), null, null, null, null, null,
-                TEAM, null, null, null);
+                TEAM, null, null, null, null);
 
             assertThrows(ApiException.class, () -> service.create(ADMIN, req, null));
+        }
+    }
+
+    @Nested
+    @DisplayName("Private files")
+    class PrivateFiles {
+
+        @Test
+        @DisplayName("an examination created without saying gets an explicit 'off', not the default")
+        void examDefaultsToOffExplicitly() {
+            when(filePolicy.defaultEnabled()).thenReturn(true);
+
+            service.create(ADMIN, request("EXAM", "DOMJUDGE", null), null);
+
+            verify(filePolicy).setRule(eq("DOMJUDGE"), eq("midsem"), eq(ADMIN),
+                argThat(r -> Boolean.FALSE.equals(r.enabled())));
+        }
+
+        @Test
+        @DisplayName("a second event on the same judge contest cannot flip the shared setting")
+        void sharedContestConflictRefused() {
+            GroupContest other = GroupContest.builder().contestId(99L).name("Morning section")
+                .platform("DOMJUDGE").externalId("midsem").build();
+            when(events.findByPlatformAndExternalId("DOMJUDGE", "midsem"))
+                .thenReturn(List.of(other));
+            when(filePolicy.hasRule("DOMJUDGE", "midsem")).thenReturn(true);
+            when(filePolicy.enabledFor("DOMJUDGE", "midsem")).thenReturn(false);
+
+            EventsDto.EventRequest base = request("EXAM", "DOMJUDGE", null);
+            EventsDto.EventRequest allowFiles = new EventsDto.EventRequest(
+                base.kind(), base.platform(), base.externalId(), base.name(), null, null, null,
+                base.startsAt(), base.endsAt(), null, null, null, null, null, TEAM, null, null,
+                null, true);
+
+            ApiException e = assertThrows(ApiException.class,
+                () -> service.create(ADMIN, allowFiles, null));
+            assertTrue(e.getMessage().contains("Morning section"), e.getMessage());
+        }
+    }
+
+    @Nested
+    @DisplayName("Settings once it has started")
+    class Locked {
+
+        private final Instant start = Instant.now().minus(Duration.ofMinutes(20));
+        private final Instant end = Instant.now().plus(Duration.ofHours(2));
+
+        private GroupContest running() {
+            GroupContest event = GroupContest.builder()
+                .contestId(EVENT)
+                .kind(GroupContest.Kind.EXAM.name())
+                .lifecycle("SCHEDULED")
+                .platform("DOMJUDGE")
+                .externalId("midsem")
+                .name("Paper")
+                .visibility("TEAMS")
+                .lockdownRequired(true)
+                .awayThresholdSeconds(10)
+                .startsAt(start)
+                .endsAt(end)
+                .build();
+            stubDetailRead(event);
+            return event;
+        }
+
+        private EventsDto.EventRequest edit(Instant endsAt, List<String> languages) {
+            return new EventsDto.EventRequest(
+                "EXAM", "DOMJUDGE", "midsem", "Paper", null, null, null, start, endsAt,
+                "TEAMS", true, 10, null, languages, null, null, null, null, null);
+        }
+
+        @Test
+        @DisplayName("the end time can still be moved")
+        void endCanMove() {
+            GroupContest exam = running();
+            Instant later = end.plus(Duration.ofMinutes(30));
+
+            service.update(ADMIN, EVENT, edit(later, null), null);
+
+            assertEquals(later, exam.getEndsAt());
+        }
+
+        @Test
+        @DisplayName("anything else is refused, and nothing is saved")
+        void otherSettingsAreFixed() {
+            GroupContest exam = running();
+
+            assertThrows(ApiException.class,
+                () -> service.update(ADMIN, EVENT, edit(end, List.of("cpp")), null));
+            assertNull(exam.getAllowedLanguages());
+        }
+
+        @Test
+        @DisplayName("a finished one cannot go back to a draft to be rewritten")
+        void finishedCannotBeDrafted() {
+            GroupContest exam = running();
+            exam.setEndsAt(Instant.now().minus(Duration.ofMinutes(1)));
+
+            assertThrows(ApiException.class,
+                () -> service.setLifecycle(ADMIN, EVENT, "DRAFT", null));
+        }
+
+        @Test
+        @DisplayName("nobody can be removed from it")
+        void candidatesCannotBeRemoved() {
+            running();
+
+            assertThrows(ApiException.class,
+                () -> service.unassignUser(ADMIN, EVENT, 5L, null));
+            assertThrows(ApiException.class,
+                () -> service.unassignTeam(ADMIN, EVENT, TEAM, null));
+        }
+
+        @Test
+        @DisplayName("its problems cannot be replaced")
+        void problemsAreFixed() {
+            running();
+
+            assertThrows(ApiException.class, () -> service.setProblems(ADMIN, EVENT,
+                new EventsDto.ProblemsRequest(List.of()), null));
         }
     }
 

@@ -1,9 +1,9 @@
 # CPIntel
 
-Competitive Programming Intelligence Platform. It aggregates a user's activity across
-Codeforces, LeetCode and CodeChef, computes topic mastery, contest analytics, spaced-repetition
+Competitive Programming Intelligence Platform. It reads a user's Codeforces history, computes
+topic mastery, contest analytics, spaced-repetition
 revision schedules and an adaptive skill roadmap — and then gives them somewhere to actually
-practise and compete, with an editor, a local runner, and admin-run group contests laid over
+practise and compete, with an editor, a sandboxed code runner, and admin-run group contests laid over
 Codeforces or DOMjudge.
 
 ## Why this exists
@@ -23,7 +23,7 @@ be ranked against each other out of a public contest's board.
 
 React (Vite, TypeScript) talks to Spring Boot 3 / Java 21, which talks to PostgreSQL (relational
 system of record, via JPA), MongoDB (raw submissions, personal files), Redis (cache, sessions,
-token revocation), and the external judges (Codeforces / LeetCode / CodeChef / DOMjudge).
+token revocation), and the external judges (Codeforces / DOMjudge).
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the system diagram, the ER diagram and
 the reasoning behind the harder decisions, and [`docs/SRS.md`](docs/SRS.md) for requirements.
@@ -32,25 +32,26 @@ the reasoning behind the harder decisions, and [`docs/SRS.md`](docs/SRS.md) for 
 
 | Layer | Technology |
 |---|---|
-| Frontend | React 19, TypeScript, Vite 5, TailwindCSS, Recharts, Zustand, TanStack Query |
+| Frontend | React 19, TypeScript, Vite 8, TailwindCSS, Recharts, Zustand, TanStack Query |
 | Backend | Spring Boot 3, Java 21, Spring Security, JWT, Spring Data JPA |
 | Primary DB | PostgreSQL 16 — relational system of record; scoring runs in the Java service layer |
 | Document DB | MongoDB — raw submission history, personal files, contest snapshots |
 | Cache | Redis — sessions, JWT blacklist, per-user token revocation, analytics cache |
-| Integrations | Codeforces REST + scraping, LeetCode GraphQL, CodeChef (Jsoup), DOMjudge REST v4 |
-| Migrations | Flyway — 10 versioned migrations (schema, indexes, materialized views, audit indexes, groups, super admin role, scheduler locks, node-level mastery, examinations, examination access) |
+| Integrations | Codeforces REST + scraping, DOMjudge REST v4 |
+| Migrations | Flyway — 13 versioned migrations (schema, indexes, materialized views, audit indexes, groups, super admin role, scheduler locks, node-level mastery, examinations, examination access, placement results, Codeforces-only cleanup, examination-mode sessions) |
 | Containerization | Docker Compose — 9 services, 3 of them behind the `monitoring` profile |
 | Editor | Monaco, bundled locally (no CDN) — shared by the Practice, Compete and examination workspaces |
-| Local runner | g++ and CPython under bubblewrap + rlimits, judged against the statement's sample tests |
-| Desktop | Electron wrapper around the same React SPA, plus contest monitoring |
+| Code runner | g++ and CPython under bubblewrap + rlimits, in its own locked-down container on a server; judged against the statement's sample tests |
+| Desktop | Electron wrapper that loads the deployed server, plus examination monitoring and Codeforces access through its own browser session |
 | Monitoring | Prometheus, Grafana, Loki (optional profile) |
 
 ## Features
 
 ### Analytics and planning
 
-- Link Codeforces, LeetCode and CodeChef accounts; async background sync of full submission
-  history
+- Link a Codeforces account; async background sync of its full submission and contest history.
+  (LeetCode and CodeChef were supported once and dropped: their APIs gave only a slice of a
+  user's history, so analytics built on them misdescribed people.)
 - Topic mastery engine: accuracy, volume, recency-decay and confidence scored per topic in
   `ScoringFormulas`
 - Contest analytics: rating history, wrong-submission patterns, behavioural insight generation
@@ -113,13 +114,18 @@ ordinary contest in four ways, and nothing else:
 - **It has a life of its own**: `DRAFT → SCHEDULED → ACTIVE → ENDED → ARCHIVED`. A draft is
   invisible to candidates however close its start time is; the three middle states follow the
   clock, so nobody has to remember to press anything for a paper to open
-- **It is opened with a password handed out in the room, and only while it is running.** Being
-  on the roster is not enough: an assignment was made a fortnight ago and cannot say somebody is
-  in the room, and the clock says the paper is open but not that it is open *for this person,
-  here*. So an admin generates two things — one **examination password** for the whole paper,
-  read out when the invigilator starts it, and one **personal code** per candidate, printed on
-  the slip on their desk. Neither is ever emailed. Until both are given, the candidate sees the
-  clock and the rules and nothing else, not even the problem list
+- **It is sat in examination mode, entered with a password handed out for that paper.** The
+  login page takes two kinds of password. A candidate's own password opens **normal mode** —
+  practice, analytics, their past examinations. Their **examination sign-in password**, issued
+  per candidate for one paper and printed on the slip on their desk, opens **examination
+  mode**: a session that can reach that one paper and nothing else — no practice, no profile,
+  no files, no other contest — and that expires fifteen minutes after the paper closes. New
+  passwords are issued for every examination, and none is ever emailed. It works from an hour
+  before the start until the end. The two modes cannot reach into each other: a normal session
+  cannot open, unlock or submit to a scheduled or running examination, and an examination
+  session cannot touch anything outside it. Optionally the paper also has a **room password**
+  read out when the invigilator starts it; until it is typed the candidate sees the clock and
+  the rules and nothing else, not even the problem list
 - **It is monitored, and the candidate is told so on the screen where it happens.** Focus
   losses, returns, absences past the paper's own away threshold, problems opened, submissions
   and verdicts are all recorded. The threshold and the desktop restrictions are set per
@@ -129,7 +135,8 @@ ordinary contest in four ways, and nothing else:
   who is away and for how long, what each candidate was last seen doing — and afterwards a
   session log filterable by person, team, event type and time, kept for a configurable
   retention period
-- **Afterwards, candidates get their own code back.** A paper that has ended opens onto the
+- **Afterwards, candidates get their own code back** — in normal mode, under **Past
+  examinations** on the Compete page. A paper that has ended opens onto the
   source of every submission that candidate made into it, read out of CPIntel's own archive
   rather than fetched from the judge. Their code, and nothing else: not their marks, not
   anybody else's verdicts, not the test data — results are published by whoever decides to
@@ -143,7 +150,8 @@ the product.
 
 ### Administration
 
-- JWT auth with refresh token rotation and Argon2id password hashing
+- JWT auth with refresh token rotation (the refresh token is an `HttpOnly`, `SameSite=Strict`
+  cookie; the access token is kept in memory only) and Argon2id password hashing
 - Three roles — `USER`, `ADMIN`, `SUPER_ADMIN` — with role assignment, the creation of other
   admins, and account deletion reserved to the super admin, so the tier that hands out
   privilege sits above the tier that uses it. An ordinary admin runs the room but cannot
@@ -198,11 +206,40 @@ npm run dev
 
 Open `http://localhost:5173`.
 
-### Full Docker stack (production-style)
+### Full Docker stack, built from source
 
 ```bash
-docker compose up -d --build     # open http://localhost
+docker compose up -d --build     # open https://localhost — a temporary self-signed certificate
 ```
+
+### Deploying to a server
+
+Images are built by CI (tagged with the commit) and pulled on the server; nothing is compiled
+there. On the server, with `.env` filled in from `.env.example`:
+
+```bash
+./deploy.sh <commit-sha>         # backup → pull → restart → health check → roll back on failure
+./deploy.sh --rollback           # back to the version before
+```
+
+- **HTTPS.** Set `CPINTEL_DOMAIN`. A server the internet can reach gets a Let's Encrypt
+  certificate: set `CPINTEL_ACME_EMAIL` and run `docker compose --profile letsencrypt up -d`
+  once. On a closed campus network, put campus IT's certificate in `nginx/certs/` instead.
+  Either is picked up within a minute, without a restart.
+- **A lab behind one NAT address:** set `CPINTEL_LAB_NETWORKS` to its range, or two hundred
+  people signing in together hit the per-address limits.
+- **Backups:** `scripts/backup.sh` nightly from cron, with `CPINTEL_BACKUP_REMOTE` for the copy
+  off the server; `scripts/restore.sh --test <stamp>` proves a backup reads back without
+  touching live data.
+- **Desktop app:** built by the Electron workflow on a `v*` tag, against the repository variable
+  `CPINTEL_SERVER_URL`. It is a window onto that server and talks to nothing else.
+- **Codeforces on the website:** a hosted server cannot fetch Codeforces' pages (its browser
+  check refuses servers), so website users need the CPIntel extension, which fetches them from
+  their own browser: `CPINTEL_SERVER_URL=https://<server> node extension/build.mjs`, then publish
+  `extension/cpintel-codeforces.zip` and set `VITE_CF_EXTENSION_URL` to where users get it. See
+  `extension/README.md`. The desktop app needs no extension.
+
+See `docs/requirements.md` for the full checklist.
 
 ### Monitoring (optional)
 
@@ -210,7 +247,8 @@ docker compose up -d --build     # open http://localhost
 docker compose --profile monitoring up -d
 ```
 
-Grafana on `:3000`, Prometheus on `:9090`.
+Grafana on `localhost:3000`, Prometheus on `localhost:9090` — loopback only; on a server,
+reach them over an SSH tunnel.
 
 ## Configuration
 
@@ -222,11 +260,14 @@ Everything below has a working default; only the secrets in `.env` genuinely nee
 | `CPINTEL_ADMIN_EMAIL` | *(unset)* | The super administrator — see [Roles and accounts](#roles-and-accounts) |
 | `CPINTEL_ADMIN_PASSWORD` | *(unset)* | Only read when that address matches no account, to create one |
 | `CPINTEL_ADMIN_USERNAME` | `superadmin` | Username for that created account |
-| `CPINTEL_RUNNER_ENABLED` | `true` (off in `prod`) | Whether code may be compiled and run on the backend host |
+| `CPINTEL_RUNNER_ENABLED` | `true` | Whether the Run button works at all |
+| `CPINTEL_RUNNER_URL` | blank (`http://runner:8090` in `prod`) | The runner container. Blank runs code inside the backend — dev and desktop only; `prod` refuses to start that way |
+| `CPINTEL_RUNNER_TOKEN` | — | Shared by the backend and the runner container; required whenever a url is set |
+| `CPINTEL_RUNNER_CONCURRENCY` | `4` | Runs executing at once in the runner container; the rest queue for up to 20 s |
 | `CPINTEL_RUNNER_TIME_LIMIT_MS` | `5000` | Wall clock per test case |
 | `CPINTEL_RUNNER_MEMORY_MB` | `512` | Address-space limit per run, for every language |
-| `CPINTEL_RUNNER_CPP` | `g++` | C++ compiler to use |
-| `CPINTEL_RUNNER_PYTHON` | `python3` | Python interpreter to use |
+| `CPINTEL_RUNNER_CPP` | `g++` | C++ compiler, when running inside the backend (dev/desktop) |
+| `CPINTEL_RUNNER_PYTHON` | `python3` | Python interpreter, when running inside the backend (dev/desktop) |
 | `CPINTEL_SUBMIT_ENABLED` | `true` | Whether submissions may be forwarded to Codeforces |
 | `CPINTEL_SESSION_KEY` | *(none — required)* | Encrypts stored Codeforces session cookies. At least 16 chars |
 | `CPINTEL_FILES_IN_CONTEST` | `true` | Whether contests offer personal files by default |
@@ -241,7 +282,7 @@ Everything below has a working default; only the secrets in `.env` genuinely nee
 | `CPINTEL_DOMJUDGE_CREDENTIAL_TTL_DAYS` | `30` | Attached credentials expire on their own, so a round nobody cleaned up after does not leave passwords on file |
 | `CPINTEL_PROCTOR_HEARTBEAT_TTL` | `45` | How long one monitoring heartbeat vouches for. Submissions into a monitored examination are refused without a fresh one |
 | `CPINTEL_PROCTOR_HEARTBEAT_INTERVAL` | `15` | How often the page sends one |
-| `CPINTEL_EXAM_PASSWORD_KEY` | *(unset)* | **Required to put a password on an examination.** AES-256-GCM key for the password read out to the room and each candidate's own code. Without it, an examination opens for anyone assigned to it |
+| `CPINTEL_EXAM_PASSWORD_KEY` | *(unset)* | **Required for examinations.** AES-256-GCM key for each candidate's examination sign-in password and the optional room password. Without it no sign-in password can be issued, so no examination can be sat |
 | `CPINTEL_EXAM_PASSWORD_LENGTH` | `8` | Characters per generated code, grouped in fours for reading off paper |
 | `SMTP_HOST` | *(unset)* | Mail server for password resets. **Blank is supported** — the message is logged instead, which is what a closed exam-lab network needs |
 | `SMTP_PORT` / `_USER` / `_PASSWORD` | `587` / — / — | The rest of the SMTP connection |
@@ -479,15 +520,16 @@ Settings -> Sessions.
    request: the desktop build applies what the operating system allows and reports what it
    could not, and a browser applies almost none of them — which is why an examination sat in a
    browser records that its monitoring was the weaker kind rather than showing a clean sheet.
-6. **Passwords** — the tab that produces what you carry into the room. **Generate** the
-   examination password, which is one string for the whole paper and the thing you read out
-   when you start it. Then **issue codes**, which gives every assigned candidate one of their
-   own; download the CSV and print the desk slips from it.
+6. **Passwords** — the tab that produces what you carry into the room. **Issue passwords**
+   gives every assigned candidate an examination sign-in password for this paper; download the
+   spreadsheet (`.xlsx`, one column per field) and print the desk slips from it. Optionally
+   **generate** a room password as well — one string for the whole paper, read out when you
+   start it.
 
-   Both are needed because they answer different questions. The shared password says *this
-   sitting has begun*; by the time the paper starts everybody in the room has it, so on its own
-   it cannot tell a candidate from somebody who heard it read out through a door. The personal
-   code says *the person typing this is the person this seat belongs to*.
+   The sign-in password says *the person typing this is the person this seat belongs to*, and
+   it is what puts them in examination mode. The room password, if you use one, says *this
+   sitting has begun*: by the time the paper starts everybody in the room has it, so on its own
+   it cannot tell a candidate from somebody who heard it read out through a door.
 
    **Neither is ever emailed, and there is no route that would.** The credential in somebody's
    mailbox gets them into CPIntel; getting into the paper additionally needs something only you
@@ -500,16 +542,16 @@ Settings -> Sessions.
    **Rotate**, which — unlike simply telling people the new one — ends every session that was
    opened with the old one.
 
-   Requires `CPINTEL_EXAM_PASSWORD_KEY`. Without it the tab says so, and the examination opens
-   for anyone assigned to it.
+   Requires `CPINTEL_EXAM_PASSWORD_KEY`. Without it the tab says so, and nobody can sit the
+   examination, because examination mode can only be entered with an issued password.
 7. **Publish.** From here the clock owns it: it opens when its window opens and closes when the
    window closes. "End now" moves the window rather than setting a flag, so the arena and this
    screen cannot disagree about whether submissions are open.
-8. Candidates find it under **Compete → Examinations** and enter it. If it has a password they
-   get one screen asking for what you gave them — it says up front whether it wants one code or
-   two, so nobody in a hall with a clock running is guessing at how many boxes to fill. A wrong
-   answer does not say which half was wrong, because naming it would turn a pair of secrets
-   into two independent guesses.
+8. Candidates sign in on the ordinary login page with their username and the examination
+   sign-in password from their slip, and land straight on the paper — there is no navigation in
+   examination mode. If the paper has a room password they get one more screen asking for it.
+   A candidate who signs in with their own password instead is in normal mode, where the
+   examination shows only a note telling them to sign in with the examination password.
 
    Once through, they work in the same workspace a contest uses. They are told they are being
    monitored, told the threshold, and warned while they are away rather than afterwards.
@@ -517,8 +559,10 @@ Settings -> Sessions.
    team, event type and time, and is kept for `CPINTEL_EXAM_RETENTION_DAYS` days. The
    **Passwords** tab keeps working while the paper runs — reissuing one candidate's code, or
    making somebody unlock again after you move them to another machine.
-10. Once it has ended, the same entry under **Compete → Examinations** opens onto the code that
-   candidate submitted. Marks are not published by this; that stays yours to decide.
+10. Once it has ended, the candidate signs in normally and finds it under **Compete →
+   Examinations → Past examinations**, which opens onto the code they submitted. Marks are not
+   published by this; that stays yours to decide. The examination sign-in password stops
+   working when the paper ends.
 
 #### Rehearsing with 200 simulated contestants
 
@@ -578,7 +622,7 @@ Three things are worth checking by hand as well:
 | `/roadmap` | anyone | The 35-node dependency graph with problems per node |
 | `/practice` | anyone | Problem search, statement, editor, local runner, submit |
 | `/compete` | anyone | Contests and examinations: statements, editor, submissions, rank, monitoring |
-| `/platforms` | anyone | Link and sync Codeforces / LeetCode / CodeChef; connect the Codeforces session used for submitting |
+| `/platforms` | anyone | Link and sync Codeforces; connect the Codeforces session used for submitting |
 | `/teams` | anyone | Team contests you are in, and where you placed |
 | `/profile` | anyone | Your account |
 | `/admin` | admin | Deployment overview and recent activity |
@@ -672,10 +716,10 @@ session is one click. See [Connecting Codeforces](#connecting-codeforces). Conne
 while a contest lockdown is engaged — a full browser window mid-round would walk around
 everything the lock is doing, so it is something to do before the round starts.
 
-## Running code locally
+## Running code
 
-The Run button compiles and executes your solution **on the machine hosting the backend**, then
-compares stdout against each test case. It is a rehearsal harness, not a judge: passing the
+The Run button compiles and executes your solution, then compares stdout against each test
+case. It is a rehearsal harness, not a judge: passing the
 samples means your code builds and agrees with the examples, nothing more — Codeforces tests far
 more than that, and a problem with several valid answers will show a mismatch here even when the
 answer is right.
@@ -687,10 +731,24 @@ and CPU, address-space and output-size limits. `GET /api/run/status` reports whe
 is actually in effect; if bubblewrap is missing, runs still get the resource limits but not the
 isolation, and the UI says so.
 
-**This is arbitrary code execution by design.** It defaults on for dev and the desktop build,
-where the only code that runs is yours. `application-prod.yml` turns it off, because on a shared
-deployment it would hand every account a shell. Override with `CPINTEL_RUNNER_ENABLED`, and only
-behind a sandbox you trust.
+**This is arbitrary code execution by design**, so where it happens depends on who is using it:
+
+- **Dev and the desktop build** run it inside the backend process — the only code there is yours.
+- **A shared server** never runs it in the backend, which holds the database credentials and
+  every signing key. `CPINTEL_RUNNER_URL` sends each run to the `runner` container
+  (`com.cpintel.runner.RunnerServer`, the same jar with a different entry point). That container
+  has no secrets but its token, no route to the internet (`runner-net` is internal), a read-only
+  filesystem, no Linux capabilities, and capped CPU, memory and processes — and each run still
+  gets its own bubblewrap sandbox, so concurrent runs cannot see each other's files. If the
+  sandbox cannot be built there, the runner refuses every run instead of running unsandboxed,
+  and the editor says running is paused. At most `CPINTEL_RUNNER_CONCURRENCY` runs execute at
+  once; the rest wait up to 20 seconds and are then told the runner is busy.
+
+Bubblewrap needs unprivileged user namespaces inside the container, so the runner uses Docker's
+default seccomp profile plus exactly the five calls that takes (`deploy/runner-seccomp.json`)
+and runs without the docker-default AppArmor profile, which forbids the mounts. On Ubuntu 24.04
+hosts, unprivileged user namespaces are restricted by default; if `docker logs cpintel-runner`
+does not say `sandbox active`, set `kernel.apparmor_restrict_unprivileged_userns=0`.
 
 ### Languages
 
@@ -698,7 +756,7 @@ behind a sandbox you trust.
 libraries visible inside the sandbox) and **Python 3** (CPython). Each toolchain is probed on
 `PATH` per request, so installing one does not need a restart, and a language whose toolchain is
 absent appears in the picker as unavailable *with the reason* rather than silently missing.
-Override the executables with `CPINTEL_RUNNER_CPP` and `CPINTEL_RUNNER_PYTHON`.
+The runner image carries g++ 13 and Python 3.12 (Ubuntu 24.04, glibc — as on the judges).
 
 Python gets a build step even though it does not need one: `py_compile` parses the file before
 anything runs. Without it, a syntax error would surface as the same runtime error on all twelve
@@ -715,9 +773,7 @@ quietly take a gigabyte of the host.
 Adding Java or SQL means implementing `LanguageRuntime` — one class, no other changes; see the
 notes on that interface for how SQL differs from the others.
 
-Note that the Docker image ships **neither** toolchain, which is deliberate: the `prod` profile
-turns the runner off, and a container that could compile submitted code would be handing every
-account a shell. Installing them there is only worth doing alongside a sandbox you trust.
+The backend image ships **neither** toolchain, deliberately: it never runs submitted code.
 
 ### Restricting an examination to certain languages
 

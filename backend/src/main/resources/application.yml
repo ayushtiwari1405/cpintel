@@ -163,6 +163,11 @@ cpintel:
     account:     { limit: 5,  window: 5m }   # per identifier — cleared on a successful sign-in
     recovery:    { limit: 5,  window: 15m }  # per address, on register and password reset
     run:         { limit: 30, window: 1m }   # per user
+    # Lab networks behind one NAT address, comma-separated CIDRs. Inside them the per-address
+    # sign-in limit is shared-login instead; the per-account limit is unchanged. See
+    # RateLimitProperties.sharedNetworks, and nginx's matching CPINTEL_LAB_NETWORKS.
+    shared-networks: ${CPINTEL_LAB_NETWORKS:}
+    shared-login: { limit: 600, window: 1m }
     sync:        { limit: 5,  window: 5m }   # per user
     # Guesses at an examination password, per candidate rather than per address: a room full
     # of people sitting the same paper shares one address.
@@ -195,13 +200,6 @@ cpintel:
       base-url: https://codeforces.com/api
       web-url: https://codeforces.com
       rate-limit-ms: 500
-    leetcode:
-      base-url: https://leetcode.com
-      graphql-url: https://leetcode.com/graphql
-      rate-limit-ms: 1000
-    codechef:
-      base-url: https://www.codechef.com
-      rate-limit-ms: 1500
   groups:
     # Live group boards are rebuilt on this interval. Unhurried on purpose: Codeforces only
     # answers per handle, so one refresh of a thirty-person group is thirty rate-limited calls.
@@ -270,11 +268,15 @@ cpintel:
     # Compiles and executes user-supplied code on this machine so the editor can check a
     # solution against the sample tests before it is spent on a real submission.
     #
-    # This is arbitrary code execution by design. It is the right default for a desktop
-    # build or a single-user dev box, where the only code that runs is the code of the
-    # person sitting at the machine. It is NOT safe on a shared deployment, so the prod
-    # profile turns it off — turn it back on there only behind a real sandbox.
+    # This is arbitrary code execution by design. With `url` blank it happens in this process,
+    # which is right for a desktop build or a single-user dev box, where the only code that
+    # runs is the code of the person sitting at the machine. A shared server sets `url` to the
+    # isolated runner container (see RunnerServer and docker-compose.yml), and the backend
+    # never executes submitted code itself.
     enabled: ${CPINTEL_RUNNER_ENABLED:true}
+    url: ${CPINTEL_RUNNER_URL:}
+    # Shared with the runner container; it refuses every request without it.
+    token: ${CPINTEL_RUNNER_TOKEN:}
     # Wall clock per test. Codeforces limits are usually 1-2s; the extra headroom accounts
     # for a dev machine being slower and busier than a judge.
     time-limit-ms: ${CPINTEL_RUNNER_TIME_LIMIT_MS:5000}
@@ -290,6 +292,10 @@ cpintel:
       # reason, rather than hidden — somebody wondering why Python is not in the picker gets
       # told to install it instead of guessing.
       interpreter: ${CPINTEL_RUNNER_PYTHON:python3}
+
+  gauntlet:
+    # Days between completed placement attempts; the answers are shown during an attempt.
+    retake-days: ${CPINTEL_GAUNTLET_RETAKE_DAYS:7}
 
   files:
     # Personal files the user can open from inside a running contest.

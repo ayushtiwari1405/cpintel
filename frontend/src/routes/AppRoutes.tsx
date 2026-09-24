@@ -1,4 +1,5 @@
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { useAuthStore } from '@/store/authStore'
 import { useAuth } from '@/contexts/AuthContext'
 import { isAdmin } from '@/utils/roles'
 import { lazy, Suspense } from 'react'
@@ -10,8 +11,8 @@ const ForgotPasswordPage = lazy(() => import('@/pages/ForgotPasswordPage'))
 const ResetPasswordPage  = lazy(() => import('@/pages/ResetPasswordPage'))
 const DashboardPage     = lazy(() => import('@/pages/DashboardPage'))
 const AnalyticsPage     = lazy(() => import('@/pages/AnalyticsPage'))
-const RecommendPage     = lazy(() => import('@/pages/RecommendationsPage'))
 const RoadmapPage       = lazy(() => import('@/pages/RoadmapPage'))
+const GauntletPage      = lazy(() => import('@/pages/GauntletPage'))
 const PlatformsPage     = lazy(() => import('@/pages/PlatformsPage'))
 const PracticePage      = lazy(() => import('@/pages/PracticePage'))
 const CompetePage       = lazy(() => import('@/pages/CompetePage'))
@@ -28,9 +29,27 @@ const AdminExams        = lazy(() => import('@/pages/admin/AdminExamsPage'))
 const AdminExamDetail   = lazy(() => import('@/pages/admin/AdminExamDetailPage'))
 const GroupsPage        = lazy(() => import('@/pages/GroupsPage'))
 
+/**
+ * Signed in — and in the right mode for where they are going.
+ *
+ * <p>An examination session (signed in with the password on a slip) lives at /exam and nowhere
+ * else; an ordinary one never sees /exam. The server enforces the same split on every request,
+ * so this only keeps the screens from offering what would be refused.
+ */
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth()
-  return isAuthenticated ? <>{children}</> : <Navigate to="/login" replace />
+  const mode = useAuthStore(s => s.mode)
+  const { pathname } = useLocation()
+  if (!isAuthenticated) return <Navigate to="/login" replace />
+  if (mode === 'EXAM' && pathname !== '/exam') return <Navigate to="/exam" replace />
+  if (mode !== 'EXAM' && pathname === '/exam') return <Navigate to="/compete" replace />
+  return <>{children}</>
+}
+
+/** The paper an examination session was signed in for, and nothing else. */
+function ExamModePage() {
+  const examId = useAuthStore(s => s.examId)
+  return examId == null ? <Navigate to="/login" replace /> : <CompetePage examOnly={examId} />
 }
 
 function GuestRoute({ children }: { children: React.ReactNode }) {
@@ -84,12 +103,16 @@ export function AppRoutes() {
         }>
           <Route path="/dashboard"       element={<DashboardPage />} />
           <Route path="/analytics"       element={<AnalyticsPage />} />
-          <Route path="/recommendations" element={<RecommendPage />} />
+          {/* Hidden for now (see the sidebar); a bookmark lands on the roadmap instead. */}
+          <Route path="/recommendations" element={<Navigate to="/roadmap" replace />} />
           <Route path="/roadmap"         element={<RoadmapPage />} />
+          <Route path="/roadmap/gauntlet" element={<GauntletPage />} />
           <Route path="/practice"        element={
             <ErrorBoundary scope="the practice workspace"><PracticePage /></ErrorBoundary>} />
           <Route path="/compete"         element={
             <ErrorBoundary scope="the contest workspace"><CompetePage /></ErrorBoundary>} />
+          <Route path="/exam"            element={
+            <ErrorBoundary scope="the examination"><ExamModePage /></ErrorBoundary>} />
           <Route path="/platforms"       element={<PlatformsPage />} />
           <Route path="/profile"         element={<ProfilePage />} />
           {/* A team is stored as a contest group; the name people use for it is "team",

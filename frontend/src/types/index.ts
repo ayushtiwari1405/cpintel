@@ -32,7 +32,7 @@ export interface User {
 
 export interface PlatformAccount {
   accountId: number
-  platform: 'CODEFORCES' | 'LEETCODE' | 'CODECHEF'
+  platform: 'CODEFORCES'
   handle: string
   currentRating?: number
   maxRating?: number
@@ -70,12 +70,7 @@ export interface ContestSummary {
 
 export interface UnifiedScore {
   cfScore: number
-  lcScore: number
-  ccScore: number
   unifiedScore: number
-  cfWeight: number
-  lcWeight: number
-  ccWeight: number
   computedAt: string
 }
 
@@ -179,7 +174,8 @@ export interface ProblemDetail {
   /** Set when the judge publishes a PDF instead of HTML; served through CPIntel's own proxy. */
   statementPdfUrl: string | null
   /** Why the statement is missing, when it is. Null whenever one was read. */
-  statementIssue?: 'SESSION_STALE' | 'NO_SESSION' | 'NOT_FOUND' | 'UNAVAILABLE' | null
+  statementIssue?: 'SESSION_STALE' | 'NO_SESSION' | 'NOT_FOUND' | 'UNAVAILABLE'
+    | 'BROWSER_CHECK' | 'NOT_CACHED' | null
 }
 
 export interface LanguageOption {
@@ -193,6 +189,8 @@ export interface CfSessionStatus {
   linkedAt?: string
   expiresAt?: string
   submitEnabled: boolean
+  /** Linked through this browser (extension or desktop app): no cookies on the server. */
+  viaBrowser?: boolean
 }
 
 export interface SubmitResponse {
@@ -218,7 +216,7 @@ export interface VerdictResponse {
 
 // ---------------------------------------------------------------- compete
 
-export type CompetePlatform = 'CODEFORCES' | 'CODECHEF' | 'DOMJUDGE'
+export type CompetePlatform = 'CODEFORCES' | 'DOMJUDGE'
 
 /**
  * Which contest, on which judge.
@@ -842,6 +840,8 @@ export interface DesktopPolicy {
   detectLeavingExam: boolean
   detectAppTermination: boolean
   clipboardGuard: boolean
+  /** The paper is sat full screen; leaving full screen covers the workspace and is recorded. */
+  requireFullscreen: boolean
 }
 
 export interface EventProblem {
@@ -887,6 +887,10 @@ export interface EventDetail {
   problems: EventProblem[]
   teams: { teamId: number; name: string; memberCount: number }[]
   users: { userId: number; username: string; fullName: string | null; active: boolean }[]
+  /** Whether contestants may open their own uploaded files during it. */
+  personalFilesAllowed: boolean
+  /** True once it has started: only the end time (and name) can still change. */
+  settingsLocked: boolean
 }
 
 /** An examination as the person sitting it sees it — their clock, their problems, their place. */
@@ -923,6 +927,8 @@ export interface MyExam {
   needsPasscode: boolean
   /** True once the paper has ended and they may read their own code back. */
   canReviewSubmissions: boolean
+  /** True when this session was signed in for this paper with its examination password. */
+  examSession: boolean
 }
 
 /** What a candidate submitted into a past examination. Their own work, and nothing else. */

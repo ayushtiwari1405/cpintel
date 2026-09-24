@@ -9,6 +9,8 @@ export default function LoginPage() {
   const [password, setPassword]     = useState('')
   const [showPass, setShowPass]     = useState(false)
   const login = useLogin()
+  // Set when an examination session was closed because its paper ended.
+  const examEnded = new URLSearchParams(window.location.search).has('exam-ended')
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -32,6 +34,13 @@ export default function LoginPage() {
         <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8">
           <h1 className="text-2xl font-semibold text-gray-50 mb-1">Welcome back</h1>
           <p className="text-gray-400 text-sm mb-6">Sign in to your account</p>
+          {examEnded && (
+            <p className="mb-4 rounded-lg border border-gray-700 bg-gray-800/60 px-3 py-2 text-xs
+              leading-relaxed text-gray-300">
+              The examination has ended and its session is closed. Sign in with your own
+              password to read your code under Past examinations.
+            </p>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {/*
@@ -102,11 +111,18 @@ export default function LoginPage() {
             Accounts are created by an administrator, who gives you your username and first
             password. You can change it once you are in.
           </p>
+          {/* The same form signs in to an examination: the password on the slip opens that
+              paper, in examination mode, instead of the account. */}
+          <p className="mt-3 rounded-lg border border-indigo-900 bg-indigo-950/30 px-3 py-2
+            text-center text-xs leading-relaxed text-indigo-200">
+            Sitting an examination? Sign in with your username and the examination password
+            on your slip instead of your own.
+          </p>
         </div>
 
         {/* Platforms hint */}
         <p className="text-center text-xs text-gray-600 mt-6">
-          Supports Codeforces · LeetCode · CodeChef
+          Built on Codeforces and DOMjudge
         </p>
       </div>
     </div>

@@ -19,12 +19,9 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Build frontend
-        working-directory: frontend
-        run: |
-          npm ci
-          npm run build
-
+      # The app is a window onto the central server, so the frontend is not bundled; the
+      # server's address is stamped in instead. Set it as a repository variable
+      # (Settings → Secrets and variables → Actions → Variables → CPINTEL_SERVER_URL).
       - name: Build Electron
         working-directory: electron
         run: |
@@ -32,6 +29,7 @@ jobs:
           npm run build
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CPINTEL_SERVER_URL: ${{ vars.CPINTEL_SERVER_URL }}
 
       - name: Upload release artifacts
         uses: actions/upload-artifact@v4

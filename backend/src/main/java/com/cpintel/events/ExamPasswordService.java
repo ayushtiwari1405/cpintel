@@ -338,6 +338,29 @@ public class ExamPasswordService {
         return ok;
     }
 
+    /**
+     * Whether this is the candidate's examination password for this paper — the code on their
+     * slip, which signs them in to examination mode. Constant-time, and counted when it matches.
+     */
+    @Transactional
+    public boolean matchesPasscode(Long examId, Long userId, String typed) {
+        ExamPasscode personal = passcodes.find(examId, userId).orElse(null);
+        if (personal == null || typed == null) return false;
+        boolean ok = constantTimeEquals(decrypt(personal.getCode()), normalise(typed));
+        if (ok) {
+            personal.setUseCount((personal.getUseCount() == null ? 0 : personal.getUseCount()) + 1);
+            if (personal.getFirstUsedAt() == null) personal.setFirstUsedAt(Instant.now());
+            passcodes.save(personal);
+        }
+        return ok;
+    }
+
+    /** Whether this is the room's shared password, for a paper that has one. */
+    public boolean matchesExamPassword(GroupContest exam, String typed) {
+        if (!requiresExamPassword(exam)) return true;
+        return constantTimeEquals(decrypt(exam.getExamPassword()), normalise(typed));
+    }
+
     // -------------------------------------------------------------- shapes
 
     /**

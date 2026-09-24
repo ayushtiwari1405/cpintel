@@ -3,6 +3,7 @@ package com.cpintel.events;
 import com.cpintel.entity.ExamEvent;
 import com.cpintel.entity.GroupContest;
 import com.cpintel.exception.ApiException;
+import com.cpintel.security.SessionMode;
 import com.cpintel.service.AuditService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
@@ -73,6 +74,8 @@ public class ExamAccessService {
     private final ExamPasswordService passwords;
     private final ExamEventService examEvents;
     private final AuditService auditService;
+    private final com.cpintel.repository.jpa.RefreshTokenRepository refreshTokens;
+    private final com.cpintel.security.JwtService jwtService;
 
     private String key(Long examId, Long userId) {
         return KEY_PREFIX + examId + ":" + userId;
@@ -82,9 +85,10 @@ public class ExamAccessService {
 
     /** True when this examination will ask this candidate for anything at all. */
     public boolean requiresUnlock(GroupContest exam, Long userId) {
+        // The candidate's own code is proven by signing in with it (examination mode), so what
+        // is left to ask inside the paper is the room's shared password, when there is one.
         if (!exam.isExam()) return false;
-        return passwords.requiresExamPassword(exam)
-            || passwords.requiresPasscode(exam.getContestId(), userId);
+        return passwords.requiresExamPassword(exam);
     }
 
     /**
@@ -95,7 +99,10 @@ public class ExamAccessService {
      * requirement would shut a room out of a paper that was about to start.
      */
     public boolean isUnlocked(GroupContest exam, Long userId) {
-        if (!requiresUnlock(exam, userId)) return true;
+        if (!exam.isExam()) return true;
+        // Only an examination session for this very paper is ever inside it. An ordinary
+        // session — the account password — never is, however the rest reads.
+        if (!SessionMode.isExamSessionFor(exam.getContestId())) return false;
 
         String stored = redis.opsForValue().get(key(exam.getContestId(), userId));
         if (stored == null) return false;
@@ -123,6 +130,11 @@ public class ExamAccessService {
                        HttpServletRequest httpReq) {
         Instant now = Instant.now();
 
+        if (!SessionMode.isExamSessionFor(exam.getContestId())) {
+            throw ApiException.forbidden("Examinations are sat in examination mode. Sign out, "
+                + "then sign in with your username and the examination password on your slip.");
+        }
+
         if (!exam.isOpenForParticipation(now)) {
             throw ApiException.forbidden(
                 "This examination is not open. It can only be unlocked while its window is "
@@ -136,7 +148,7 @@ public class ExamAccessService {
             return;
         }
 
-        if (!passwords.verify(exam, userId, examPassword, passcode)) {
+        if (!passwords.matchesExamPassword(exam, examPassword)) {
             auditService.record(userId, AuditService.EXAM_UNLOCK_REFUSED, "EXAM",
                 String.valueOf(exam.getContestId()), httpReq);
             examEvents.recordServerSide(exam, userId, ExamEvent.Type.SUSPICIOUS_ACTIVITY, null,
@@ -144,12 +156,9 @@ public class ExamAccessService {
             log.info("Refused an examination unlock from user {} on exam {}",
                 userId, exam.getContestId());
 
-            // Which half was wrong is not said. The candidate has both slips in front of them
-            // and should try both again; telling somebody who has one of the two which one
-            // they are missing turns the pair into two independent guesses.
             throw ApiException.forbidden(
                 "That did not match. Check the examination password your invigilator gave the "
-                + "room and the code on your own slip, and try again.");
+                + "room, and try again.");
         }
 
         grant(exam, userId);
@@ -170,10 +179,21 @@ public class ExamAccessService {
      */
     public void requireUnlocked(GroupContest exam, Long userId) {
         if (isUnlocked(exam, userId)) return;
+        if (!SessionMode.isExamSessionFor(exam.getContestId())) {
+            throw ApiException.forbidden("Examinations are sat in examination mode: sign in "
+                + "with your username and the examination password on your slip.");
+        }
         throw ApiException.forbidden(
-            "This examination has not been unlocked on this device. Enter the examination "
-            + "password your invigilator gave the room, together with the code on your own "
-            + "slip.");
+            "This examination has not been unlocked yet. Enter the examination password your "
+            + "invigilator gave the room.");
+    }
+
+    /**
+     * Called when a candidate signs in with this paper's examination password. That proves the
+     * code on their slip, so a paper without a shared room password is open to them at once.
+     */
+    public void onExamSignIn(GroupContest exam, Long userId) {
+        if (!passwords.requiresExamPassword(exam)) grant(exam, userId);
     }
 
     /**
@@ -182,8 +202,14 @@ public class ExamAccessService {
      * For a candidate who has to be moved to another machine, or one an invigilator is
      * removing from the room.
      */
+    @org.springframework.transaction.annotation.Transactional
     public void revoke(Long examId, Long userId) {
         redis.delete(key(examId, userId));
+        // And the examination sessions themselves: a grant alone would be handed straight back
+        // to a session that is still signed in. The access tokens it holds stop at once; the
+        // candidate signs in again with their slip, on whichever machine they are moved to.
+        refreshTokens.revokeExamSessions(userId, examId);
+        jwtService.revokeUserTokens(userId);
     }
 
     private void grant(GroupContest exam, Long userId) {

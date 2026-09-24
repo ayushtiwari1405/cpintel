@@ -55,6 +55,8 @@ public class AuditService {
     public static final String EXAM_PASSCODES_ISSUED = "ADMIN_EXAM_PASSCODES_ISSUED";
     public static final String EXAM_PASSCODES_READ   = "ADMIN_EXAM_PASSCODES_READ";
     public static final String EXAM_UNLOCKED         = "EXAM_UNLOCKED";
+    /** Signed in with an examination password, into examination mode. */
+    public static final String EXAM_SIGN_IN          = "EXAM_SIGN_IN";
     public static final String EXAM_UNLOCK_REFUSED   = "EXAM_UNLOCK_REFUSED";
 
     // Admin actions on accounts

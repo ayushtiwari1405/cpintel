@@ -77,7 +77,7 @@ class SkillAttributionTest {
         @Test
         @DisplayName("an unrated problem credits the most elementary matching skill, not the advanced ones")
         void unratedFallsBackToTheFrontier() {
-            // CodeChef gives no difficulty, so the band cannot discriminate. Matching on tags
+            // With no difficulty the band cannot discriminate. Matching on tags
             // alone would let one unrated data-structures problem count towards plain segment
             // trees, lazy propagation, persistence and segment tree beats simultaneously.
             Set<String> nodes = SkillAttribution.nodesFor(null, Set.of("data structures"));

@@ -14,22 +14,6 @@ const PLATFORMS = [
     desc: 'Competitive programming contests, ratings, and problems',
     placeholder: 'tourist',
   },
-  {
-    id: 'LEETCODE',
-    name: 'LeetCode',
-    color: 'text-yellow-400',
-    bg: 'bg-yellow-900/20 border-yellow-800',
-    desc: 'Interview prep problems and weekly contests',
-    placeholder: 'neal_wu',
-  },
-  {
-    id: 'CODECHEF',
-    name: 'CodeChef',
-    color: 'text-orange-400',
-    bg: 'bg-orange-900/20 border-orange-800',
-    desc: 'Long challenges, cook-offs, and lunchtime contests',
-    placeholder: 'gennady',
-  },
 ]
 
 const statusIcon = (status: string) => {

@@ -1,6 +1,5 @@
 package com.cpintel.runner;
 
-import com.cpintel.config.AppMetrics;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -10,14 +9,13 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.mock;
 
 /**
  * Python, actually compiled and run.
  *
  * <p>Not a unit test of the command strings — those can be right while the thing does not work,
  * which is the failure mode that matters for a runtime. These drive the real
- * {@link CodeRunnerService} against the real interpreter and assert on verdicts.
+ * {@link RunEngine} against the real interpreter and assert on verdicts.
  *
  * <p>Skipped where python3 is not installed, rather than failing: the runner reports a missing
  * toolchain as an unavailable language by design, and a build machine without Python is a
@@ -40,24 +38,23 @@ class PythonRunnerTest {
         return probe.isAvailable();
     }
 
-    private CodeRunnerService runner;
+    private RunEngine runner;
 
     @BeforeEach
     void setUp() {
+        runner = engine(10_000L, 512);
+    }
+
+    private static RunEngine engine(long timeLimitMs, int memoryLimitMb) {
         PythonRuntime python = new PythonRuntime();
         ReflectionTestUtils.setField(python, "interpreter", "python3");
-
-        runner = new CodeRunnerService(List.of(python), new Sandbox(), mock(AppMetrics.class));
-        ReflectionTestUtils.setField(runner, "enabled", true);
-        ReflectionTestUtils.setField(runner, "timeLimitMs", 10_000L);
-        ReflectionTestUtils.setField(runner, "compileTimeLimitMs", 20_000L);
-        ReflectionTestUtils.setField(runner, "memoryLimitMb", 512);
-        ReflectionTestUtils.setField(runner, "outputLimitBytes", 65_536);
+        return new RunEngine(List.of(python), new Sandbox(),
+            new RunEngine.Limits(timeLimitMs, 20_000L, memoryLimitMb, 65_536), false);
     }
 
     private RunDto.RunResponse run(String source, String input, String expected) {
-        return runner.run(new RunDto.RunRequest("python3", source,
-            List.of(new RunDto.TestCase(input, expected, "Test 1")), null, null));
+        return runner.run("python3", source,
+            List.of(new RunDto.TestCase(input, expected, "Test 1")));
     }
 
     @Test
@@ -113,7 +110,7 @@ class PythonRunnerTest {
     @Test
     @DisplayName("an endless loop is stopped by the wall clock")
     void infiniteLoopTimesOut() {
-        ReflectionTestUtils.setField(runner, "timeLimitMs", 2_000L);
+        runner = engine(2_000L, 512);
 
         RunDto.RunResponse result = run("while True:\n    pass\n", "", "");
 
@@ -130,7 +127,7 @@ class PythonRunnerTest {
     @Test
     @DisplayName("a runaway allocation is bounded rather than taking the host's memory")
     void memoryIsCapped() {
-        ReflectionTestUtils.setField(runner, "memoryLimitMb", 256);
+        runner = engine(10_000L, 256);
 
         RunDto.RunResponse result = run(
             "x = bytearray(2 * 1024 * 1024 * 1024)\nprint(len(x))\n", "", "");
@@ -144,7 +141,7 @@ class PythonRunnerTest {
     @Test
     @DisplayName("an ordinary solution still fits inside the cap")
     void realWorkFitsUnderTheCap() {
-        ReflectionTestUtils.setField(runner, "memoryLimitMb", 512);
+        runner = engine(10_000L, 512);
 
         RunDto.RunResponse result = run(
             "a = list(range(2_000_000))\nprint(sum(a) % 1000)\n", "", "0\n");

@@ -15,8 +15,9 @@ import java.time.Instant;
 import java.util.List;
 
 /**
- * The unified score: one number blending a user's standing across Codeforces,
- * LeetCode and CodeChef. Replaces the pkg_unified_rating PL/SQL package.
+ * The unified score: a user's standing as one number on a 0-1000 scale. Built from Codeforces
+ * alone since LeetCode and CodeChef were dropped. Replaces the pkg_unified_rating PL/SQL
+ * package.
  *
  * The Oracle version had compute_unified_score doing an UPDATE inside a function,
  * which meant reading a score silently rewrote it, and callers had to invoke a
@@ -41,9 +42,9 @@ public class UnifiedRatingService {
      */
     private final ObjectProvider<UnifiedRatingService> self;
 
-    /** Per-platform normalized scores and the weights that were actually in play. */
-    public record Breakdown(double cfScore, double lcScore, double ccScore, double unifiedScore) {
-        public static Breakdown empty() { return new Breakdown(0, 0, 0, 0); }
+    /** The Codeforces rating on the 0-1000 scale, and the unified score built from it. */
+    public record Breakdown(double cfScore, double unifiedScore) {
+        public static Breakdown empty() { return new Breakdown(0, 0); }
     }
 
     /** Normalize one platform rating onto the shared 0-1000 scale. */
@@ -54,9 +55,9 @@ public class UnifiedRatingService {
     /**
      * Compute a user's unified score without writing anything.
      *
-     * <p>Only linked, active platform accounts contribute, and the weighted mean is
-     * re-normalized across whichever of them exist — so a user with one platform linked
-     * is not penalised for the two they have not connected.
+     * <p>Codeforces is the only platform now, so the unified score is its rating on the
+     * 0-1000 scale — the blend with LeetCode and CodeChef went with them. Kept as its own
+     * number so a second judge can be blended back in without every screen changing.
      */
     @Transactional(readOnly = true)
     public Breakdown computeBreakdown(Long userId) {
@@ -66,33 +67,10 @@ public class UnifiedRatingService {
             return Breakdown.empty();
         }
 
-        double cfNorm = 0, lcNorm = 0, ccNorm = 0, totalWeight = 0;
-
         Integer cfRating = activeRating(userId, "CODEFORCES");
-        if (cfRating != null) {
-            cfNorm = ScoringFormulas.normalizeRating("CODEFORCES", cfRating);
-            totalWeight += score.getCfWeight();
-        }
-
-        Integer lcRating = activeRating(userId, "LEETCODE");
-        if (lcRating != null) {
-            lcNorm = ScoringFormulas.normalizeRating("LEETCODE", lcRating);
-            totalWeight += score.getLcWeight();
-        }
-
-        Integer ccRating = activeRating(userId, "CODECHEF");
-        if (ccRating != null) {
-            ccNorm = ScoringFormulas.normalizeRating("CODECHEF", ccRating);
-            totalWeight += score.getCcWeight();
-        }
-
-        double unified = ScoringFormulas.unifiedScore(
-            cfNorm, score.getCfWeight(),
-            lcNorm, score.getLcWeight(),
-            ccNorm, score.getCcWeight(),
-            totalWeight);
-
-        return new Breakdown(cfNorm, lcNorm, ccNorm, unified);
+        double cfNorm = cfRating == null
+            ? 0.0 : ScoringFormulas.normalizeRating("CODEFORCES", cfRating);
+        return new Breakdown(cfNorm, cfNorm);
     }
 
     /**
@@ -110,8 +88,6 @@ public class UnifiedRatingService {
 
         Breakdown breakdown = computeBreakdown(userId);
         score.setCfScore(breakdown.cfScore());
-        score.setLcScore(breakdown.lcScore());
-        score.setCcScore(breakdown.ccScore());
         score.setUnifiedScore(breakdown.unifiedScore());
         score.setComputedAt(Instant.now());
         unifiedScoreRepository.save(score);

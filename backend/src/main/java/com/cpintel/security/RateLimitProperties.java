@@ -6,6 +6,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * How much of each expensive thing one caller may have, and how often.
@@ -37,6 +39,21 @@ public class RateLimitProperties {
      * read their own handwriting the third time.
      */
     private Rule examUnlock = new Rule(10, Duration.ofMinutes(5));
+
+    /**
+     * Address ranges many people share through one NAT — a lab whose two hundred machines reach
+     * the server as a single address. CIDR notation, e.g. {@code 10.20.0.0/16}.
+     *
+     * <p>The per-address limits (sign-in, account recovery) exist to stop one machine guessing
+     * passwords. Applied to a NATed lab they stop the whole room signing in when a paper opens,
+     * because the room is one address. Inside these ranges the per-address limit becomes
+     * {@link #sharedLogin} instead. The per-account limit still applies to everybody, so guessing
+     * at one person's password is exactly as slow from a lab as from anywhere else.
+     */
+    private List<String> sharedNetworks = new ArrayList<>();
+
+    /** The per-address sign-in and recovery allowance inside {@link #sharedNetworks}. */
+    private Rule sharedLogin = new Rule(600, Duration.ofMinutes(1));
 
     @Getter
     @Setter

@@ -59,6 +59,9 @@ declare global {
         connect: (apiBase: string, token: string, handle?: string)
           => Promise<{ connected: boolean; handle?: string; error?: string }>
         forget: () => Promise<void>
+        /** A codeforces.com request made with the app's own Codeforces session. */
+        fetch?: (request: { method?: 'GET' | 'POST'; url: string; form?: Record<string, string> })
+          => Promise<{ status: number; url: string; body: string } | { error: string }>
       }
       lockdown: {
         engage:   (reason: string, policy?: Partial<LockdownPolicyRequest>)

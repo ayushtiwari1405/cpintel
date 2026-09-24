@@ -85,6 +85,7 @@ public class AdminUserService {
     private final JwtService jwtService;
     private final ExamEventRepository examEventRepository;
     private final MailService mail;
+    private final com.cpintel.repository.mongo.CfSubmissionRepository cfSubmissionRepository;
 
     // ------------------------------------------------------------------ reads
 
@@ -457,6 +458,10 @@ public class AdminUserService {
 
         endSessions(targetUserId);
         userRepository.delete(user);
+        // Mongo has no foreign key to cascade through. Synced platform history is re-derivable
+        // and belongs to nobody once the account is gone; left behind, it is orphaned rows
+        // that no screen can reach.
+        cfSubmissionRepository.deleteByUserId(targetUserId);
 
         auditService.record(adminId, AuditService.USER_DELETED, "USER",
             targetUserId + ":" + user.getUsername(), httpReq);

@@ -18,7 +18,8 @@
 flowchart LR
     subgraph Client
         FE[React SPA<br/>Vite + TypeScript]
-        EL[Electron shell<br/>contest monitoring]
+        EL[Electron app<br/>window onto the server<br/>+ exam monitoring]
+        EXT[Browser extension<br/>Codeforces via the<br/>user's browser]
     end
 
     subgraph Backend [Spring Boot 3 / Java 21]
@@ -26,8 +27,11 @@ flowchart LR
         SVC[Service layer]
         ANL[Analytics engine]
         GRP[Groups + standings]
-        RUN[Local runner<br/>bubblewrap]
         SCH[Schedulers]
+    end
+
+    subgraph Runner [Runner container]
+        RUN[RunnerServer<br/>bubblewrap per run<br/>no secrets, no internet]
     end
 
     subgraph Data
@@ -37,16 +41,16 @@ flowchart LR
     end
 
     subgraph Judges [External judges]
-        CF[Codeforces<br/>REST + scraping]
-        LC[LeetCode GraphQL]
-        CC[CodeChef - scraped]
+        CF[Codeforces<br/>REST API; web pages<br/>via the user's browser]
         DJ[DOMjudge REST v4]
     end
 
     EL --> FE
+    EXT -.-> FE
+    EXT -- the user's own session --> CF
     FE -- HTTPS/JWT --> API
     API --> SVC
-    API --> RUN
+    API -- internal network, token --> RUN
     SVC --> ANL
     SVC --> GRP
     SVC --> PG
@@ -331,7 +335,32 @@ Two Oracle facilities had to be replaced rather than ported:
 
 ## Why MongoDB for submissions
 
-Codeforces, LeetCode, and CodeChef submission payloads have different shapes and change independently of each other. Storing them as loosely-typed documents avoids a brittle shared relational schema, while normalized aggregates (topic mastery, contest summaries) still live in PostgreSQL once computed.
+Judge submission payloads, archived source and uploaded files have shapes that change independently of the relational model. Storing them as loosely-typed documents avoids a brittle shared schema, while normalized aggregates (topic mastery, contest summaries) still live in PostgreSQL once computed. Codeforces is the only platform synced for analytics; LeetCode and CodeChef were dropped because their APIs returned only a slice of a user's history.
+
+## Running code on a shared server
+
+The Run button executes whatever anybody types, so on a server it never runs in the backend,
+which holds the database credentials and every signing key. The backend forwards each run to the
+`runner` container: the same jar started as `com.cpintel.runner.RunnerServer`, with no Spring, no
+database and no configuration beyond a token shared with the backend. The container has a
+read-only filesystem, no Linux capabilities, capped CPU, memory and processes, and only an
+internal network. Inside it every run still gets its own bubblewrap sandbox, so concurrent runs —
+an examination room's — cannot see each other's files. If the sandbox cannot be built there, the
+runner refuses every run rather than running unsandboxed. At most `CPINTEL_RUNNER_CONCURRENCY`
+runs execute at once; the rest wait up to 20 seconds. In development and in the desktop build the
+same `RunEngine` runs inside the backend instead, where the only code is the user's own.
+
+## Codeforces through the user's browser
+
+Codeforces serves its website from behind Cloudflare, which ties the clearance a browser earns to
+that browser. A server replaying a user's cookies from its own address gets the challenge page, so
+a hosted CPIntel cannot fetch statements, read the compiler list or submit on anyone's behalf.
+The user's browser can: the CPIntel extension on the website, and the desktop app's own
+Codeforces window. They only carry requests — `GET` or `POST` to codeforces.com — and the server
+(`/api/v1/cf-browser`) reads the pages with the same parsers it uses for its own fetches, builds
+the submission form and archives the code. CPIntel keeps the user's handle, which the public API
+needs for verdicts and standings, and no cookies. A statement fetched this way is shown to that
+user only and never cached for others, since the page came from the client.
 
 ## The problem-solving workspace
 
@@ -545,6 +574,14 @@ annotation. The frontend hides the routes from non-admins, but that is presentat
 enforcement is entirely server-side, so editing the stored profile to say ADMIN gets you the
 screens and nothing to put in them.
 
+### Where the tokens live
+
+The access token lives fifteen minutes and only in memory. The refresh token is an `HttpOnly`,
+`SameSite=Strict` cookie scoped to `/api/v1/auth`, so no script on the page can read it; it used
+to sit in `localStorage` beside the access token, where anything that ran on the page could take a
+week-long login. After a reload the first request gets a 401 and the client renews from the
+cookie.
+
 ### Making "deactivate" mean something
 
 An account state that only takes effect at the next login is not an account state. Deactivating
@@ -618,6 +655,28 @@ somebody is expected; it cannot say they are in the room. A clock says the paper
 cannot say it is open *for this person, here*. Without it, the whole of "sitting the
 examination" is "be on the roster and have a browser", which is the arrangement an invigilated
 paper exists to replace.
+
+### Normal mode and examination mode
+
+The per-candidate password is not typed inside the app: it is typed **on the login page, in
+place of the account password**, and it signs the candidate into *examination mode*. The
+access token then carries an `exam` claim naming the paper, and the refresh token row carries
+the same `exam_id`, so a refresh re-issues an examination session — and stops doing so fifteen
+minutes after the paper ends. Two layers hold the line:
+
+- `ExamModeFilter` confines an examination session to an allow-list of routes: its own
+  `/exams/{id}/**`, the judge contest of that paper, the Run button, its submissions, and the
+  handful of reads the workspace needs. Everything else — practice, roadmap, files, profile,
+  admin, other contests — is a 403 with code `EXAM_MODE`.
+- `ExamSessionGuard` covers the other direction: a normal session (the account password) cannot
+  enter, unlock, heartbeat or submit to a paper that is scheduled or running. Once it has
+  ended, the normal session is where the candidate reads their code back, under *Past
+  examinations*.
+
+So a candidate cannot use their everyday session to reach into the paper, and cannot use the
+paper's session to reach anything else. The login tries the account password first, then the
+candidate's examination passwords for papers whose window (an hour before the start to the end)
+is open.
 
 ### Two passwords, because they answer different questions
 

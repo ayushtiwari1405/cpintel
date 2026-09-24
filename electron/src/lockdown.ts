@@ -109,7 +109,12 @@ export class Lockdown {
   private readonly handleBlur = () => this.onBlur()
   private readonly handleFocus = () => this.onFocus()
 
-  constructor(_devBuild: boolean, onChange: (state: LockdownState) => void) {
+  /**
+   * @param isInternal whether a URL is the CPIntel server itself. Navigation there is the app
+   *                   moving between its own pages; anywhere else is leaving the examination.
+   */
+  constructor(private readonly isInternalUrl: (url: string) => boolean,
+              onChange: (state: LockdownState) => void) {
     this.onChange = onChange
   }
 
@@ -273,9 +278,7 @@ export class Lockdown {
   // ------------------------------------------------------------------ internals
 
   private isInternal(url: string): boolean {
-    return url.startsWith('file://')
-      || url.startsWith('http://localhost:5173')
-      || url.startsWith('app://')
+    return this.isInternalUrl(url)
   }
 
   private onBlur(): void {

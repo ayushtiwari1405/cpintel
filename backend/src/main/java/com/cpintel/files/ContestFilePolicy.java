@@ -51,6 +51,11 @@ public class ContestFilePolicy {
         return defaultEnabled();
     }
 
+    /** Whether this contest has a rule of its own, rather than following the default. */
+    public boolean hasRule(String platform, String contestId) {
+        return contestId != null && find(platform, contestId).isPresent();
+    }
+
     /** The default in force — an admin's deployment-wide rule, or the configured value. */
     public boolean defaultEnabled() {
         return find(ContestFileRule.GLOBAL, null)

@@ -55,6 +55,16 @@ public class Sandbox {
 
     private volatile Boolean bwrapUsable;
 
+    /**
+     * Whether the sandbox gets its own /proc.
+     *
+     * <p>Inside a container it cannot: Docker masks parts of the container's /proc, and the
+     * kernel refuses a fresh proc mount over a masked one. The PID namespace is still
+     * unshared either way — the program just has no /proc to read, which compilers and
+     * competitive-programming solutions do not need. Decided by the probe.
+     */
+    private volatile boolean mountProc = true;
+
     public record ExecResult(
         int exitCode,
         String stdout,
@@ -152,7 +162,12 @@ public class Sandbox {
         // documented fallback path — rlimits only, when bwrap is unavailable — had nothing
         // between submitted code and the host's process table. This is the one term that closes
         // it. Generous enough that a compiler driver spawning cc1 and as is unaffected.
-        ulimits.append("ulimit -u ").append(MAX_PROCESSES).append("; ");
+        //
+        // Spelled two ways: bash calls it -u, but /bin/sh on Debian and Ubuntu is dash, where
+        // it is -p and -u is an error. Written only as -u, it was never applied on those
+        // systems, and every run's stderr began with "ulimit: Illegal option -u".
+        ulimits.append("if (ulimit -u ").append(MAX_PROCESSES).append(") 2>/dev/null; then ulimit -u ")
+            .append(MAX_PROCESSES).append("; else ulimit -p ").append(MAX_PROCESSES).append("; fi; ");
         ulimits.append("exec \"$@\"");
 
         List<String> inner = new ArrayList<>(List.of("/bin/sh", "-c", ulimits.toString(), "sh"));
@@ -184,8 +199,10 @@ public class Sandbox {
             "--symlink", "usr/bin", "/bin",
             "--symlink", "usr/lib", "/lib",
             "--symlink", "usr/lib64", "/lib64",
-            "--symlink", "usr/sbin", "/sbin",
-            "--proc", "/proc",
+            "--symlink", "usr/sbin", "/sbin"
+        ));
+        if (mountProc) args.addAll(List.of("--proc", "/proc"));
+        args.addAll(List.of(
             "--dev", "/dev",
             "--tmpfs", "/tmp"
         ));
@@ -223,13 +240,20 @@ public class Sandbox {
 
         synchronized (this) {
             if (bwrapUsable != null) return bwrapUsable;
+            // With its own /proc first, as on a desktop; without, as inside a container.
+            mountProc = true;
             boolean usable = probeBwrap();
+            if (!usable) {
+                mountProc = false;
+                usable = probeBwrap();
+            }
             if (!usable) {
                 log.warn("bubblewrap unavailable — code runs with resource limits but WITHOUT "
                     + "filesystem or network isolation. Keep cpintel.runner.enabled off on any "
                     + "shared deployment.");
             } else {
-                log.info("bubblewrap available — runner is filesystem and network isolated.");
+                log.info("bubblewrap available — runner is filesystem and network isolated{}.",
+                    mountProc ? "" : " (no /proc inside the sandbox)");
             }
             bwrapUsable = usable;
             return usable;

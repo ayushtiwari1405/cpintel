@@ -46,22 +46,6 @@ public class IntegrationController {
             syncService.linkAccount(userId, "CODEFORCES", req.getHandle())));
     }
 
-    @PostMapping("/leetcode/link")
-    public ResponseEntity<ApiResponse<PlatformDto.Summary>> linkLc(
-        @AuthenticationPrincipal Long userId,
-        @Valid @RequestBody PlatformDto.LinkRequest req) {
-        return ResponseEntity.ok(ApiResponse.ok(
-            syncService.linkAccount(userId, "LEETCODE", req.getHandle())));
-    }
-
-    @PostMapping("/codechef/link")
-    public ResponseEntity<ApiResponse<PlatformDto.Summary>> linkCc(
-        @AuthenticationPrincipal Long userId,
-        @Valid @RequestBody PlatformDto.LinkRequest req) {
-        return ResponseEntity.ok(ApiResponse.ok(
-            syncService.linkAccount(userId, "CODECHEF", req.getHandle())));
-    }
-
     @PostMapping("/codeforces/sync")
     public ResponseEntity<ApiResponse<PlatformDto.SyncResponse>> syncCf(
         @AuthenticationPrincipal Long userId) {
@@ -69,22 +53,8 @@ public class IntegrationController {
             syncService.triggerSync(userId, "CODEFORCES", "INCREMENTAL")));
     }
 
-    @PostMapping("/leetcode/sync")
-    public ResponseEntity<ApiResponse<PlatformDto.SyncResponse>> syncLc(
-        @AuthenticationPrincipal Long userId) {
-        return ResponseEntity.ok(ApiResponse.ok(
-            syncService.triggerSync(userId, "LEETCODE", "INCREMENTAL")));
-    }
-
-    @PostMapping("/codechef/sync")
-    public ResponseEntity<ApiResponse<PlatformDto.SyncResponse>> syncCc(
-        @AuthenticationPrincipal Long userId) {
-        return ResponseEntity.ok(ApiResponse.ok(
-            syncService.triggerSync(userId, "CODECHEF", "INCREMENTAL")));
-    }
-
     @PostMapping("/contests/sync")
-    @Operation(summary = "Sync contest history from all linked platforms")
+    @Operation(summary = "Sync contest history from Codeforces")
     public ResponseEntity<ApiResponse<ContestSyncResult>> syncContests(
         @AuthenticationPrincipal Long userId) {
         int cfContests = contestSyncService.syncCfContests(userId);
@@ -97,18 +67,6 @@ public class IntegrationController {
     public ResponseEntity<ApiResponse<Void>> unlinkCf(@AuthenticationPrincipal Long userId) {
         syncService.unlinkAccount(userId, "CODEFORCES");
         return ResponseEntity.ok(ApiResponse.message("Codeforces account unlinked"));
-    }
-
-    @DeleteMapping("/leetcode")
-    public ResponseEntity<ApiResponse<Void>> unlinkLc(@AuthenticationPrincipal Long userId) {
-        syncService.unlinkAccount(userId, "LEETCODE");
-        return ResponseEntity.ok(ApiResponse.message("LeetCode account unlinked"));
-    }
-
-    @DeleteMapping("/codechef")
-    public ResponseEntity<ApiResponse<Void>> unlinkCc(@AuthenticationPrincipal Long userId) {
-        syncService.unlinkAccount(userId, "CODECHEF");
-        return ResponseEntity.ok(ApiResponse.message("CodeChef account unlinked"));
     }
 
     @GetMapping("/sync-status/{jobId}")

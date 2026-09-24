@@ -30,8 +30,12 @@ export default function AdminExamsPage() {
   const [startsAt, setStartsAt] = useState('')
   const [endsAt, setEndsAt] = useState('')
   const [teamId, setTeamId] = useState<number | ''>('')
+  // Asked at creation rather than left to a separate screen: whether a candidate may open
+  // their own notes is part of what the paper is, and it is fixed once the paper starts.
+  const [files, setFiles] = useState<'' | 'allow' | 'deny'>('')
 
   const exam = kind === 'EXAM'
+  const filesAllowed = files === '' ? !exam : files === 'allow'
 
   const submit = () => {
     if (!name.trim() || !externalId.trim()) return
@@ -45,9 +49,11 @@ export default function AdminExamsPage() {
       startsAt: startsAt ? new Date(startsAt).toISOString() : null,
       endsAt: endsAt ? new Date(endsAt).toISOString() : null,
       teamId: teamId === '' ? null : Number(teamId),
+      personalFilesAllowed: filesAllowed,
     }, {
       onSuccess: () => {
         setName(''); setExternalId(''); setStartsAt(''); setEndsAt(''); setTeamId('')
+        setFiles('')
       },
     })
   }
@@ -190,6 +196,16 @@ export default function AdminExamsPage() {
               {teams?.map(team => (
                 <option key={team.groupId} value={team.groupId}>{team.name}</option>
               ))}
+            </select>
+          </Field>
+          <Field label="Private files" className="min-w-[12rem]">
+            <select
+              value={files === '' ? (exam ? 'deny' : 'allow') : files}
+              onChange={e => setFiles(e.target.value as 'allow' | 'deny')}
+              className={INPUT}
+            >
+              <option value="deny">Not allowed</option>
+              <option value="allow">Allowed — own notes and templates</option>
             </select>
           </Field>
           <button

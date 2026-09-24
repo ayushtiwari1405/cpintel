@@ -16,7 +16,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const {
     user, isAuthenticated,
     logout: storeLogout,
-    setUser, accessToken
+    setUser,
   } = useAuthStore()
 
   const queryClient = useQueryClient()
@@ -38,7 +38,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (r.data) setUser(r.data)
       return r.data
     }),
-    enabled: !!accessToken,
+    // On isAuthenticated rather than on the token: after a reload there is no token in memory,
+    // and this request is what gets a 401 and renews it from the refresh cookie.
+    enabled: isAuthenticated,
     retry: false,
     // The window regains focus far more often than a role changes; once per mount is the
     // point at which a promotion or demotion needs to land.

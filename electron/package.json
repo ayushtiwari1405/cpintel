@@ -5,8 +5,8 @@
   "main": "dist/main.js",
   "scripts": {
     "dev": "concurrently \"tsc -w\" \"cross-env NODE_ENV=development electron .\"",
-    "build": "tsc && electron-builder",
-    "pack": "electron-builder --dir",
+    "build": "tsc && node scripts/stamp-server.mjs && electron-builder",
+    "pack": "tsc && node scripts/stamp-server.mjs && electron-builder --dir",
     "test": "tsc && node --test dist"
   },
   "dependencies": {
@@ -16,8 +16,8 @@
     "@types/node": "^20.0.0",
     "concurrently": "^8.2.2",
     "cross-env": "^10.1.0",
-    "electron": "^31.0.0",
-    "electron-builder": "^24.13.3",
+    "electron": "^41.7.1",
+    "electron-builder": "^26.15.3",
     "typescript": "^5.4.5"
   },
   "build": {
@@ -28,14 +28,7 @@
     },
     "files": [
       "dist/**/*",
-      "!dist/**/*.test.js",
-      "resources/**/*"
-    ],
-    "extraResources": [
-      {
-        "from": "../frontend/dist",
-        "to": "frontend"
-      }
+      "!dist/**/*.test.js"
     ],
     "linux": {
       "target": [

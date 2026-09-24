@@ -38,8 +38,8 @@ public class CompeteDto {
         }
     }
 
-    /** Platform selector. CODEFORCES and DOMJUDGE are wired up; CODECHEF is the next one in. */
-    public enum Platform { CODEFORCES, CODECHEF, DOMJUDGE }
+    /** Platform selector: the judges the arena can open a contest on. */
+    public enum Platform { CODEFORCES, DOMJUDGE }
 
     /**
      * How a judge publishes its statements.

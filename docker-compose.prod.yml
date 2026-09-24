@@ -1,0 +1,40 @@
+# Production overrides. Use together with the base file:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# (deploy.sh does this for you.) Differences from the base file:
+#
+#   - images come from GHCR, built by CI, instead of being built on the server. CPINTEL_VERSION
+#     picks the tag — a commit SHA, so a deploy can be rolled back to exactly the previous one;
+#   - nothing is published but nginx's 80 and 443. The databases, Redis and the backend stay on
+#     the Docker network, where only the containers that need them can reach them.
+#
+# The monitoring profile keeps its loopback-only ports from the base file; reach Grafana over
+# an SSH tunnel (ssh -L 3000:localhost:3000 server).
+
+services:
+  postgres:
+    ports: !reset []
+
+  mongodb:
+    ports: !reset []
+
+  redis:
+    ports: !reset []
+
+  backend:
+    image: ghcr.io/${CPINTEL_IMAGE_REPO:-ayushtiwari1405/cpintel}-backend:${CPINTEL_VERSION:?set CPINTEL_VERSION to the image tag to run}
+    build: !reset null
+    ports: !reset []
+
+  runner:
+    image: ghcr.io/${CPINTEL_IMAGE_REPO:-ayushtiwari1405/cpintel}-runner:${CPINTEL_VERSION:?set CPINTEL_VERSION}
+    build: !reset null
+
+  frontend:
+    image: ghcr.io/${CPINTEL_IMAGE_REPO:-ayushtiwari1405/cpintel}-frontend:${CPINTEL_VERSION:?set CPINTEL_VERSION}
+    build: !reset null
+
+  nginx:
+    image: ghcr.io/${CPINTEL_IMAGE_REPO:-ayushtiwari1405/cpintel}-nginx:${CPINTEL_VERSION:?set CPINTEL_VERSION}
+    build: !reset null

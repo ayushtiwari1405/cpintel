@@ -1,12 +1,15 @@
 package com.cpintel.practice;
 
+import com.cpintel.entity.mongo.CfStatementDoc;
 import com.cpintel.exception.ApiException;
+import com.cpintel.repository.mongo.CfStatementRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.safety.Safelist;
 import org.jsoup.select.Elements;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -54,8 +57,20 @@ public class CfStatementScraper {
     /** Pages are fetched outside the JVM; see {@link CfWebFetcher} for why. */
     private final CfWebFetcher fetcher;
 
+    /**
+     * Statements that have been read once, kept for good. Null outside Spring (the probe test),
+     * where the in-process cache is all there is.
+     */
+    private final CfStatementRepository store;
+
     public CfStatementScraper(CfWebFetcher fetcher) {
+        this(fetcher, null);
+    }
+
+    @Autowired
+    public CfStatementScraper(CfWebFetcher fetcher, CfStatementRepository store) {
         this.fetcher = fetcher;
+        this.store = store;
     }
 
     @Value("${cpintel.platforms.codeforces.web-url:https://codeforces.com}")
@@ -106,6 +121,15 @@ public class CfStatementScraper {
 
         String url = problemUrl(contestId, index);
 
+        // Anybody's earlier success answers before Codeforces is asked at all. The clearance
+        // that fetch needs lapses within hours, and whether a problem opened should not depend
+        // on whether this particular user reconnected this afternoon.
+        PracticeDto.ProblemDetail stored = loadStored(contestId, index, rating, tags);
+        if (stored != null) {
+            cache.put(key, new Entry(stored, Instant.now()));
+            return stored;
+        }
+
         // Fetched by curl, parsed by jsoup. Jsoup opens its own JVM socket, and Cloudflare
         // refuses the JVM's TLS fingerprint whatever headers ride on it; the parsing was never
         // the problem, only the transport. See CfWebFetcher.
@@ -127,7 +151,94 @@ public class CfStatementScraper {
 
         PracticeDto.ProblemDetail detail = parse(doc, contestId, index, rating, tags, url);
         cache.put(key, new Entry(detail, Instant.now()));
+        saveStored(contestId, index, detail);
         return detail;
+    }
+
+    /**
+     * A statement that is already known — in memory or stored — without asking Codeforces.
+     *
+     * <p>For callers that will fetch the page through the user's browser if this is null, so a
+     * miss costs nothing rather than a server fetch that Cloudflare would refuse anyway.
+     */
+    public PracticeDto.ProblemDetail cached(int contestId, String index,
+                                            Integer rating, List<String> tags) {
+        for (String prefix : new String[] { "session:", "anon:" }) {
+            Entry hit = cache.get(prefix + contestId + "/" + index.toUpperCase());
+            if (hit != null && Instant.now().isBefore(hit.at().plus(TTL))) return hit.detail();
+        }
+        return loadStored(contestId, index, rating, tags);
+    }
+
+    /**
+     * A statement page the user's own browser fetched, read exactly as a server fetch would be.
+     *
+     * <p>Not added to the shared cache or the store. The HTML comes from the client, and a
+     * client could send anything; what it sends may show on its own screen, but must never
+     * become the statement everybody else is served.
+     */
+    public PracticeDto.ProblemDetail parsePage(String html, int contestId, String index,
+                                               Integer rating, List<String> tags,
+                                               boolean contest) {
+        String url = contest ? contestProblemUrl(contestId, index) : problemUrl(contestId, index);
+        String body = html == null ? "" : html;
+        String issue = looksLikeChallenge(body) && !body.contains("problem-statement")
+            ? "BROWSER_CHECK"
+            : issueFor(new CfWebFetcher.Response(200, body), true);
+        if (issue != null) {
+            return new PracticeDto.ProblemDetail(
+                String.valueOf(contestId), index.toUpperCase(), contestId + index.toUpperCase(),
+                rating, tags, null, null, null, null, null, null, null, null,
+                List.of(), url, false, null, issue);
+        }
+        return parse(Jsoup.parse(body, url), contestId, index, rating, tags, url);
+    }
+
+    private static String storeId(int contestId, String index) {
+        return contestId + "/" + index.toUpperCase();
+    }
+
+    /** A statement some earlier fetch stored, with today's rating and tags laid over it. */
+    private PracticeDto.ProblemDetail loadStored(int contestId, String index,
+                                                 Integer rating, List<String> tags) {
+        if (store == null) return null;
+        try {
+            return store.findById(storeId(contestId, index)).map(d ->
+                new PracticeDto.ProblemDetail(
+                    String.valueOf(contestId), index.toUpperCase(), d.getName(), rating, tags,
+                    d.getTimeLimit(), d.getMemoryLimit(), d.getInputFile(), d.getOutputFile(),
+                    d.getLegendHtml(), d.getInputSpecHtml(), d.getOutputSpecHtml(),
+                    d.getNoteHtml(),
+                    d.getSamples() == null ? List.of() : d.getSamples().stream()
+                        .map(x -> new PracticeDto.Sample(x.getInput(), x.getOutput())).toList(),
+                    d.getUrl(), true, null, null))
+                .orElse(null);
+        } catch (Exception e) {
+            // The store is an accelerator; a Mongo hiccup falls through to Codeforces.
+            log.debug("Could not read stored statement {}{}: {}", contestId, index, e.getMessage());
+            return null;
+        }
+    }
+
+    private void saveStored(int contestId, String index, PracticeDto.ProblemDetail d) {
+        if (store == null) return;
+        try {
+            store.save(CfStatementDoc.builder()
+                .id(storeId(contestId, index))
+                .name(d.name())
+                .timeLimit(d.timeLimit()).memoryLimit(d.memoryLimit())
+                .inputFile(d.inputFile()).outputFile(d.outputFile())
+                .legendHtml(d.legendHtml())
+                .inputSpecHtml(d.inputSpecHtml()).outputSpecHtml(d.outputSpecHtml())
+                .noteHtml(d.noteHtml())
+                .samples(d.samples() == null ? List.of() : d.samples().stream()
+                    .map(x -> new CfStatementDoc.Sample(x.input(), x.output())).toList())
+                .url(d.url())
+                .fetchedAt(Instant.now())
+                .build());
+        } catch (Exception e) {
+            log.debug("Could not store statement {}{}: {}", contestId, index, e.getMessage());
+        }
     }
 
     /**

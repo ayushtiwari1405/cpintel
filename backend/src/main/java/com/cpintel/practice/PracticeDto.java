@@ -105,7 +105,12 @@ public class PracticeDto {
         String handle,
         Instant linkedAt,
         Instant expiresAt,
-        boolean submitEnabled
+        boolean submitEnabled,
+        /**
+         * Linked through the user's own browser: CPIntel knows the handle and holds no
+         * Codeforces cookies, and pages are fetched by the browser (extension or desktop app).
+         */
+        boolean viaBrowser
     ) {}
 
     // ---------------------------------------------------------- submission

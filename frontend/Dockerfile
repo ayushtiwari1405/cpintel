@@ -5,6 +5,9 @@ COPY package*.json ./
 RUN npm ci --prefer-offline
 
 COPY . .
+# Baked in at build time, like every VITE_ variable: where users get the Codeforces extension.
+ARG VITE_CF_EXTENSION_URL=""
+ENV VITE_CF_EXTENSION_URL=$VITE_CF_EXTENSION_URL
 RUN npm run build
 
 FROM nginx:1.25-alpine

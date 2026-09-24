@@ -6,16 +6,19 @@ import { useToast } from '@/components/common/Toaster'
 import { useNavigate } from 'react-router-dom'
 
 export function useLogin() {
-  const { setTokens, setUser } = useAuthStore()
+  const { setAccessToken, setUser, setSession } = useAuthStore()
   const toast = useToast()
   const navigate = useNavigate()
 
   return useMutation({
     mutationFn: authApi.login,
     onSuccess: (res) => {
-      setTokens(res.data.accessToken, res.data.refreshToken)
+      setAccessToken(res.data.accessToken)
       setUser(res.data.user)
-      navigate('/dashboard')
+      // The examination password opens the paper it belongs to and nothing else.
+      const exam = res.data.mode === 'EXAM' && res.data.examId != null
+      setSession(exam ? 'EXAM' : 'NORMAL', exam ? res.data.examId! : null)
+      navigate(exam ? '/exam' : '/dashboard')
     },
     onError: (err: any) => {
       toast.push('error', err.response?.data?.message ?? 'Login failed')

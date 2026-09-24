@@ -1,6 +1,7 @@
 package com.cpintel.controller;
 
 import com.cpintel.common.ApiResponse;
+import com.cpintel.events.LiveExamGuard;
 import com.cpintel.files.FilesDto;
 import com.cpintel.files.PersonalFileService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -34,11 +35,18 @@ import java.nio.charset.StandardCharsets;
 public class PersonalFileController {
 
     private final PersonalFileService files;
+    /**
+     * The vault's own routes are closed while an examination is running. Reads during a paper
+     * go through the contest route, which applies that paper's private-files rule; uploads
+     * are closed too, or the vault would be a way to carry text in from outside mid-paper.
+     */
+    private final LiveExamGuard exams;
 
     @GetMapping
     @Operation(summary = "Your library, with the limits it is held to")
     public ResponseEntity<ApiResponse<FilesDto.Vault>> vault(
         @AuthenticationPrincipal Long userId) {
+        exams.requireNoLiveExam(userId, "your files");
         return ResponseEntity.ok(ApiResponse.ok(files.vault(userId)));
     }
 
@@ -49,6 +57,7 @@ public class PersonalFileController {
         @RequestParam("file") MultipartFile file,
         @RequestParam(required = false) String label,
         @RequestParam(defaultValue = "false") boolean replace) {
+        exams.requireNoLiveExam(userId, "your files");
         return ResponseEntity.ok(ApiResponse.ok(files.upload(userId, file, label, replace)));
     }
 
@@ -57,6 +66,7 @@ public class PersonalFileController {
     public ResponseEntity<ApiResponse<FilesDto.FileContent>> content(
         @AuthenticationPrincipal Long userId,
         @PathVariable String fileId) {
+        exams.requireNoLiveExam(userId, "your files");
         return ResponseEntity.ok(ApiResponse.ok(files.content(userId, fileId)));
     }
 
@@ -65,6 +75,7 @@ public class PersonalFileController {
     public ResponseEntity<byte[]> download(
         @AuthenticationPrincipal Long userId,
         @PathVariable String fileId) {
+        exams.requireNoLiveExam(userId, "your files");
         return asDownload(files.download(userId, fileId));
     }
 
@@ -74,6 +85,7 @@ public class PersonalFileController {
         @AuthenticationPrincipal Long userId,
         @PathVariable String fileId,
         @Valid @RequestBody FilesDto.RenameRequest req) {
+        exams.requireNoLiveExam(userId, "your files");
         return ResponseEntity.ok(ApiResponse.ok(files.rename(userId, fileId, req)));
     }
 
@@ -82,6 +94,7 @@ public class PersonalFileController {
     public ResponseEntity<ApiResponse<Void>> delete(
         @AuthenticationPrincipal Long userId,
         @PathVariable String fileId) {
+        exams.requireNoLiveExam(userId, "your files");
         files.delete(userId, fileId);
         return ResponseEntity.ok(ApiResponse.message("File deleted"));
     }

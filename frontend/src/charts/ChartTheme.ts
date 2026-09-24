@@ -18,8 +18,6 @@ export const MASTERY_COLORS: Record<string, string> = {
 
 export const PLATFORM_COLORS: Record<string, string> = {
   CODEFORCES: '#3b82f6',
-  LEETCODE:   '#f59e0b',
-  CODECHEF:   '#f97316',
 }
 
 // Chrome colours follow the light/dark theme through the palette variables defined in

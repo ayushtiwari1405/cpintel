@@ -11,6 +11,7 @@ import {
   useReissuePasscode, useRevokePasscodes,
 } from '@/hooks/useExams'
 import type { IssuedPasscode } from '@/types'
+import { downloadSpreadsheet } from '@/utils/spreadsheet'
 
 /**
  * The passwords that open one examination, and the screen that prints them.
@@ -178,10 +179,12 @@ export function ExamPasswordsTab({ eventId }: { eventId: number }) {
       </Panel>
 
       <Panel
-        title="Candidates' own codes"
-        description="One per person, printed on the slip on their desk. Issue is additive —
-          somebody added the morning of the paper gets a code without invalidating the slips
-          already printed."
+        title="Examination sign-in passwords"
+        description="One per candidate, for this paper only. On the day the candidate signs in
+          with their username and this password instead of their own, which opens this paper in
+          examination mode and nothing else. Without one a candidate cannot sit the paper. Issue
+          is additive — somebody added the morning of the paper gets one without invalidating
+          the ones already handed out."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             {status.passcodesIssued > 0 && (
@@ -227,7 +230,7 @@ export function ExamPasswordsTab({ eventId }: { eventId: number }) {
               {issue.isPending
                 ? <Loader2 size={12} className="animate-spin" />
                 : <KeyRound size={12} />}
-              Issue codes
+              Issue passwords
             </button>
           </div>
         }
@@ -244,7 +247,7 @@ export function ExamPasswordsTab({ eventId }: { eventId: number }) {
             <span className="text-amber-400">
               — {status.participantCount - status.passcodesIssued} assigned candidate
               {status.participantCount - status.passcodesIssued === 1 ? ' has' : 's have'} no
-              code yet
+              sign-in password yet and cannot sit the paper
             </span>
           )}
         </div>
@@ -257,7 +260,7 @@ export function ExamPasswordsTab({ eventId }: { eventId: number }) {
                 className="flex items-center gap-1.5 rounded-md border border-gray-800
                   px-2.5 py-1.5 text-xs text-gray-300 transition-colors hover:bg-gray-800"
               >
-                <Download size={12} /> Download as CSV
+                <Download size={12} /> Download spreadsheet
               </button>
               <button
                 onClick={() => window.print()}
@@ -337,24 +340,12 @@ export function ExamPasswordsTab({ eventId }: { eventId: number }) {
 }
 
 /**
- * The desk slips, as a file.
+ * The sign-in passwords, as a spreadsheet to print slips from or hand out.
  *
- * CSV rather than a PDF because what this actually feeds is a mail merge or a spreadsheet
- * somebody already has a slip template in, and generating a layout nobody asked for would be
- * one more thing to fight at eight in the morning.
+ * .xlsx rather than CSV, so every value lands in its own column whatever program opens it.
  */
 function downloadSlips(codes: IssuedPasscode[]) {
-  const escape = (value: string) => `"${value.replace(/"/g, '""')}"`
-  const rows = [
-    ['username', 'name', 'code'].join(','),
-    ...codes.map(row =>
-      [row.username, row.fullName ?? '', row.code].map(escape).join(',')),
-  ].join('\n')
-
-  const url = URL.createObjectURL(new Blob([rows], { type: 'text/csv;charset=utf-8' }))
-  const link = document.createElement('a')
-  link.href = url
-  link.download = 'exam-codes.csv'
-  link.click()
-  URL.revokeObjectURL(url)
+  downloadSpreadsheet('exam-sign-in-passwords.xlsx',
+    ['Username', 'Name', 'Examination password'],
+    codes.map(row => [row.username, row.fullName ?? '', row.code]))
 }

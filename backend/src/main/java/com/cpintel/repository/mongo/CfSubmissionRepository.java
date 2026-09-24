@@ -13,7 +13,8 @@ import java.util.Optional;
 public interface CfSubmissionRepository extends MongoRepository<CfSubmission, String> {
     List<CfSubmission> findByUserId(Long userId);
     Optional<CfSubmission> findByCfSubmissionId(Long cfSubmissionId);
-    boolean existsByCfSubmissionId(Long cfSubmissionId);
+    /** Per user: the same Codeforces submission is stored once for each account linked to it. */
+    boolean existsByUserIdAndCfSubmissionId(Long userId, Long cfSubmissionId);
     long countByUserIdAndVerdict(Long userId, String verdict);
 
     @Query("{ 'userId': ?0, 'verdict': 'OK', 'tags': { $in: ?1 } }")

@@ -282,10 +282,13 @@ public class RoadmapService {
         if (own >= COMPLETE_THRESHOLD && confidence >= COMPLETE_MIN_CONFIDENCE) {
             return "COMPLETED";
         }
+        // Done stays done, however it got there — by mastery, by hand, or by the placement
+        // gauntlet. This used to return UNLOCKED for a completed node whose own mastery was
+        // low, which undid every hand-marked and placed completion on the next regenerate.
+        if ("COMPLETED".equals(node.getStatus())) return "COMPLETED";
         if (!prereqsMet) {
-            // Never re-lock something the user has already started; that reads as lost progress.
-            return "COMPLETED".equals(node.getStatus()) || "IN_PROGRESS".equals(node.getStatus())
-                ? node.getStatus() : "LOCKED";
+            // Never re-lock something already opened; that reads as lost progress.
+            return node.getStatus() == null ? "LOCKED" : node.getStatus();
         }
         return own > 0 ? "IN_PROGRESS" : "UNLOCKED";
     }

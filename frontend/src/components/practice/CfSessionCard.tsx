@@ -11,6 +11,10 @@ import { useToast } from '@/components/common/Toaster'
 import { cfHelper, HELPER_COMMAND, apiBase } from '@/api/cfHelper'
 import { useAuthStore } from '@/store/authStore'
 import { desktopCf, isDesktop, openExternal } from '@/utils/desktopBridge'
+import { browserConnect, cfRelay, openCodeforces } from '@/api/cfBrowser'
+
+/** Where users get the CPIntel extension — a Chrome Web Store link, set per deployment. */
+const EXTENSION_URL = import.meta.env.VITE_CF_EXTENSION_URL as string | undefined
 
 /**
  * @param variant `card` stands on its own; `inline` drops the panel of its own and sits inside
@@ -48,6 +52,7 @@ export function CfSessionCard({ variant = 'card' }: { variant?: 'card' | 'inline
       <ConnectedRow
         handle={session.handle}
         expiresAt={session.expiresAt}
+        viaBrowser={session.viaBrowser}
         className={shell}
       />
     )
@@ -67,14 +72,15 @@ export function CfSessionCard({ variant = 'card' }: { variant?: 'card' | 'inline
           : <ChevronDown size={14} className="text-gray-500" />}
       </button>
 
-      {open && (isDesktop() ? <DesktopConnectForm /> : <ConnectForm />)}
+      {open && (isDesktop() ? <DesktopConnectForm />
+        : cfRelay() === 'extension' ? <ExtensionConnectForm /> : <NoExtensionForm />)}
     </div>
   )
 }
 
 function ConnectedRow(
-  { handle, expiresAt, className }:
-  { handle?: string; expiresAt?: string; className?: string },
+  { handle, expiresAt, viaBrowser, className }:
+  { handle?: string; expiresAt?: string; viaBrowser?: boolean; className?: string },
 ) {
   const disconnect = useDisconnectCfSession()
 
@@ -86,7 +92,11 @@ function ConnectedRow(
           <p className="text-sm text-gray-200 truncate">
             Submitting as <span className="font-medium text-gray-50">{handle}</span>
           </p>
-          {expiresAt && (
+          {viaBrowser ? (
+            <p className="text-[11px] text-gray-500">
+              Through this browser — problems and submissions use your Codeforces sign-in here
+            </p>
+          ) : expiresAt && (
             <p className="text-[11px] text-gray-500">
               Session stored until {formatDistanceToNowStrict(new Date(expiresAt),
                 { addSuffix: true })} — reconnect if submits start failing
@@ -171,6 +181,100 @@ function DesktopConnectForm() {
           with Disconnect here.
         </p>
       </div>
+    </div>
+  )
+}
+
+/**
+ * The website route, with the CPIntel extension installed.
+ *
+ * <p>The extension reads codeforces.com as this browser, which is signed in and has passed
+ * Codeforces' browser check; CPIntel learns the handle and nothing else. No cookie leaves the
+ * browser — which is also why this is the only website route that works on a hosted server,
+ * where replayed cookies meet Cloudflare's challenge.
+ */
+function ExtensionConnectForm() {
+  const qc = useQueryClient()
+  const toast = useToast()
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<{ message: string; check: boolean } | null>(null)
+
+  const connect = async () => {
+    setBusy(true)
+    setError(null)
+    try {
+      const status = await browserConnect()
+      qc.setQueryData(['practice', 'cf-session'], status)
+      qc.invalidateQueries({ queryKey: ['practice'] })
+      toast.push('success', `Connected as ${status.handle}`)
+    } catch (e: any) {
+      setError({
+        message: e?.response?.data?.message ?? e?.message ?? 'Could not connect',
+        check: !!e?.browserCheck,
+      })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-gray-400">
+        Uses the Codeforces account signed in on this browser. Sign in at codeforces.com first if
+        you have not. CPIntel stores only your handle.
+      </p>
+      {error && (
+        <div className="space-y-1.5">
+          <p className="flex items-start gap-1.5 text-[11px] text-red-300">
+            <ShieldAlert size={12} className="flex-shrink-0 mt-0.5" /> {error.message}
+          </p>
+          <button onClick={openCodeforces}
+            className="flex items-center gap-1 text-[11px] text-indigo-300 hover:underline">
+            <ExternalLink size={11} /> Open codeforces.com
+          </button>
+        </div>
+      )}
+      <button
+        onClick={connect}
+        disabled={busy}
+        className="btn-primary py-1.5 text-xs w-full flex items-center justify-center gap-1.5"
+      >
+        {busy ? <Loader2 size={12} className="animate-spin" /> : <Link2 size={12} />}
+        Connect with this browser
+      </button>
+    </div>
+  )
+}
+
+/**
+ * The website without the extension.
+ *
+ * <p>On a hosted server the extension is the way: the helper and pasted-cookie routes hand the
+ * server cookies it cannot use from its own address. They still work when CPIntel runs on this
+ * computer, so they stay, one click further down.
+ */
+function NoExtensionForm() {
+  const [local, setLocal] = useState(false)
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-gray-400">
+        Install the <span className="text-gray-200">CPIntel Codeforces Connector</span> extension
+        (Chrome, Edge or Brave), then reload this page. It lets CPIntel open problems and submit
+        through this browser, where your Codeforces sign-in lives.
+      </p>
+      {EXTENSION_URL ? (
+        <a href={EXTENSION_URL} target="_blank" rel="noreferrer"
+          className="btn-primary py-1.5 text-xs w-full flex items-center justify-center gap-1.5">
+          <ExternalLink size={12} /> Get the extension
+        </a>
+      ) : (
+        <p className="text-[11px] text-gray-500">Ask your administrator for the extension.</p>
+      )}
+      <button onClick={() => setLocal(v => !v)}
+        className="text-[11px] text-gray-500 hover:text-gray-300">
+        {local ? 'Hide' : 'Running CPIntel on this computer? Other ways to connect'}
+      </button>
+      {local && <ConnectForm />}
     </div>
   )
 }

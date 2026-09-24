@@ -24,8 +24,11 @@ export default function DashboardPage() {
     staleTime: 0,
     refetchOnMount: true,
   })
+  // Once per visit. The mutation object changes identity every render; depending on it would
+  // refresh in a loop.
   useEffect(() => {
     refresh.mutate()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const platforms = dashboard?.user?.platforms ?? []
@@ -65,7 +68,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Score row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="card">
           <div className="flex items-center gap-1.5 mb-1">
             <p className="card-header mb-0">Unified score</p>
@@ -77,13 +80,7 @@ export default function DashboardPage() {
                       bg-gray-800 border border-gray-700 rounded-lg p-3 
                       w-56 text-xs text-gray-300 shadow-xl">
                 <p className="font-medium text-gray-50 mb-1">How it's calculated</p>
-                <p>Normalizes each platform's rating to a 0–1000 scale, then blends them:</p>
-                <ul className="mt-1.5 space-y-0.5 text-gray-400">
-                  <li>Codeforces — 40%</li>
-                  <li>LeetCode — 35%</li>
-                  <li>CodeChef — 25%</li>
-                </ul>
-                <p className="mt-1.5 text-gray-500">Only linked platforms contribute.</p>
+                <p>Your Codeforces rating mapped onto a 0–1000 scale (4000 = 1000).</p>
               </div>
             </div>
           </div>
@@ -91,12 +88,10 @@ export default function DashboardPage() {
             {score?.unifiedScore != null ? score.unifiedScore.toFixed(0) : '—'}
           </p>
           <p className="text-xs text-gray-500 mt-1">
-            {platforms.length === 0
-              ? 'Link accounts to compute'
-              : `Based on ${platforms.length} platform${platforms.length > 1 ? 's' : ''}`}
+            {platforms.length === 0 ? 'Link Codeforces to compute' : 'From your Codeforces rating'}
           </p>
         </div>
-        {['CODEFORCES', 'LEETCODE', 'CODECHEF'].map(p => {
+        {['CODEFORCES'].map(p => {
           const acc = platforms.find((a: any) => a.platform === p)
           return (
             <div key={p} className="card">
@@ -125,18 +120,23 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Radar */}
-        {radarData.length > 0 && (
-          <div className="card">
-            <div className="flex items-center justify-between mb-4">
-              <p className="text-sm font-medium text-gray-300 flex items-center gap-1.5">
-                <Target size={14} className="text-indigo-400" /> Topic mastery
-              </p>
-              <Link to="/analytics"
-                className="text-xs text-indigo-400 flex items-center gap-0.5 hover:underline">
-                Full breakdown <ChevronRight size={12} />
-              </Link>
-            </div>
+        {/* Topic mastery */}
+        <div className="card">
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-sm font-medium text-gray-300 flex items-center gap-1.5">
+              <Target size={14} className="text-indigo-400" /> Topic mastery
+            </p>
+            <Link to="/analytics"
+              className="text-xs text-indigo-400 flex items-center gap-0.5 hover:underline">
+              Full breakdown <ChevronRight size={12} />
+            </Link>
+          </div>
+
+          {topics.length === 0 ? (
+            <p className="text-gray-500 text-sm text-center py-8">
+              No solved problems analysed yet — link a platform and refresh
+            </p>
+          ) : radarData.length >= 3 ? (
             <ResponsiveContainer width="100%" height={220}>
               <RadarChart data={radarData}>
                 <PolarGrid stroke={CHROME.grid} />
@@ -148,8 +148,34 @@ export default function DashboardPage() {
                 />
               </RadarChart>
             </ResponsiveContainer>
-          </div>
-        )}
+          ) : (
+            // A radar needs three axes to be a shape; with one or two it draws a lone spoke
+            // that reads as a broken chart. Bars say the same thing at any count.
+            <div className="space-y-3 py-2">
+              {topics.slice(0, 7).map((t: any) => {
+                const mastery = Math.round(t.masteryScore ?? 0)
+                return (
+                  <div key={t.topic}>
+                    <div className="flex items-center justify-between text-xs mb-1">
+                      <span className="text-gray-300">{t.topic}</span>
+                      <span className="tabular-nums text-gray-500">
+                        {mastery}%
+                        {t.problemsSolved != null && ` · ${t.problemsSolved} solved`}
+                      </span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-gray-800 overflow-hidden">
+                      <div className="h-full rounded-full bg-indigo-500"
+                        style={{ width: `${Math.min(100, Math.max(0, mastery))}%` }} />
+                    </div>
+                  </div>
+                )
+              })}
+              <p className="pt-1 text-[11px] text-gray-600">
+                More topics appear as solved problems are analysed.
+              </p>
+            </div>
+          )}
+        </div>
 
         {/* Recent contests */}
         <div className="card">
@@ -197,7 +223,7 @@ export default function DashboardPage() {
           <Zap size={24} className="text-indigo-400 mx-auto mb-3" />
           <p className="text-gray-300 font-medium mb-1">Get started with CPIntel</p>
           <p className="text-gray-500 text-sm mb-4">
-            Link your Codeforces, LeetCode, or CodeChef account to start tracking
+            Link your Codeforces account to start tracking
           </p>
           <Link to="/platforms" className="btn-primary inline-flex items-center gap-2">
             <Link2 size={14} /> Link a platform

@@ -50,7 +50,7 @@ public class PlatformAccount extends BaseEntity {
     private Boolean isActive = true;
 
     public enum Platform {
-        CODEFORCES, LEETCODE, CODECHEF
+        CODEFORCES
     }
 
     public enum SyncStatus {

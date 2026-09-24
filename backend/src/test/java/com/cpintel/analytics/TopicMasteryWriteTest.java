@@ -1,17 +1,13 @@
 package com.cpintel.analytics;
 
 import com.cpintel.entity.TopicMastery;
-import com.cpintel.entity.mongo.CcSubmission;
 import com.cpintel.entity.mongo.CfSubmission;
-import com.cpintel.entity.mongo.LcSubmission;
 import com.cpintel.exception.ApiException;
 import com.cpintel.repository.jpa.ContestSummaryRepository;
 import com.cpintel.repository.jpa.PlatformAccountRepository;
 import com.cpintel.repository.jpa.TopicMasteryRepository;
 import com.cpintel.repository.jpa.UserRepository;
-import com.cpintel.repository.mongo.CcSubmissionRepository;
 import com.cpintel.repository.mongo.CfSubmissionRepository;
-import com.cpintel.repository.mongo.LcSubmissionRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -51,8 +47,6 @@ class TopicMasteryWriteTest {
     private UserRepository users;
     private TopicMasteryRepository topicMastery;
     private CfSubmissionRepository cfSubmissions;
-    private LcSubmissionRepository lcSubmissions;
-    private CcSubmissionRepository ccSubmissions;
     private AnalyticsService service;
 
     @BeforeEach
@@ -60,19 +54,15 @@ class TopicMasteryWriteTest {
         users = mock(UserRepository.class);
         topicMastery = mock(TopicMasteryRepository.class);
         cfSubmissions = mock(CfSubmissionRepository.class);
-        lcSubmissions = mock(LcSubmissionRepository.class);
-        ccSubmissions = mock(CcSubmissionRepository.class);
 
         when(cfSubmissions.findByUserId(USER_ID)).thenReturn(List.of());
-        when(lcSubmissions.findByUserId(USER_ID)).thenReturn(List.of());
-        when(ccSubmissions.findByUserId(USER_ID)).thenReturn(List.of());
 
         service = new AnalyticsService(
             users,
             topicMastery,
             mock(ContestSummaryRepository.class),
             mock(PlatformAccountRepository.class),
-            new PracticeHistory(cfSubmissions, lcSubmissions, ccSubmissions),
+            new PracticeHistory(cfSubmissions),
             mock(AnalyticsEngine.class),
             mock(UnifiedRatingService.class),
             mock(ContestAnalysisService.class),
@@ -89,28 +79,6 @@ class TopicMasteryWriteTest {
         s.setProblemIndex(index);
         s.setVerdict(verdict);
         s.setProblemRating(rating);
-        s.setTags(List.of(tags));
-        s.setSubmittedAt(at);
-        return s;
-    }
-
-    private LcSubmission lc(String slug, String status, String difficulty,
-                            Instant at, String... tags) {
-        LcSubmission s = new LcSubmission();
-        s.setUserId(USER_ID);
-        s.setTitleSlug(slug);
-        s.setStatus(status);
-        s.setDifficulty(difficulty);
-        s.setTags(List.of(tags));
-        s.setSubmittedAt(at);
-        return s;
-    }
-
-    private CcSubmission cc(String code, String result, Instant at, String... tags) {
-        CcSubmission s = new CcSubmission();
-        s.setUserId(USER_ID);
-        s.setProblemCode(code);
-        s.setResult(result);
         s.setTags(List.of(tags));
         s.setSubmittedAt(at);
         return s;
@@ -204,43 +172,6 @@ class TopicMasteryWriteTest {
             "expected at least one NODE row");
         assertTrue(scope.getAllValues().contains(TopicMastery.Scope.TOPIC),
             "expected at least one TOPIC roll-up row");
-    }
-
-    @Test
-    @DisplayName("LeetCode and CodeChef history reaches the tree too")
-    void everyJudgeContributes() {
-        // The analytics pass read CfSubmissionRepository and nothing else, so a user who linked
-        // and synced the other two judges saw none of that work anywhere in the product.
-        when(lcSubmissions.findByUserId(USER_ID)).thenReturn(List.of(
-            lc("two-sum", "Accepted", "Easy", Instant.now(), "array", "hash-table")));
-        when(ccSubmissions.findByUserId(USER_ID)).thenReturn(List.of(
-            cc("FLOW001", "AC", Instant.now(), "implementation")));
-
-        service.updateTopicMasteryFromSubmissions(USER_ID);
-
-        verify(topicMastery, atLeastOnce()).upsertCounts(
-            eq(USER_ID), anyString(), anyString(), any(), any(),
-            anyInt(), anyInt(), any());
-    }
-
-    @Test
-    @DisplayName("the same problem on two judges stays two problems")
-    void problemIdentityIsPerPlatform() {
-        when(cfSubmissions.findByUserId(USER_ID)).thenReturn(List.of(
-            cf(1000, "A", "OK", DP_RATING, Instant.now(), "dp")));
-        when(ccSubmissions.findByUserId(USER_ID)).thenReturn(List.of(
-            cc("1000A", "AC", Instant.now(), "dp")));
-
-        service.updateTopicMasteryFromSubmissions(USER_ID);
-
-        ArgumentCaptor<Integer> attempted = ArgumentCaptor.forClass(Integer.class);
-        verify(topicMastery, atLeastOnce()).upsertCounts(
-            eq(USER_ID), anyString(), anyString(), any(), any(),
-            anyInt(), attempted.capture(), any());
-
-        assertTrue(attempted.getAllValues().stream().anyMatch(v -> v == 2),
-            "the two judges' problems must not collapse into one, got "
-                + attempted.getAllValues());
     }
 
     @Test

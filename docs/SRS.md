@@ -3,10 +3,10 @@
 ## 1. Introduction
 
 ### 1.1 Purpose
-CPIntel is a competitive programming management and intelligence platform. It aggregates a user's activity from Codeforces, LeetCode and CodeChef and produces analytics, mastery scoring and adaptive practice recommendations that no single platform provides on its own. It provides the working surface for a practice, contest or examination session — statement, editor, local test runs, submission — and lets an administrator run team contests and invigilated examinations over an external judge.
+CPIntel is a competitive programming management and intelligence platform. It reads a user's Codeforces activity and produces analytics, mastery scoring and adaptive practice recommendations that no single platform provides on its own. It provides the working surface for a practice, contest or examination session — statement, editor, local test runs, submission — and lets an administrator run team contests and invigilated examinations over an external judge.
 
 ### 1.2 Scope
-In scope: account linking and sync; topic mastery computation; contest analytics; unified cross-platform rating; recommendation generation; spaced-repetition revision scheduling; an adaptive skill roadmap; an in-app editor with local sample-test execution; forwarding submissions to Codeforces; live contest and examination participation with statements, submissions and rank; per-user file storage reachable during a contest; administrator tooling for accounts, audit, teams, contests and examinations; examination assignment, lifecycle, monitoring and session logging; and contest monitoring that reports absence from the contest window.
+In scope: account linking and sync; topic mastery computation; contest analytics; unified rating; recommendation generation; spaced-repetition revision scheduling; an adaptive skill roadmap; an in-app editor with local sample-test execution; forwarding submissions to Codeforces; live contest and examination participation with statements, submissions and rank; per-user file storage reachable during a contest; administrator tooling for accounts, audit, teams, contests and examinations; examination assignment, lifecycle, monitoring and session logging; and contest monitoring that reports absence from the contest window.
 
 Out of scope: **being an online judge.** CPIntel never decides a verdict. It compiles and runs code against sample tests as a rehearsal harness, and it forwards submissions to Codeforces or reads DOMjudge's scoreboard, but the judging itself always belongs to the external platform. Also out of scope: hosting contests of its own, authoring problems, and any form of proctoring beyond what a normal desktop application can observe about its own window.
 
@@ -15,7 +15,7 @@ An earlier revision listed code execution, direct submission and live contest tr
 ### 1.3 Definitions
 - **Mastery score** - 0-100 score per DSA topic derived from accuracy, solve volume and recency.
 - **Decay score** - portion of mastery score considered "faded" due to inactivity, computed via exponential decay.
-- **Unified score** - single cross-platform rating combining normalized Codeforces, LeetCode and CodeChef ratings.
+- **Unified score** - the user's Codeforces rating mapped onto a 0-1000 scale.
 - **Roadmap node** - one DSA sub-skill (e.g. "DFS & BFS") in the 35-node dependency tree.
 - **Team** - a named set of CPIntel users an administrator measures against each other. Stored as a contest group; "team" is the name used throughout the product.
 - **Event** - a contest or an examination. One record, with the rules that differ stated per kind.
@@ -39,7 +39,7 @@ The desktop build is the same SPA plus a main process that can observe the windo
 ### FR-1 Authentication
 - FR-1.1 Accounts carry an email address, a username and a password (Argon2id hashed). Self-registration is closed by default; an account is created by an administrator, and its first password is handed over with the username rather than emailed, because a mailed first password is a live credential sitting in a mailbox and because a closed deployment may have no mail transport at the moment accounts are made.
 - FR-1.1a Sign-in accepts either the email address or the username, in one field, matched case-insensitively. Neither form is treated as more authoritative, and a refusal does not indicate which of the identifier or the password was wrong.
-- FR-1.2 JWT access tokens (15 min) with rotating refresh tokens (7 day) stored server-side and revocable.
+- FR-1.2 JWT access tokens (15 min, held in memory only) with rotating refresh tokens (7 day) stored server-side and revocable, and delivered to the browser only as an HttpOnly cookie.
 - FR-1.3 Logout blacklists the active access token in Redis until natural expiry.
 - FR-1.4 Refresh re-checks that the account is still active, so an account deactivated mid-session cannot renew itself.
 - FR-1.5 An administrator can retire every access token a user currently holds, so a role change or deactivation takes effect within seconds rather than at token expiry.
@@ -50,11 +50,11 @@ The desktop build is the same SPA plus a main process that can observe the windo
 - FR-1.10 With no mail transport configured, the system still operates: the message and its link are written to the application log so an operator can complete a reset by hand, and startup warns that delivery is off. A deployment on a closed network is a supported arrangement rather than a misconfiguration.
 
 ### FR-2 Platform integration
-- FR-2.1 Users link one account per platform (Codeforces, LeetCode, CodeChef).
+- FR-2.1 Users link a Codeforces account. (LeetCode and CodeChef were supported and dropped: their APIs give only part of a user's history.)
 - FR-2.2 Handle existence is validated against the live platform before linking.
 - FR-2.3 Initial link triggers a full async sync of submission history into MongoDB.
 - FR-2.4 Subsequent syncs are incremental, run on demand or nightly via scheduler.
-- FR-2.5 CodeChef has no public JSON API; profile data is obtained via HTML scraping (Jsoup) since this is the only available method.
+- FR-2.5 Codeforces web pages (statements, the submit form) are fetched by the user's own browser — the CPIntel extension, or the desktop app — and read by the server; a hosted server cannot fetch them itself.
 
 ### FR-3 Topic mastery
 - FR-3.1 Mongo-stored submissions are normalized into PostgreSQL `topic_mastery` rows per canonical topic (14 topics: Arrays, Strings, Binary Search, Two Pointers, Greedy, DP, Graphs, Trees, Segment Trees, Binary Lifting, Number Theory, Bit Manipulation, Tries, Geometry).
@@ -93,7 +93,7 @@ The desktop build is the same SPA plus a main process that can observe the windo
 ### FR-9 Practice, contest and examination workspace
 - FR-9.1 Problems may be searched by id, name, rating band and tag; statements are rendered with mathematics typeset — as HTML from Codeforces, as the problem package's PDF from DOMjudge.
 - FR-9.2 An in-app Monaco editor keeps a separate buffer per problem, so switching problems never loses work.
-- FR-9.3 Solutions may be compiled and run on the backend host against editable test cases seeded from the statement's samples. This is a rehearsal harness and reports itself as such; it is not a verdict.
+- FR-9.3 Solutions may be compiled and run against editable test cases seeded from the statement's samples — on a shared server in an isolated runner container, never in the backend. This is a rehearsal harness and reports itself as such; it is not a verdict.
 - FR-9.3a The runner supports C++ and Python 3. Each toolchain is probed per request rather than at startup, so one installed on a running host becomes available without a restart, and a language whose toolchain is absent is offered as unavailable with the reason rather than omitted — a contestant who cannot find a language is told why.
 - FR-9.3b An interpreted language is still parsed before it is run, so that a syntax error is reported once as a build failure rather than as an identical runtime error on every test case.
 - FR-9.3c Every language is held to the same wall-clock, CPU, address-space, output-size and process-count limits. A language exempted from the address-space limit would be able to exhaust the host's memory, which the others cannot.
@@ -136,15 +136,17 @@ The desktop build is the same SPA plus a main process that can observe the windo
 - FR-11A.5g An examination with no restriction set accepts whatever the judge accepts. This is the default.
 - FR-11A.6 An administrator sets the away-time threshold and the desktop restrictions per examination.
 - FR-11A.7 A candidate sees only the examinations assigned to them; an examination that exists but is not theirs is answered as not found rather than as forbidden.
-- FR-11A.7a An examination may carry two passwords, both generated by an administrator: one for the whole paper, and one per candidate. Being assigned an examination is not sufficient to enter it — the assignment was made in advance and cannot establish that a candidate is in the room, and the window establishes that the paper is open but not that it is open for a particular person. The shared password establishes that a sitting has begun; the per-candidate code establishes which candidate is present, which the shared password cannot, since every candidate in the room holds it.
+- FR-11A.7.0 An examination is sat only in examination mode. The sign-in page accepts either the account's own password, which opens normal mode, or an examination sign-in password issued to that candidate for one examination, which opens examination mode for that examination. Examination sign-in passwords are issued anew for each examination and are accepted from one hour before its start until its end. An examination-mode session may reach only that examination (its paper, the editor's run facility within it, and its submissions) and expires fifteen minutes after the examination ends, including across token refresh. A normal-mode session may not enter, unlock, submit to or otherwise act on an examination that is scheduled or running. After an examination ends its submissions are read back in normal mode (FR-11A.13).
+- FR-11A.7a An examination may carry two passwords, both generated by an administrator: an optional room password for the whole paper, and the per-candidate examination sign-in password. Being assigned an examination is not sufficient to enter it — the assignment was made in advance and cannot establish that a candidate is in the room, and the window establishes that the paper is open but not that it is open for a particular person. The shared password establishes that a sitting has begun; the per-candidate code establishes which candidate is present, which the shared password cannot, since every candidate in the room holds it.
 - FR-11A.7b Neither password is sent by email, and no interface offers to send one. They are distributed physically by the invigilator. A password delivered to the same mailbox that holds the account credential would provide no assurance beyond the credential itself.
 - FR-11A.7c Both passwords are stored encrypted under a key held in the environment rather than hashed, because the invigilator must read them back to print candidate slips before the sitting and to reissue a lost code during it. An unreadable stored value — the result of a key rotation — is treated as no match rather than as an empty one.
 - FR-11A.7d An examination may be unlocked only while its window is open. A password obtained in advance does not grant access before the sitting begins.
 - FR-11A.7e A successful unlock grants access for the remainder of the window and records the password generation under which it was issued. Regenerating the shared password invalidates every access granted under the previous one. An administrator may also revoke one candidate's access individually, and reissue one candidate's code without affecting any other.
 - FR-11A.7f Until an examination is unlocked, a candidate is given its window, its rules and the fact that a password is required, and is not given its problem list.
 - FR-11A.7g A failed unlock does not indicate which password was incorrect, and is recorded in the audit trail and the session log.
-- FR-11A.7h An examination for which no password has been generated does not require one. An administrator who has generated nothing has not elected to require anything, and an inferred requirement would exclude candidates from a sitting about to begin.
-- FR-11A.7i Where no password key is configured, no examination password can be generated and the administrative interface states this, so the condition is discovered before a sitting rather than during one.
+- FR-11A.7h An examination for which no room password has been generated does not require one once the candidate is in examination mode. An administrator who has generated nothing has not elected to require anything, and an inferred requirement would exclude candidates from a sitting about to begin.
+- FR-11A.7i Where no password key is configured, no examination password can be generated — and so no examination can be sat — and the administrative interface and the startup log state this, so the condition is discovered before a sitting rather than during one.
+- FR-11A.7j Every tabular download (examination sign-in passwords, generated roster credentials) is an Office Open XML spreadsheet with one value per cell, so that it opens in columns regardless of the spreadsheet program or locale.
 - FR-11A.8 Entering an examination is recorded, as are problems opened, submissions, focus losses, returns, absences past the threshold, restrictions triggered, exits and completion.
 - FR-11A.9 An administrator has a live monitoring view of an examination in progress: who is present, who is away and for how long, focus-loss counts, last activity, submissions and current problem.
 - FR-11A.10 An administrator may read the session log during and after an examination, filtered by candidate, team, event type and time.
@@ -183,7 +185,5 @@ Full ER diagram: [`docs/ARCHITECTURE.md`](ARCHITECTURE.md#entity-relationship-di
 
 | Platform | Method | Notes |
 |---|---|---|
-| Codeforces | REST (`/api/user.info`, `/user.status`, `/user.rating`, `/problemset.problems`, `/contest.status`) plus authenticated HTML scraping for statements, submission and standings | Official API is stable and rate-limited client-side (500ms). `contest.standings` refuses filtered queries for public contests, which is why group standings are computed per handle |
-| LeetCode | Unofficial GraphQL endpoint | No official public API; schema can change without notice |
-| CodeChef | HTML scraping (Jsoup) | No public JSON API exists for user profiles |
+| Codeforces | REST (`/api/user.info`, `/user.status`, `/user.rating`, `/problemset.problems`, `/contest.status`) plus HTML pages (statements, submission) fetched by the user's browser and parsed server-side | Official API is stable and rate-limited client-side (500ms). `contest.standings` refuses filtered queries for public contests, which is why group standings are computed per handle |
 | DOMjudge | REST v4 (`/contests`, `/contests/{id}/teams`, `/contests/{id}/scoreboard`) | Self-hosted, so unconfigured by default; basic auth, omitted when the scoreboard is public. The whole board arrives in one request |

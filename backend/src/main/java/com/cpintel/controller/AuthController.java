@@ -2,6 +2,8 @@ package com.cpintel.controller;
 
 import com.cpintel.common.ApiResponse;
 import com.cpintel.dto.AuthDto;
+import com.cpintel.exception.ApiException;
+import com.cpintel.security.JwtProperties;
 import com.cpintel.security.JwtService;
 import com.cpintel.service.AuthService;
 import com.cpintel.service.PasswordService;
@@ -11,7 +13,10 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import java.time.Duration;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.util.StringUtils;
@@ -26,6 +31,40 @@ public class AuthController {
     private final AuthService authService;
     private final PasswordService passwordService;
     private final JwtService jwtService;
+    private final JwtProperties jwtProperties;
+
+    /**
+     * The refresh token travels as an HttpOnly cookie, never in a response body.
+     *
+     * <p>It is the long-lived half of a session. Kept in localStorage — where it used to be — any
+     * script that ever ran on the page could read it and sign in as this user from anywhere for
+     * a week. As an HttpOnly cookie scoped to the auth routes, page scripts cannot see it at all;
+     * only the refresh and logout requests carry it. The access token lives fifteen minutes and
+     * only in memory. SameSite=Strict: no other site can make the browser send it.
+     */
+    static final String REFRESH_COOKIE = "cpintel_refresh";
+
+    private ResponseEntity<ApiResponse<AuthDto.AuthResponse>> withRefreshCookie(
+            HttpStatus status, String message, AuthDto.AuthResponse auth, HttpServletRequest req) {
+        String token = auth.getRefreshToken();
+        auth.setRefreshToken(null);
+        ResponseCookie cookie = ResponseCookie.from(REFRESH_COOKIE, token == null ? "" : token)
+            .httpOnly(true)
+            // Behind nginx this is https (forwarded headers); plain http only in development.
+            .secure(req.isSecure())
+            .sameSite("Strict")
+            .path("/api/v1/auth")
+            .maxAge(Duration.ofMillis(jwtProperties.getRefreshExpiryMs()))
+            .build();
+        return ResponseEntity.status(status)
+            .header(HttpHeaders.SET_COOKIE, cookie.toString())
+            .body(message == null ? ApiResponse.ok(auth) : ApiResponse.ok(message, auth));
+    }
+
+    private static String clearedRefreshCookie(HttpServletRequest req) {
+        return ResponseCookie.from(REFRESH_COOKIE, "").httpOnly(true).secure(req.isSecure())
+            .sameSite("Strict").path("/api/v1/auth").maxAge(0).build().toString();
+    }
 
     @PostMapping("/register")
     @Operation(summary = "Register a new user")
@@ -33,8 +72,8 @@ public class AuthController {
         @Valid @RequestBody AuthDto.RegisterRequest req,
         HttpServletRequest httpReq
     ) {
-        return ResponseEntity.status(HttpStatus.CREATED)
-            .body(ApiResponse.ok("Registration successful", authService.register(req, httpReq)));
+        return withRefreshCookie(HttpStatus.CREATED, "Registration successful",
+            authService.register(req, httpReq), httpReq);
     }
 
     @PostMapping("/login")
@@ -43,16 +82,25 @@ public class AuthController {
         @Valid @RequestBody AuthDto.LoginRequest req,
         HttpServletRequest httpReq
     ) {
-        return ResponseEntity.ok(ApiResponse.ok(authService.login(req, httpReq)));
+        return withRefreshCookie(HttpStatus.OK, null, authService.login(req, httpReq), httpReq);
     }
 
     @PostMapping("/refresh")
     @Operation(summary = "Refresh access token")
     public ResponseEntity<ApiResponse<AuthDto.AuthResponse>> refresh(
-        @Valid @RequestBody AuthDto.RefreshRequest req,
+        @RequestBody(required = false) AuthDto.RefreshRequest req,
+        @CookieValue(name = REFRESH_COOKIE, required = false) String cookie,
         HttpServletRequest httpReq
     ) {
-        return ResponseEntity.ok(ApiResponse.ok(authService.refresh(req, httpReq)));
+        // The cookie is what the web app and the desktop app send. A token in the body is still
+        // accepted, for scripts and API clients that hold one themselves.
+        String token = req != null && StringUtils.hasText(req.getRefreshToken())
+            ? req.getRefreshToken() : cookie;
+        if (!StringUtils.hasText(token)) throw ApiException.unauthorized("Not signed in");
+        AuthDto.RefreshRequest resolved = new AuthDto.RefreshRequest();
+        resolved.setRefreshToken(token);
+        return withRefreshCookie(HttpStatus.OK, null, authService.refresh(resolved, httpReq),
+            httpReq);
     }
 
     @PostMapping("/logout")
@@ -63,7 +111,9 @@ public class AuthController {
     ) {
         String token = extractBearerToken(request);
         authService.logout(token, userId);
-        return ResponseEntity.ok(ApiResponse.message("Logged out successfully"));
+        return ResponseEntity.ok()
+            .header(HttpHeaders.SET_COOKIE, clearedRefreshCookie(request))
+            .body(ApiResponse.message("Logged out successfully"));
     }
 
     /**

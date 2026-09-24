@@ -9,6 +9,8 @@ import com.cpintel.entity.GroupContest;
 import com.cpintel.entity.GroupStanding;
 import com.cpintel.entity.User;
 import com.cpintel.exception.ApiException;
+import com.cpintel.files.ContestFilePolicy;
+import com.cpintel.files.FilesDto;
 import com.cpintel.entity.mongo.CodeSubmission;
 import com.cpintel.repository.jpa.*;
 import com.cpintel.repository.mongo.CodeSubmissionRepository;
@@ -30,6 +32,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -75,6 +78,7 @@ public class EventService {
     private final ExamAccessService access;
     private final ExamPasswordService examPasswords;
     private final AuditService auditService;
+    private final ContestFilePolicy filePolicy;
     private final ObjectMapper json;
 
     // ------------------------------------------------------------ admin reads
@@ -124,7 +128,9 @@ public class EventService {
             EventMapper.languagesOf(event),
             problems,
             teams,
-            users);
+            users,
+            filePolicy.enabledFor(event.getPlatform(), event.getExternalId()),
+            event.hasStarted(now));
     }
 
     @Transactional(readOnly = true)
@@ -228,6 +234,11 @@ public class EventService {
         if (req.problems() != null && !req.problems().isEmpty()) {
             replaceProblems(event, req.problems());
         }
+        // Always an explicit rule, even when the request did not say: an event that followed
+        // the deployment default would change under a scheduled paper the day somebody moved it.
+        // Unsaid means off for an examination, and whatever the default is now for a contest.
+        applyFileRule(event, req.personalFilesAllowed() != null ? req.personalFilesAllowed()
+            : event.isExam() ? Boolean.FALSE : filePolicy.defaultEnabled(), adminId);
 
         auditService.record(adminId, AuditService.EVENT_CREATED, kind,
             event.getContestId() + ":" + event.getName(), httpReq);
@@ -240,6 +251,23 @@ public class EventService {
         GroupContest event = require(eventId);
         String kind = normaliseKind(req.kind());
         requireWindowOrder(req.startsAt(), req.endsAt());
+
+        // Once people are sitting it, what they were told it would be is what it is. The only
+        // thing still movable is the end — extending a paper after a power cut is ordinary;
+        // changing its languages, problems or monitoring under a room of candidates is not.
+        Instant now = Instant.now();
+        if (event.hasStarted(now)) {
+            requireOnlyEndMoved(event, req, kind, now);
+            event.setName(req.name().trim());
+            event.setDescription(trimToNull(req.description()));
+            event.setEndsAt(req.endsAt());
+            eventRepository.save(event);
+            // Adding a candidate who was left off the roster stays possible mid-paper.
+            applyAssignments(event, req.teamIds(), req.userIds(), adminId);
+            auditService.record(adminId, AuditService.EVENT_UPDATED, kind,
+                eventId + ":end", httpReq);
+            return detail(eventId);
+        }
 
         event.setKind(kind);
         event.setPlatform(normalisePlatform(req.platform(), kind));
@@ -267,6 +295,7 @@ public class EventService {
 
         if (req.problems() != null) replaceProblems(event, req.problems());
         applyAssignments(event, req.teamIds(), req.userIds(), adminId);
+        applyFileRule(event, req.personalFilesAllowed(), adminId);
 
         auditService.record(adminId, AuditService.EVENT_UPDATED, kind,
             String.valueOf(eventId), httpReq);
@@ -296,6 +325,14 @@ public class EventService {
                     throw ApiException.badRequest(
                         "This is running. End it before taking it back to a draft — pulling it "
                             + "out from under the people sitting it would lose their session.");
+                }
+                // A draft counts as never started, which is what unlocks its settings. Allowing
+                // a finished event back to draft would let its settings and problems be
+                // rewritten after people sat it under them. Archiving is how it goes away.
+                if (event.hasStarted(now)) {
+                    throw ApiException.badRequest(
+                        "This has already been sat, so it cannot go back to a draft. Archive it "
+                            + "instead.");
                 }
                 event.setLifecycle(GroupContest.Lifecycle.DRAFT.name());
                 event.setArchivedAt(null);
@@ -384,6 +421,10 @@ public class EventService {
     public EventsDto.EventDetail unassignTeam(Long adminId, Long eventId, Long teamId,
                                               HttpServletRequest httpReq) {
         GroupContest event = require(eventId);
+        if (event.hasStarted(Instant.now())) {
+            throw ApiException.badRequest("It has started, so nobody can be removed from it — "
+                + "that would erase them from a paper they may already have sat.");
+        }
         assignmentRepository.deleteByContestContestIdAndGroupGroupId(eventId, teamId);
         // The owning team is also the one the by-team screens hang off, so removing it as a
         // participant has to remove it as the owner too or the event would still claim it.
@@ -400,6 +441,10 @@ public class EventService {
     public EventsDto.EventDetail unassignUser(Long adminId, Long eventId, Long userId,
                                               HttpServletRequest httpReq) {
         GroupContest event = require(eventId);
+        if (event.hasStarted(Instant.now())) {
+            throw ApiException.badRequest("It has started, so nobody can be removed from it — "
+                + "that would erase them from a paper they may already have sat.");
+        }
         assignmentRepository.deleteByContestContestIdAndUserUserId(eventId, userId);
         auditService.record(adminId, AuditService.EVENT_UNASSIGNED, event.getKind(),
             eventId + ":user:" + userId, httpReq);
@@ -413,6 +458,10 @@ public class EventService {
                                                   EventsDto.ProblemsRequest req,
                                                   HttpServletRequest httpReq) {
         GroupContest event = require(eventId);
+        if (event.hasStarted(Instant.now())) {
+            throw ApiException.badRequest(
+                "It has started, so its problems are fixed.");
+        }
         replaceProblems(event, req.problems());
         auditService.record(adminId, AuditService.EVENT_PROBLEMS, event.getKind(),
             eventId + ":" + (req.problems() == null ? 0 : req.problems().size()), httpReq);
@@ -485,11 +534,14 @@ public class EventService {
             requiresPassword,
             unlocked,
             examPasswords.requiresExamPassword(event),
-            examPasswords.requiresPasscode(eventId, userId),
+            // The personal code is the examination sign-in password now; nothing inside the
+            // paper asks for it again.
+            false,
             // Reading your own code back belongs to a paper that is over. During one it would
             // be a second window on the same work, and there is nothing to recover: the editor
             // still has it.
-            stage == GroupContest.Lifecycle.ENDED || stage == GroupContest.Lifecycle.ARCHIVED);
+            stage == GroupContest.Lifecycle.ENDED || stage == GroupContest.Lifecycle.ARCHIVED,
+            com.cpintel.security.SessionMode.isExamSessionFor(eventId));
     }
 
     /**
@@ -754,6 +806,131 @@ public class EventService {
         assignmentRepository.save(ContestAssignment.builder()
             .contest(event).group(team).assignedBy(adminId).build());
         return true;
+    }
+
+    /**
+     * Refuses an edit to a started event that changes anything but its end time.
+     *
+     * <p>The form sends every field every time, so this compares rather than looking for
+     * which fields are present: a save that only moved the end passes, and anything else is
+     * named in the refusal so the admin knows which change was not taken.
+     */
+    private void requireOnlyEndMoved(GroupContest event, EventsDto.EventRequest req,
+                                     String kind, Instant now) {
+        List<String> changed = new ArrayList<>();
+        if (!kind.equals(event.getKind())) changed.add("kind");
+        if (!normalisePlatform(req.platform(), kind).equals(event.getPlatform())) {
+            changed.add("judge");
+        }
+        if (!req.externalId().trim().equals(event.getExternalId())) changed.add("judge contest");
+        if (!Objects.equals(req.startsAt(), event.getStartsAt())) changed.add("start time");
+        if (!Objects.equals(trimToNull(req.rules()), event.getRules())) changed.add("rules");
+        if (!Objects.equals(trimToNull(req.url()), event.getUrl())) changed.add("link");
+        if (!normaliseVisibility(req.visibility(), kind).equals(event.getVisibility())) {
+            changed.add("visibility");
+        }
+        if (lockdownFor(req.lockdownRequired(), kind) != Boolean.TRUE.equals(
+                event.getLockdownRequired())) {
+            changed.add("monitoring");
+        }
+        if (!Objects.equals(normaliseThreshold(req.awayThresholdSeconds()),
+                event.getAwayThresholdSeconds())) {
+            changed.add("away threshold");
+        }
+        if (!Objects.equals(joinLanguages(req.allowedLanguages()), event.getAllowedLanguages())) {
+            changed.add("languages");
+        }
+        if (req.desktopPolicy() != null && !req.desktopPolicy().withDefaults(event.isExam())
+                .equals(EventMapper.policyOf(event, json))) {
+            changed.add("desktop restrictions");
+        }
+        if (req.personalFilesAllowed() != null && req.personalFilesAllowed()
+                != filePolicy.enabledFor(event.getPlatform(), event.getExternalId())) {
+            changed.add("private files");
+        }
+        if (req.teamId() != null && (event.getGroup() == null
+                || !req.teamId().equals(event.getGroup().getGroupId()))) {
+            changed.add("owning team");
+        }
+        if (req.problems() != null && !problemKeys(req.problems())
+                .equals(problemKeys(event.getContestId()))) {
+            changed.add("problems");
+        }
+        if (!Objects.equals(req.endsAt(), event.getEndsAt())
+                && event.getEndsAt() != null && !now.isBefore(event.getEndsAt())) {
+            changed.add("end time (it has already ended)");
+        }
+
+        if (!changed.isEmpty()) {
+            throw ApiException.badRequest("It has started, so its settings are fixed — only the "
+                + "end time can still be moved. Not saved: " + String.join(", ", changed) + ".");
+        }
+    }
+
+    /** A problem list reduced to what an edit could change, in the order it is shown. */
+    private List<String> problemKeys(List<EventsDto.ProblemRequest> requested) {
+        List<String> keys = new ArrayList<>();
+        List<EventsDto.ProblemRequest> sorted = new ArrayList<>(requested);
+        int[] order = {0};
+        Map<EventsDto.ProblemRequest, Integer> position = new java.util.IdentityHashMap<>();
+        for (EventsDto.ProblemRequest p : requested) {
+            position.put(p, p.ordering() == null ? order[0] : p.ordering());
+            order[0]++;
+        }
+        sorted.sort(Comparator.comparing(position::get));
+        for (EventsDto.ProblemRequest p : sorted) {
+            keys.add(problemKey(p.label().trim(), trimToNull(p.title()), trimToNull(p.externalId()),
+                p.points() == null ? null : BigDecimal.valueOf(p.points())));
+        }
+        return keys;
+    }
+
+    private List<String> problemKeys(Long eventId) {
+        return problemRepository.findByContestContestIdOrderByOrderingAscLabelAsc(eventId).stream()
+            .map(p -> problemKey(p.getLabel(), p.getTitle(), p.getExternalId(), p.getPoints()))
+            .toList();
+    }
+
+    private static String problemKey(String label, String title, String externalId,
+                                     BigDecimal points) {
+        return label + "\u0000" + title + "\u0000" + externalId + "\u0000"
+            + (points == null ? "" : points.stripTrailingZeros().toPlainString());
+    }
+
+    /**
+     * Records whether this event's contest serves personal files, as part of the event.
+     *
+     * <p>The rule is the same one the contest-files page writes, keyed by judge and contest,
+     * so the arena reads one answer whichever screen set it. Null means the form did not say,
+     * and whatever rule is in force is left alone.
+     */
+    private void applyFileRule(GroupContest event, Boolean allowed, Long adminId) {
+        if (allowed == null) return;
+        // The rule belongs to the judge's contest, which the arena knows and the event does not;
+        // two events laid over one DOMjudge contest therefore share it. Changing it for one would
+        // change it for the other without its admin knowing, so a conflicting value is refused.
+        boolean current = filePolicy.enabledFor(event.getPlatform(), event.getExternalId());
+        if (allowed != current && filePolicy.hasRule(event.getPlatform(), event.getExternalId())) {
+            List<String> sharing = eventRepository
+                .findByPlatformAndExternalId(event.getPlatform(), event.getExternalId()).stream()
+                .filter(other -> !other.getContestId().equals(event.getContestId()))
+                .map(GroupContest::getName)
+                .toList();
+            if (!sharing.isEmpty()) {
+                throw ApiException.badRequest("\"" + String.join("\", \"", sharing) + "\" "
+                    + (sharing.size() == 1 ? "runs" : "run") + " on the same judge contest ("
+                    + event.getExternalId() + ") and "
+                    + (current ? "allows" : "does not allow") + " private files. Events on one "
+                    + "judge contest share that setting — change it there, or use a separate "
+                    + "contest on the judge.");
+            }
+        }
+        if (filePolicy.hasRule(event.getPlatform(), event.getExternalId()) && allowed == current) {
+            return;
+        }
+        filePolicy.setRule(event.getPlatform(), event.getExternalId(), adminId,
+            new FilesDto.RuleRequest(allowed,
+                "Set with " + event.getKind().toLowerCase(Locale.ROOT) + " " + event.getName()));
     }
 
     /**

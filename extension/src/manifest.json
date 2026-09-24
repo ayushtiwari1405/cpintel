@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "CPIntel Codeforces Connector",
+  "version": "0.1.0",
+  "description": "Lets CPIntel open Codeforces problems and submit your solutions through this browser, where your Codeforces sign-in lives.",
+  "host_permissions": ["https://codeforces.com/*"],
+  "permissions": ["declarativeNetRequestWithHostAccess"],
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [
+    {
+      "matches": ["__CPINTEL_ORIGINS__"],
+      "js": ["content.js"],
+      "run_at": "document_start"
+    }
+  ]
+}

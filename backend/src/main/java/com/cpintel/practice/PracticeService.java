@@ -94,13 +94,28 @@ public class PracticeService {
      * that can be done anonymously.
      */
     public PracticeDto.ProblemDetail getProblem(Long userId, int contestId, String index) {
-        CfModels.Submission.Problem meta = problemsetClient.getAllProblems().stream()
-            .filter(p -> contestId == (p.getContestId() == null ? -1 : p.getContestId()))
-            .filter(p -> index.equalsIgnoreCase(p.getIndex()))
-            .findFirst().orElse(null);
+        return getProblem(userId, contestId, index, false);
+    }
 
+    /**
+     * @param cachedOnly answer from the cache or not at all, with issue NOT_CACHED on a miss.
+     *                   For a page that will fetch the statement through the user's browser:
+     *                   a server fetch would only reach Cloudflare's challenge.
+     */
+    public PracticeDto.ProblemDetail getProblem(Long userId, int contestId, String index,
+                                                boolean cachedOnly) {
+        CfModels.Submission.Problem meta = problemMeta(contestId, index);
         Integer rating = meta == null ? null : meta.getRating();
         List<String> tags = meta == null || meta.getTags() == null ? List.of() : meta.getTags();
+
+        if (cachedOnly) {
+            PracticeDto.ProblemDetail hit = scraper.cached(contestId, index, rating, tags);
+            if (hit != null) return hit;
+            return new PracticeDto.ProblemDetail(String.valueOf(contestId), index.toUpperCase(),
+                meta != null && meta.getName() != null ? meta.getName() : contestId + index,
+                rating, tags, null, null, null, null, null, null, null, null, List.of(),
+                scraper.problemUrl(contestId, index), false, null, "NOT_CACHED");
+        }
 
         CfSessionStore.StoredSession session = userId == null ? null : sessionStore.find(userId);
         return scraper.fetch(contestId, index, rating, tags,
@@ -108,15 +123,24 @@ public class PracticeService {
             session == null ? null : session.userAgent());
     }
 
+    /** The problemset API's entry for a problem — rating, tags, name — or null. */
+    public CfModels.Submission.Problem problemMeta(int contestId, String index) {
+        return problemsetClient.getAllProblems().stream()
+            .filter(p -> contestId == (p.getContestId() == null ? -1 : p.getContestId()))
+            .filter(p -> index.equalsIgnoreCase(p.getIndex()))
+            .findFirst().orElse(null);
+    }
+
     // ---------------------------------------------------------------- session
 
     public PracticeDto.SessionStatus sessionStatus(Long userId) {
         CfSessionStore.StoredSession s = sessionStore.find(userId);
         if (s == null) {
-            return new PracticeDto.SessionStatus(false, null, null, null, submitEnabled);
+            return new PracticeDto.SessionStatus(false, null, null, null, submitEnabled, false);
         }
         return new PracticeDto.SessionStatus(
-            true, s.handle(), s.linkedAt(), s.expiresAt(), submitEnabled);
+            true, s.handle(), s.linkedAt(), s.expiresAt(), submitEnabled,
+            s.cookieHeader() == null || s.cookieHeader().isBlank());
     }
 
     /**

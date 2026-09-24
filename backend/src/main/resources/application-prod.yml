@@ -31,7 +31,9 @@ management:
 
 cpintel:
   runner:
-    # Off in prod: this deployment is multi-user and network-reachable, where compiling and
-    # running submitted code would hand every account a shell on the server. The editor
-    # still works; it just cannot run code, and the UI says so.
-    enabled: false
+    # On, but never in this process: every run goes to the isolated runner container, which
+    # holds none of this backend's secrets and sandboxes each run. SecretsCheck refuses to
+    # start prod with the runner on and no url, so it cannot quietly fall back to running
+    # submitted code next to the database credentials.
+    enabled: ${CPINTEL_RUNNER_ENABLED:true}
+    url: ${CPINTEL_RUNNER_URL:http://runner:8090}

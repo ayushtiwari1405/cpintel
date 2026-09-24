@@ -42,6 +42,8 @@ contextBridge.exposeInMainWorld('cpintelDesktop', {
     connect: (apiBase: string, token: string, handle?: string) =>
       ipcRenderer.invoke('cf:connect', apiBase, token, handle),
     forget: () => ipcRenderer.invoke('cf:forget'),
+    fetch: (request: { method?: 'GET' | 'POST'; url: string; form?: Record<string, string> }) =>
+      ipcRenderer.invoke('cf:fetch', request),
   },
 
   // Contest lockdown

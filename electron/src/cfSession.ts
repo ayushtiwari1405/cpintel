@@ -196,6 +196,54 @@ export function connectCodeforces(
 }
 
 /** Forget the stored Codeforces sign-in, so the next connect starts from a clean window. */
+/** A Codeforces request made for the page, as the extension makes them on the website. */
+export interface CfFetchRequest { method?: 'GET' | 'POST'; url: string; form?: Record<string, string> }
+export interface CfFetchResponse { status: number; url: string; body: string }
+
+let headersInstalled = false
+
+/**
+ * Fetches a Codeforces page with this app's own Codeforces session.
+ *
+ * <p>A hosted CPIntel server cannot fetch Codeforces' website — Cloudflare ties its clearance to
+ * the browser that earned it — so statements and submissions are fetched here instead and the
+ * page handed back for the server to read. The sign-in window above earned the clearance in this
+ * very session partition, which is why this works where a server replaying the cookies does not.
+ * Only https://codeforces.com, GET or POST.
+ */
+export async function fetchCodeforces(request: CfFetchRequest): Promise<CfFetchResponse> {
+  const url = new URL(request.url)
+  if (url.origin !== 'https://codeforces.com') {
+    throw new Error('Only https://codeforces.com can be fetched.')
+  }
+  const sess = session.fromPartition(PARTITION)
+
+  if (!headersInstalled) {
+    // Codeforces' forms expect to be posted from Codeforces. Requests from this session are
+    // only ever this app's own, so they can all carry its Origin and Referer.
+    sess.webRequest.onBeforeSendHeaders({ urls: ['https://codeforces.com/*'] }, (details, cb) => {
+      cb({ requestHeaders: {
+        ...details.requestHeaders,
+        Origin: 'https://codeforces.com',
+        Referer: 'https://codeforces.com/',
+      } })
+    })
+    headersInstalled = true
+  }
+
+  let body: FormData | undefined
+  if (request.method === 'POST') {
+    body = new FormData()
+    for (const [k, v] of Object.entries(request.form ?? {})) body.append(k, String(v))
+  }
+  const res = await sess.fetch(url.toString(), {
+    method: request.method === 'POST' ? 'POST' : 'GET',
+    body,
+    redirect: 'follow',
+  })
+  return { status: res.status, url: res.url, body: await res.text() }
+}
+
 export async function forgetCodeforces(): Promise<void> {
   const sess = session.fromPartition(PARTITION)
   await sess.clearStorageData({ storages: ['cookies'] })

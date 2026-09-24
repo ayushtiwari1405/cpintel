@@ -1,6 +1,6 @@
 import { NavLink } from 'react-router-dom'
 import {
-  LayoutDashboard, BarChart2, Lightbulb, Map, Link2, User, Zap, ChevronLeft,
+  LayoutDashboard, BarChart2, Map, Link2, User, Zap, ChevronLeft,
   ChevronRight, LogOut, Code2, Swords, Shield, Users, ScrollText, FolderCog,
   UsersRound, FileText } from 'lucide-react'
 import { useLogout } from '@/hooks/useAuth'
@@ -12,7 +12,9 @@ import { clsx } from 'clsx'
 const navItems = [
   { to: '/dashboard',       icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/analytics',       icon: BarChart2,        label: 'Analytics' },
-  { to: '/recommendations', icon: Lightbulb,        label: 'Recommend' },
+  // Recommendations is parked for now: the roadmap already says what to practise next, and
+  // two answers to the same question that can disagree are worse than one. The page and its
+  // route stay; re-add this line to bring it back.
   { to: '/roadmap',         icon: Map,              label: 'Roadmap' },
   { to: '/practice',        icon: Code2,            label: 'Practice' },
   { to: '/compete',         icon: Swords,           label: 'Compete' },
@@ -35,9 +37,16 @@ const adminItems = [
 interface Props {
   open: boolean
   onToggle: () => void
+  /**
+   * An examination is live in this tab. The links are shown but inert: following one would
+   * unmount the paper and release its monitor without anything being recorded.
+   */
+  locked?: boolean
+  /** Signed in with an examination password: no other page exists for this session. */
+  examMode?: boolean
 }
 
-export function Sidebar({ open, onToggle }: Props) {
+export function Sidebar({ open, onToggle, locked, examMode }: Props) {
   const logout = useLogout()
   const { user } = useAuth()
   const showAdmin = isAdmin(user)
@@ -63,8 +72,22 @@ export function Sidebar({ open, onToggle }: Props) {
         {open && <span className="font-semibold text-gray-50 text-sm">CPIntel</span>}
       </div>
 
-      {/* Nav */}
-      <nav className="flex-1 p-2 space-y-0.5 overflow-y-auto">
+      {examMode ? (
+        <div className="flex-1 p-3">
+          {open && (
+            <p className="rounded-lg border border-indigo-900 bg-indigo-950/40 px-2.5 py-2
+                          text-[11px] leading-relaxed text-indigo-200">
+              Examination mode. Only this paper is available; sign out when you are done, and
+              sign in with your own password for everything else.
+            </p>
+          )}
+        </div>
+      ) : (
+      <nav
+        className={clsx('flex-1 p-2 space-y-0.5 overflow-y-auto',
+          locked && 'pointer-events-none opacity-40')}
+        aria-disabled={locked || undefined}
+      >
         {navItems.map(({ to, icon: Icon, label }) => (
           <NavLink key={to} to={to} className={linkClass}>
             <Icon size={18} className="flex-shrink-0" />
@@ -96,6 +119,15 @@ export function Sidebar({ open, onToggle }: Props) {
           </div>
         )}
       </nav>
+
+      )}
+
+      {locked && open && (
+        <p className="mx-3 mb-2 rounded-lg border border-gray-800 bg-gray-950/60 px-2.5 py-2
+                      text-[11px] leading-relaxed text-gray-500">
+          Other pages are closed while your examination is running.
+        </p>
+      )}
 
       {/* User + logout */}
       <div className="p-2 border-t border-gray-800">

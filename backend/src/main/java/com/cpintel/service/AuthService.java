@@ -43,6 +43,9 @@ public class AuthService {
     private final AuditService auditService;
     private final RateLimitService rateLimiter;
     private final AppMetrics metrics;
+    private final com.cpintel.events.ExamLoginService examLogin;
+    private final com.cpintel.events.ExamAccessService examAccess;
+    private final com.cpintel.repository.jpa.GroupContestRepository events;
 
     /**
      * Whether anyone may create their own account.
@@ -140,6 +143,18 @@ public class AuthService {
         }
 
         if (!passwordEncoder.matches(req.getPassword(), user.getPasswordHash())) {
+            // Not the account password — perhaps the examination password on this person's
+            // slip, which signs them in to examination mode for that one paper instead.
+            var exam = examLogin.match(user.getUserId(), req.getPassword());
+            if (exam.isPresent()) {
+                rateLimiter.reset(ACCOUNT_BUCKET, identifier);
+                examAccess.onExamSignIn(exam.get(), user.getUserId());
+                auditService.record(user.getUserId(), AuditService.EXAM_SIGN_IN, "EXAM",
+                    String.valueOf(exam.get().getContestId()), httpReq);
+                log.info("User {} signed in to examination {}", user.getUserId(),
+                    exam.get().getContestId());
+                return buildAuthResponse(user, httpReq, exam.get());
+            }
             auditService.record(user.getUserId(), AuditService.LOGIN_FAILED, "USER",
                 "bad-password", httpReq);
             throw ApiException.unauthorized("Invalid credentials");
@@ -178,6 +193,17 @@ public class AuthService {
         if (!user.getIsActive())
             throw ApiException.forbidden("Account is deactivated");
 
+        // An examination session renews as one, and only while its paper is open. When the paper
+        // ends the candidate is signed out of examination mode rather than quietly handed an
+        // ordinary session they never signed in for.
+        if (token.getExamId() != null) {
+            var exam = events.findById(token.getExamId()).orElse(null);
+            if (exam == null || !examLogin.stillOpen(exam, Instant.now())) {
+                throw ApiException.unauthorized("The examination has ended. Sign in with your "
+                    + "account password to see your submissions under Past examinations.");
+            }
+            return buildAuthResponse(user, httpReq, exam);
+        }
         return buildAuthResponse(user, httpReq);
     }
 
@@ -224,13 +250,29 @@ public class AuthService {
     }
 
     private AuthDto.AuthResponse buildAuthResponse(User user, HttpServletRequest req) {
-        String accessToken  = jwtService.generateAccessToken(user.getUserId(), user.getEmail(), user.getRole());
+        return buildAuthResponse(user, req, null);
+    }
+
+    /** @param exam the paper an examination session is for; null for an ordinary session. */
+    private AuthDto.AuthResponse buildAuthResponse(User user, HttpServletRequest req,
+                                                   com.cpintel.entity.GroupContest exam) {
+        Long examId = exam == null ? null : exam.getContestId();
+        String accessToken  = jwtService.generateAccessToken(user.getUserId(), user.getEmail(),
+            user.getRole(), examId);
         String refreshToken = jwtService.generateRefreshToken();
+
+        // An examination session lives no longer than its paper.
+        Instant expires = Instant.now().plusMillis(7 * 24 * 60 * 60 * 1000L);
+        if (exam != null && exam.getEndsAt() != null) {
+            Instant paperEnd = exam.getEndsAt().plus(com.cpintel.events.ExamLoginService.AFTER_END);
+            if (paperEnd.isBefore(expires)) expires = paperEnd;
+        }
 
         RefreshToken rt = RefreshToken.builder()
             .user(user)
             .token(refreshToken)
-            .expiresAt(Instant.now().plusMillis(7 * 24 * 60 * 60 * 1000L))
+            .examId(examId)
+            .expiresAt(expires)
             .ipAddress(req.getRemoteAddr())
             .deviceInfo(req.getHeader("User-Agent"))
             .revoked(false)
@@ -241,6 +283,8 @@ public class AuthService {
             .accessToken(accessToken)
             .refreshToken(refreshToken)
             .user(userMapper.toProfile(user))
+            .mode(exam == null ? "NORMAL" : "EXAM")
+            .examId(examId)
             .build();
     }
 }

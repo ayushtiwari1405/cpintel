@@ -9,7 +9,13 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.validation.FieldError;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingRequestCookieException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
@@ -99,6 +105,25 @@ public class GlobalExceptionHandler {
         log.debug("No handler for request: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
             .body(new ErrorResponse("NOT_FOUND", "No such endpoint"));
+    }
+
+    /**
+     * A request the server could not read — wrong content type, a body that is not JSON, a
+     * missing parameter, the wrong method. That is the caller's mistake and a 4xx; left to the
+     * catch-all below it became a 500 and an ERROR in the log, which is where real incidents
+     * are read from.
+     */
+    @ExceptionHandler({HttpMediaTypeNotSupportedException.class, HttpMessageNotReadableException.class,
+        MissingServletRequestParameterException.class, MissingRequestCookieException.class,
+        MethodArgumentTypeMismatchException.class, HttpRequestMethodNotSupportedException.class})
+    public ResponseEntity<ErrorResponse> handleUnreadable(Exception ex) {
+        log.debug("Unreadable request: {}", ex.getMessage());
+        HttpStatus status = ex instanceof HttpMediaTypeNotSupportedException
+            ? HttpStatus.UNSUPPORTED_MEDIA_TYPE
+            : ex instanceof HttpRequestMethodNotSupportedException
+                ? HttpStatus.METHOD_NOT_ALLOWED : HttpStatus.BAD_REQUEST;
+        return ResponseEntity.status(status)
+            .body(new ErrorResponse("BAD_REQUEST", "The request could not be read"));
     }
 
     @ExceptionHandler(Exception.class)

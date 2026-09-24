@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import {
-  AlertTriangle, Code2, Eye, KeyRound, Loader2, Monitor, Plus, Save, ScrollText, Settings2,
+  AlertTriangle, Code2, Eye, KeyRound, Loader2, Lock, Monitor, Plus, Save, ScrollText, Settings2,
   Trash2, Users,
 } from 'lucide-react'
 import { clsx } from 'clsx'
@@ -216,11 +216,17 @@ const POLICY_LABELS: { key: keyof DesktopPolicy; label: string; hint: string }[]
     hint: 'A session that stops reporting shows as having left, either way.' },
   { key: 'clipboardGuard', label: 'Discard clipboard content from outside',
     hint: 'Content that appeared while the window was away is cleared.' },
+  { key: 'requireFullscreen', label: 'Require full screen',
+    hint: 'The paper stays covered until the candidate enters full screen; leaving it covers '
+      + 'the paper again and is recorded like leaving the window.' },
 ]
 
 function SettingsTab({ detail }: { detail: EventDetail }) {
   const update = useUpdateEvent()
   const { event } = detail
+  // Started: the server takes a new end time and name and refuses the rest, so the rest is
+  // shown as it is rather than offered as editable and then rejected.
+  const locked = detail.settingsLocked
 
   const [form, setForm] = useState({
     name: event.name,
@@ -233,6 +239,7 @@ function SettingsTab({ detail }: { detail: EventDetail }) {
     awayThresholdSeconds: event.awayThresholdSeconds,
     policy: detail.desktopPolicy,
     allowedLanguages: detail.allowedLanguages ?? [],
+    personalFilesAllowed: detail.personalFilesAllowed,
   })
 
   const { data: languageCatalog } = useEventLanguageCatalog()
@@ -263,12 +270,25 @@ function SettingsTab({ detail }: { detail: EventDetail }) {
         // out cleared the restriction each time anything else on this screen was saved.
         allowedLanguages: form.allowedLanguages,
         teamId: event.teamId,
+        personalFilesAllowed: form.personalFilesAllowed,
       },
     })
   }
 
   return (
     <div className="space-y-4">
+      {locked && (
+        <p className="flex items-start gap-2 rounded-lg border border-amber-900 bg-amber-950/40
+          px-3 py-2 text-xs leading-relaxed text-amber-200">
+          <Lock size={13} className="mt-0.5 flex-shrink-0" />
+          <span>
+            This has started, so its settings are fixed — candidates are sitting it under them.
+            Only the end time and the name can still change. Candidates can still be added on
+            the People tab.
+          </span>
+        </p>
+      )}
+
       <Panel title="The paper" description="What it is called, when it runs, and what it says">
         <div className="grid gap-3 p-4 sm:grid-cols-2">
           <label className="flex flex-col gap-1">
@@ -278,12 +298,13 @@ function SettingsTab({ detail }: { detail: EventDetail }) {
           </label>
           <label className="flex flex-col gap-1">
             <span className="text-xs text-gray-500">DOMjudge contest id</span>
-            <input value={form.externalId} maxLength={100} className={INPUT}
+            <input value={form.externalId} maxLength={100} className={INPUT} disabled={locked}
               onChange={e => setForm({ ...form, externalId: e.target.value })} />
           </label>
           <label className="flex flex-col gap-1">
             <span className="text-xs text-gray-500">Starts</span>
             <input type="datetime-local" value={form.startsAt} className={INPUT}
+              disabled={locked}
               onChange={e => setForm({ ...form, startsAt: e.target.value })} />
           </label>
           <label className="flex flex-col gap-1">
@@ -300,9 +321,39 @@ function SettingsTab({ detail }: { detail: EventDetail }) {
           <label className="flex flex-col gap-1 sm:col-span-2">
             <span className="text-xs text-gray-500">Rules</span>
             <textarea value={form.rules} maxLength={4000} rows={4} className={INPUT}
+              disabled={locked}
               placeholder="Shown to the candidate inside the examination, verbatim"
               onChange={e => setForm({ ...form, rules: e.target.value })} />
           </label>
+        </div>
+      </Panel>
+
+      {/* A disabled fieldset disables every control inside it, which is the lock in one place
+          rather than a `disabled` on each checkbox. */}
+      <fieldset disabled={locked} className="space-y-4 disabled:opacity-60">
+      <Panel
+        title="Private files"
+        description="Whether candidates may open their own uploaded notes and templates during it"
+      >
+        <div className="space-y-2 p-4">
+          {([
+            [false, 'Not allowed', 'The files panel is hidden and the server refuses reads.'],
+            [true, 'Allowed', 'Candidates can open and insert their own uploaded files.'],
+          ] as const).map(([value, label, hint]) => (
+            <label key={label} className="flex items-start gap-2">
+              <input
+                type="radio"
+                name="personal-files"
+                checked={form.personalFilesAllowed === value}
+                className="mt-0.5"
+                onChange={() => setForm({ ...form, personalFilesAllowed: value })}
+              />
+              <span className="text-sm text-gray-300">
+                {label}
+                <span className="block text-xs text-gray-500">{hint}</span>
+              </span>
+            </label>
+          ))}
         </div>
       </Panel>
 
@@ -402,11 +453,13 @@ function SettingsTab({ detail }: { detail: EventDetail }) {
               These are requests to the examination client. The desktop build applies what the
               operating system allows and reports what it could not; a browser applies almost
               none of them, and an examination sat in one records that its monitoring was the
-              weaker kind rather than showing a clean sheet.
+              weaker kind rather than showing a clean sheet. Full screen is the exception: both
+              enforce it.
             </p>
           </div>
         </div>
       </Panel>
+      </fieldset>
 
       <button
         onClick={save}
@@ -458,12 +511,15 @@ function PeopleTab({ detail }: { detail: EventDetail }) {
                 {team.name}
                 <span className="ml-2 text-xs text-gray-500">{team.memberCount} members</span>
               </span>
-              <button
-                onClick={() => unassignTeam.mutate({ eventId: event.eventId, teamId: team.teamId })}
-                className="text-xs text-gray-500 hover:text-red-400"
-              >
-                Remove
-              </button>
+              {/* Once it has started nobody can be taken off it — the server refuses. */}
+              {!detail.settingsLocked && (
+                <button
+                  onClick={() => unassignTeam.mutate({ eventId: event.eventId, teamId: team.teamId })}
+                  className="text-xs text-gray-500 hover:text-red-400"
+                >
+                  Remove
+                </button>
+              )}
             </li>
           ))}
         </ul>
@@ -510,12 +566,15 @@ function PeopleTab({ detail }: { detail: EventDetail }) {
                 {user.fullName && <span className="ml-2 text-xs text-gray-500">{user.fullName}</span>}
                 {!user.active && <span className="ml-2"><Pill tone="gray">inactive</Pill></span>}
               </span>
-              <button
-                onClick={() => unassignUser.mutate({ eventId: event.eventId, userId: user.userId })}
-                className="text-xs text-gray-500 hover:text-red-400"
-              >
-                Remove
-              </button>
+              {/* Once it has started nobody can be taken off it — the server refuses. */}
+              {!detail.settingsLocked && (
+                <button
+                  onClick={() => unassignUser.mutate({ eventId: event.eventId, userId: user.userId })}
+                  className="text-xs text-gray-500 hover:text-red-400"
+                >
+                  Remove
+                </button>
+              )}
             </li>
           ))}
         </ul>
@@ -580,7 +639,8 @@ function ProblemsTab({ detail }: { detail: EventDetail }) {
               .filter(row => row.label.trim())
               .map((row, index) => ({ ...row, ordering: index })),
           })}
-          disabled={save.isPending}
+          disabled={save.isPending || detail.settingsLocked}
+          title={detail.settingsLocked ? 'It has started, so its problems are fixed' : undefined}
           className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs
                      font-medium text-white transition-colors hover:bg-indigo-500
                      disabled:opacity-40"

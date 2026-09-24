@@ -82,7 +82,8 @@ public final class EventMapper {
         String stored = event.getDesktopPolicy();
         if (stored == null || stored.isBlank()) return fallback;
         try {
-            return json.readValue(stored, EventsDto.DesktopPolicy.class);
+            return json.readValue(stored, EventsDto.DesktopPolicy.class)
+                .withDefaults(event.isExam());
         } catch (Exception e) {
             log.warn("Unreadable desktop policy on event {}: {}",
                 event.getContestId(), e.getMessage());

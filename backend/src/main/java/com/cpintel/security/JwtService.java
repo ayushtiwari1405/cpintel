@@ -45,15 +45,28 @@ public class JwtService {
     }
 
     public String generateAccessToken(Long userId, String email, String role) {
+        return generateAccessToken(userId, email, role, null);
+    }
+
+    /**
+     * @param examId the examination this session was signed in for, with the examination
+     *               password; null for an ordinary session. See {@link SessionMode}.
+     */
+    public String generateAccessToken(Long userId, String email, String role, Long examId) {
+        Map<String, Object> claims = new java.util.HashMap<>(Map.of("email", email, "role", role));
+        if (examId != null) claims.put(EXAM_CLAIM, examId);
         return Jwts.builder()
             .id(UUID.randomUUID().toString())
             .subject(String.valueOf(userId))
-            .claims(Map.of("email", email, "role", role))
+            .claims(claims)
             .issuedAt(new Date())
             .expiration(new Date(System.currentTimeMillis() + props.getExpiryMs()))
             .signWith(signingKey(), Jwts.SIG.HS256)
             .compact();
     }
+
+    /** The claim naming the examination an examination session is for. */
+    public static final String EXAM_CLAIM = "exam";
 
     public String generateRefreshToken() {
         return UUID.randomUUID().toString() + "-" + UUID.randomUUID().toString();

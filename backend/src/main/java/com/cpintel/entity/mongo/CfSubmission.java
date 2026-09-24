@@ -13,6 +13,8 @@ import java.util.List;
 
 @Document(collection = "cf_submissions")
 @CompoundIndexes({
+    @CompoundIndex(name = "idx_cf_user_submission", def = "{'userId': 1, 'cfSubmissionId': 1}",
+                   unique = true),
     @CompoundIndex(name = "idx_cf_user_verdict", def = "{'userId': 1, 'verdict': 1}"),
     @CompoundIndex(name = "idx_cf_user_created", def = "{'userId': 1, 'createdAt': -1}")
 })

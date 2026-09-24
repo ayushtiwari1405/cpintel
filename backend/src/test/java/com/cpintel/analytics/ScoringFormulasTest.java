@@ -213,19 +213,6 @@ class ScoringFormulasTest {
         }
 
         @Test
-        @DisplayName("judges each platform against its own rating scale")
-        void scaleIsPerPlatform() {
-            // The same spread means very different things on two judges: +-40 is an ordinary
-            // Codeforces round and a wild LeetCode one. Scoring both against one divisor made
-            // anyone active on both look inconsistent for a reason that was not about them.
-            List<Integer> changes = List.of(-40, 45, -38, 42, 0);
-            double onCodeforces = ScoringFormulas.consistency(changes, "CODEFORCES");
-            double onLeetCode = ScoringFormulas.consistency(changes, "LEETCODE");
-            assertTrue(onCodeforces > onLeetCode,
-                "cf=" + onCodeforces + " lc=" + onLeetCode);
-        }
-
-        @Test
         @DisplayName("floors at zero rather than going negative on extreme spread")
         void neverNegative() {
             assertTrue(ScoringFormulas.consistency(
@@ -249,9 +236,6 @@ class ScoringFormulasTest {
         @CsvSource({
             "CODEFORCES, 2000, 500.00",
             "CODEFORCES, 4000, 1000.00",
-            "CODECHEF,   3500, 1000.00",
-            "LEETCODE,   1400, 0.00",
-            "LEETCODE,   2700, 500.00",
         })
         void mapsPlatformRangesOntoSharedScale(String platform, int rating, double expected) {
             assertEquals(expected, ScoringFormulas.normalizeRating(platform, rating), EPSILON);
@@ -265,12 +249,6 @@ class ScoringFormulasTest {
             assertEquals(0.0, ScoringFormulas.normalizeRating("CODEFORCES", -100), EPSILON);
         }
 
-        @Test
-        @DisplayName("gives a LeetCode account below the 1400 floor no credit")
-        void leetcodeFloor() {
-            assertEquals(0.0, ScoringFormulas.normalizeRating("LEETCODE", 1200), EPSILON);
-        }
-
         @ParameterizedTest
         @ValueSource(strings = {"UNKNOWN", "", "TOPCODER"})
         @DisplayName("falls back to a 0-3000 range for platforms it does not know")
@@ -282,33 +260,6 @@ class ScoringFormulasTest {
         @DisplayName("clamps a rating above the platform ceiling to 1000")
         void clampedAtCeiling() {
             assertEquals(1000.0, ScoringFormulas.normalizeRating("CODEFORCES", 9999), EPSILON);
-        }
-    }
-
-    @Nested
-    @DisplayName("unified score")
-    class Unified {
-
-        @Test
-        @DisplayName("is zero when no platform carries any weight")
-        void zeroWithoutPlatforms() {
-            assertEquals(0.0,
-                ScoringFormulas.unifiedScore(0, 0.40, 0, 0.35, 0, 0.25, 0), EPSILON);
-        }
-
-        @Test
-        @DisplayName("does not penalise a user for platforms they have not linked")
-        void renormalizesOverLinkedPlatformsOnly() {
-            double score = ScoringFormulas.unifiedScore(500, 0.40, 0, 0.35, 0, 0.25, 0.40);
-            assertEquals(500.0, score, EPSILON);
-        }
-
-        @Test
-        @DisplayName("weights platforms against each other when several are linked")
-        void weightedAcrossPlatforms() {
-            double expected = (600 * 0.40 + 200 * 0.35) / 0.75;
-            double score = ScoringFormulas.unifiedScore(600, 0.40, 200, 0.35, 0, 0.25, 0.75);
-            assertEquals(expected, score, 0.01);
         }
     }
 

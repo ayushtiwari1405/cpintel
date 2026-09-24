@@ -3,9 +3,13 @@ import type { ApiResponse } from '@/types'
 
 export interface AuthResponse {
   accessToken: string
-  refreshToken: string
   user: import('@/types').User
+  /** EXAM when signed in with an examination password: that one paper, nothing else. */
+  mode?: SessionMode
+  examId?: number | null
 }
+
+export type SessionMode = 'NORMAL' | 'EXAM'
 
 export const authApi = {
   // Self-registration is closed by default (cpintel.auth.registration-enabled) and there is no
@@ -25,8 +29,6 @@ export const authApi = {
   login: (data: { identifier: string; password: string }) =>
     apiClient.post<ApiResponse<AuthResponse>>('/auth/login', data).then(r => r.data),
 
-  refresh: (refreshToken: string) =>
-    apiClient.post<ApiResponse<AuthResponse>>('/auth/refresh', { refreshToken }).then(r => r.data),
 
   logout: () =>
     apiClient.post<ApiResponse<void>>('/auth/logout').then(r => r.data),

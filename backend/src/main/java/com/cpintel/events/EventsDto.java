@@ -51,16 +51,30 @@ public class EventsDto {
         /** Notice and report an attempt to quit the examination application. */
         boolean detectAppTermination,
         /** Discard clipboard content that arrived from outside while the window was away. */
-        boolean clipboardGuard
+        boolean clipboardGuard,
+        /**
+         * The paper is sat full screen: the workspace stays covered until the candidate enters
+         * full screen, and leaving it is recorded like leaving the window. Boxed because
+         * policies stored before it existed have no value, and those read as the default for
+         * their kind — see {@link #withDefaults}.
+         */
+        Boolean requireFullscreen
     ) {
         /** What an examination gets when nobody has said otherwise: watchful, not locked shut. */
         public static DesktopPolicy examDefault() {
-            return new DesktopPolicy(false, true, true, true, true, true);
+            return new DesktopPolicy(false, true, true, true, true, true, true);
         }
 
         /** A contest is not an examination; nothing is restricted unless it is asked for. */
         public static DesktopPolicy contestDefault() {
-            return new DesktopPolicy(false, false, false, false, false, false);
+            return new DesktopPolicy(false, false, false, false, false, false, false);
+        }
+
+        /** Fills a missing full-screen answer with the default for this kind of event. */
+        public DesktopPolicy withDefaults(boolean exam) {
+            if (requireFullscreen != null) return this;
+            return new DesktopPolicy(restrictWindowSwitching, blockNavigation, blockExternalApps,
+                detectLeavingExam, detectAppTermination, clipboardGuard, exam);
         }
     }
 
@@ -125,7 +139,14 @@ public class EventsDto {
         List<String> allowedLanguages,
         List<ProblemRow> problems,
         List<AssignedTeam> teams,
-        List<AssignedUser> users
+        List<AssignedUser> users,
+        /** Whether contestants may open their own uploaded files during it. */
+        boolean personalFilesAllowed,
+        /**
+         * True once it has started. Its settings are then fixed — the server refuses changes
+         * to anything but the end time — so the form shows them read-only.
+         */
+        boolean settingsLocked
     ) {}
 
     // ------------------------------------------------------------- admin writes
@@ -172,7 +193,13 @@ public class EventsDto {
         List<Long> teamIds,
         /** People who may enter by name, whatever team they are in. */
         List<Long> userIds,
-        List<ProblemRequest> problems
+        List<ProblemRequest> problems,
+        /**
+         * Whether contestants may open their personal files during it. Decided here, with the
+         * rest of the event, and fixed with it once it starts. Null leaves the contest's rule
+         * as it is (the deployment default, unless one was set).
+         */
+        Boolean personalFilesAllowed
     ) {}
 
     public record AssignmentRequest(
@@ -236,7 +263,12 @@ public class EventsDto {
         /** True when a code was issued to this candidate personally, so they must present it. */
         boolean needsPasscode,
         /** True when this candidate may read back the code they submitted. See ExamController. */
-        boolean canReviewSubmissions
+        boolean canReviewSubmissions,
+        /**
+         * True when the current session was signed in for this paper with its examination
+         * password. An ordinary session sees the paper's details and never its inside.
+         */
+        boolean examSession
     ) {}
 
     /** What a candidate types to open a paper. Never logged, never echoed back. */

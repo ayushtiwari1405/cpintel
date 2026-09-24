@@ -63,10 +63,8 @@ public class AnalyticsEngine {
     /**
      * How steady the user's contest results are, 0-100.
      *
-     * <p>Computed per platform and then averaged, rather than over every contest at once. A
-     * single standard deviation across judges was measuring the difference between Codeforces
-     * and LeetCode rating scales as though it were volatility in the user, so anyone active on
-     * both scored badly for a reason that had nothing to do with them.
+     * <p>Computed per platform and then averaged, rather than over every contest at once, since
+     * judges do not share rating scales. Only Codeforces is synced today.
      */
     @Transactional(readOnly = true)
     public double calculateConsistency(Long userId) {

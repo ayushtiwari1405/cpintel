@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { clsx } from 'clsx'
 import {
-  CheckCircle2, Clock, Eye, FileText, FolderOpen, ListOrdered, Loader2, Send, Swords, Trophy,
+  CheckCircle2, Clock, Eye, FileText, FolderOpen, ListOrdered, Loader2, Maximize, Send, Swords,
+  Trophy,
 } from 'lucide-react'
 
 import { CfSessionCard } from '@/components/practice/CfSessionCard'
@@ -30,11 +31,17 @@ import { useCfSession } from '@/hooks/usePractice'
 import { useEnterExam, useMyExam, useMyExams } from '@/hooks/useExams'
 import { useExamSession } from '@/hooks/useExamSession'
 import { useLockdown } from '@/hooks/useLockdown'
+import { useLogout } from '@/hooks/useAuth'
 import { useAwayMonitor } from '@/hooks/useAwayMonitor'
 import { useActiveGroupContest } from '@/hooks/useGroups'
 import { useMonitorHeartbeat } from '@/hooks/useMonitorHeartbeat'
 import { useViolationReporter } from '@/hooks/useViolationReporter'
-import type { CompetePlatform, ContestRef, MyExam, VerdictResponse } from '@/types'
+import { archiveApi } from '@/api/archiveApi'
+import { useToast } from '@/components/common/Toaster'
+import { useExamMode } from '@/store/examModeStore'
+import type {
+  CompetePlatform, ContestRef, ContestSubmission, MyExam, VerdictResponse,
+} from '@/types'
 import { parseSamples } from '@/utils/parseSamples'
 
 /** Survives a refresh mid-contest, which matters when the clock is running. */
@@ -60,7 +67,9 @@ const EXAM_KEY = 'cpintel.compete.exam'
  * that was about to start.
  */
 function examUnlocked(exam: MyExam): boolean {
-  return !exam.requiresPassword || exam.unlocked
+  // Only a session signed in with this paper's examination password is ever inside it; the
+  // server's `unlocked` already says so, and this keeps the screens from pretending otherwise.
+  return exam.examSession && exam.unlocked
 }
 
 /** What the old single-judge build stored: a bare Codeforces contest number. */
@@ -99,11 +108,16 @@ function restoreExamId(): number | null {
   return Number.isFinite(saved) && saved > 0 ? saved : null
 }
 
-export default function CompetePage() {
+/**
+ * @param examOnly set in examination mode (signed in with a paper's examination password):
+ *   the page is that paper and nothing else — no contests, no list, no way to another one.
+ */
+export default function CompetePage({ examOnly }: { examOnly?: number } = {}) {
   const qc = useQueryClient()
+  const logout = useLogout()
 
-  const [mode, setMode] = useState<Mode>(restoreMode)
-  const [examId, setExamId] = useState<number | null>(restoreExamId)
+  const [mode, setMode] = useState<Mode>(() => examOnly != null ? 'exams' : restoreMode())
+  const [examId, setExamId] = useState<number | null>(() => examOnly ?? restoreExamId())
   const [contestRef, setContestRef] = useState<ContestRef | null>(restoreContest)
   const [selected, setSelected] = useState<string | null>(null)
   const [languageId, setLanguageId] = useState('')
@@ -112,6 +126,9 @@ export default function CompetePage() {
     useState<'description' | 'problems' | 'submissions' | 'leaderboard'>('description')
   // Each problem keeps its own buffer — switching tabs must not lose work.
   const [sources, setSources] = useState<Record<string, string>>({})
+  /** The submission being fetched to reopen, so its row can show it is on the way. */
+  const [opening, setOpening] = useState<string | null>(null)
+  const toast = useToast(s => s.push)
 
   const { data: session } = useCfSession()
   const load = useLoadContest()
@@ -129,13 +146,15 @@ export default function CompetePage() {
   const enterExam = useEnterExam()
 
   useEffect(() => {
+    if (examOnly != null) return
     localStorage.setItem(MODE_KEY, mode)
-  }, [mode])
+  }, [mode, examOnly])
 
   useEffect(() => {
+    if (examOnly != null) return
     if (examId == null) localStorage.removeItem(EXAM_KEY)
     else localStorage.setItem(EXAM_KEY, String(examId))
-  }, [examId])
+  }, [examId, examOnly])
 
   /**
    * An examination drives the workspace rather than the other way round.
@@ -258,6 +277,15 @@ export default function CompetePage() {
 
   const examSession = useExamSession({ exam: inExam ? exam : null, lockdown })
 
+  // Tells the app's frame a paper is live, so it stops offering other pages. Cleared on the way
+  // out, including when the paper ends while this page is still open.
+  const setExamLive = useExamMode(s => s.setLive)
+  const examLive = inExam && !!contest?.running
+  useEffect(() => {
+    setExamLive(examLive)
+    return () => setExamLive(false)
+  }, [examLive, setExamLive])
+
   useViolationReporter({
     contestId: !inExam && groupContest?.lockdownRequired ? groupContest.contestId : null,
     active: !!contest?.running,
@@ -337,6 +365,51 @@ export default function CompetePage() {
     })
   }
 
+  /**
+   * Reopens a submission: its problem on the left, its code in the editor on the right.
+   *
+   * The judge's list carries no source, so the code comes out of CPIntel's archive, matched on
+   * the judge's submission id. The same query key as the history panel's, so a list that panel
+   * already fetched is reused rather than asked for again.
+   */
+  const openSubmission = async (sub: ContestSubmission) => {
+    if (!contestRef || !sub.index) return
+    const index = sub.index
+    setSelected(index)
+    setTab('description')
+    setOpening(sub.id)
+    try {
+      const page = await qc.fetchQuery({
+        queryKey: ['archive', 'problem', contestRef.platform, contestRef.id, index],
+        queryFn: () => archiveApi.forProblem(contestRef.platform, contestRef.id, index)
+          .then(r => r.data),
+        staleTime: 15_000,
+      })
+      const attempt = page.attempts.find(a => String(a.externalId) === sub.id)
+      if (!attempt) {
+        toast('info', 'That submission was not sent through CPIntel, so its code is not here.')
+        return
+      }
+      const found = attempt.id
+        ? await archiveApi.source(attempt.id).then(r => r.data)
+        : await archiveApi.codeforcesSource(contestRef.id, attempt.externalId!).then(r => r.data)
+
+      const current = (sources[index] ?? '').trim()
+      if (current && current !== found.source.trim() && !window.confirm(
+        `Replace what is in the editor for ${index} with this submission?`)) return
+
+      setSources(prev => ({ ...prev, [index]: found.source }))
+      // Only if the judge still offers that compiler; a dead id would fail at submit instead.
+      if (found.languageId && languages?.some(l => l.id === found.languageId)) {
+        setLanguageId(found.languageId)
+      }
+    } catch (err: any) {
+      toast('error', err?.response?.data?.message ?? 'Could not open that submission.')
+    } finally {
+      setOpening(null)
+    }
+  }
+
   const closeContest = () => {
     setContestRef(null)
     setSelected(null)
@@ -347,8 +420,19 @@ export default function CompetePage() {
     setExamId(null)
   }
 
-  /** The two halves of the arena, as one strip. */
-  const modeStrip = (
+  /*
+   * Examination mode records entering once the paper is open to this session — on arrival, or
+   * the moment its window opens while the candidate waits here.
+   */
+  const enterNow = examOnly != null && !!exam && exam.examSession
+    && exam.event.lifecycle === 'ACTIVE' && exam.unlocked && !exam.entered
+  useEffect(() => {
+    if (enterNow && !enterExam.isPending) enterExam.mutate(examOnly!)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enterNow])
+
+  /** The two halves of the arena, as one strip. Examination mode has only the one. */
+  const modeStrip = examOnly != null ? null : (
     <div className="flex items-center gap-1 rounded-lg border border-gray-800 bg-gray-900 p-1">
       {([
         { id: 'contests', label: 'Contests', icon: Swords },
@@ -384,6 +468,24 @@ export default function CompetePage() {
    * examination has ended, and what a candidate wants from it is the work they did, read out
    * of CPIntel's own archive rather than fetched from DOMjudge.
    */
+  if (mode === 'exams' && exam && exam.canReviewSubmissions && examOnly != null) {
+    // The paper is over; examination mode has nothing left to show. The code is kept, and is
+    // read back from the ordinary session, under Past examinations.
+    return (
+      <div className="flex flex-1 items-center justify-center p-6">
+        <div className="max-w-md rounded-2xl border border-gray-800 bg-gray-900 p-7 text-center">
+          <CheckCircle2 size={26} className="mx-auto text-indigo-400" />
+          <h1 className="mt-3 text-lg font-semibold text-gray-50">{exam.event.name} has ended</h1>
+          <p className="mt-2 text-sm leading-relaxed text-gray-400">
+            Your submissions are saved. Sign out, then sign in with your own password to read
+            the code you submitted under Compete → Examinations → Past examinations.
+          </p>
+          <button onClick={() => logout.mutate()} className="btn-primary mt-5">Sign out</button>
+        </div>
+      </div>
+    )
+  }
+
   if (mode === 'exams' && exam && exam.canReviewSubmissions) {
     return (
       <div className="flex-1 min-h-0 overflow-y-auto">
@@ -420,12 +522,41 @@ export default function CompetePage() {
    * fortnight ago and cannot say who is in the room, and the clock cannot say the paper is
    * open for this person, here.
    */
+  if (mode === 'exams' && exam && !exam.examSession) {
+    // An ordinary session looking at a paper that has not ended: its details, and how to sit it.
+    return (
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        <div className="mx-auto flex max-w-3xl flex-col gap-4 p-6">
+          {modeStrip}
+          <div className="rounded-2xl border border-gray-800 bg-gray-900 p-7">
+            <h1 className="text-lg font-semibold text-gray-50">{exam.event.name}</h1>
+            <p className="mt-2 text-sm leading-relaxed text-gray-400">
+              Examinations are sat in examination mode. When your invigilator says so, sign out
+              and sign in again with your username and the examination password on your slip —
+              not your own password. That opens this paper and nothing else.
+            </p>
+            <p className="mt-2 text-xs text-gray-500">
+              Your ordinary session cannot open, submit to, or change anything in the paper.
+              Once it ends, your code appears here under Past examinations.
+            </p>
+            <button onClick={() => setExamId(null)}
+              className="mt-5 rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 text-sm
+                text-gray-300 transition-colors hover:bg-gray-800">
+              Back to your examinations
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   if (mode === 'exams' && exam && !examUnlocked(exam)) {
     return (
       <div className="flex-1 min-h-0 overflow-y-auto">
         <div className="mx-auto flex max-w-3xl flex-col gap-4 p-6">
           {modeStrip}
-          <ExamUnlock exam={exam} onLeave={() => setExamId(null)} />
+          <ExamUnlock exam={exam}
+            onLeave={examOnly != null ? undefined : () => setExamId(null)} />
         </div>
       </div>
     )
@@ -437,7 +568,7 @@ export default function CompetePage() {
         <div className="mx-auto flex max-w-3xl flex-col gap-4 p-6">
           {modeStrip}
 
-          <ExamList
+          {examOnly == null && <ExamList
             exams={myExams}
             isLoading={examsLoading}
             entering={enterExam.isPending ? enterExam.variables ?? null : null}
@@ -446,9 +577,10 @@ export default function CompetePage() {
               setSelected(null)
               setSources({})
               setTab('description')
-              enterExam.mutate(id)
+              // Entering is recorded by the examination session itself; an ordinary session
+              // only looks — at the paper's details, or at its own code once it is over.
             }}
-          />
+          />}
 
           {examId != null && !contest && !contestError && (
             <div className="flex items-center justify-center gap-2 text-sm text-gray-500">
@@ -469,13 +601,15 @@ export default function CompetePage() {
                 {' '}Tell your invigilator — this usually means the account attached to you is
                 not registered for it.
               </p>
-              <button
-                onClick={() => setExamId(null)}
-                className="mt-2 rounded-md border border-amber-900 px-2 py-1 text-amber-200
-                           transition-colors hover:bg-amber-900/40"
-              >
-                Back to your examinations
-              </button>
+              {examOnly == null && (
+                <button
+                  onClick={() => setExamId(null)}
+                  className="mt-2 rounded-md border border-amber-900 px-2 py-1 text-amber-200
+                             transition-colors hover:bg-amber-900/40"
+                >
+                  Back to your examinations
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -574,6 +708,7 @@ export default function CompetePage() {
               pdfUrl={statementPdfUrl}
               pdfText={statementText}
               pdfError={statementPdfError}
+              samples={samples}
             />
           </div>
         )}
@@ -597,7 +732,12 @@ export default function CompetePage() {
 
         {tab === 'submissions' && (
           <div className="h-full min-h-0">
-            <SubmissionsList submissions={rows} isLoading={submissionsFetching} />
+            <SubmissionsList
+              submissions={rows}
+              isLoading={submissionsFetching}
+              onOpen={openSubmission}
+              opening={opening}
+            />
           </div>
         )}
       </div>
@@ -606,6 +746,31 @@ export default function CompetePage() {
 
   return (
     <div className="flex flex-col flex-1 min-h-0">
+      {/* The paper is covered, not merely warned about, until it is full screen: a notice is
+          easy to dismiss and read past; a cover is not. Nothing underneath is lost — the
+          buffers stay in state and the editor is still mounted behind it. */}
+      {inExam && examSession.fullscreenRequired && !examSession.fullscreen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-gray-950 p-6">
+          <div className="flex max-w-md flex-col items-center gap-3 text-center">
+            <Maximize size={28} className="text-indigo-400" />
+            <p className="text-base font-medium text-gray-100">
+              This examination is sat in full screen
+            </p>
+            <p className="text-sm leading-relaxed text-gray-500">
+              The paper appears once the window is full screen. Leaving full screen covers it
+              again and is recorded, the same way leaving the window is.
+            </p>
+            <button
+              onClick={examSession.enterFullscreen}
+              className="mt-1 flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2
+                         text-sm font-medium text-white transition-colors hover:bg-indigo-500"
+            >
+              <Maximize size={14} /> Enter full screen
+            </button>
+          </div>
+        </div>
+      )}
+
       {!inExam && needsCfSession && !session?.connected && (
         <div className="px-4 pt-3 flex-shrink-0">
           <CfSessionCard />
@@ -670,7 +835,7 @@ export default function CompetePage() {
           contest={contest}
           elapsed={elapsed}
           rank={rank}
-          onClose={closeContest}
+          onClose={examOnly != null ? undefined : closeContest}
           onOpenFiles={contest.personalFilesEnabled ? () => setFilesOpen(true) : undefined}
           lockdown={lockdown}
         />

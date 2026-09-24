@@ -59,6 +59,7 @@ class AdminConsoleAuthorizationTest extends AuthorizationTestBase {
     @MockBean private ExamMonitorService examMonitor;
     @MockBean private ExamPasswordService examPasswords;
     @MockBean private GroupMemberRepository members;
+    @MockBean private com.cpintel.repository.jpa.GroupContestRepository groupContests;
 
     private static final String[] ROUTES = {
         "/api/v1/admin/overview",

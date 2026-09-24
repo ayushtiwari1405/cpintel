@@ -7,17 +7,7 @@
     <meta name="description" content="CPIntel — Competitive Programming Intelligence Platform" />
     <title>CPIntel</title>
     <!-- Apply the saved (or OS) theme before first paint; ThemeContext keeps it in sync after. -->
-    <script>
-      (function () {
-        var t
-        try { t = localStorage.getItem('cpintel-theme') } catch (e) {}
-        if (t !== 'light' && t !== 'dark') {
-          t = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
-        }
-        if (t === 'dark') document.documentElement.classList.add('dark')
-        document.documentElement.style.colorScheme = t
-      })()
-    </script>
+    <script src="/theme-init.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -30,13 +20,7 @@
          packaged desktop build — leaves every statement as raw $$$ markup, which is
          unreadable. Statements are the core of the Practice and Compete pages, so this
          cannot depend on a third-party host being reachable. -->
-    <script>
-      window.MathJax = {
-        tex: { inlineMath: [['$$$', '$$$']], displayMath: [['$$$$$$', '$$$$$$']] },
-        options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] },
-        startup: { typeset: false },
-      }
-    </script>
+    <script src="/mathjax-config.js"></script>
     <script id="MathJax-script" async src="/mathjax/tex-mml-chtml.js"></script>
   </head>
   <body>

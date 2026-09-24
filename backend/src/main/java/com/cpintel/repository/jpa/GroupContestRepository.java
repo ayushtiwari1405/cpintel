@@ -20,6 +20,9 @@ public interface GroupContestRepository extends JpaRepository<GroupContest, Long
 
     List<GroupContest> findByKindOrderByStartsAtDesc(String kind);
 
+    /** Every event run on one judge contest — usually one, but nothing forbids reuse. */
+    List<GroupContest> findByPlatformAndExternalId(String platform, String externalId);
+
     /**
      * Everything one person may enter, whichever way they were given it.
      *

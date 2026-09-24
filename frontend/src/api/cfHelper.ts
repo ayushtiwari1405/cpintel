@@ -30,9 +30,6 @@ export interface HelperConnectResult {
   cookies?: string[]
 }
 
-/** Where the backend's development server listens, when nothing else says otherwise. */
-const DEV_BACKEND_ORIGIN = 'http://localhost:8080'
-
 /**
  * Absolute backend URL — the helper runs outside the browser, so a relative path is no use.
  *
@@ -47,7 +44,12 @@ const DEV_BACKEND_ORIGIN = 'http://localhost:8080'
 export function apiBase(): string {
   const configured = import.meta.env.VITE_API_URL
   if (configured && /^https?:\/\//i.test(configured)) return configured
-  return DEV_BACKEND_ORIGIN + API_BASE_URL
+  // The API is served from the same origin as this page — nginx in production, the Vite
+  // proxy in development — so the page's own origin is the answer everywhere. This used to
+  // fall back to http://localhost:8080, which was right only on a developer's machine: on a
+  // server it sent the desktop app's and the helper's Codeforces session to the user's own
+  // computer instead.
+  return new URL(API_BASE_URL, window.location.origin).toString().replace(/\/$/, '')
 }
 
 async function parse(res: Response) {

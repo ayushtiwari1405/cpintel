@@ -40,6 +40,16 @@ export interface ExamSession {
   away: boolean
   awayMs: number
   focusLosses: number
+  /** This paper is sat full screen, and it is live. */
+  fullscreenRequired: boolean
+  /** Whether the page is full screen right now. */
+  fullscreen: boolean
+  /** Asks the browser for full screen. Must be called from a click — browsers insist. */
+  enterFullscreen: () => void
+}
+
+function isFullscreen(): boolean {
+  return typeof document !== 'undefined' && !!document.fullscreenElement
 }
 
 function newId(): string {
@@ -305,6 +315,53 @@ export function useExamSession({ exam, lockdown }: Options): ExamSession {
     return () => window.removeEventListener('beforeunload', onBeforeUnload)
   }, [live, examId, enqueue])
 
+  /*
+   * Full screen, when the paper asks for it.
+   *
+   * Leaving is recorded the way leaving the window is — one event out, one back with how long
+   * it lasted — and the candidate is told, since the page is about to be covered anyway. Not
+   * being full screen on arrival records nothing: everybody starts that way, and the cover is
+   * what asks them in.
+   */
+  const fullscreenRequired = live && examId != null && !!exam?.desktopPolicy?.requireFullscreen
+  const [fullscreen, setFullscreen] = useState(isFullscreen)
+  const leftFullscreenAt = useRef<number | null>(null)
+
+  useEffect(() => {
+    if (!fullscreenRequired) return
+    const onChange = () => {
+      const now = isFullscreen()
+      setFullscreen(now)
+      if (!now) {
+        leftFullscreenAt.current = Date.now()
+        enqueue('LOCKDOWN_TRIGGERED', {
+          eventId: `${sessionId.current}-fs-out-${Date.now()}`,
+          detail: 'Left full screen',
+        })
+        notify('fullscreen', 'warn', 'You left full screen',
+          'This examination is sat in full screen, and leaving it has been recorded. Return '
+            + 'to full screen to carry on — your code is where you left it.')
+      } else if (leftFullscreenAt.current != null) {
+        const durationMs = Date.now() - leftFullscreenAt.current
+        leftFullscreenAt.current = null
+        enqueue('LOCKDOWN_TRIGGERED', {
+          eventId: `${sessionId.current}-fs-back-${Date.now()}`,
+          detail: 'Returned to full screen',
+          durationMs,
+        })
+      }
+    }
+    document.addEventListener('fullscreenchange', onChange)
+    return () => document.removeEventListener('fullscreenchange', onChange)
+  }, [fullscreenRequired, enqueue, notify])
+
+  const enterFullscreen = useCallback(() => {
+    document.documentElement.requestFullscreen?.().catch(() => {
+      notify('fullscreen', 'danger', 'Full screen was refused',
+        'This browser would not go full screen. Tell your invigilator.')
+    })
+  }, [notify])
+
   const problemOpened = useCallback((label: string) => {
     if (!live || examId == null) return
     enqueue('PROBLEM_OPENED', {
@@ -331,5 +388,9 @@ export function useExamSession({ exam, lockdown }: Options): ExamSession {
     away: !!lockdown?.away,
     awayMs: lockdown?.awayMs ?? 0,
     focusLosses: lockdown?.focusLosses ?? 0,
-  }), [notices, dismiss, problemOpened, completed, lockdown])
+    fullscreenRequired,
+    fullscreen,
+    enterFullscreen,
+  }), [notices, dismiss, problemOpened, completed, lockdown, fullscreenRequired, fullscreen,
+    enterFullscreen])
 }

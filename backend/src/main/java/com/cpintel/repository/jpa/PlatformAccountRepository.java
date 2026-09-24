@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
@@ -21,7 +22,9 @@ public interface PlatformAccountRepository extends JpaRepository<PlatformAccount
     @Query("SELECT pa FROM PlatformAccount pa WHERE pa.syncStatus = 'PENDING' OR pa.syncStatus = 'FAILED'")
     List<PlatformAccount> findAccountsPendingSync();
 
+    /** Its own transaction: it is called from the sync thread, where there is no other. */
     @Modifying
+    @Transactional
     @Query("UPDATE PlatformAccount pa SET pa.syncStatus = :status WHERE pa.accountId = :id")
     void updateSyncStatus(@Param("id") Long id, @Param("status") String status);
 
