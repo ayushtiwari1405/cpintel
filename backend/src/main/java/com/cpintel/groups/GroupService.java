@@ -237,12 +237,6 @@ public class GroupService {
         String platform = platformOf(req.platform());
         String externalId = req.externalId().trim();
 
-        contestRepository.findByGroupGroupIdAndPlatformAndExternalId(groupId, platform, externalId)
-            .ifPresent(existing -> {
-                throw ApiException.conflict(
-                    "This group already has " + platform + " contest " + externalId + ".");
-            });
-
         if (req.startsAt() != null && req.endsAt() != null && !req.endsAt().isAfter(req.startsAt())) {
             throw ApiException.badRequest("The contest must end after it starts.");
         }

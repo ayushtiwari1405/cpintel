@@ -622,6 +622,8 @@ public class EventService {
         return submissions
             .findByUserIdAndPlatformAndContestId(userId, event.getPlatform(), event.getExternalId())
             .stream()
+            // The judge contest may also have held an earlier round; only this paper's work.
+            .filter(row -> LiveExamGuard.madeDuring(event, row.getSubmittedAt()))
             .sorted(Comparator.comparing(CodeSubmission::getSubmittedAt,
                 Comparator.nullsLast(Comparator.reverseOrder())))
             .map(row -> new EventsDto.MySubmission(
@@ -655,6 +657,7 @@ public class EventService {
             // asked for and that the ended-paper rule would not bound.
             .filter(r -> event.getPlatform().equals(r.getPlatform()))
             .filter(r -> event.getExternalId().equals(r.getContestId()))
+            .filter(r -> LiveExamGuard.madeDuring(event, r.getSubmittedAt()))
             .orElseThrow(() -> ApiException.notFound(
                 "No submission of yours with that id on this examination."));
 

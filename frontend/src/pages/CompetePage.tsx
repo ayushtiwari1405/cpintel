@@ -17,6 +17,7 @@ import { SubmissionsList } from '@/components/compete/SubmissionsList'
 import { ExamList } from '@/components/exam/ExamList'
 import { ExamUnlock } from '@/components/exam/ExamUnlock'
 import { PastExamCode } from '@/components/exam/PastExamCode'
+import { PastExamProblems } from '@/components/exam/PastExamProblems'
 import { ExamNotices } from '@/components/exam/ExamNotices'
 import { EditorPane } from '@/components/workspace/EditorPane'
 import { SplitPane } from '@/components/workspace/SplitPane'
@@ -111,17 +112,29 @@ function restoreExamId(): number | null {
 /**
  * @param examOnly set in examination mode (signed in with a paper's examination password):
  *   the page is that paper and nothing else — no contests, no list, no way to another one.
+ * @param section which half of the arena this route is: Compete holds the contests and
+ *   Exams the examinations, each with its own place in the sidebar. Left out, the page
+ *   offers both behind a switch and remembers the last one.
  */
-export default function CompetePage({ examOnly }: { examOnly?: number } = {}) {
+export default function CompetePage({ examOnly, section }: {
+  examOnly?: number
+  section?: Mode
+} = {}) {
   const qc = useQueryClient()
   const logout = useLogout()
 
-  const [mode, setMode] = useState<Mode>(() => examOnly != null ? 'exams' : restoreMode())
+  const [mode, setMode] =
+    useState<Mode>(() => examOnly != null ? 'exams' : section ?? restoreMode())
   const [examId, setExamId] = useState<number | null>(() => examOnly ?? restoreExamId())
-  const [contestRef, setContestRef] = useState<ContestRef | null>(restoreContest)
+  // The saved contest is the Compete side's. On the examinations side the contest is always
+  // the open paper's, and saving it there would reopen the paper's judge contest in Compete.
+  const [contestRef, setContestRef] = useState<ContestRef | null>(
+    () => examOnly != null || section === 'exams' ? null : restoreContest())
   const [selected, setSelected] = useState<string | null>(null)
   const [languageId, setLanguageId] = useState('')
   const [filesOpen, setFilesOpen] = useState(false)
+  const [confirmFinish, setConfirmFinish] = useState(false)
+  const [finishing, setFinishing] = useState(false)
   const [tab, setTab] =
     useState<'description' | 'problems' | 'submissions' | 'leaderboard'>('description')
   // Each problem keeps its own buffer — switching tabs must not lose work.
@@ -142,13 +155,14 @@ export default function CompetePage({ examOnly }: { examOnly?: number } = {}) {
    * contest behind it.
    */
   const { data: myExams, isLoading: examsLoading } = useMyExams()
-  const { data: exam } = useMyExam(mode === 'exams' ? examId : null)
+  const { data: exam, dataUpdatedAt: examUpdatedAt } =
+    useMyExam(mode === 'exams' ? examId : null)
   const enterExam = useEnterExam()
 
   useEffect(() => {
-    if (examOnly != null) return
+    if (examOnly != null || section != null) return
     localStorage.setItem(MODE_KEY, mode)
-  }, [mode, examOnly])
+  }, [mode, examOnly, section])
 
   useEffect(() => {
     if (examOnly != null) return
@@ -218,8 +232,26 @@ export default function CompetePage({ examOnly }: { examOnly?: number } = {}) {
     contestRef ?? undefined, tab === 'leaderboard' && credentialsReady)
 
   // Tick once a second so the countdown moves between contest refetches.
-  useTicker(!!contest && (contest.phase === 'BEFORE' || contest.running))
+  useTicker((!!contest && (contest.phase === 'BEFORE' || contest.running))
+    || (mode === 'exams' && !!exam))
   const elapsed = dataUpdatedAt ? (Date.now() - dataUpdatedAt) / 1000 : 0
+  // Counted from the server's figure rather than this machine's clock, which in a lab may
+  // well be wrong; the exam is re-read every minute, so an extension reaches it too.
+  const examSecondsRemaining = exam
+    ? exam.secondsRemaining - (examUpdatedAt ? (Date.now() - examUpdatedAt) / 1000 : 0)
+    : undefined
+
+  const inExam = mode === 'exams' && !!exam
+  /**
+   * Whether what is open is live, and so watched.
+   *
+   * An examination is live for its own window, not its judge contest's: a paper can be set on
+   * a contest that runs for days, and reading a finished paper back must not switch the
+   * monitoring on again.
+   */
+  const roundLive = mode === 'exams'
+    ? !!exam && exam.event.lifecycle === 'ACTIVE' && (examSecondsRemaining ?? 0) > 0
+    : !!contest?.running
 
   /**
    * The desktop lock, held for exactly as long as the round is live.
@@ -230,7 +262,7 @@ export default function CompetePage({ examOnly }: { examOnly?: number } = {}) {
    * In the browser build this does nothing and returns null.
    */
   const desktopMonitor = useLockdown({
-    active: !!contest?.running,
+    active: roundLive,
     reason: contest?.name ?? 'Contest',
     // An examination carries its own restrictions and its own away threshold; an ordinary
     // contest sends none and the client keeps its defaults.
@@ -249,7 +281,7 @@ export default function CompetePage({ examOnly }: { examOnly?: number } = {}) {
    * web build look like the clean way to sit a monitored round.
    */
   const browserMonitor = useAwayMonitor(
-    !!contest?.running,
+    roundLive,
     // An examination sets its own threshold; a contest uses the default. What counts as
     // leaving a two-hour written paper is not what counts as leaving a five-hour round.
     exam ? exam.event.awayThresholdSeconds * 1000 : undefined)
@@ -273,14 +305,12 @@ export default function CompetePage({ examOnly }: { examOnly?: number } = {}) {
    * The examination log is the wider record — it holds the ordinary course of the session as
    * well — so it is the one an examination uses.
    */
-  const inExam = mode === 'exams' && !!exam
-
   const examSession = useExamSession({ exam: inExam ? exam : null, lockdown })
 
   // Tells the app's frame a paper is live, so it stops offering other pages. Cleared on the way
   // out, including when the paper ends while this page is still open.
   const setExamLive = useExamMode(s => s.setLive)
-  const examLive = inExam && !!contest?.running
+  const examLive = inExam && roundLive
   useEffect(() => {
     setExamLive(examLive)
     return () => setExamLive(false)
@@ -310,11 +340,12 @@ export default function CompetePage({ examOnly }: { examOnly?: number } = {}) {
   const rows = useMemo(() => submissions ?? [], [submissions])
 
   useEffect(() => {
+    if (mode === 'exams') return
     if (contestRef) localStorage.setItem(STORAGE_KEY, JSON.stringify(contestRef))
     else localStorage.removeItem(STORAGE_KEY)
     // The old key is cleared either way, so the migration above runs exactly once.
     localStorage.removeItem(LEGACY_STORAGE_KEY)
-  }, [contestRef])
+  }, [contestRef, mode])
 
   // Land on the first problem as soon as Codeforces publishes the list.
   useEffect(() => {
@@ -432,7 +463,7 @@ export default function CompetePage({ examOnly }: { examOnly?: number } = {}) {
   }, [enterNow])
 
   /** The two halves of the arena, as one strip. Examination mode has only the one. */
-  const modeStrip = examOnly != null ? null : (
+  const modeStrip = examOnly != null || section != null ? null : (
     <div className="flex items-center gap-1 rounded-lg border border-gray-800 bg-gray-900 p-1">
       {([
         { id: 'contests', label: 'Contests', icon: Swords },
@@ -478,7 +509,7 @@ export default function CompetePage({ examOnly }: { examOnly?: number } = {}) {
           <h1 className="mt-3 text-lg font-semibold text-gray-50">{exam.event.name} has ended</h1>
           <p className="mt-2 text-sm leading-relaxed text-gray-400">
             Your submissions are saved. Sign out, then sign in with your own password to read
-            the code you submitted under Compete → Examinations → Past examinations.
+            the code you submitted under Exams → Past examinations.
           </p>
           <button onClick={() => logout.mutate()} className="btn-primary mt-5">Sign out</button>
         </div>
@@ -496,7 +527,8 @@ export default function CompetePage({ examOnly }: { examOnly?: number } = {}) {
             <div className="min-w-0">
               <h1 className="truncate text-lg font-semibold text-gray-50">{exam.event.name}</h1>
               <p className="text-xs text-gray-500">
-                This examination has ended. Below is the code you submitted.
+                This examination has ended. Below are its questions and the code you
+                submitted.
               </p>
             </div>
             <button
@@ -508,7 +540,15 @@ export default function CompetePage({ examOnly }: { examOnly?: number } = {}) {
             </button>
           </div>
 
-          <PastExamCode exam={exam} />
+          <section className="flex flex-col gap-2">
+            <h2 className="text-sm font-medium text-gray-300">Questions</h2>
+            <PastExamProblems exam={exam} />
+          </section>
+
+          <section className="flex flex-col gap-2">
+            <h2 className="text-sm font-medium text-gray-300">Your code</h2>
+            <PastExamCode exam={exam} />
+          </section>
         </div>
       </div>
     )
@@ -796,14 +836,48 @@ export default function CompetePage({ examOnly }: { examOnly?: number } = {}) {
                 )}
               </p>
             </div>
-            <button
-              onClick={examSession.completed}
-              className="flex items-center gap-1.5 rounded-lg border border-gray-800
-                         bg-gray-900 px-3 py-1.5 text-xs text-gray-300 transition-colors
-                         hover:bg-gray-800"
-            >
-              <CheckCircle2 size={13} /> I have finished
-            </button>
+            {/* Asked in the page rather than with window.confirm: a native dialog takes
+                focus from the window, which the desktop lock would record as leaving it. */}
+            {confirmFinish ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs text-gray-400">
+                  Finish and sign out? Anything already submitted still counts.
+                </span>
+                <button
+                  onClick={() => setConfirmFinish(false)}
+                  disabled={finishing}
+                  className="rounded-lg border border-gray-800 bg-gray-900 px-3 py-1.5 text-xs
+                             text-gray-300 transition-colors hover:bg-gray-800"
+                >
+                  Keep working
+                </button>
+                <button
+                  onClick={async () => {
+                    setFinishing(true)
+                    await examSession.completed()
+                    logout.mutate()
+                  }}
+                  disabled={finishing}
+                  className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5
+                             text-xs font-medium text-white transition-colors
+                             hover:bg-indigo-500 disabled:opacity-60"
+                >
+                  {finishing
+                    ? <Loader2 size={13} className="animate-spin" />
+                    : <CheckCircle2 size={13} />}
+                  Yes, finish and sign out
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setConfirmFinish(true)}
+                className="flex items-center gap-1.5 rounded-lg border border-gray-800
+                           bg-gray-900 px-3 py-1.5 text-xs text-gray-300 transition-colors
+                           hover:bg-gray-800"
+              >
+                <CheckCircle2 size={13} /> I have finished
+              </button>
+            )}
           </div>
 
           {exam.rules && (
@@ -817,7 +891,7 @@ export default function CompetePage({ examOnly }: { examOnly?: number } = {}) {
 
       {/* Someone being watched is told so, on the screen where it is happening. A lock that
           reports on a contestant without saying so is a different and much worse product. */}
-      {!inExam && groupContest?.lockdownRequired && (
+      {!inExam && contest.running && groupContest?.lockdownRequired && (
         <div className="mx-4 mt-3 flex items-start gap-2 rounded-lg border border-indigo-900
           bg-indigo-950/40 px-3 py-2 text-xs text-indigo-200 flex-shrink-0">
           <Eye size={13} className="mt-0.5 flex-shrink-0" />
@@ -838,6 +912,7 @@ export default function CompetePage({ examOnly }: { examOnly?: number } = {}) {
           onClose={examOnly != null ? undefined : closeContest}
           onOpenFiles={contest.personalFilesEnabled ? () => setFilesOpen(true) : undefined}
           lockdown={lockdown}
+          examSecondsRemaining={inExam ? examSecondsRemaining : undefined}
         />
       </div>
 

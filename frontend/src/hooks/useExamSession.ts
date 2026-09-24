@@ -370,15 +370,26 @@ export function useExamSession({ exam, lockdown }: Options): ExamSession {
     })
   }, [live, examId, enqueue])
 
-  const completed = useCallback(() => {
+  /**
+   * The candidate is done, and is about to be signed out.
+   *
+   * Sent now rather than left to the next flush, because the session ends straight after and
+   * the queue would end with it. Whatever else is still queued goes in the same request; the
+   * server drops anything a periodic flush already delivered, by its event id. A failed send
+   * does not keep anyone in the paper — the heartbeat stopping says the same thing.
+   */
+  const completed = useCallback(async () => {
     if (examId == null) return
     enqueue('EXAM_COMPLETED', {
       eventId: `${sessionId.current}-completed`,
       detail: 'Marked as finished by the candidate',
     })
-    notify('done', 'info', 'Marked as finished',
-      'Your invigilator can see that you are done. Anything already submitted still counts.')
-  }, [examId, enqueue, notify])
+    try {
+      await examsApi.report(examId, queue.current.slice(-200))
+    } catch {
+      /* signed out regardless */
+    }
+  }, [examId, enqueue])
 
   return useMemo(() => ({
     notices,

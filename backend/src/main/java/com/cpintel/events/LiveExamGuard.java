@@ -56,6 +56,40 @@ public class LiveExamGuard {
         }
     }
 
+    /**
+     * Whether this was submitted while the paper was open — the only work that belongs to it.
+     *
+     * <p>A paper can be set on a judge contest that already held a practice round, so "this
+     * contest" is not enough to say what is the candidate's own work on this paper: their
+     * practice attempts, source included, sit under the same contest id. The window is.
+     */
+    public static boolean madeDuring(GroupContest exam, Instant at) {
+        return at != null && exam.getStartsAt() != null && !at.isBefore(exam.getStartsAt())
+            && (exam.getEndsAt() == null || !at.isAfter(exam.getEndsAt()));
+    }
+
+    /** The live examination set on this contest, if this person is sitting one. */
+    public Optional<GroupContest> liveExamOn(Long userId, String platform, String contestId) {
+        return liveExamFor(userId)
+            .filter(exam -> exam.getPlatform().equalsIgnoreCase(platform)
+                && exam.getExternalId().equals(contestId));
+    }
+
+    /**
+     * Throws when a live examination rules this submission out: another contest's, or this
+     * contest's from before the paper started.
+     */
+    public void requireSubmissionAllowed(Long userId, String platform, String contestId,
+                                         Instant submittedAt) {
+        requireContestAllowed(userId, platform, contestId);
+        liveExamOn(userId, platform, contestId)
+            .filter(exam -> !madeDuring(exam, submittedAt))
+            .ifPresent(exam -> {
+                throw ApiException.forbidden("Your examination is running, so only code "
+                    + "written during it can be opened.");
+            });
+    }
+
     /** Throws while any examination is live — for routes with no contest to scope to. */
     public void requireNoLiveExam(Long userId, String what) {
         liveExamFor(userId).ifPresent(exam -> {

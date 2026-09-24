@@ -14,6 +14,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/roadmap/gauntlet': 'Roadmap · Gauntlet',
   '/practice':        'Practice',
   '/compete':         'Compete',
+  '/exams':           'Exams',
   '/exam':            'Examination',
   '/platforms':       'Platforms',
   '/profile':         'Profile',
@@ -47,7 +48,7 @@ function titleFor(path: string): string {
  * workspaces: resizable panes that have to fill the window exactly, so a max width and a page
  * scrollbar would fight the split rather than help it.
  */
-const WORKSPACE_ROUTES = new Set(['/practice', '/compete', '/exam'])
+const WORKSPACE_ROUTES = new Set(['/practice', '/compete', '/exams', '/exam'])
 
 export default function AppLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(true)

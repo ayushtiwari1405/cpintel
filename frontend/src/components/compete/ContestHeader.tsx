@@ -34,9 +34,18 @@ interface Props {
   onOpenFiles?: () => void
   /** Null in the browser build, which has nothing to lock. */
   lockdown?: LockdownState | null
+  /**
+   * Set in an examination: seconds left in the paper, ticking already. The paper's window is
+   * its own and the judge contest under it may run for days, so this is then the only clock
+   * shown — the judge's phase, duration and countdown would only contradict it.
+   */
+  examSecondsRemaining?: number
 }
 
-export function ContestHeader({ contest, elapsed, rank, onClose, onOpenFiles, lockdown }: Props) {
+export function ContestHeader({
+  contest, elapsed, rank, onClose, onOpenFiles, lockdown, examSecondsRemaining,
+}: Props) {
+  const exam = examSecondsRemaining != null
   const before = contest.phase === 'BEFORE'
   const untilStart = contest.secondsUntilStart - elapsed
   const remaining = contest.secondsRemaining - elapsed
@@ -59,13 +68,15 @@ export function ContestHeader({ contest, elapsed, rank, onClose, onOpenFiles, lo
             {contest.name}
             <ExternalLink size={12} className="flex-shrink-0 text-gray-600" />
           </a>
-          <span className={clsx(
-            'badge flex-shrink-0',
-            contest.running ? 'badge-green'
-              : before ? 'badge-blue' : 'badge-gray'
-          )}>
-            {PHASE_LABELS[contest.phase] ?? contest.phase}
-          </span>
+          {!exam && (
+            <span className={clsx(
+              'badge flex-shrink-0',
+              contest.running ? 'badge-green'
+                : before ? 'badge-blue' : 'badge-gray'
+            )}>
+              {PHASE_LABELS[contest.phase] ?? contest.phase}
+            </span>
+          )}
           {contest.frozen && (
             <span className="badge-blue flex-shrink-0 gap-1">
               <Snowflake size={10} /> frozen
@@ -74,13 +85,26 @@ export function ContestHeader({ contest, elapsed, rank, onClose, onOpenFiles, lo
           <LockdownBadge state={lockdown ?? null} />
         </div>
         <div className="text-[11px] text-gray-600 mt-0.5">
-          #{contest.id} · {Math.round(contest.durationSeconds / 60)} min
+          #{contest.id}
+          {!exam && ` · ${Math.round(contest.durationSeconds / 60)} min`}
           {contest.problems.length > 0 && ` · ${contest.problems.length} problems`}
         </div>
       </div>
 
+      {exam && (
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <Timer size={15} className="text-green-400" />
+          <div className="leading-tight">
+            <div className="font-mono text-lg tabular-nums text-green-300">
+              {clock(examSecondsRemaining)}
+            </div>
+            <div className="text-[10px] text-gray-600 uppercase tracking-wide">remaining</div>
+          </div>
+        </div>
+      )}
+
       {/* Countdown before the start, remaining time once running. */}
-      {(before || contest.running) && (
+      {!exam && (before || contest.running) && (
         <div className="flex items-center gap-2 flex-shrink-0">
           <Timer size={15} className={contest.running ? 'text-green-400' : 'text-indigo-400'} />
           <div className="leading-tight">

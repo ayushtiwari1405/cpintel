@@ -42,8 +42,15 @@ public class SubmissionArchiveController {
         @PathVariable String index) {
         String judge = platform.toUpperCase(java.util.Locale.ROOT);
         exams.requireContestAllowed(userId, judge, contestId);
-        return ResponseEntity.ok(ApiResponse.ok(archive.attemptsForProblem(
-            userId, judge, contestId, index)));
+        ArchiveDto.AttemptPage page = archive.attemptsForProblem(userId, judge, contestId, index);
+        // The paper may share its judge contest with an earlier round; only its own attempts.
+        var live = exams.liveExamOn(userId, judge, contestId);
+        if (live.isPresent()) {
+            page = new ArchiveDto.AttemptPage(page.attempts().stream()
+                .filter(a -> LiveExamGuard.madeDuring(live.get(), a.submittedAt()))
+                .toList(), page.codeforcesReachable(), page.notice());
+        }
+        return ResponseEntity.ok(ApiResponse.ok(page));
     }
 
     @GetMapping("/recent")
@@ -52,13 +59,14 @@ public class SubmissionArchiveController {
         @AuthenticationPrincipal Long userId,
         @RequestParam(defaultValue = "50") int limit) {
         List<ArchiveDto.Attempt> all = archive.recent(userId, limit);
-        // Mid-examination, "everything I have written" is only this paper's code.
+        // Mid-examination, "everything I have written" is only what was written during it.
         var live = exams.liveExamFor(userId);
         if (live.isPresent()) {
             var exam = live.get();
             all = all.stream()
                 .filter(a -> exam.getPlatform().equalsIgnoreCase(a.platform())
-                    && exam.getExternalId().equals(a.contestId()))
+                    && exam.getExternalId().equals(a.contestId())
+                    && LiveExamGuard.madeDuring(exam, a.submittedAt()))
                 .toList();
         }
         return ResponseEntity.ok(ApiResponse.ok(all));
@@ -97,7 +105,8 @@ public class SubmissionArchiveController {
     /** Reads an archived source, refusing it when a live examination puts it out of bounds. */
     private ArchiveDto.Source scoped(Long userId, String archiveId) {
         ArchiveDto.Source source = archive.source(userId, archiveId);
-        exams.requireContestAllowed(userId, source.platform(), source.contestId());
+        exams.requireSubmissionAllowed(userId, source.platform(), source.contestId(),
+            source.submittedAt());
         return source;
     }
 }

@@ -109,8 +109,16 @@ export function AppRoutes() {
           <Route path="/roadmap/gauntlet" element={<GauntletPage />} />
           <Route path="/practice"        element={
             <ErrorBoundary scope="the practice workspace"><PracticePage /></ErrorBoundary>} />
+          {/* Keyed, so moving between the two starts a fresh page rather than carrying one
+              half's open contest or paper across into the other. */}
           <Route path="/compete"         element={
-            <ErrorBoundary scope="the contest workspace"><CompetePage /></ErrorBoundary>} />
+            <ErrorBoundary scope="the contest workspace">
+              <CompetePage key="contests" section="contests" />
+            </ErrorBoundary>} />
+          <Route path="/exams"           element={
+            <ErrorBoundary scope="the examination workspace">
+              <CompetePage key="exams" section="exams" />
+            </ErrorBoundary>} />
           <Route path="/exam"            element={
             <ErrorBoundary scope="the examination"><ExamModePage /></ErrorBoundary>} />
           <Route path="/platforms"       element={<PlatformsPage />} />

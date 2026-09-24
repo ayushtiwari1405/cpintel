@@ -8,15 +8,11 @@ import org.springframework.stereotype.Repository;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.Optional;
 
 @Repository
 public interface GroupContestRepository extends JpaRepository<GroupContest, Long> {
 
     List<GroupContest> findByGroupGroupIdOrderByStartsAtDesc(Long groupId);
-
-    Optional<GroupContest> findByGroupGroupIdAndPlatformAndExternalId(
-        Long groupId, String platform, String externalId);
 
     List<GroupContest> findByKindOrderByStartsAtDesc(String kind);
 

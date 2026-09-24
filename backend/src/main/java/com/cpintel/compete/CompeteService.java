@@ -45,6 +45,10 @@ public class CompeteService {
     private final ProctoringGate proctoring;
     private final LanguagePolicy languagePolicy;
     private final ExamSessionRecorder examSessions;
+    /** Keeps an earlier round on the same judge contest out of a paper's submission list. */
+    private final com.cpintel.events.LiveExamGuard liveExams;
+    /** A CPIntel event's own window, over the judge's, for whoever was given one. */
+    private final com.cpintel.events.EventWindow eventWindow;
 
     private Map<String, CompeteProvider> byPlatform;
 
@@ -95,7 +99,7 @@ public class CompeteService {
 
     public CompeteDto.ContestInfo contestInfo(Long userId, String platform, String contestId) {
         examGuard.requireContestAccess(userId, platform, contestId);
-        return provider(platform).contestInfo(userId, contestId);
+        return eventWindow.apply(userId, provider(platform).contestInfo(userId, contestId));
     }
 
     public PracticeDto.ProblemDetail statement(Long userId, String platform, String contestId,
@@ -167,6 +171,8 @@ public class CompeteService {
                                                CompeteDto.ContestSubmitRequest req) {
         examGuard.requireContestAccess(userId, platform, contestId);
         CompeteProvider target = provider(platform);
+        // Before the judge is asked: it may well still be open long after the event ended.
+        eventWindow.requireOpen(userId, target.platform(), contestId);
         proctoring.requireMonitored(userId, target.platform(), contestId);
 
         // Only when an admin actually restricted this event. The check costs a call to the
@@ -194,7 +200,14 @@ public class CompeteService {
     public List<CompeteDto.ContestSubmission> submissions(Long userId, String platform,
                                                           String contestId) {
         examGuard.requireContestAccess(userId, platform, contestId);
-        return provider(platform).submissions(userId, contestId);
+        List<CompeteDto.ContestSubmission> all = provider(platform).submissions(userId, contestId);
+        // A paper can be set on a judge contest that already held a round, and the judge
+        // lists that round's submissions too. Only what was submitted during the paper is its.
+        return liveExams.liveExamOn(userId, platform, contestId)
+            .map(exam -> all.stream()
+                .filter(s -> com.cpintel.events.LiveExamGuard.madeDuring(exam, s.createdAt()))
+                .toList())
+            .orElse(all);
     }
 
     public CompeteDto.RankInfo rank(Long userId, String platform, String contestId) {

@@ -18,6 +18,7 @@ const navItems = [
   { to: '/roadmap',         icon: Map,              label: 'Roadmap' },
   { to: '/practice',        icon: Code2,            label: 'Practice' },
   { to: '/compete',         icon: Swords,           label: 'Compete' },
+  { to: '/exams',           icon: FileText,         label: 'Exams' },
   { to: '/teams',           icon: UsersRound,       label: 'Teams' },
   { to: '/platforms',       icon: Link2,            label: 'Platforms' },
   { to: '/profile',         icon: User,             label: 'Profile' },
