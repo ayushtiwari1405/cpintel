@@ -37,6 +37,7 @@ class DomjudgeAccountServiceTest {
         UserRepository users = mock(UserRepository.class);
 
         when(domjudge.isConfigured()).thenReturn(true);
+        when(credentials.isConfigured()).thenReturn(true);
         when(users.existsById(USER)).thenReturn(true);
 
         service = new DomjudgeAccountService(domjudge, credentials, users);
@@ -266,6 +267,64 @@ class DomjudgeAccountServiceTest {
                 new DomjudgeDto.ProvisionRequest(USER, "ada", "pw", "   ", null));
 
             assertEquals("ada-on-judge", captureSaved().name());
+        }
+    }
+
+    @Nested
+    @DisplayName("changing the password")
+    class PasswordChange {
+
+        private DomjudgeCredentialStore.Stored current() {
+            return new DomjudgeCredentialStore.Stored("ada", "old-pw", "Ada L", "t7", "Team 7",
+                "t9", "Team 9", java.time.Instant.EPOCH);
+        }
+
+        @Test
+        @DisplayName("keeps the login, name and assigned team, and replaces only the password")
+        void replacesOnlyThePassword() {
+            when(credentials.find(USER)).thenReturn(current());
+            when(domjudge.whoami(any())).thenReturn(account("ada", "Ada L", "t7"));
+
+            service.changePassword(USER, "new-pw");
+
+            DomjudgeCredentialStore.Stored saved = captureSaved();
+            assertEquals("ada", saved.username());
+            assertEquals("new-pw", saved.password());
+            assertEquals("Ada L", saved.name());
+            assertEquals("t9", saved.assignedTeamId(), "the admin's choice survives");
+            assertTrue(saved.provisioned().isAfter(java.time.Instant.EPOCH));
+        }
+
+        @Test
+        @DisplayName("verifies the new password as the attached login before storing it")
+        void verifiesAsTheAttachedLogin() {
+            when(credentials.find(USER)).thenReturn(current());
+            when(domjudge.whoami(argThat(c -> c != null && "ada".equals(c.username())
+                && "new-pw".equals(c.password())))).thenReturn(account("ada", "Ada L", "t7"));
+
+            service.changePassword(USER, "new-pw");
+
+            verify(credentials).save(eq(USER), any());
+        }
+
+        @Test
+        @DisplayName("a rejected password leaves the working one in place")
+        void rejectedKeepsOld() {
+            when(credentials.find(USER)).thenReturn(current());
+            when(domjudge.whoami(any()))
+                .thenThrow(ApiException.badRequest("DOMjudge rejected that username and password."));
+
+            assertThrows(ApiException.class, () -> service.changePassword(USER, "typo"));
+            verify(credentials, never()).save(any(), any());
+        }
+
+        @Test
+        @DisplayName("refuses when nothing is attached, rather than inventing a login")
+        void nothingAttached() {
+            when(credentials.find(USER)).thenReturn(null);
+
+            assertThrows(ApiException.class, () -> service.changePassword(USER, "pw"));
+            verify(domjudge, never()).whoami(any());
         }
     }
 }

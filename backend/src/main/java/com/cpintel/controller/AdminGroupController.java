@@ -6,6 +6,8 @@ import com.cpintel.groups.GroupsDto;
 import com.cpintel.events.EventAnalyticsService;
 import com.cpintel.events.EventsDto;
 import com.cpintel.groups.RosterImportService;
+import com.cpintel.groups.DomjudgePasswordImportService;
+import com.cpintel.integration.domjudge.DomjudgeDto;
 import com.cpintel.security.Roles;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -38,6 +40,7 @@ public class AdminGroupController {
 
     private final GroupService groups;
     private final RosterImportService rosterImport;
+    private final DomjudgePasswordImportService domjudgePasswords;
     private final EventAnalyticsService analyticsService;
 
     @GetMapping
@@ -111,6 +114,20 @@ public class AdminGroupController {
         return ResponseEntity.ok(ApiResponse.ok(rosterImport.importRoster(
             adminId, groupId, req.text(), Boolean.TRUE.equals(req.dryRun()),
             Roles.isSuperAdmin(authentication), req.teamName(), httpReq)));
+    }
+
+    @PostMapping("/{groupId}/members/domjudge-passwords")
+    @Operation(summary = "Update the DOMjudge passwords of many members at once",
+        description = "Accepts djUsername,djPassword rows as CSV or tab-separated text. Each "
+            + "row replaces the stored password of the group member that login is attached to, "
+            + "after the judge accepts it; a member with nothing attached whose username is the "
+            + "login has it attached. Send dryRun=true first to verify every row and write "
+            + "nothing.")
+    public ResponseEntity<ApiResponse<DomjudgePasswordImportService.Result>> domjudgePasswords(
+        @PathVariable Long groupId,
+        @Valid @RequestBody DomjudgeDto.BulkPasswordRequest req) {
+        return ResponseEntity.ok(ApiResponse.ok(domjudgePasswords.update(
+            groupId, req.text(), Boolean.TRUE.equals(req.dryRun()))));
     }
 
     @PutMapping("/{groupId}/members/{userId}")

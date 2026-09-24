@@ -46,6 +46,12 @@ export type RosterRowStatus =
   | 'DUPLICATE'         // the same person appears earlier in the paste
   | 'INVALID'           // unusable row
 
+export type RosterDomjudgeStatus =
+  | 'NONE'       // no DOMjudge login on the row
+  | 'VERIFIED'   // the judge accepted it; attached on import
+  | 'ATTACHED'   // attached to the account
+  | 'FAILED'     // not attached; domjudgeMessage says why
+
 export interface RosterRowOutcome {
   line: number
   email: string | null
@@ -58,6 +64,10 @@ export interface RosterRowOutcome {
   userId: number | null
   /** Present only on a committed creation, and only in that one response. */
   generatedPassword: string | null
+  /** The DOMjudge login named on the row. Its password is never sent back. */
+  djUsername: string | null
+  domjudgeStatus: RosterDomjudgeStatus
+  domjudgeMessage: string | null
 }
 
 export interface RosterImportResult {
@@ -69,8 +79,37 @@ export interface RosterImportResult {
   alreadyMembers: number
   duplicates: number
   invalid: number
+  domjudgeOk: number
+  domjudgeFailed: number
   mayCreateAccounts: boolean
   blockedReason: string | null
+}
+
+export type DomjudgePasswordRowStatus =
+  | 'WILL_CHANGE'  // preview: judge accepted it; will replace the stored password
+  | 'WILL_ATTACH'  // preview: nothing attached; will be attached to the member of that name
+  | 'CHANGED'
+  | 'ATTACHED'
+  | 'NOT_FOUND'    // no member of the group has that login
+  | 'DUPLICATE'
+  | 'FAILED'
+
+export interface DomjudgePasswordRow {
+  line: number
+  djUsername: string | null
+  userId: number | null
+  username: string | null
+  status: DomjudgePasswordRowStatus
+  message: string
+}
+
+export interface DomjudgePasswordResult {
+  dryRun: boolean
+  rows: DomjudgePasswordRow[]
+  total: number
+  ok: number
+  notFound: number
+  failed: number
 }
 
 export const adminApi = {
@@ -216,6 +255,10 @@ export const adminApi = {
     apiClient.post<ApiResponse<RosterImportResult>>(
       `/admin/groups/${groupId}/members/import`, body).then(r => r.data),
 
+  domjudgePasswords: (groupId: number, body: { text: string; dryRun: boolean }) =>
+    apiClient.post<ApiResponse<DomjudgePasswordResult>>(
+      `/admin/groups/${groupId}/members/domjudge-passwords`, body).then(r => r.data),
+
   updateMember: (groupId: number, userId: number, body: { userId: number; externalHandle?: string }) =>
     apiClient.put<ApiResponse<GroupMember>>(`/admin/groups/${groupId}/members/${userId}`, body)
       .then(r => r.data),
@@ -279,6 +322,10 @@ export const adminDomjudgeApi = {
   }) =>
     apiClient.post<ApiResponse<DomjudgeAccount>>('/admin/domjudge/credentials', body)
       .then(r => r.data),
+
+  changePassword: (userId: number, password: string) =>
+    apiClient.put<ApiResponse<DomjudgeAccount>>(
+      `/admin/domjudge/credentials/${userId}/password`, { password }).then(r => r.data),
 
   detach: (userId: number) =>
     apiClient.delete<ApiResponse<void>>(`/admin/domjudge/credentials/${userId}`)

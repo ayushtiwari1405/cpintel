@@ -39,6 +39,23 @@ public class DomjudgeDto {
         @Size(max = 100) String teamId
     ) {}
 
+    /** A new password for the DOMjudge login already attached to a user. */
+    public record PasswordChangeRequest(
+        @NotBlank @Size(max = 200) String password
+    ) {}
+
+    /**
+     * New passwords for many attached logins at once, pasted as {@code djUsername,djPassword}.
+     *
+     * Sent whole, like a roster, so the preview the admin approves is produced by the same code
+     * that commits it.
+     */
+    public record BulkPasswordRequest(
+        @NotBlank @Size(max = 200_000) String text,
+        /** True to verify every row and write nothing. */
+        Boolean dryRun
+    ) {}
+
     /** One team an admin may put somebody in. */
     public record TeamOption(String id, String name) {}
 

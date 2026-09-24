@@ -5,6 +5,8 @@ import com.cpintel.entity.GroupMember;
 import com.cpintel.security.Roles;
 import com.cpintel.entity.User;
 import com.cpintel.exception.ApiException;
+import com.cpintel.integration.domjudge.DomjudgeAccountService;
+import com.cpintel.integration.domjudge.DomjudgeDto;
 import com.cpintel.repository.jpa.ContestGroupRepository;
 import com.cpintel.repository.jpa.GroupMemberRepository;
 import com.cpintel.repository.jpa.UnifiedScoreRepository;
@@ -41,6 +43,7 @@ class RosterImportServiceTest {
     private GroupMemberRepository members;
     private UserRepository users;
     private UnifiedScoreRepository scores;
+    private DomjudgeAccountService domjudge;
     private RosterImportService service;
 
     @BeforeEach
@@ -70,8 +73,10 @@ class RosterImportServiceTest {
         });
         when(members.save(any(GroupMember.class))).thenAnswer(inv -> inv.getArgument(0));
 
+        domjudge = mock(DomjudgeAccountService.class);
+
         service = new RosterImportService(groups, members, users, scores, encoder,
-            mock(AuditService.class));
+            mock(AuditService.class), domjudge);
     }
 
     private RosterImportService.ImportResult run(String text, boolean dryRun, boolean superAdmin) {
@@ -301,6 +306,163 @@ class RosterImportServiceTest {
 
             assertEquals("Team NEW", membership.getExternalHandle());
             verify(members).save(membership);
+        }
+    }
+
+    @Nested
+    @DisplayName("DOMjudge logins")
+    class DomjudgeLogins {
+
+        private DomjudgeDto.AccountStatus attached(String team) {
+            return new DomjudgeDto.AccountStatus(true, "team01", null, "7", team,
+                null, null, false, null, null);
+        }
+
+        @Test
+        @DisplayName("the preview checks the login against the judge and stores nothing")
+        void previewVerifies() {
+            when(domjudge.verify("team01", "pw1"))
+                .thenReturn(new DomjudgeAccountService.Verified(null, null, "7", "Team 01"));
+
+            var result = run("email,djUsername,djPassword\nasha@uni.edu,team01,pw1\n",
+                true, true);
+
+            var row = result.rows().get(0);
+            assertEquals(RosterImportService.DomjudgeStatus.VERIFIED, row.domjudgeStatus());
+            assertEquals(1, result.domjudgeOk());
+            verify(domjudge, never()).provision(any());
+        }
+
+        @Test
+        @DisplayName("a wrong password shows in the preview, before any account exists")
+        void previewReportsRejection() {
+            when(domjudge.verify("team01", "wrong"))
+                .thenThrow(ApiException.badRequest("DOMjudge rejected that username and password."));
+
+            var result = run("email,djUsername,djPassword\nasha@uni.edu,team01,wrong\n",
+                true, true);
+
+            var row = result.rows().get(0);
+            assertEquals(RosterImportService.DomjudgeStatus.FAILED, row.domjudgeStatus());
+            assertTrue(row.domjudgeMessage().contains("rejected"));
+            assertEquals(RosterImportService.RowStatus.CREATE_AND_ADD, row.status(),
+                "a bad login is reported beside the row, not a reason to skip the person");
+        }
+
+        @Test
+        @DisplayName("a new account is named after the DOMjudge login")
+        void usernameFollowsLogin() {
+            when(domjudge.provision(any())).thenReturn(attached("Team 01"));
+
+            var result = run("email,djUsername,djPassword\nasha@uni.edu,team01,pw1\n",
+                false, true);
+
+            assertEquals("team01", result.rows().get(0).username());
+            verify(users).save(argThat(u -> "team01".equals(u.getUsername())));
+        }
+
+        @Test
+        @DisplayName("an explicit username column still wins over the login")
+        void explicitUsernameWins() {
+            when(domjudge.provision(any())).thenReturn(attached("Team 01"));
+
+            run("email,username,djUsername,djPassword\nasha@uni.edu,asha,team01,pw1\n",
+                false, true);
+
+            verify(users).save(argThat(u -> "asha".equals(u.getUsername())));
+        }
+
+        @Test
+        @DisplayName("attaches the login to the new account and scores them under the judge's team")
+        void attachesAndUsesJudgeTeam() {
+            when(domjudge.provision(any())).thenReturn(attached("Team 01"));
+
+            var result = run("email,fullName,djUsername,djPassword\n"
+                + "asha@uni.edu,Asha Rao,team01,pw1\n", false, true);
+
+            ArgumentCaptor<DomjudgeDto.ProvisionRequest> req =
+                ArgumentCaptor.forClass(DomjudgeDto.ProvisionRequest.class);
+            verify(domjudge).provision(req.capture());
+            assertEquals(101L, req.getValue().userId());
+            assertEquals("team01", req.getValue().username());
+            assertEquals("pw1", req.getValue().password());
+            assertEquals("Asha Rao", req.getValue().name());
+
+            assertEquals(RosterImportService.DomjudgeStatus.ATTACHED,
+                result.rows().get(0).domjudgeStatus());
+            // With no teamName column, the judge's own answer is the handle on the board.
+            verify(members).save(argThat(m -> "Team 01".equals(m.getExternalHandle())));
+        }
+
+        @Test
+        @DisplayName("a failed attach still creates the account and adds the member")
+        void failedAttachKeepsTheAccount() {
+            when(domjudge.provision(any()))
+                .thenThrow(ApiException.badRequest("DOMjudge rejected that username and password."));
+
+            var result = run("email,djUsername,djPassword\nasha@uni.edu,team01,pw1\n",
+                false, true);
+
+            var row = result.rows().get(0);
+            assertEquals(RosterImportService.DomjudgeStatus.FAILED, row.domjudgeStatus());
+            assertNotNull(row.generatedPassword());
+            verify(members).save(any(GroupMember.class));
+            assertEquals(1, result.domjudgeFailed());
+        }
+
+        @Test
+        @DisplayName("logins alone re-attach to the accounts named after them")
+        void reattachByLogin() {
+            // The stored logins expire; re-pasting the judge's own account list must be enough.
+            when(users.findByUsername("team01"))
+                .thenReturn(Optional.of(existing(12L, "team01", "asha@uni.edu")));
+            when(members.existsByGroupGroupIdAndUserUserId(GROUP_ID, 12L)).thenReturn(true);
+            when(domjudge.provision(any())).thenReturn(attached("Team 01"));
+
+            var result = run("djUsername,djPassword\nteam01,pw1\n", false, true);
+
+            assertEquals(RosterImportService.RowStatus.ALREADY_MEMBER,
+                result.rows().get(0).status());
+            verify(domjudge).provision(argThat(r -> r.userId() == 12L));
+            verify(users, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("a missing setting is reported per row without calling the judge")
+        void unavailableJudge() {
+            when(domjudge.unavailableReason()).thenReturn("No DOMjudge instance is configured.");
+
+            var result = run("email,djUsername,djPassword\nasha@uni.edu,team01,pw1\n",
+                true, true);
+
+            assertEquals(RosterImportService.DomjudgeStatus.FAILED,
+                result.rows().get(0).domjudgeStatus());
+            verify(domjudge, never()).verify(anyString(), anyString());
+        }
+
+        @Test
+        @DisplayName("once the judge stops answering, later rows do not wait on it again")
+        void judgeDownStopsAsking() {
+            when(domjudge.verify(anyString(), anyString()))
+                .thenThrow(new IllegalStateException("timeout"));
+
+            var result = run("email,djUsername,djPassword\n"
+                + "a@uni.edu,team01,pw1\nb@uni.edu,team02,pw2\n", true, true);
+
+            assertEquals(2, result.domjudgeFailed());
+            verify(domjudge, times(1)).verify(anyString(), anyString());
+        }
+
+        @Test
+        @DisplayName("the password is never echoed back in any outcome")
+        void passwordNotEchoed() {
+            when(domjudge.provision(any())).thenReturn(attached("Team 01"));
+
+            var result = run("email,djUsername,djPassword\nasha@uni.edu,team01,s3cret-pw\n",
+                false, true);
+
+            assertFalse(result.toString().contains("s3cret-pw"));
+            assertFalse(result.rows().get(0).toString().contains("s3cret-pw"));
         }
     }
 

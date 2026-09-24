@@ -40,18 +40,36 @@ public final class RosterParser {
         "username",  Set.of("username", "user", "login", "handle", "id"),
         "fullName",  Set.of("fullname", "name", "displayname", "student", "participant"),
         "cfHandle",  Set.of("cfhandle", "codeforces", "codeforceshandle", "cf"),
-        "teamName",  Set.of("teamname", "team", "domjudgeteam", "externalhandle", "djteam")
+        "teamName",  Set.of("teamname", "team", "domjudgeteam", "externalhandle", "djteam"),
+        "djUsername", Set.of("djusername", "djuser", "djlogin", "domjudgeusername",
+            "domjudgeuser", "domjudgelogin"),
+        "djPassword", Set.of("djpassword", "djpass", "domjudgepassword", "domjudgepass")
     );
 
-    /** One parsed line, with whatever the header offered. Any field may be blank. */
+    /**
+     * One parsed line, with whatever the header offered. Any field may be blank.
+     *
+     * <p>{@code djUsername} and {@code djPassword} are a DOMjudge team login to attach to the
+     * account, so the admin does not have to attach each one by hand afterwards. The password
+     * goes no further than the credential store: it is not echoed in any outcome.
+     */
     public record Row(
         int lineNumber,
         String email,
         String username,
         String fullName,
         String cfHandle,
-        String teamName
-    ) {}
+        String teamName,
+        String djUsername,
+        String djPassword
+    ) {
+        /** Never let a DOMjudge password reach a log line or an error body. */
+        @Override
+        public String toString() {
+            return "Row[line=" + lineNumber + ", email=" + email + ", username=" + username
+                + ", djUsername=" + djUsername + "]";
+        }
+    }
 
     /** The header could not be understood, so nothing below it can be trusted either. */
     public static final class RosterFormatException extends RuntimeException {
@@ -76,10 +94,12 @@ public final class RosterParser {
 
         // Without one of these there is no way to say who a row is about, and guessing from a
         // bare name column would silently create accounts for the wrong people.
-        if (!columns.containsKey("email") && !columns.containsKey("username")) {
+        // A DOMjudge login counts: new accounts are named after it, so it finds them again.
+        if (!columns.containsKey("email") && !columns.containsKey("username")
+            && !columns.containsKey("djUsername")) {
             throw new RosterFormatException(
-                "The first row has to name the columns, and needs at least an 'email' or "
-                    + "'username' column. Found: " + String.join(", ", header));
+                "The first row has to name the columns, and needs at least an 'email', "
+                    + "'username' or 'djUsername' column. Found: " + String.join(", ", header));
         }
 
         List<Row> rows = new ArrayList<>();
@@ -94,12 +114,15 @@ public final class RosterParser {
                 value(fields, columns.get("username")),
                 value(fields, columns.get("fullName")),
                 value(fields, columns.get("cfHandle")),
-                value(fields, columns.get("teamName")));
+                value(fields, columns.get("teamName")),
+                value(fields, columns.get("djUsername")),
+                value(fields, columns.get("djPassword")));
 
             // A line of empty cells is what a spreadsheet leaves behind below the data; it is
             // not a row the admin meant to include and should not be reported as an error.
             if (row.email() == null && row.username() == null && row.fullName() == null
-                && row.cfHandle() == null && row.teamName() == null) {
+                && row.cfHandle() == null && row.teamName() == null
+                && row.djUsername() == null && row.djPassword() == null) {
                 continue;
             }
             rows.add(row);

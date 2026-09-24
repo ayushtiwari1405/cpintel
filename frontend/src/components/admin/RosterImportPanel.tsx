@@ -28,9 +28,9 @@ const STATUS_META: Record<RosterRowStatus, { label: string; cls: string }> = {
   INVALID:        { label: 'Skipped',        cls: 'text-red-300 bg-red-950/40' },
 }
 
-const EXAMPLE = `email,fullName,cfHandle,teamName
-asha@uni.edu,Asha Rao,asha_r,Team 01
-ben@uni.edu,Ben Tan,,Team 02`
+const EXAMPLE = `email,fullName,cfHandle,teamName,djUsername,djPassword
+asha@uni.edu,Asha Rao,asha_r,Team 01,team01,pw1
+ben@uni.edu,Ben Tan,,Team 02,team02,pw2`
 
 interface Props {
   groupId: number
@@ -111,6 +111,13 @@ export function RosterImportPanel({ groupId }: Props) {
           <span className="text-gray-500">cfHandle</span> and{' '}
           <span className="text-gray-500">teamName</span> are optional. Commas or tabs both
           work, so copying cells straight out of Excel or Sheets is fine.
+        </p>
+        <p className="text-xs text-gray-600">
+          Add <span className="text-gray-500">djUsername</span> and{' '}
+          <span className="text-gray-500">djPassword</span> to attach each person's DOMjudge team
+          login too. The preview checks every login against the judge, new accounts take the
+          DOMjudge username as their username, and a paste of just those two columns re-attaches
+          logins to existing accounts after they expire.
         </p>
 
         {/* The common roster has no team column at all and everybody on one team. Typing that
@@ -234,6 +241,9 @@ function Summary({ result }: { result: RosterImportResult }) {
     ['Already in', result.alreadyMembers, 'text-gray-400'],
     ['Duplicates', result.duplicates, 'text-amber-300'],
     ['Skipped', result.invalid, 'text-red-300'],
+    [result.dryRun ? 'DOMjudge logins OK' : 'DOMjudge logins attached',
+      result.domjudgeOk, 'text-green-300'],
+    ['DOMjudge logins failed', result.domjudgeFailed, 'text-red-300'],
   ]
   return (
     <div className="flex flex-wrap gap-3 rounded-lg border border-gray-800 bg-gray-900/60 px-3 py-2">
@@ -289,6 +299,15 @@ function RowTable({ rows }: { rows: RosterRowOutcome[] }) {
                     {meta.label}
                   </span>
                   <span className="ml-2 text-gray-600">{row.message}</span>
+                  {row.domjudgeStatus !== 'NONE' && (
+                    <span className={clsx('mt-0.5 block',
+                      row.domjudgeStatus === 'FAILED' ? 'text-red-300' : 'text-green-300')}>
+                      DOMjudge {row.djUsername ?? ''}:{' '}
+                      {row.domjudgeStatus === 'FAILED' ? 'not attached — '
+                        : row.domjudgeStatus === 'VERIFIED' ? 'login OK — ' : 'attached — '}
+                      <span className="text-gray-500">{row.domjudgeMessage}</span>
+                    </span>
+                  )}
                 </td>
               </tr>
             )

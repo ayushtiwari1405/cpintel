@@ -5,6 +5,8 @@ import com.cpintel.entity.GroupMember;
 import com.cpintel.entity.UnifiedScore;
 import com.cpintel.entity.User;
 import com.cpintel.exception.ApiException;
+import com.cpintel.integration.domjudge.DomjudgeAccountService;
+import com.cpintel.integration.domjudge.DomjudgeDto;
 import com.cpintel.repository.jpa.ContestGroupRepository;
 import com.cpintel.repository.jpa.GroupMemberRepository;
 import com.cpintel.repository.jpa.UnifiedScoreRepository;
@@ -61,6 +63,19 @@ import java.util.regex.Pattern;
  *
  * <p>An import may name one team for everybody, which is what a class list normally wants. A
  * team named on a row still wins over it, so a mixed roster keeps its own assignments.
+ *
+ * <h2>DOMjudge logins</h2>
+ *
+ * <p>A row may carry a DOMjudge team login ({@code djUsername}, {@code djPassword}), which is
+ * attached to the account exactly as the one-at-a-time admin screen would — verified against
+ * the judge first, and refused if it has no team. The preview verifies too, so a wrong password
+ * shows up before any account exists. A login that fails does not stop the row: the account is
+ * still created and added, and the failure is reported beside it to fix on its own.
+ *
+ * <p>A new account takes the DOMjudge username as its CPIntel username when the row names no
+ * username of its own, so a contestant has one name to remember. A row with only a DOMjudge
+ * login and no email or username finds the account of that name, which is how a round's logins
+ * are re-attached after the stored ones expire.
  */
 @Service
 @RequiredArgsConstructor
@@ -73,6 +88,7 @@ public class RosterImportService {
     private final UnifiedScoreRepository unifiedScoreRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuditService auditService;
+    private final DomjudgeAccountService domjudgeAccounts;
 
     /** Matches AdminDto.CreateUserRequest, so a bulk account is never weaker than a typed one. */
     private static final Pattern USERNAME_OK = Pattern.compile("^[a-zA-Z0-9_]+$");
@@ -110,6 +126,18 @@ public class RosterImportService {
         INVALID
     }
 
+    /** What will happen, or did happen, to the DOMjudge login on one row. */
+    public enum DomjudgeStatus {
+        /** The row carries no DOMjudge login. */
+        NONE,
+        /** The judge accepted the login; it will be attached on import. */
+        VERIFIED,
+        /** Attached to the account. */
+        ATTACHED,
+        /** Not attached; the message says why. The rest of the row is unaffected. */
+        FAILED
+    }
+
     /**
      * Plan or outcome for one row.
      *
@@ -128,8 +156,18 @@ public class RosterImportService {
         RowStatus status,
         String message,
         Long userId,
-        String generatedPassword
-    ) {}
+        String generatedPassword,
+        /** The DOMjudge login named on the row. Its password is never echoed back. */
+        String djUsername,
+        DomjudgeStatus domjudgeStatus,
+        /** The judge's team on success, or why the login was not attached. */
+        String domjudgeMessage
+    ) {
+        RowOutcome withDomjudge(DomjudgeStatus status, String message) {
+            return new RowOutcome(line, email, username, fullName, cfHandle, teamName, this.status,
+                this.message, userId, generatedPassword, djUsername, status, message);
+        }
+    }
 
     public record ImportResult(
         boolean dryRun,
@@ -140,6 +178,10 @@ public class RosterImportService {
         int alreadyMembers,
         int duplicates,
         int invalid,
+        /** Rows whose DOMjudge login verified (preview) or was attached (import). */
+        int domjudgeOk,
+        /** Rows whose DOMjudge login could not be attached. */
+        int domjudgeFailed,
         /**
          * True when the caller may create the accounts this import needs.
          *
@@ -188,11 +230,11 @@ public class RosterImportService {
 
         String fallbackTeam = StringUtils.hasText(defaultTeam) ? defaultTeam.trim() : null;
 
-        List<RowOutcome> outcomes = new ArrayList<>(parsed.size());
+        List<RosterParser.Row> rows = parsed.stream().map(r -> withTeam(r, fallbackTeam)).toList();
+        List<RowOutcome> outcomes = new ArrayList<>(rows.size());
 
-        for (RosterParser.Row row : parsed) {
-            outcomes.add(plan(group, withTeam(row, fallbackTeam),
-                plannedUsernames, seenIdentities));
+        for (RosterParser.Row row : rows) {
+            outcomes.add(plan(group, row, plannedUsernames, seenIdentities));
         }
 
         int toCreate = (int) outcomes.stream()
@@ -200,13 +242,19 @@ public class RosterImportService {
 
         // Nothing here is refused by tier any more: every account an import creates is a
         // USER, so there is no privilege for the higher tier to be guarding.
+        DomjudgeCheck judge = new DomjudgeCheck(domjudgeAccounts.unavailableReason());
+
         if (dryRun) {
-            return summarise(outcomes, true, null);
+            List<RowOutcome> checked = new ArrayList<>(outcomes.size());
+            for (int i = 0; i < outcomes.size(); i++) {
+                checked.add(previewDomjudge(outcomes.get(i), rows.get(i), judge));
+            }
+            return summarise(checked, true, null);
         }
 
         List<RowOutcome> committed = new ArrayList<>(outcomes.size());
-        for (RowOutcome planned : outcomes) {
-            committed.add(commit(group, planned, adminId, httpReq));
+        for (int i = 0; i < outcomes.size(); i++) {
+            committed.add(commit(group, outcomes.get(i), rows.get(i), judge, adminId, httpReq));
         }
 
         auditService.record(adminId, AuditService.GROUP_MEMBER_ADDED, "GROUP",
@@ -227,7 +275,7 @@ public class RosterImportService {
     private RosterParser.Row withTeam(RosterParser.Row row, String fallbackTeam) {
         if (fallbackTeam == null || StringUtils.hasText(row.teamName())) return row;
         return new RosterParser.Row(row.lineNumber(), row.email(), row.username(),
-            row.fullName(), row.cfHandle(), fallbackTeam);
+            row.fullName(), row.cfHandle(), fallbackTeam, row.djUsername(), row.djPassword());
     }
 
     // -- planning ----------------------------------------------------------
@@ -236,7 +284,10 @@ public class RosterImportService {
                             Set<String> plannedUsernames, Set<String> seenIdentities) {
 
         String email = row.email() == null ? null : row.email().trim().toLowerCase(Locale.ROOT);
-        String username = row.username() == null ? null : row.username().trim();
+        // With nothing else to go on, the DOMjudge login names the account: new accounts are
+        // created under it, so on a re-import it is the name the account already has.
+        String username = row.username() != null ? row.username().trim()
+            : email == null ? row.djUsername() : null;
 
         if (email == null && username == null) {
             return invalid(row, "No email or username on this row.");
@@ -268,8 +319,11 @@ public class RosterImportService {
         }
 
         // Nothing matched, so this row means a new account. It needs a username whether or not
-        // the paste supplied one.
-        String candidate = username != null ? username : usernameFromEmail(email);
+        // the paste supplied one; the DOMjudge login is preferred to the email so a contestant
+        // has one name for both.
+        String candidate = username != null ? username
+            : row.djUsername() != null ? row.djUsername()
+            : usernameFromEmail(email);
         String resolved = uniqueUsername(candidate, plannedUsernames);
         if (resolved == null) {
             return invalid(row, "Could not make a valid username from '"
@@ -282,54 +336,166 @@ public class RosterImportService {
                 "New accounts need an email address; '" + username + "' matched nobody.");
         }
 
+        String note = row.djUsername() != null && username == null
+            && !resolved.equals(row.djUsername())
+            ? " As " + resolved + ", since '" + row.djUsername() + "' is taken or not a valid "
+                + "username."
+            : "";
         return new RowOutcome(row.lineNumber(), email, resolved, row.fullName(),
             row.cfHandle(), row.teamName(), RowStatus.CREATE_AND_ADD,
-            "New account will be created.", null, null);
+            "New account will be created." + note, null, null,
+            row.djUsername(), DomjudgeStatus.NONE, null);
+    }
+
+    // -- DOMjudge logins ---------------------------------------------------
+
+    /**
+     * Whether the judge can be asked at all, carried across the rows of one import.
+     *
+     * <p>Once the judge has failed to answer, every later row would wait out the same timeout
+     * to learn the same thing, so the first such failure is remembered and the rest are
+     * reported without asking.
+     */
+    private static final class DomjudgeCheck {
+        String unavailable;
+
+        DomjudgeCheck(String unavailable) { this.unavailable = unavailable; }
+    }
+
+    /** Why a row's login cannot even be tried, or null when it can. */
+    private String loginProblem(RowOutcome planned, RosterParser.Row row, DomjudgeCheck judge) {
+        if (row.djPassword() == null) {
+            return "The DOMjudge login '" + row.djUsername() + "' has no password on this row.";
+        }
+        if (planned.status() == RowStatus.INVALID || planned.status() == RowStatus.DUPLICATE) {
+            return "Not attached, because the row itself is skipped.";
+        }
+        return judge.unavailable;
+    }
+
+    private RowOutcome previewDomjudge(RowOutcome planned, RosterParser.Row row,
+                                       DomjudgeCheck judge) {
+        if (row.djUsername() == null) {
+            return row.djPassword() == null ? planned : planned.withDomjudge(
+                DomjudgeStatus.FAILED, "A DOMjudge password with no djUsername beside it.");
+        }
+        String problem = loginProblem(planned, row, judge);
+        if (problem != null) return planned.withDomjudge(DomjudgeStatus.FAILED, problem);
+
+        try {
+            DomjudgeAccountService.Verified verified =
+                domjudgeAccounts.verify(row.djUsername(), row.djPassword());
+            return planned.withDomjudge(DomjudgeStatus.VERIFIED,
+                "Team " + verified.teamLabel() + ".");
+        } catch (ApiException e) {
+            return planned.withDomjudge(DomjudgeStatus.FAILED, e.getMessage());
+        } catch (RuntimeException e) {
+            return planned.withDomjudge(DomjudgeStatus.FAILED, judgeDown(judge, e));
+        }
+    }
+
+    /**
+     * Attaches the row's login to the account.
+     *
+     * @return the outcome with its DOMjudge fields filled, and the judge's team name when the
+     *         login was attached
+     */
+    private Attached attach(RowOutcome row, RosterParser.Row source, Long userId,
+                            DomjudgeCheck judge) {
+        if (source.djUsername() == null) {
+            return new Attached(source.djPassword() == null ? row : row.withDomjudge(
+                DomjudgeStatus.FAILED, "A DOMjudge password with no djUsername beside it."), null);
+        }
+        String problem = loginProblem(row, source, judge);
+        if (problem != null) {
+            return new Attached(row.withDomjudge(DomjudgeStatus.FAILED, problem), null);
+        }
+
+        try {
+            DomjudgeDto.AccountStatus status = domjudgeAccounts.provision(
+                new DomjudgeDto.ProvisionRequest(userId, source.djUsername(), source.djPassword(),
+                    source.fullName(), null));
+            String team = status.teamName() != null ? status.teamName() : status.teamId();
+            return new Attached(
+                row.withDomjudge(DomjudgeStatus.ATTACHED, "Team " + team + "."), team);
+        } catch (ApiException e) {
+            return new Attached(row.withDomjudge(DomjudgeStatus.FAILED, e.getMessage()), null);
+        } catch (RuntimeException e) {
+            return new Attached(
+                row.withDomjudge(DomjudgeStatus.FAILED, judgeDown(judge, e)), null);
+        }
+    }
+
+    private record Attached(RowOutcome row, String teamName) {}
+
+    private String judgeDown(DomjudgeCheck judge, RuntimeException e) {
+        log.warn("DOMjudge did not answer during a roster import: {}", e.getClass().getSimpleName());
+        judge.unavailable = "DOMjudge did not answer, so this login could not be checked. "
+            + "Try again once the judge is reachable.";
+        return judge.unavailable;
     }
 
     // -- committing --------------------------------------------------------
 
-    private RowOutcome commit(ContestGroup group, RowOutcome planned, Long adminId,
-                              HttpServletRequest httpReq) {
+    /**
+     * Carries out one planned row.
+     *
+     * <p>The DOMjudge login is attached before the member is added, because the team the judge
+     * reports is the handle the member is scored under when the row named no team of its own.
+     * A roster of logins alone therefore still produces a working standings board.
+     */
+    private RowOutcome commit(ContestGroup group, RowOutcome planned, RosterParser.Row source,
+                              DomjudgeCheck judge, Long adminId, HttpServletRequest httpReq) {
         switch (planned.status()) {
             case INVALID, DUPLICATE -> {
-                return planned;
+                return attach(planned, source, null, judge).row();
             }
             case ALREADY_MEMBER -> {
+                Attached attached = attach(planned, source, planned.userId(), judge);
                 // The one thing worth doing for an existing member: refresh the judge handle,
                 // which is the field most likely to be the reason for re-importing at all.
-                if (planned.teamName() != null) {
+                String handle = handleFor(planned, attached);
+                if (handle != null) {
                     memberRepository
                         .findByGroupGroupIdAndUserUserId(group.getGroupId(), planned.userId())
                         .ifPresent(m -> {
-                            m.setExternalHandle(planned.teamName());
+                            m.setExternalHandle(handle);
                             memberRepository.save(m);
                         });
                 }
-                return planned;
+                return attached.row();
             }
             case ADD_EXISTING -> {
+                Attached attached = attach(planned, source, planned.userId(), judge);
                 User user = userRepository.getReferenceById(planned.userId());
-                addMember(group, user, planned.teamName());
-                return planned;
+                addMember(group, user, handleFor(planned, attached));
+                return attached.row();
             }
             case CREATE_AND_ADD -> {
                 String password = generatePassword();
                 User user = createAccount(planned, password);
-                addMember(group, user, planned.teamName());
 
                 auditService.record(adminId, AuditService.USER_CREATED, "USER",
                     user.getUserId() + ":" + Roles.USER + ":bulk", httpReq);
 
-                return new RowOutcome(planned.line(), planned.email(), user.getUsername(),
-                    planned.fullName(), planned.cfHandle(), planned.teamName(),
-                    RowStatus.CREATE_AND_ADD, "Account created and added.",
-                    user.getUserId(), password);
+                RowOutcome created = new RowOutcome(planned.line(), planned.email(),
+                    user.getUsername(), planned.fullName(), planned.cfHandle(),
+                    planned.teamName(), RowStatus.CREATE_AND_ADD, "Account created and added.",
+                    user.getUserId(), password, planned.djUsername(), DomjudgeStatus.NONE, null);
+
+                Attached attached = attach(created, source, user.getUserId(), judge);
+                addMember(group, user, handleFor(planned, attached));
+                return attached.row();
             }
             default -> {
                 return planned;
             }
         }
+    }
+
+    /** The row's own team, else the one the judge reported for the attached login. */
+    private String handleFor(RowOutcome planned, Attached attached) {
+        return planned.teamName() != null ? planned.teamName() : attached.teamName();
     }
 
     private User createAccount(RowOutcome row, String password) {
@@ -415,7 +581,8 @@ public class RosterImportService {
     private RowOutcome outcome(RosterParser.Row row, RowStatus status, String message,
                                Long userId, String password) {
         return new RowOutcome(row.lineNumber(), row.email(), row.username(), row.fullName(),
-            row.cfHandle(), row.teamName(), status, message, userId, password);
+            row.cfHandle(), row.teamName(), status, message, userId, password,
+            row.djUsername(), DomjudgeStatus.NONE, null);
     }
 
     private ImportResult summarise(List<RowOutcome> rows, boolean dryRun, String blocked) {
@@ -428,6 +595,9 @@ public class RosterImportService {
             (int) rows.stream().filter(r -> r.status() == RowStatus.ALREADY_MEMBER).count(),
             (int) rows.stream().filter(r -> r.status() == RowStatus.DUPLICATE).count(),
             (int) rows.stream().filter(r -> r.status() == RowStatus.INVALID).count(),
+            (int) rows.stream().filter(r -> r.domjudgeStatus() == DomjudgeStatus.VERIFIED
+                || r.domjudgeStatus() == DomjudgeStatus.ATTACHED).count(),
+            (int) rows.stream().filter(r -> r.domjudgeStatus() == DomjudgeStatus.FAILED).count(),
             // Always true now that both console tiers may create. Kept in the response so the
             // screen need not know the caller's role to decide what to offer.
             true,

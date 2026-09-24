@@ -12,6 +12,7 @@ import { useAdminUsers } from '@/hooks/useAdmin'
 import { useTeamAnalytics } from '@/hooks/useExams'
 import { Ago, EmptyRow, Panel, Pill, StatCard } from '@/components/admin/AdminUi'
 import { RosterImportPanel } from '@/components/admin/RosterImportPanel'
+import { DomjudgePasswordPanel } from '@/components/admin/DomjudgePasswordPanel'
 import type { GroupContestStatus } from '@/types'
 
 /**
@@ -280,6 +281,8 @@ export default function AdminGroupDetailPage() {
       </Panel>
 
       <RosterImportPanel groupId={id} />
+
+      <DomjudgePasswordPanel groupId={id} />
 
       <TeamAnalyticsPanel teamId={id} />
 

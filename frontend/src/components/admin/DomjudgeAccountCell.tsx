@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AlertTriangle, Link2, Loader2, X } from 'lucide-react'
 
 import { adminDomjudgeApi } from '@/api/adminApi'
+import type { DomjudgeAccount } from '@/types'
 import { useToast } from '@/components/common/Toaster'
 
 interface Props {
@@ -41,7 +42,7 @@ export function DomjudgeAccountCell({ userId, username }: Props) {
       {account?.linked ? (
         <button
           onClick={() => setOpen(true)}
-          title="Change or detach this DOMjudge account"
+          title="Change the password, replace or detach this DOMjudge account"
           className="group flex min-w-0 items-start gap-2 text-left text-xs"
         >
           <span className="min-w-0">
@@ -85,7 +86,7 @@ export function DomjudgeAccountCell({ userId, username }: Props) {
         <AttachDialog
           userId={userId}
           username={username}
-          linked={!!account?.linked}
+          account={account?.linked ? account : undefined}
           onClose={() => setOpen(false)}
         />
       )}
@@ -102,15 +103,18 @@ export function DomjudgeAccountCell({ userId, username }: Props) {
  * standings. Left on the judge's own answer — the right choice whenever the account is already
  * on the correct team — the two can never disagree.
  *
- * <p>The password is write-only. There is no read path for it anywhere in the API, so a wrong
- * one is corrected by attaching again rather than by editing what is stored.
+ * <p>The password is write-only. There is no read path for it anywhere in the API. When the
+ * judge's password changes, "Change password" replaces just that, keeping the login, name and
+ * team as they were; the new one is checked against the judge before it replaces the old.
  */
 function AttachDialog(
-  { userId, username, linked, onClose }:
-  { userId: number; username: string; linked: boolean; onClose: () => void }
+  { userId, username, account, onClose }:
+  { userId: number; username: string; account?: DomjudgeAccount; onClose: () => void }
 ) {
   const qc = useQueryClient()
   const toast = useToast()
+  const linked = !!account
+  const [mode, setMode] = useState<'password' | 'attach'>(linked ? 'password' : 'attach')
 
   const [djUser, setDjUser] = useState('')
   const [name, setName] = useState('')
@@ -153,6 +157,19 @@ function AttachDialog(
     },
   })
 
+  const changePassword = useMutation({
+    mutationFn: () => adminDomjudgeApi.changePassword(userId, djPass),
+    onSuccess: (res) => {
+      setDjPass('')
+      qc.setQueryData(key, res.data)
+      toast.push('info', `Updated ${username}'s DOMjudge password`)
+      onClose()
+    },
+    onError: (err: any) => {
+      toast.push('error', err.response?.data?.message ?? 'Could not change that password')
+    },
+  })
+
   const detach = useMutation({
     mutationFn: () => adminDomjudgeApi.detach(userId),
     onSuccess: () => {
@@ -166,7 +183,11 @@ function AttachDialog(
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (valid) attach.mutate()
+    if (mode === 'password') {
+      if (djPass.length > 0) changePassword.mutate()
+    } else if (valid) {
+      attach.mutate()
+    }
   }
 
   const field = `w-full rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 text-sm
@@ -189,6 +210,16 @@ function AttachDialog(
           </button>
         </header>
 
+        {mode === 'password' && account ? (
+          <PasswordForm
+            account={account}
+            password={djPass}
+            setPassword={setDjPass}
+            field={field}
+            onReplace={() => { setDjPass(''); setMode('attach') }}
+          />
+        ) : (
+        <>
         <div className="space-y-3">
           <label className="block">
             <span className="mb-1 block text-xs text-gray-500">DOMjudge username</span>
@@ -228,6 +259,8 @@ function AttachDialog(
           The team only decides how CPIntel groups them for its own standings. Submissions are
           always attributed by DOMjudge to the team behind the login, whatever is chosen here.
         </p>
+        </>
+        )}
 
         <div className="mt-4 flex items-center justify-between gap-2">
           {linked ? (
@@ -244,15 +277,62 @@ function AttachDialog(
                          hover:bg-gray-800">
               Cancel
             </button>
-            <button type="submit" disabled={!valid || attach.isPending}
-              className="flex items-center gap-2 rounded-lg bg-indigo-600 px-3 py-2 text-sm
-                         font-medium text-white hover:bg-indigo-500 disabled:opacity-40">
-              {attach.isPending && <Loader2 size={14} className="animate-spin" />}
-              {linked ? 'Replace account' : 'Attach account'}
-            </button>
+            {mode === 'password' ? (
+              <button type="submit" disabled={!djPass || changePassword.isPending}
+                className="flex items-center gap-2 rounded-lg bg-indigo-600 px-3 py-2 text-sm
+                           font-medium text-white hover:bg-indigo-500 disabled:opacity-40">
+                {changePassword.isPending && <Loader2 size={14} className="animate-spin" />}
+                Update password
+              </button>
+            ) : (
+              <button type="submit" disabled={!valid || attach.isPending}
+                className="flex items-center gap-2 rounded-lg bg-indigo-600 px-3 py-2 text-sm
+                           font-medium text-white hover:bg-indigo-500 disabled:opacity-40">
+                {attach.isPending && <Loader2 size={14} className="animate-spin" />}
+                {linked ? 'Replace account' : 'Attach account'}
+              </button>
+            )}
           </div>
         </div>
       </form>
+    </div>
+  )
+}
+
+/** The linked-account view: the same login, a new password. */
+function PasswordForm(
+  { account, password, setPassword, field, onReplace }: {
+    account: DomjudgeAccount
+    password: string
+    setPassword: (v: string) => void
+    field: string
+    onReplace: () => void
+  }
+) {
+  return (
+    <div className="space-y-3">
+      <div className="rounded-lg border border-gray-800 bg-gray-900/60 px-3 py-2 text-xs">
+        <span className="text-gray-500">Attached login </span>
+        <span className="font-mono text-gray-200">{account.username}</span>
+        {account.teamName && <span className="text-gray-500"> · {account.teamName}</span>}
+      </div>
+
+      <label className="block">
+        <span className="mb-1 block text-xs text-gray-500">New DOMjudge password</span>
+        <input value={password} onChange={e => setPassword(e.target.value)}
+          type="password" autoComplete="new-password" autoFocus
+          placeholder="checked against the judge before it replaces the old one"
+          className={`${field} font-mono`} />
+      </label>
+
+      <p className="text-xs leading-relaxed text-gray-600">
+        Use this after the password was changed on DOMjudge. The login, name and team stay as
+        they are. If the new password is rejected, the old one is kept.{' '}
+        <button type="button" onClick={onReplace}
+          className="text-indigo-400 hover:text-indigo-300">
+          Attach a different login instead
+        </button>
+      </p>
     </div>
   )
 }

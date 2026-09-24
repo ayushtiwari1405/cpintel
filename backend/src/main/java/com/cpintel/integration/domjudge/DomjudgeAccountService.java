@@ -48,20 +48,83 @@ public class DomjudgeAccountService {
      *         right one before the round rather than after it
      */
     public DomjudgeDto.AccountStatus provision(DomjudgeDto.ProvisionRequest req) {
-        if (!domjudge.isConfigured()) {
-            throw ApiException.badRequest(
-                "No DOMjudge instance is configured on this deployment, so there is nothing to "
-                    + "attach an account to. Set cpintel.domjudge.base-url first.");
-        }
+        String unavailable = unavailableReason();
+        if (unavailable != null) throw ApiException.badRequest(unavailable);
         if (!userRepository.existsById(req.userId())) {
             throw ApiException.notFound("No CPIntel user with id " + req.userId() + ".");
         }
 
-        // Verified against the judge before anything is written. The candidate is built here
-        // only so the client has something to authenticate with; it is not stored unless the
-        // judge confirms both the password and a team.
+        Verified verified = verify(req.username(), req.password());
+        DomjudgeCredentialStore.Stored candidate = verified.candidate();
+        DjModels.User account = verified.account();
+        String judgeTeamId = verified.teamId();
+        String judgeTeamName = verified.teamName();
+
+        String assignedId = StringUtils.hasText(req.teamId()) ? req.teamId().trim() : null;
+        String assignedName = assignedId == null ? null : teamNameById(candidate, assignedId);
+
+        DomjudgeCredentialStore.Stored stored = new DomjudgeCredentialStore.Stored(
+            req.username().trim(), req.password(),
+            StringUtils.hasText(req.name()) ? req.name().trim() : nameOf(account),
+            judgeTeamId, judgeTeamName != null ? judgeTeamName : teamNameOf(account),
+            assignedId, assignedName,
+            Instant.now());
+
+        credentials.save(req.userId(), stored);
+        if (stored.teamMismatch()) {
+            // Logged rather than refused: an admin may genuinely want somebody grouped apart
+            // from the team the judge has them on, and only they can tell.
+            log.info("DOMjudge account {} is on team {} but was assigned to {} for CPIntel user "
+                + "{}", stored.username(), stored.teamId(), assignedId, req.userId());
+        } else {
+            log.info("Attached DOMjudge account {} (team {}) to CPIntel user {}",
+                stored.username(), stored.teamId(), req.userId());
+        }
+
+        return status(req.userId());
+    }
+
+    /**
+     * Why no account can be attached on this deployment right now, or null when one can.
+     *
+     * Asked once up front by a bulk import, so that a missing setting is one message on the
+     * screen rather than the same failure repeated on every row.
+     */
+    public String unavailableReason() {
+        if (!domjudge.isConfigured()) {
+            return "No DOMjudge instance is configured on this deployment, so there is nothing to "
+                + "attach an account to. Set cpintel.domjudge.base-url first.";
+        }
+        if (!credentials.isConfigured()) {
+            return "CPINTEL_DOMJUDGE_CREDENTIAL_KEY is not set, so DOMjudge credentials cannot be "
+                + "stored. Set it and restart before attaching accounts.";
+        }
+        return null;
+    }
+
+    /** A login the judge accepted, and the team it files submissions under. */
+    public record Verified(DomjudgeCredentialStore.Stored candidate, DjModels.User account,
+                           String teamId, String teamName) {
+
+        /** The team's name where the judge gave one, else its id — what a roster calls it. */
+        public String teamLabel() {
+            return teamName != null ? teamName : teamId;
+        }
+    }
+
+    /**
+     * Proves a login works and belongs to a team, without storing anything.
+     *
+     * Separate from {@link #provision} so a bulk import can check every row in its preview,
+     * before any CPIntel account has been created for the person.
+     *
+     * @throws ApiException when the judge refuses the login or it has no team
+     */
+    public Verified verify(String username, String password) {
+        // The candidate is built only so the client has something to authenticate with; it is
+        // not stored unless the caller goes on to provision.
         DomjudgeCredentialStore.Stored candidate = new DomjudgeCredentialStore.Stored(
-            req.username().trim(), req.password(), null, null, null, null, null, Instant.now());
+            username.trim(), password, null, null, null, null, null, Instant.now());
 
         DjModels.User account = domjudge.whoami(candidate);
         if (account == null) {
@@ -89,33 +152,11 @@ public class DomjudgeAccountService {
         // here would change that.
         if (judgeTeamId == null && judgeTeamName == null) {
             throw ApiException.badRequest(
-                "The DOMjudge account '" + req.username().trim() + "' is not attached to a "
+                "The DOMjudge account '" + username.trim() + "' is not attached to a "
                     + "team, so submissions made as it would not land on any scoreboard. "
                     + "Attach a team account rather than an admin or jury one.");
         }
-
-        String assignedId = StringUtils.hasText(req.teamId()) ? req.teamId().trim() : null;
-        String assignedName = assignedId == null ? null : teamNameById(candidate, assignedId);
-
-        DomjudgeCredentialStore.Stored stored = new DomjudgeCredentialStore.Stored(
-            req.username().trim(), req.password(),
-            StringUtils.hasText(req.name()) ? req.name().trim() : nameOf(account),
-            judgeTeamId, judgeTeamName != null ? judgeTeamName : teamNameOf(account),
-            assignedId, assignedName,
-            Instant.now());
-
-        credentials.save(req.userId(), stored);
-        if (stored.teamMismatch()) {
-            // Logged rather than refused: an admin may genuinely want somebody grouped apart
-            // from the team the judge has them on, and only they can tell.
-            log.info("DOMjudge account {} is on team {} but was assigned to {} for CPIntel user "
-                + "{}", stored.username(), stored.teamId(), assignedId, req.userId());
-        } else {
-            log.info("Attached DOMjudge account {} (team {}) to CPIntel user {}",
-                stored.username(), stored.teamId(), req.userId());
-        }
-
-        return status(req.userId());
+        return new Verified(candidate, account, judgeTeamId, judgeTeamName);
     }
 
     /**
@@ -201,6 +242,45 @@ public class DomjudgeAccountService {
     private String teamNameOf(DjModels.User account) {
         return StringUtils.hasText(account.getName())
             ? account.getName() : account.getUsername();
+    }
+
+    /**
+     * Replaces the stored password after the login's password was changed on the judge.
+     *
+     * <p>Everything else stays as it was: the login, the name and the admin's team choice. Only
+     * the judge's own team is refreshed, since the judge is the one authority on it and a
+     * password change is a natural moment for an admin to have moved the account too. The
+     * new password is verified before it replaces the old one, so a typo leaves the working
+     * credentials in place rather than breaking them. Saving also restarts the expiry clock.
+     */
+    public DomjudgeDto.AccountStatus changePassword(Long userId, String newPassword) {
+        String unavailable = unavailableReason();
+        if (unavailable != null) throw ApiException.badRequest(unavailable);
+
+        DomjudgeCredentialStore.Stored current = credentials.find(userId);
+        if (current == null) {
+            throw ApiException.badRequest(
+                "No DOMjudge account is attached to this user, so there is no password to "
+                    + "change. Attach one instead.");
+        }
+
+        Verified verified = verify(current.username(), newPassword);
+        String teamName = verified.teamName() != null ? verified.teamName() : current.teamName();
+
+        DomjudgeCredentialStore.Stored updated = new DomjudgeCredentialStore.Stored(
+            current.username(), newPassword, current.name(),
+            verified.teamId(), teamName,
+            current.assignedTeamId(), current.assignedTeamName(),
+            Instant.now());
+        credentials.save(userId, updated);
+
+        if (!java.util.Objects.equals(current.teamId(), updated.teamId())) {
+            log.info("DOMjudge account {} moved from team {} to {} while changing its password",
+                current.username(), current.teamId(), updated.teamId());
+        }
+        log.info("Changed the DOMjudge password stored for CPIntel user {} (dj user={})",
+            userId, current.username());
+        return status(userId);
     }
 
     public void revoke(Long userId) {

@@ -121,6 +121,20 @@ class RosterParserTest {
         }
 
         @Test
+        @DisplayName("reads a DOMjudge login, which alone is enough to identify people")
+        void domjudgeLogin() {
+            List<RosterParser.Row> rows = RosterParser.parse("""
+                DOMjudge Username,DJ Password
+                team01,pw1
+                """);
+
+            assertEquals("team01", rows.get(0).djUsername());
+            assertEquals("pw1", rows.get(0).djPassword());
+            assertFalse(rows.get(0).toString().contains("pw1"),
+                "a row must never carry its password into a log line");
+        }
+
+        @Test
         @DisplayName("refuses a paste with no way to identify anyone")
         void requiresAnIdentityColumn() {
             // A name column alone cannot say who a row is about, and guessing would create

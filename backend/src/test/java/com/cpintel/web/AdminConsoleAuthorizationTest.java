@@ -51,6 +51,7 @@ class AdminConsoleAuthorizationTest extends AuthorizationTestBase {
     @MockBean private AdminAuditService audit;
     @MockBean private GroupService groups;
     @MockBean private RosterImportService rosterImport;
+    @MockBean private com.cpintel.groups.DomjudgePasswordImportService domjudgePasswords;
     @MockBean private ContestFilePolicy policy;
     @MockBean private AuditService auditService;
     @MockBean private EventAnalyticsService eventAnalytics;

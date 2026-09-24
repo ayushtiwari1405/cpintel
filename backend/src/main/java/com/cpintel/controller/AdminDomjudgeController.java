@@ -73,6 +73,19 @@ public class AdminDomjudgeController {
         return ResponseEntity.ok(ApiResponse.ok(accounts.status(userId)));
     }
 
+    /**
+     * Replaces the stored password after it was changed on the judge, keeping everything else.
+     *
+     * Verified first, so a mistyped password leaves the working one in place.
+     */
+    @PutMapping("/credentials/{userId}/password")
+    @Operation(summary = "Change the password of a user's attached DOMjudge account")
+    public ResponseEntity<ApiResponse<DomjudgeDto.AccountStatus>> changePassword(
+        @PathVariable Long userId,
+        @Valid @RequestBody DomjudgeDto.PasswordChangeRequest req) {
+        return ResponseEntity.ok(ApiResponse.ok(accounts.changePassword(userId, req.password())));
+    }
+
     @DeleteMapping("/credentials/{userId}")
     @Operation(summary = "Detach a user's DOMjudge account")
     public ResponseEntity<ApiResponse<Void>> revoke(@PathVariable Long userId) {
