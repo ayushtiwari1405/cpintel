@@ -1,5 +1,7 @@
 package com.cpintel.events;
 
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -438,6 +440,67 @@ public class EventsDto {
         int longAwaySeconds,
         int frequentAwayCount,
         int fastSubmissionSeconds
+    ) {}
+
+    // ------------------------------------------------------------ leaderboard
+
+    public record LeaderboardSettings(
+        @NotNull Boolean enabled,
+        @NotNull @Min(1) @Max(1440) Integer refreshMinutes,
+        @NotNull @Min(0) @Max(1440) Integer penaltyMinutes,
+        @NotNull Boolean finalPublic
+    ) {}
+
+    /** One problem for one candidate. */
+    public record LeaderboardCell(
+        String label,
+        boolean solved,
+        /** Wrong attempts counted against it: before the solve, or all of them if unsolved. */
+        int wrongAttempts,
+        /** Seconds from the start to when the accepted code was sent; null if unsolved. */
+        Long solvedAtSeconds,
+        /** Whether something on it was still being judged when the board was computed. */
+        boolean pending,
+        /** First to solve this problem. */
+        boolean firstSolve
+    ) {}
+
+    public record LeaderboardRow(
+        int rank,
+        Long userId,
+        String username,
+        String fullName,
+        int solved,
+        /** Solve times plus penalties, in seconds. Lower is better among equal solve counts. */
+        long totalSeconds,
+        List<LeaderboardCell> cells
+    ) {}
+
+    /** A computed board, as stored between refreshes. */
+    public record LeaderboardStandings(
+        List<String> problems,
+        List<LeaderboardRow> rows,
+        int penaltyMinutes,
+        /** Submissions still being judged when this was computed. */
+        int pendingSubmissions,
+        Instant generatedAt
+    ) {}
+
+    /**
+     * What a leaderboard request answers.
+     *
+     * <p>{@code state} is DISABLED, NOT_STARTED, LIVE, FINAL or UNPUBLISHED (over, and the
+     * admin has not released the final board). {@code standings} is null unless there is a
+     * board to show.
+     */
+    public record Leaderboard(
+        Long eventId,
+        String eventName,
+        String state,
+        LeaderboardSettings settings,
+        LeaderboardStandings standings,
+        /** When the board will next be recomputed, while the paper runs. */
+        Instant nextRefreshAt
     ) {}
 
     // ------------------------------------------------------------ analytics

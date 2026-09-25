@@ -140,8 +140,8 @@ export function ExamList({ exams, isLoading, onEnter, entering }: Props) {
                 bg-gray-950/60 px-3 py-2 text-xs leading-relaxed text-gray-400">
                 <FileText size={13} className="mt-0.5 flex-shrink-0" />
                 <span>
-                  This paper is over. Opening it shows the code you submitted — not your
-                  marks, which are published separately if they are published at all.
+                  This paper is over. Opening it shows the code you submitted and, if your
+                  examiner has released them, the final standings.
                 </span>
               </p>
             )}

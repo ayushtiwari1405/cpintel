@@ -145,6 +145,35 @@ public class GroupContest extends BaseEntity {
     @Builder.Default
     private Integer examPasswordGen = 0;
 
+    // ------------------------------------------------------------- leaderboard
+
+    /** Whether candidates see a leaderboard at all. Admins always can. */
+    @Column(name = "leaderboard_enabled", nullable = false)
+    @Builder.Default
+    private Boolean leaderboardEnabled = true;
+
+    /** How often the board candidates see is recomputed while the paper runs. */
+    @Column(name = "leaderboard_refresh_minutes", nullable = false)
+    @Builder.Default
+    private Integer leaderboardRefreshMinutes = 15;
+
+    /** Added to a solve's time for every wrong attempt on that problem before it. 0 = none. */
+    @Column(name = "wrong_penalty_minutes", nullable = false)
+    @Builder.Default
+    private Integer wrongPenaltyMinutes = 0;
+
+    /** Whether the final board is shown to candidates, in normal mode, once the paper is over. */
+    @Column(name = "leaderboard_final_public", nullable = false)
+    @Builder.Default
+    private Boolean leaderboardFinalPublic = true;
+
+    /** The last computed board, as JSON — see ExamLeaderboardService. */
+    @Column(name = "leaderboard_snapshot", columnDefinition = "TEXT")
+    private String leaderboardSnapshot;
+
+    @Column(name = "leaderboard_generated_at")
+    private Instant leaderboardGeneratedAt;
+
     @Column(name = "standings_refreshed_at")
     private Instant standingsRefreshedAt;
 

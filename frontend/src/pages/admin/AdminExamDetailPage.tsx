@@ -2,26 +2,28 @@ import { useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import {
   AlertTriangle, ArrowLeft, Code2, Eye, Flag, KeyRound, Loader2, Lock, Monitor, Plus, Save,
-  ScrollText, Settings2, Trash2, Users,
+  RefreshCw, ScrollText, Settings2, Trash2, Trophy, Users,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 
 import { Ago, EmptyRow, Pager, Panel, Pill, StatCard } from '@/components/admin/AdminUi'
 import { ExamPasswordsTab } from '@/components/admin/ExamPasswordsTab'
+import { ExamLeaderboardView } from '@/components/exam/ExamLeaderboardView'
 import { LifecyclePill } from '@/pages/admin/AdminExamsPage'
 import {
   useAdminEvent, useAssignToEvent, useDeleteEvent, useEventLanguageCatalog, useExamFlags,
-  useExamLogs, useExamMonitor, useSetLifecycle, useSetProblems, useUnassignTeam, useUnassignUser,
+  useExamLeaderboard, useExamLeaderboardSettings, useExamLogs, useExamMonitor,
+  useRefreshExamLeaderboard, useSetLifecycle, useSetProblems, useUnassignTeam, useUnassignUser,
   useUpdateEvent,
 } from '@/hooks/useExams'
 import { useAdminGroups } from '@/hooks/useGroups'
 import { useAdminUsers } from '@/hooks/useAdmin'
 import type {
   DesktopPolicy, EventDetail, EventProblem, ExamEventType, ExamFlag, ExamFlagKind, ExamFlagReport,
-  ExamMonitorRow,
+  ExamLeaderboardSettings, ExamMonitorRow,
 } from '@/types'
 
-type Tab = 'settings' | 'people' | 'problems' | 'passwords' | 'monitor' | 'logs'
+type Tab = 'settings' | 'people' | 'problems' | 'passwords' | 'monitor' | 'logs' | 'leaderboard'
 
 /**
  * One examination, from the side that runs it.
@@ -61,6 +63,7 @@ export default function AdminExamDetailPage() {
       { id: 'passwords' as Tab, label: 'Passwords', icon: KeyRound },
       { id: 'monitor' as Tab, label: 'Monitor', icon: Monitor },
       { id: 'logs' as Tab,    label: 'Session log', icon: ScrollText },
+      { id: 'leaderboard' as Tab, label: 'Leaderboard', icon: Trophy },
     ] : []),
   ]
 
@@ -111,6 +114,9 @@ export default function AdminExamDetailPage() {
       {tab === 'passwords' && <ExamPasswordsTab eventId={id} />}
       {tab === 'monitor'  && <MonitorTab eventId={id} live={event.lifecycle === 'ACTIVE'} />}
       {tab === 'logs'     && <LogsTab eventId={id} live={event.lifecycle === 'ACTIVE'} />}
+      {tab === 'leaderboard' && (
+        <LeaderboardTab eventId={id} live={event.lifecycle === 'ACTIVE'} />
+      )}
     </div>
   )
 }
@@ -1230,6 +1236,122 @@ function CandidateLog({ eventId, userId, username, flags, onBack }: {
         {logs && (
           <Pager page={logs.page} totalPages={logs.totalPages} total={logs.total} onPage={setPage} />
         )}
+      </Panel>
+    </div>
+  )
+}
+
+// --------------------------------------------------------------- leaderboard
+
+/**
+ * The exam's own leaderboard: whether candidates see one, how often it moves, what a wrong
+ * attempt costs — and the board itself, which an admin always sees.
+ *
+ * <p>These settings are not part of the locked configuration above. Turning the board off, or
+ * slowing it down, is something an invigilator may reasonably decide halfway through.
+ */
+function LeaderboardTab({ eventId, live }: { eventId: number; live: boolean }) {
+  const { data: board, isLoading } = useExamLeaderboard(eventId, live)
+  const save = useExamLeaderboardSettings()
+  const refresh = useRefreshExamLeaderboard()
+  const [draft, setDraft] = useState<ExamLeaderboardSettings | null>(null)
+
+  const settings = draft ?? board?.settings
+  const dirty = draft != null && board != null
+    && JSON.stringify(draft) !== JSON.stringify(board.settings)
+
+  const candidatesSee = board && ({
+    DISABLED: 'Candidates see "Leaderboard disabled".',
+    NOT_STARTED: 'Candidates see it once the examination starts.',
+    LIVE: `Candidates see this board, updated every ${board.settings.refreshMinutes} minutes.`,
+    FINAL: 'Candidates see these final standings in normal mode.',
+    UNPUBLISHED: 'The examination is over; candidates are told the final standings are not published.',
+  } as const)[board.state]
+
+  return (
+    <div className="space-y-4">
+      <Panel title="Leaderboard settings"
+        description="Can be changed at any time, including while the examination runs">
+        {!settings ? (
+          <div className="flex items-center gap-2 p-4 text-sm text-gray-500">
+            <Loader2 size={14} className="animate-spin" /> Loading…
+          </div>
+        ) : (
+          <div className="space-y-3 p-4">
+            <label className="flex items-start gap-2">
+              <input type="checkbox" checked={settings.enabled} className="mt-0.5"
+                onChange={e => setDraft({ ...settings, enabled: e.target.checked })} />
+              <span className="text-sm text-gray-300">
+                Show candidates a leaderboard
+                <span className="block text-xs text-gray-500">
+                  Off: candidates are told the leaderboard is disabled. You still see it here.
+                </span>
+              </span>
+            </label>
+
+            <div className="grid max-w-lg grid-cols-1 gap-3 sm:grid-cols-2">
+              <label className="flex flex-col gap-1">
+                <span className="text-xs text-gray-500">Update every (minutes)</span>
+                <input type="number" min={1} max={1440} value={settings.refreshMinutes}
+                  className={INPUT} disabled={!settings.enabled}
+                  onChange={e => setDraft({
+                    ...settings, refreshMinutes: Math.max(1, Number(e.target.value) || 1) })} />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs text-gray-500">Penalty per wrong attempt (minutes)</span>
+                <input type="number" min={0} max={1440} value={settings.penaltyMinutes}
+                  className={INPUT}
+                  onChange={e => setDraft({
+                    ...settings, penaltyMinutes: Math.max(0, Number(e.target.value) || 0) })} />
+              </label>
+            </div>
+            <p className="text-xs text-gray-600">
+              0 means no penalty. A penalty is added to a problem&apos;s time for each wrong
+              attempt before it was solved; compilation errors do not count.
+            </p>
+
+            <label className="flex items-start gap-2">
+              <input type="checkbox" checked={settings.finalPublic} className="mt-0.5"
+                disabled={!settings.enabled}
+                onChange={e => setDraft({ ...settings, finalPublic: e.target.checked })} />
+              <span className="text-sm text-gray-300">
+                Publish the final standings when the examination ends
+                <span className="block text-xs text-gray-500">
+                  Candidates can then see them in normal mode, under Past examinations.
+                </span>
+              </span>
+            </label>
+
+            <button
+              onClick={() => save.mutate({ eventId, settings },
+                { onSuccess: () => setDraft(null) })}
+              disabled={!dirty || save.isPending}
+              className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-sm
+                font-medium text-white hover:bg-indigo-500 disabled:opacity-40"
+            >
+              {save.isPending ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+              Save leaderboard settings
+            </button>
+          </div>
+        )}
+      </Panel>
+
+      <Panel
+        title="Standings"
+        description={candidatesSee ?? 'Ranked by problems solved, then total time'}
+        actions={
+          <button
+            onClick={() => refresh.mutate(eventId)}
+            disabled={refresh.isPending || board?.state === 'NOT_STARTED'}
+            className="flex items-center gap-1.5 rounded-lg border border-gray-800 px-3 py-1.5
+              text-xs text-gray-300 hover:bg-gray-800 disabled:opacity-40"
+          >
+            <RefreshCw size={12} className={clsx(refresh.isPending && 'animate-spin')} />
+            Recompute now
+          </button>
+        }
+      >
+        <ExamLeaderboardView board={board} isLoading={isLoading} admin />
       </Panel>
     </div>
   )

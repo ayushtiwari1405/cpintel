@@ -22,5 +22,8 @@ public interface CodeSubmissionRepository extends MongoRepository<CodeSubmission
 
     List<CodeSubmission> findByUserIdOrderBySubmittedAtDesc(Long userId, Pageable pageable);
 
+    /** Everyone's attempts on one judge contest — what an examination leaderboard ranks. */
+    List<CodeSubmission> findByPlatformAndContestId(String platform, String contestId);
+
     void deleteByUserId(Long userId);
 }

@@ -1,8 +1,8 @@
 import { apiClient } from './client'
 import type {
   ApiResponse, EventDetail, EventKind, EventLifecycle, EventProblem, EventSummary,
-  ExamClientEvent, ExamFlagReport, ExamLogPage, ExamMonitorSnapshot, ExamPasswordStatus,
-  ExamEventType,
+  ExamClientEvent, ExamFlagReport, ExamLeaderboard, ExamLeaderboardSettings, ExamLogPage,
+  ExamMonitorSnapshot, ExamPasswordStatus, ExamEventType,
   IssuedPasscode, LanguageChoice, MyExam, MyExamSubmission, TeamAnalytics,
 } from '@/types'
 
@@ -86,6 +86,11 @@ export const examsApi = {
     apiClient.get<ApiResponse<MyExamSubmission>>(
       `/exams/${examId}/submissions/${submissionId}`).then(r => r.data),
 
+  /** The exam's leaderboard, when the admin shows one: live during it, final after it. */
+  leaderboard: (examId: number) =>
+    apiClient.get<ApiResponse<ExamLeaderboard>>(`/exams/${examId}/leaderboard`)
+      .then(r => r.data),
+
   /**
    * What this candidate's own client observed.
    *
@@ -149,6 +154,18 @@ export const adminEventsApi = {
   monitor: (eventId: number) =>
     apiClient.get<ApiResponse<ExamMonitorSnapshot>>(`/admin/events/${eventId}/monitor`)
       .then(r => r.data),
+
+  leaderboard: (eventId: number) =>
+    apiClient.get<ApiResponse<ExamLeaderboard>>(`/admin/events/${eventId}/leaderboard`)
+      .then(r => r.data),
+
+  refreshLeaderboard: (eventId: number) =>
+    apiClient.post<ApiResponse<ExamLeaderboard>>(
+      `/admin/events/${eventId}/leaderboard/refresh`, {}).then(r => r.data),
+
+  leaderboardSettings: (eventId: number, body: ExamLeaderboardSettings) =>
+    apiClient.put<ApiResponse<ExamLeaderboard>>(
+      `/admin/events/${eventId}/leaderboard/settings`, body).then(r => r.data),
 
   flags: (eventId: number) =>
     apiClient.get<ApiResponse<ExamFlagReport>>(`/admin/events/${eventId}/flags`)

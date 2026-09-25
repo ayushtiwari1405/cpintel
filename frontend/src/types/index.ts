@@ -1061,6 +1061,52 @@ export interface ExamFlagReport {
   fastSubmissionSeconds: number
 }
 
+export interface ExamLeaderboardSettings {
+  enabled: boolean
+  refreshMinutes: number
+  /** Added per wrong attempt before a solve. 0 means no penalty. */
+  penaltyMinutes: number
+  /** Whether candidates see the final board, in normal mode, once the paper is over. */
+  finalPublic: boolean
+}
+
+export interface ExamLeaderboardCell {
+  label: string
+  solved: boolean
+  wrongAttempts: number
+  /** Seconds from the start to when the accepted code was sent. */
+  solvedAtSeconds: number | null
+  pending: boolean
+  firstSolve: boolean
+}
+
+export interface ExamLeaderboardRow {
+  rank: number
+  userId: number
+  username: string
+  fullName: string | null
+  solved: number
+  totalSeconds: number
+  cells: ExamLeaderboardCell[]
+}
+
+export interface ExamLeaderboardStandings {
+  problems: string[]
+  rows: ExamLeaderboardRow[]
+  penaltyMinutes: number
+  pendingSubmissions: number
+  generatedAt: string
+}
+
+export interface ExamLeaderboard {
+  eventId: number
+  eventName: string
+  state: 'DISABLED' | 'NOT_STARTED' | 'LIVE' | 'FINAL' | 'UNPUBLISHED'
+  settings: ExamLeaderboardSettings
+  standings: ExamLeaderboardStandings | null
+  nextRefreshAt: string | null
+}
+
 export interface ParticipationRow {
   eventId: number
   kind: EventKind

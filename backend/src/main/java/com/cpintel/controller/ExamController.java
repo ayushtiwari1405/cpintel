@@ -42,6 +42,7 @@ public class ExamController {
     private final EventService events;
     private final ExamEventService examEvents;
     private final ContestMonitorRegistry monitors;
+    private final com.cpintel.events.ExamLeaderboardService leaderboard;
     /** Entering, unlocking and reporting belong to an examination session only. */
     private final com.cpintel.events.ExamSessionGuard examGuard;
 
@@ -122,6 +123,21 @@ public class ExamController {
         @PathVariable String submissionId) {
         return ResponseEntity.ok(ApiResponse.ok(
             events.mySubmission(userId, examId, submissionId)));
+    }
+
+    /**
+     * The examination's leaderboard, if the admin has turned one on.
+     *
+     * <p>During the paper, the snapshot recomputed on the admin's schedule — reachable from the
+     * examination session, since an ordinary one is locked out while the paper runs. Once it is
+     * over, the final board, from an ordinary session, if the admin has released it.
+     */
+    @GetMapping("/{examId}/leaderboard")
+    @Operation(summary = "The leaderboard for an examination you are sitting or sat")
+    public ResponseEntity<ApiResponse<EventsDto.Leaderboard>> leaderboard(
+        @AuthenticationPrincipal Long userId,
+        @PathVariable Long examId) {
+        return ResponseEntity.ok(ApiResponse.ok(leaderboard.forCandidate(userId, examId)));
     }
 
     /**

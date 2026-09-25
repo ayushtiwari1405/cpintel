@@ -14,6 +14,7 @@ import { ProblemNav } from '@/components/compete/ProblemNav'
 import { FilesPanel } from '@/components/compete/FilesPanel'
 import { LeaderboardPanel } from '@/components/compete/LeaderboardPanel'
 import { SubmissionsList } from '@/components/compete/SubmissionsList'
+import { ExamLeaderboardView } from '@/components/exam/ExamLeaderboardView'
 import { ExamList } from '@/components/exam/ExamList'
 import { ExamUnlock } from '@/components/exam/ExamUnlock'
 import { PastExamCode } from '@/components/exam/PastExamCode'
@@ -29,7 +30,7 @@ import {
   useTicker,
 } from '@/hooks/useCompete'
 import { useCfSession } from '@/hooks/usePractice'
-import { useEnterExam, useMyExam, useMyExams } from '@/hooks/useExams'
+import { useEnterExam, useMyExam, useMyExamLeaderboard, useMyExams } from '@/hooks/useExams'
 import { useExamSession } from '@/hooks/useExamSession'
 import { useLockdown } from '@/hooks/useLockdown'
 import { useLogout } from '@/hooks/useAuth'
@@ -39,6 +40,7 @@ import { useMonitorHeartbeat } from '@/hooks/useMonitorHeartbeat'
 import { useViolationReporter } from '@/hooks/useViolationReporter'
 import { archiveApi } from '@/api/archiveApi'
 import { useToast } from '@/components/common/Toaster'
+import { useAuthStore } from '@/store/authStore'
 import { useExamMode } from '@/store/examModeStore'
 import type {
   CompetePlatform, ContestRef, ContestSubmission, MyExam, VerdictResponse,
@@ -229,7 +231,8 @@ export default function CompetePage({ examOnly, section }: {
    * most contestants actually want.
    */
   const { data: leaderboard, isFetching: leaderboardFetching } = useLeaderboard(
-    contestRef ?? undefined, tab === 'leaderboard' && credentialsReady)
+    contestRef ?? undefined,
+    tab === 'leaderboard' && credentialsReady && !(mode === 'exams' && !!exam))
 
   // Tick once a second so the countdown moves between contest refetches.
   useTicker((!!contest && (contest.phase === 'BEFORE' || contest.running))
@@ -242,6 +245,16 @@ export default function CompetePage({ examOnly, section }: {
     : undefined
 
   const inExam = mode === 'exams' && !!exam
+
+  /**
+   * An examination has its own leaderboard, ranked by CPIntel from when each answer was sent,
+   * in place of the judge's scoreboard. Fetched while its tab is open during the paper, and on
+   * the review screen once it is over.
+   */
+  const reviewing = inExam && !!exam?.canReviewSubmissions
+  const { data: examBoard, isLoading: examBoardLoading } = useMyExamLeaderboard(
+    inExam && (reviewing || tab === 'leaderboard') ? examId : null, !reviewing)
+  const meId = useAuthStore(s => s.user?.userId)
   /**
    * Whether what is open is live, and so watched.
    *
@@ -549,6 +562,13 @@ export default function CompetePage({ examOnly, section }: {
             <h2 className="text-sm font-medium text-gray-300">Your code</h2>
             <PastExamCode exam={exam} />
           </section>
+
+          <section className="flex flex-col gap-2">
+            <h2 className="text-sm font-medium text-gray-300">Final standings</h2>
+            <div className="rounded-xl border border-gray-800 bg-gray-900">
+              <ExamLeaderboardView board={examBoard} isLoading={examBoardLoading} meId={meId} />
+            </div>
+          </section>
         </div>
       </div>
     )
@@ -712,7 +732,15 @@ export default function CompetePage({ examOnly, section }: {
               ? <span className="text-[10px] text-gray-600">{contest.problems.length}</span>
               : null,
           },
-          ...(contestRef.platform === 'DOMJUDGE' ? [{
+          ...(inExam ? [{
+            id: 'leaderboard',
+            label: 'Leaderboard',
+            icon: Trophy,
+            badge: (() => {
+              const mine = examBoard?.standings?.rows.find(r => r.userId === meId)
+              return mine ? <span className="text-[10px] text-gray-600">#{mine.rank}</span> : null
+            })(),
+          }] : contestRef.platform === 'DOMJUDGE' ? [{
             id: 'leaderboard',
             label: 'Leaderboard',
             icon: Trophy,
@@ -766,7 +794,9 @@ export default function CompetePage({ examOnly, section }: {
 
         {tab === 'leaderboard' && (
           <div className="h-full min-h-0">
-            <LeaderboardPanel board={leaderboard} isLoading={leaderboardFetching} />
+            {inExam
+              ? <ExamLeaderboardView board={examBoard} isLoading={examBoardLoading} meId={meId} />
+              : <LeaderboardPanel board={leaderboard} isLoading={leaderboardFetching} />}
           </div>
         )}
 

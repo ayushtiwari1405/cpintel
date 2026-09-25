@@ -5,6 +5,7 @@ import com.cpintel.common.Languages;
 import com.cpintel.events.EventService;
 import com.cpintel.events.EventsDto;
 import com.cpintel.events.ExamFlagService;
+import com.cpintel.events.ExamLeaderboardService;
 import com.cpintel.events.ExamMonitorService;
 import com.cpintel.events.ExamPasswordService;
 import com.cpintel.security.Roles;
@@ -47,6 +48,7 @@ public class AdminEventController {
     private final EventService events;
     private final ExamMonitorService monitor;
     private final ExamFlagService flags;
+    private final ExamLeaderboardService leaderboard;
     private final ExamPasswordService passwords;
 
     // ------------------------------------------------------------------ reads
@@ -180,6 +182,37 @@ public class AdminEventController {
             + "each entry is something worth a look, not a finding.")
     public ResponseEntity<ApiResponse<EventsDto.FlagReport>> flags(@PathVariable Long eventId) {
         return ResponseEntity.ok(ApiResponse.ok(flags.flags(eventId)));
+    }
+
+    // ----------------------------------------------------------- leaderboard
+
+    @GetMapping("/{eventId}/leaderboard")
+    @Operation(summary = "This examination's leaderboard, whatever candidates are shown",
+        description = "Ranked by problems solved, then total time: each solve timed from when "
+            + "the accepted code was sent, plus the configured penalty per earlier wrong "
+            + "attempt. The same snapshot candidates see, recomputed on its schedule.")
+    public ResponseEntity<ApiResponse<EventsDto.Leaderboard>> leaderboard(
+        @PathVariable Long eventId) {
+        return ResponseEntity.ok(ApiResponse.ok(leaderboard.forAdmin(eventId, false)));
+    }
+
+    @PostMapping("/{eventId}/leaderboard/refresh")
+    @Operation(summary = "Recompute the leaderboard now, ahead of its schedule")
+    public ResponseEntity<ApiResponse<EventsDto.Leaderboard>> refreshLeaderboard(
+        @PathVariable Long eventId) {
+        return ResponseEntity.ok(ApiResponse.ok(leaderboard.forAdmin(eventId, true)));
+    }
+
+    @PutMapping("/{eventId}/leaderboard/settings")
+    @Operation(summary = "Turn the leaderboard on or off, and set its refresh and penalty",
+        description = "Can be changed at any time, including while the examination runs.")
+    public ResponseEntity<ApiResponse<EventsDto.Leaderboard>> leaderboardSettings(
+        @AuthenticationPrincipal Long adminId,
+        @PathVariable Long eventId,
+        @Valid @RequestBody EventsDto.LeaderboardSettings req,
+        HttpServletRequest httpReq) {
+        return ResponseEntity.ok(ApiResponse.ok(
+            leaderboard.updateSettings(adminId, eventId, req, httpReq)));
     }
 
     /**

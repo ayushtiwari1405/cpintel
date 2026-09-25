@@ -2,9 +2,11 @@ package com.cpintel.repository.jpa;
 
 import com.cpintel.entity.GroupContest;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
@@ -97,4 +99,16 @@ public interface GroupContestRepository extends JpaRepository<GroupContest, Long
         WHERE c.startsAt <= :now AND c.endsAt >= :now
         """)
     List<GroupContest> findLive(@Param("now") Instant now);
+
+    /** Stores a freshly computed leaderboard without touching the rest of the row. */
+    @Modifying
+    @Transactional
+    @Query("""
+        UPDATE GroupContest c
+        SET c.leaderboardSnapshot = :snapshot, c.leaderboardGeneratedAt = :generatedAt
+        WHERE c.contestId = :contestId
+        """)
+    int storeLeaderboard(@Param("contestId") Long contestId,
+                         @Param("snapshot") String snapshot,
+                         @Param("generatedAt") Instant generatedAt);
 }

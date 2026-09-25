@@ -3,7 +3,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { adminEventsApi, examsApi, type EventBody, type LogQuery } from '@/api/examsApi'
 import { useToast } from '@/components/common/Toaster'
 import { useIsAdmin } from '@/hooks/useAdmin'
-import type { EventKind, EventLifecycle, EventProblem } from '@/types'
+import type {
+  EventKind, EventLifecycle, EventProblem, ExamLeaderboardSettings,
+} from '@/types'
 
 // ------------------------------------------------------------- candidate
 
@@ -30,6 +32,21 @@ export function useMyExam(examId: number | null) {
     // The clock is computed locally; this is re-read so a change an invigilator makes — ending
     // it early, extending it — reaches the page without a reload.
     refetchInterval: 60_000,
+  })
+}
+
+/**
+ * A candidate's view of an exam's leaderboard.
+ *
+ * The server recomputes it on the admin's schedule, so polling faster than once a minute would
+ * only fetch the same snapshot again.
+ */
+export function useMyExamLeaderboard(examId: number | null, live = true) {
+  return useQuery({
+    queryKey: ['exams', 'leaderboard', examId],
+    queryFn: () => examsApi.leaderboard(examId!).then(r => r.data),
+    enabled: examId != null,
+    refetchInterval: live ? 60_000 : false,
   })
 }
 
@@ -143,6 +160,33 @@ export function useExamFlags(eventId: number | null, live = true) {
     enabled: isAdmin && eventId != null,
     refetchInterval: live ? 15_000 : false,
   })
+}
+
+export function useExamLeaderboard(eventId: number | null, live = true) {
+  const isAdmin = useIsAdmin()
+  return useQuery({
+    queryKey: ['admin', 'exam-leaderboard', eventId],
+    queryFn: () => adminEventsApi.leaderboard(eventId!).then(r => r.data),
+    enabled: isAdmin && eventId != null,
+    refetchInterval: live ? 60_000 : false,
+  })
+}
+
+export function useRefreshExamLeaderboard() {
+  return useEventMutation(
+    (eventId: number) => adminEventsApi.refreshLeaderboard(eventId),
+    () => 'Leaderboard recomputed',
+  )
+}
+
+export function useExamLeaderboardSettings() {
+  return useEventMutation(
+    ({ eventId, settings }: { eventId: number; settings: ExamLeaderboardSettings }) =>
+      adminEventsApi.leaderboardSettings(eventId, settings),
+    ({ settings }) => settings.enabled
+      ? 'Leaderboard settings saved'
+      : 'Leaderboard turned off — candidates now see that it is disabled',
+  )
 }
 
 export function useExamLogs(eventId: number | null, query: LogQuery) {
