@@ -1,6 +1,7 @@
 package com.cpintel.security;
 
 import com.cpintel.entity.GroupContest;
+import com.cpintel.events.ExamLockoutService;
 import com.cpintel.repository.jpa.GroupContestRepository;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -8,6 +9,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -26,12 +28,20 @@ import java.util.regex.Pattern;
  * allow-list rather than a deny-list, so a route added next month is closed to examination
  * sessions until somebody decides it belongs to sitting a paper.
  *
+ * <p>And the other direction: while a candidate's examination is running, an ordinary session
+ * of theirs reaches nothing at all ({@link com.cpintel.events.ExamLockoutService}). It is
+ * answered 401 with {@code EXAM_IN_PROGRESS}; the client's renewal is refused for the same
+ * reason, and it signs out.
+ *
  * <p>Runs after the security chain, which is where {@link JwtAuthFilter} marks the request.
  */
 @Component
 @RequiredArgsConstructor
 @Slf4j
 public class ExamModeFilter extends OncePerRequestFilter {
+
+    private static final com.fasterxml.jackson.databind.ObjectMapper JSON =
+        new com.fasterxml.jackson.databind.ObjectMapper();
 
     private static final Pattern EXAM_ROUTE = Pattern.compile("^/exams/(\\d+)(/.*)?$");
     private static final Pattern COMPETE_ROUTE = Pattern.compile("^/compete/([A-Za-z]+)/([^/]+)(/.*)?$");
@@ -42,10 +52,26 @@ public class ExamModeFilter extends OncePerRequestFilter {
      */
     private final org.springframework.beans.factory.ObjectProvider<GroupContestRepository> events;
 
+    /** Lazily, for the same reason; absent in slices, where nobody is sitting anything. */
+    private final org.springframework.beans.factory.ObjectProvider<ExamLockoutService> lockout;
+
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                     FilterChain chain) throws ServletException, IOException {
         Object attribute = request.getAttribute(SessionMode.EXAM_ATTRIBUTE);
+        if (!(attribute instanceof Long)) {
+            var lock = heldByExamination(request);
+            if (lock != null) {
+                log.info("Refused {} {} to an ordinary session of a candidate in exam {}",
+                    request.getMethod(), request.getRequestURI(), lock.examId());
+                response.setStatus(401);
+                response.setContentType("application/json");
+                response.getWriter().write(JSON.writeValueAsString(java.util.Map.of(
+                        "code", com.cpintel.service.AuthService.EXAM_IN_PROGRESS,
+                        "message", com.cpintel.service.AuthService.examInProgressMessage(lock))));
+                return;
+            }
+        }
         if (!(attribute instanceof Long examId) || allowed(request, examId)) {
             chain.doFilter(request, response);
             return;
@@ -57,6 +83,20 @@ public class ExamModeFilter extends OncePerRequestFilter {
         response.getWriter().write("{\"code\":\"EXAM_MODE\",\"message\":\"Not available while "
             + "you are signed in for an examination. Sign out and sign in with your account "
             + "password for everything else.\"}");
+    }
+
+    /**
+     * The examination holding this ordinary session's owner out, or null. Signing out is let
+     * through, and admins are not candidates.
+     */
+    private ExamLockoutService.Lock heldByExamination(HttpServletRequest request) {
+        var auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !(auth.getPrincipal() instanceof Long userId)) return null;
+        if (auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN")
+                || a.getAuthority().equals("ROLE_SUPER_ADMIN"))) return null;
+        if (route(request).equals("/auth/logout")) return null;
+        ExamLockoutService service = lockout.getIfAvailable();
+        return service == null ? null : service.lockFor(userId).orElse(null);
     }
 
     private boolean allowed(HttpServletRequest request, long examId) {

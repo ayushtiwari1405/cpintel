@@ -1,15 +1,25 @@
 package com.cpintel.security;
 
 import com.cpintel.entity.GroupContest;
+import com.cpintel.events.ExamLockoutService;
 import com.cpintel.repository.jpa.GroupContestRepository;
 import jakarta.servlet.FilterChain;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
+
+import java.time.Instant;
+import java.util.List;
+import java.util.Set;
 
 import java.util.Optional;
 
@@ -21,6 +31,12 @@ import static org.mockito.Mockito.*;
 class ExamModeFilterTest {
 
     private ExamModeFilter filter;
+    private ExamLockoutService lockout;
+
+    @AfterEach
+    void clearContext() {
+        SecurityContextHolder.clearContext();
+    }
 
     @BeforeEach
     @SuppressWarnings("unchecked")
@@ -30,7 +46,11 @@ class ExamModeFilterTest {
             .contestId(7L).kind("EXAM").platform("DOMJUDGE").externalId("midsem").build()));
         ObjectProvider<GroupContestRepository> provider = mock(ObjectProvider.class);
         when(provider.getObject()).thenReturn(events);
-        filter = new ExamModeFilter(provider);
+        lockout = mock(ExamLockoutService.class);
+        when(lockout.lockFor(any())).thenReturn(Optional.empty());
+        ObjectProvider<ExamLockoutService> lockoutProvider = mock(ObjectProvider.class);
+        when(lockoutProvider.getIfAvailable()).thenReturn(lockout);
+        filter = new ExamModeFilter(provider, lockoutProvider);
     }
 
     private int status(String method, String uri, Long examSession) throws Exception {
@@ -70,5 +90,32 @@ class ExamModeFilterTest {
     @CsvSource({ "GET, /api/v1/practice/problems", "GET, /api/v1/admin/users" })
     void ordinarySession(String method, String uri) throws Exception {
         assertEquals(200, status(method.trim(), uri.trim(), null));
+    }
+
+    private void signedInAs(long userId, String role) {
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+            userId, null, List.of(new SimpleGrantedAuthority("ROLE_" + role))));
+    }
+
+    @Test
+    @DisplayName("an ordinary session of a candidate reaches nothing while their examination runs")
+    void ordinarySessionHeldDuringExamination() throws Exception {
+        when(lockout.lockFor(42L)).thenReturn(Optional.of(new ExamLockoutService.Lock(7L,
+            "Midsem", Instant.now().minusSeconds(60), Instant.now().plusSeconds(3600),
+            Set.of(42L))));
+
+        signedInAs(42L, "USER");
+        assertEquals(401, status("GET", "/api/v1/practice/problems", null));
+        assertEquals(401, status("GET", "/api/v1/users/me", null));
+        assertEquals(200, status("POST", "/api/v1/auth/logout", null));
+
+        // Their examination session is the way in, and is held only to its paper.
+        assertEquals(200, status("GET", "/api/v1/exams/7", 7L));
+
+        // Somebody else, and an admin, carry on.
+        signedInAs(43L, "USER");
+        assertEquals(200, status("GET", "/api/v1/practice/problems", null));
+        signedInAs(42L, "ADMIN");
+        assertEquals(200, status("GET", "/api/v1/practice/problems", null));
     }
 }

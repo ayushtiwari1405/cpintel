@@ -41,6 +41,8 @@ class LoginIdentifierTest {
     private AuthService service;
     private final com.cpintel.events.ExamLoginService examLogin =
         mock(com.cpintel.events.ExamLoginService.class);
+    private final com.cpintel.events.ExamLockoutService lockout =
+        mock(com.cpintel.events.ExamLockoutService.class);
 
     private User ada;
 
@@ -62,7 +64,9 @@ class LoginIdentifierTest {
             mock(AuditService.class), limiter, mock(AppMetrics.class),
             examLogin,
             mock(com.cpintel.events.ExamAccessService.class),
-            mock(com.cpintel.repository.jpa.GroupContestRepository.class));
+            mock(com.cpintel.repository.jpa.GroupContestRepository.class),
+            lockout);
+        when(lockout.lockFor(any())).thenReturn(Optional.empty());
 
         ada = User.builder().userId(42L).username("Ada").email("ada@example.com")
             .passwordHash("hash").role("USER").isActive(true).isVerified(false).build();
@@ -173,5 +177,31 @@ class LoginIdentifierTest {
     void neitherPasswordFails() {
         when(examLogin.match(any(), any())).thenReturn(Optional.empty());
         assertThrows(com.cpintel.exception.ApiException.class, () -> signIn("ada", "wrong"));
+    }
+
+    @Test
+    @DisplayName("the account password is refused while the person's examination runs")
+    void accountPasswordRefusedDuringExamination() {
+        when(lockout.lockFor(42L)).thenReturn(Optional.of(new com.cpintel.events.ExamLockoutService
+            .Lock(7L, "Midsem", java.time.Instant.now().minusSeconds(60),
+                java.time.Instant.now().plusSeconds(3600), java.util.Set.of(42L))));
+
+        ApiException refused = assertThrows(ApiException.class, () -> signIn("ada", "correct"));
+        assertEquals(AuthService.EXAM_IN_PROGRESS, refused.getCode());
+        assertTrue(refused.getMessage().contains("Midsem"));
+
+        // An admin is not a candidate.
+        ada.setRole("ADMIN");
+        assertEquals("NORMAL", signIn("ada", "correct").getMode());
+    }
+
+    @Test
+    @DisplayName("a wrong password during an examination says nothing about it")
+    void wrongPasswordDuringExaminationIsPlain() {
+        when(lockout.lockFor(42L)).thenReturn(Optional.of(new com.cpintel.events.ExamLockoutService
+            .Lock(7L, "Midsem", java.time.Instant.now().minusSeconds(60),
+                java.time.Instant.now().plusSeconds(3600), java.util.Set.of(42L))));
+        ApiException refused = assertThrows(ApiException.class, () -> signIn("ada", "wrong"));
+        assertEquals("UNAUTHORIZED", refused.getCode());
     }
 }

@@ -31,4 +31,14 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long
     @Query("UPDATE RefreshToken rt SET rt.revoked = true "
         + "WHERE rt.user.userId = :userId AND rt.examId = :examId")
     void revokeExamSessions(@Param("userId") Long userId, @Param("examId") Long examId);
+
+    /**
+     * Ends the ordinary (account-password) sessions of these people, leaving their examination
+     * sessions alone. Admins are left alone too: they are not candidates.
+     */
+    @Modifying
+    @Query("UPDATE RefreshToken rt SET rt.revoked = true "
+        + "WHERE rt.examId IS NULL AND rt.revoked = false AND rt.user.userId IN "
+        + "(SELECT u.userId FROM User u WHERE u.userId IN :userIds AND u.role = 'USER')")
+    int revokeOrdinarySessions(@Param("userIds") java.util.Collection<Long> userIds);
 }

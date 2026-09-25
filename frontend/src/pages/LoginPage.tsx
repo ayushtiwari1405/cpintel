@@ -11,6 +11,8 @@ export default function LoginPage() {
   const login = useLogin()
   // Set when an examination session was closed because its paper ended.
   const examEnded = new URLSearchParams(window.location.search).has('exam-ended')
+  // Set when an ordinary session was closed because the person's examination is running.
+  const examRunning = new URLSearchParams(window.location.search).has('exam-in-progress')
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -39,6 +41,13 @@ export default function LoginPage() {
               leading-relaxed text-gray-300">
               The examination has ended and its session is closed. Sign in with your own
               password to read your code under Past examinations.
+            </p>
+          )}
+          {examRunning && (
+            <p className="mb-4 rounded-lg border border-gray-700 bg-gray-800/60 px-3 py-2 text-xs
+              leading-relaxed text-gray-300">
+              Your examination is running, so you have been signed out of your account until it
+              ends. Sign in with your username and the examination password on your slip.
             </p>
           )}
 

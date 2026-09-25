@@ -76,10 +76,14 @@ apiClient.interceptors.response.use(
         return apiClient(originalRequest)
       } catch (refreshError) {
         processQueue(refreshError, null)
-        // An examination session stops renewing when its paper ends; say so on the way out.
+        // An examination session stops renewing when its paper ends, and an ordinary one stops
+        // while its holder's examination is running; say which on the way out.
         const examOver = useAuthStore.getState().mode === 'EXAM'
+        const examRunning = (refreshError as AxiosError<{ code?: string }>)
+          ?.response?.data?.code === 'EXAM_IN_PROGRESS'
         useAuthStore.getState().logout()
-        window.location.href = examOver ? '/login?exam-ended=1' : '/login'
+        window.location.href = examRunning ? '/login?exam-in-progress=1'
+          : examOver ? '/login?exam-ended=1' : '/login'
         return Promise.reject(refreshError)
       } finally {
         isRefreshing = false

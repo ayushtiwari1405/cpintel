@@ -79,6 +79,18 @@ public interface GroupContestRepository extends JpaRepository<GroupContest, Long
         """)
     boolean isAssignedTo(@Param("contestId") Long contestId, @Param("userId") Long userId);
 
+    /**
+     * Examinations whose window overlaps [from, until): running now, or starting soon. Drafts and
+     * archived papers hold nobody.
+     */
+    @Query("""
+        SELECT c FROM GroupContest c
+        WHERE c.kind = 'EXAM' AND c.lifecycle <> 'DRAFT' AND c.lifecycle <> 'ARCHIVED'
+          AND c.startsAt < :until AND c.endsAt > :from
+        """)
+    List<GroupContest> findExamsOverlapping(@Param("from") Instant from,
+                                            @Param("until") Instant until);
+
     /** Contests whose window is open, which are the ones worth refreshing often. */
     @Query("""
         SELECT c FROM GroupContest c

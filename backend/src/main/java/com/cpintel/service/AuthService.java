@@ -46,6 +46,7 @@ public class AuthService {
     private final com.cpintel.events.ExamLoginService examLogin;
     private final com.cpintel.events.ExamAccessService examAccess;
     private final com.cpintel.repository.jpa.GroupContestRepository events;
+    private final com.cpintel.events.ExamLockoutService examLockout;
 
     /**
      * Whether anyone may create their own account.
@@ -162,13 +163,20 @@ public class AuthService {
 
         rateLimiter.reset(ACCOUNT_BUCKET, identifier);
 
+        // The right account password, but this person's examination is running: for its length
+        // the only way in is the examination password on their slip. Checked after the password,
+        // so the refusal says nothing about anybody's examinations to somebody guessing.
+        refuseDuringExamination(user, httpReq);
+
         log.info("User logged in: {}", user.getEmail());
         auditService.record(user.getUserId(), AuditService.LOGIN, "USER",
             String.valueOf(user.getUserId()), httpReq);
         return buildAuthResponse(user, httpReq);
     }
 
-    @Transactional
+    // A refusal must not roll back the rotation: a refresh token that is turned away has to stay
+    // spent, or it is still there to use the moment whatever refused it lifts.
+    @Transactional(noRollbackFor = ApiException.class)
     public AuthDto.AuthResponse refresh(AuthDto.RefreshRequest req, HttpServletRequest httpReq) {
         RefreshToken token = refreshTokenRepository.findByToken(req.getRefreshToken())
             .orElseThrow(() -> ApiException.unauthorized("Invalid refresh token"));
@@ -204,8 +212,39 @@ public class AuthService {
             }
             return buildAuthResponse(user, httpReq, exam);
         }
+        // An ordinary session does not renew while its holder's examination runs. The token was
+        // revoked by the rotation above, so this is the sign-out.
+        refuseDuringExamination(user, httpReq);
         return buildAuthResponse(user, httpReq);
     }
+
+    /**
+     * Refuses an ordinary session to a candidate whose examination is running. Admins are not
+     * candidates. See {@link com.cpintel.events.ExamLockoutService}.
+     */
+    private void refuseDuringExamination(User user, HttpServletRequest httpReq) {
+        if (com.cpintel.security.Roles.isAdminLevel(user.getRole())) return;
+        var lock = examLockout.lockFor(user.getUserId());
+        if (lock.isEmpty()) return;
+        auditService.record(user.getUserId(), AuditService.LOGIN_FAILED, "EXAM",
+            String.valueOf(lock.get().examId()), httpReq);
+        throw examInProgress(lock.get());
+    }
+
+    /** What a candidate held out of ordinary mode is told, and the code the client looks for. */
+    public static ApiException examInProgress(com.cpintel.events.ExamLockoutService.Lock lock) {
+        return new ApiException(org.springframework.http.HttpStatus.UNAUTHORIZED,
+            EXAM_IN_PROGRESS, examInProgressMessage(lock));
+    }
+
+    public static String examInProgressMessage(com.cpintel.events.ExamLockoutService.Lock lock) {
+        return "\"" + lock.name() + "\" is running and you are sitting it, so ordinary mode is "
+            + "closed to you until it ends. Sign in with your username and the examination "
+            + "password on your slip.";
+    }
+
+    /** The error code for a sign-in or session refused because the holder's examination runs. */
+    public static final String EXAM_IN_PROGRESS = "EXAM_IN_PROGRESS";
 
     @Transactional
     public void logout(String accessToken, Long userId) {
