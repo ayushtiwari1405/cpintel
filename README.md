@@ -32,14 +32,14 @@ the reasoning behind the harder decisions, and [`docs/SRS.md`](docs/SRS.md) for 
 
 | Layer | Technology |
 |---|---|
-| Frontend | React 19, TypeScript, Vite 8, TailwindCSS, Recharts, Zustand, TanStack Query |
+| Frontend | React 19, TypeScript, Vite 8, TailwindCSS, Recharts, Zustand, TanStack Query; light and dark themes |
 | Backend | Spring Boot 3, Java 21, Spring Security, JWT, Spring Data JPA |
 | Primary DB | PostgreSQL 16 — relational system of record; scoring runs in the Java service layer |
 | Document DB | MongoDB — raw submission history, personal files, contest snapshots |
 | Cache | Redis — sessions, JWT blacklist, per-user token revocation, analytics cache |
 | Integrations | Codeforces REST + scraping, DOMjudge REST v4 |
-| Migrations | Flyway — 13 versioned migrations (schema, indexes, materialized views, audit indexes, groups, super admin role, scheduler locks, node-level mastery, examinations, examination access, placement results, Codeforces-only cleanup, examination-mode sessions) |
-| Containerization | Docker Compose — 9 services, 3 of them behind the `monitoring` profile |
+| Migrations | Flyway — 15 versioned migrations (schema, indexes, materialized views, audit indexes, groups, super admin role, scheduler locks, node-level mastery, examinations, examination access, placement results, Codeforces-only cleanup, examination-mode sessions, several events per judge contest, examination leaderboards) |
+| Containerization | Docker Compose — 11 services: 3 behind the `monitoring` profile and certbot behind `letsencrypt`. `docker-compose.prod.yml` swaps the builds for CI images |
 | Editor | Monaco, bundled locally (no CDN) — shared by the Practice, Compete and examination workspaces |
 | Code runner | g++ and CPython under bubblewrap + rlimits, in its own locked-down container on a server; judged against the statement's sample tests |
 | Desktop | Electron wrapper that loads the deployed server, plus examination monitoring and Codeforces access through its own browser session |
@@ -55,16 +55,22 @@ the reasoning behind the harder decisions, and [`docs/SRS.md`](docs/SRS.md) for 
 - Topic mastery engine: accuracy, volume, recency-decay and confidence scored per topic in
   `ScoringFormulas`
 - Contest analytics: rating history, wrong-submission patterns, behavioural insight generation
-- Unified cross-platform rating, normalised and weighted per platform
-- Daily/weekly recommendation sheets and an SM-2-style spaced repetition revision queue
+- Unified rating: the Codeforces rating mapped onto a 0-1000 scale
+- Daily/weekly recommendation sheets and an SM-2-style spaced repetition revision queue. The
+  page is parked — out of the sidebar, and `/recommendations` redirects to the roadmap — because
+  the roadmap already answers "what next", and two answers that can disagree are worse than one
 - 35-node adaptive roadmap with real prerequisite chains, live-pulled Codeforces problems per
   node, and auto-unlock based on measured mastery
+- A placement gauntlet (`/roadmap/gauntlet`): a short tiered test per area whose result moves
+  roadmap nodes forward — never back — so a newcomer does not start at the bottom of a tree they
+  have already climbed. It can be retaken every `CPINTEL_GAUNTLET_RETAKE_DAYS` days
 - Dashboards: topic radar, mastery heatmap, rating-over-time, recent contests
 
 ### Practising and competing
 
-Practice is open at any time. The **Compete** section has two halves beside it: *Contests*,
-which anyone may open, and *Examinations*, which are assigned to you.
+Practice is open at any time. **Compete** is for contests anyone may open — pick Codeforces or
+DOMjudge from two tiles. **Exams** has its own sidebar entry and page, and lists only the
+examinations assigned to you.
 
 - A split-pane workspace on Practice, Compete and examinations alike — statement and problem
   list on the left, editor above a testcase console on the right, with draggable dividers whose
@@ -72,7 +78,7 @@ which anyone may open, and *Examinations*, which are assigned to you.
 - Sample tests are seeded as **editable** cases; add your own to run the program on anything,
   and Run executes them all
 - A Run button that compiles your solution locally and checks it against the samples before you
-  spend a real submission — see [Running code locally](#running-code-locally)
+  spend a real submission — see [Running code](#running-code)
 - Submit straight to the judge from the editor, with the verdict polled back into the console —
   Codeforces and DOMjudge both, from the same page
 - **DOMjudge contestants never type a judge password.** An admin attaches each person's
@@ -81,9 +87,10 @@ which anyone may open, and *Examinations*, which are assigned to you.
   team. They pick their round from a list of the contests DOMjudge says they are registered
   for, rather than hunting for a contest id. Statements are the problem package's PDF,
   embedded, with its sample data seeded into the console
-- **A leaderboard in the sidebar**, on DOMjudge: the whole contest board as the judge ranks it,
-  with your own team pinned above it and broken out per problem. Every number is the judge's
-  own, so it agrees with the board on the wall
+- **A leaderboard in the sidebar**, on DOMjudge contests: the whole contest board as the judge
+  ranks it, with your own team pinned above it and broken out per problem. Every number is the
+  judge's own, so it agrees with the board on the wall. (Examinations have their own board
+  instead — see below)
 - Submitting to Codeforces uses a session you create yourself in your own browser — the desktop
   app signs you in inside a window it owns, the web build uses a local helper. Nothing anywhere
   asks for your Codeforces password; see [Connecting Codeforces](#connecting-codeforces)
@@ -131,17 +138,40 @@ ordinary contest in four ways, and nothing else:
   and verdicts are all recorded. The threshold and the desktop restrictions are set per
   examination. **Only examinations are monitored** — an ordinary contest is practice among
   people who chose to enter it, and nothing watches one
+- **It holds its candidates for its whole window.** From the start of the paper to its end,
+  somebody assigned to it cannot sign in with their account password or renew a normal session,
+  and any normal session they already held is ended (`EXAM_IN_PROGRESS`). The slip is the only
+  way in; the rule lifts by itself when the paper ends. Admins are not held to it. Their own
+  vault and code archive are closed too, so "personal files: off" holds everywhere and not
+  only on the exam page
+- **It keeps to its own window, not the judge's.** One DOMjudge contest can carry several
+  events — a practice round one week, a paper the next — and each opens and closes on its own
+  times. Submissions outside the event's window are refused even while the judge contest is
+  still running, and only submissions made during the paper count as part of it
+- **It has its own leaderboard**, ranked from CPIntel's own submission archive rather than
+  the judge's board: most marks first — each problem is worth what the admin gave it — then
+  anyone who submitted something ahead of anyone who submitted nothing, then less total time, with a solve timed from when CPIntel sent the accepted code — so a busy judge cannot reorder two people who submitted a
+  second apart. An optional per-wrong-attempt penalty is added (compilation errors do not
+  count). The admin turns it on or off, sets how often it is recomputed and whether the final
+  standings are released; after the end it keeps settling for ten minutes, then is final
 - **It leaves a log.** Admins get a live monitoring dashboard while it runs — who is present,
-  who is away and for how long, what each candidate was last seen doing — and afterwards a
-  session log filterable by person, team, event type and time, kept for a configurable
-  retention period
+  who is away and for how long, what each candidate was last seen doing — and a session log in
+  two lists: **Students**, every assigned candidate with their counts, opening onto that
+  person's own log; and **Suspicious activity**, the handful of rows worth a human look — long
+  absences, frequent focus losses, signing in more than once (from different addresses ranks
+  higher), a first submission within seconds of opening a problem, desktop restrictions firing.
+  That list is worked out from the log on every read and never stored, so nothing is written
+  against anyone's name. The log is kept for a configurable retention period
+- **A candidate says when they are done.** *I have finished* asks for confirmation, records it
+  and signs them out. A finished paper shows its questions and samples beside their code
 - **Afterwards, candidates get their own code back** — in normal mode, under **Past
-  examinations** on the Compete page. A paper that has ended opens onto the
+  examinations** on the Exams page. A paper that has ended opens onto the
   source of every submission that candidate made into it, read out of CPIntel's own archive
   rather than fetched from the judge. Their code, and nothing else: not their marks, not
   anybody else's verdicts, not the test data — results are published by whoever decides to
   publish them, and a review screen that quietly became a results screen would take that
-  decision away from them
+  decision away from them. The one exception is the leaderboard's final standings, and only
+  once the admin has released them
 
 Everything on both screens is an observation rather than a finding. A focus loss is a focus
 loss; whether it was a second screen, a notification or somebody answering the door is not
@@ -284,6 +314,12 @@ Everything below has a working default; only the secrets in `.env` genuinely nee
 | `CPINTEL_PROCTOR_HEARTBEAT_INTERVAL` | `15` | How often the page sends one |
 | `CPINTEL_EXAM_PASSWORD_KEY` | *(unset)* | **Required for examinations.** AES-256-GCM key for each candidate's examination sign-in password and the optional room password. Without it no sign-in password can be issued, so no examination can be sat |
 | `CPINTEL_EXAM_PASSWORD_LENGTH` | `8` | Characters per generated code, grouped in fours for reading off paper |
+| `CPINTEL_EXAM_RETENTION_DAYS` | `365` | How long an examination's session log is kept. `0` keeps everything. Swept daily, never at startup |
+| `CPINTEL_RUNNER_COMPILE_LIMIT_MS` | `20000` | Wall clock for the compile step |
+| `CPINTEL_FILES_MAX_FILES` | `100` | Files per user vault |
+| `CPINTEL_SESSION_TTL_DAYS` | `14` | How long a stored Codeforces session is kept |
+| `CPINTEL_GAUNTLET_RETAKE_DAYS` | `7` | How soon the placement gauntlet may be retaken |
+| `CPINTEL_LAB_NETWORKS` | *(unset)* | Comma-separated CIDRs of labs behind one NAT address; inside them the per-address sign-in limit is raised to a shared one (the per-account limit is unchanged) |
 | `SMTP_HOST` | *(unset)* | Mail server for password resets. **Blank is supported** — the message is logged instead, which is what a closed exam-lab network needs |
 | `SMTP_PORT` / `_USER` / `_PASSWORD` | `587` / — / — | The rest of the SMTP connection |
 | `SMTP_AUTH` / `SMTP_STARTTLS` | `true` / `true` | Turn off for a relay that wants neither |
@@ -340,8 +376,8 @@ with no way for a row to say otherwise**. If that ever changes, the permission h
 All of it is enforced server-side — the UI hides what you cannot use, but a hand-written request
 from an ordinary admin trying to create an admin gets a 403, not an account.
 
-**Self-registration is off by default.** There is no sign-up page; accounts are created by a
-super admin from `/admin/users`. Set `CPINTEL_REGISTRATION_ENABLED=true` to reopen public
+**Self-registration is off by default.** There is no sign-up page; accounts are created by an
+admin from `/admin/users` or by roster import. Set `CPINTEL_REGISTRATION_ENABLED=true` to reopen public
 sign-up, and the `/api/v1/auth/register` endpoint starts accepting again.
 
 **An admin may not touch another admin's account.** Editing details, deactivating, signing out
@@ -456,8 +492,11 @@ Settings -> Sessions.
 1. `/admin/teams` — create a team and add its members. For a whole class, the **Import a
    roster** panel on the group page takes a CSV file or a range pasted straight out of Excel or
    Sheets (that paste is tab-separated, and the parser detects which it is given). The first row
-   names the columns; `email` or `username` is required, `fullName`, `cfHandle` and `teamName`
-   optional. **Preview** first — it writes nothing and reports per row what would happen. Rows
+   names the columns; `email` or `username` is required, `fullName`, `cfHandle`, `teamName`,
+   `djUsername` and `djPassword` optional. DOMjudge columns attach that login in the same pass
+   (the preview checks each one against the judge), and a new account takes the DOMjudge
+   username as its CPIntel username. A paste of just the login columns re-attaches expired
+   logins. **Preview** first — it writes nothing and reports per row what would happen. Rows
    for people who have no account yet create one; any admin may do this, and the account is
    always an ordinary `USER`. Generated passwords are shown once, on that screen, and stored
    hashed — the download is the only copy.
@@ -472,6 +511,10 @@ Settings -> Sessions.
    resolved to, so a wrong account is caught then rather than at the end of the contest.
    Requires `CPINTEL_DOMJUDGE_CREDENTIAL_KEY` to be set.
 
+   DOMjudge passwords can be changed from CPIntel — for one person from their account dialog,
+   or for a whole team from the group's panel. Only the password is replaced, and only after the
+   judge accepts it; a rejected one leaves the old one in place.
+
    **On the team picker.** Leave it blank and the judge's own answer is used, which is right
    whenever the account is already on the correct team. Choosing a team sets how *CPIntel*
    groups that person for its standings — it cannot change where their code lands, because
@@ -483,13 +526,14 @@ Settings -> Sessions.
 3. Add a contest to the group: the judge, the contest id, and the **start and end times**. Those
    times decide when monitoring is expected and which reports are accepted, so they should match
    the judge's own window.
-4. Members see it under `/teams`, and sit it on `/compete` as normal. On Codeforces they
+4. Members see it under `/teams`, and sit it on `/compete` as normal. An event's own start and
+   end decide when it is open, not the judge contest's, so one long-running DOMjudge contest can
+   carry several rounds. On Codeforces they
    paste the contest link; on DOMjudge they pick from the list of contests their attached
    account may enter. Statements, editor, submissions, live rank and the board all appear
    there. Nothing about a team contest is monitored or password-protected — see
    [Running an examination](#running-an-examination) for the round that is.
-5. `/admin/teams/{id}` lists the team's contests; opening one shows the team's ranking and
-   what the monitors reported. Standings refresh on a timer while the contest is live, or on
+5. `/admin/teams/{id}` lists the team's contests; opening one shows the team's ranking. Standings refresh on a timer while the contest is live, or on
    demand.
 
 ### Running an examination
@@ -499,9 +543,16 @@ Settings -> Sessions.
    saving a half-written paper is never the same click as publishing it to two hundred people.
 2. **Who sits it** — assign teams, individuals, or both. An examination for four candidates who
    missed the first sitting needs no team at all.
-3. **Problems** — the labels, their order and what each is worth. Statements, test data and
-   verdicts stay on DOMjudge; duplicating them here would create a second source of truth for
-   the one thing the judge is actually authoritative about.
+3. **Problems** — the tab reads the linked DOMjudge contest and lists its problems; you give
+   each one its marks and save. The leaderboard ranks by total marks, then time. A solved problem
+   earns all its marks (the judge gives a verdict, not a partial score); with no marks set at
+   all every problem counts as one, and once any are set a problem left blank is worth nothing.
+   **Reload from DOMjudge** re-reads the judge's list and keeps the marks you already gave. The
+   judge is read through the service account, or else as an assigned candidate's attached login —
+   if neither exists, enter the problems by hand using the judge's labels (A, B, C…), since
+   submissions are recorded under those. Statements, test data and verdicts stay on DOMjudge;
+   duplicating them here would create a second source of truth for the one thing the judge is
+   actually authoritative about.
 4. **Languages** — which languages the paper accepts. Leave everything unticked, which is the
    default, and it takes whatever the judge offers.
 
@@ -550,19 +601,28 @@ Settings -> Sessions.
 8. Candidates sign in on the ordinary login page with their username and the examination
    sign-in password from their slip, and land straight on the paper — there is no navigation in
    examination mode. If the paper has a room password they get one more screen asking for it.
-   A candidate who signs in with their own password instead is in normal mode, where the
-   examination shows only a note telling them to sign in with the examination password.
+   Before the start, a candidate who signs in with their own password is in normal mode, where
+   the examination shows only a note telling them to use the examination password. Once the
+   paper has started their own password is refused outright until it ends, and any normal
+   session they left open is signed out.
 
    Once through, they work in the same workspace a contest uses. They are told they are being
-   monitored, told the threshold, and warned while they are away rather than afterwards.
-9. **Monitor** and **Session log** tabs, during and after. The log is filterable by candidate,
-   team, event type and time, and is kept for `CPINTEL_EXAM_RETENTION_DAYS` days. The
+   monitored, told the threshold, and warned while they are away rather than afterwards. When
+   they are done, *I have finished* records it and signs them out.
+9. **Monitor** and **Session log** tabs, during and after. The session log opens on two lists —
+   **Students** (everyone assigned, with their counts; click one for their own log, filterable
+   by event type) and **Suspicious activity** (computed on read; thresholds under
+   `cpintel.exams.flags.*`). It is kept for `CPINTEL_EXAM_RETENTION_DAYS` days. The
    **Passwords** tab keeps working while the paper runs — reissuing one candidate's code, or
    making somebody unlock again after you move them to another machine.
-10. Once it has ended, the candidate signs in normally and finds it under **Compete →
-   Examinations → Past examinations**, which opens onto the code they submitted. Marks are not
-   published by this; that stays yours to decide. The examination sign-in password stops
-   working when the paper ends.
+10. **Leaderboard** tab: on or off, how often it is recomputed (default every 15 minutes), the
+   penalty per wrong attempt, and whether the final standings are released. **Recompute** does
+   it now. Candidates see it in the workspace's Leaderboard tab ("Leaderboard disabled" when it
+   is off).
+11. Once it has ended, the candidate signs in normally and finds it under **Exams → Past
+   examinations**, which opens onto the code they submitted and, if you released them, the final
+   standings. Marks are not published by this; that stays yours to decide. The examination
+   sign-in password stops working when the paper ends.
 
 #### Rehearsing with 200 simulated contestants
 
@@ -618,19 +678,22 @@ Three things are worth checking by hand as well:
 |---|---|---|
 | `/dashboard` | anyone | Topic radar, streak, recent contests |
 | `/analytics` | anyone | Mastery heatmap, rating history, behavioural insights |
-| `/recommendations` | anyone | Daily sheet, weekly plan, revision queue |
+| `/recommendations` | — | Parked; redirects to `/roadmap` |
 | `/roadmap` | anyone | The 35-node dependency graph with problems per node |
+| `/roadmap/gauntlet` | anyone | The placement gauntlet |
 | `/practice` | anyone | Problem search, statement, editor, local runner, submit |
-| `/compete` | anyone | Contests and examinations: statements, editor, submissions, rank, monitoring |
+| `/compete` | anyone | Contests on Codeforces or DOMjudge: statements, editor, submissions, rank |
+| `/exams` | anyone | Your assigned examinations, and past ones to read back |
+| `/exam` | exam mode | The one paper an examination session can reach; every other route redirects here |
 | `/platforms` | anyone | Link and sync Codeforces; connect the Codeforces session used for submitting |
 | `/teams` | anyone | Team contests you are in, and where you placed |
 | `/profile` | anyone | Your account |
 | `/admin` | admin | Deployment overview and recent activity |
 | `/admin/users` | admin | Accounts, roles, deactivation, session revocation |
 | `/admin/audit` | admin | The append-only audit trail |
-| `/admin/teams` | admin | Teams, members, contests, standings, monitor reports, team analytics |
+| `/admin/teams` | admin | Teams, members, DOMjudge logins, contests, standings, team analytics |
 | `/admin/exams` | admin | Contests and examinations: rosters, problems, lifecycle |
-| `/admin/exams/{id}` | admin | One event — settings, who sits it, live monitoring, session log |
+| `/admin/exams/{id}` | admin | One event — settings, who sits it, problems, passwords, live monitoring, session log, leaderboard |
 | `/admin/contest-files` | admin | Which contests may offer personal files |
 
 ## API documentation
@@ -654,13 +717,12 @@ as well as on each controller.
 ## Tests
 
 ```bash
-cd backend  && ./mvnw test      # 304 tests
+cd backend  && ./mvnw test      # ~600 tests
 cd electron && npm test         # away-time accounting
-cd frontend && npm run type-check
+cd frontend && npm run type-check && npm run lint
 ```
 
-The frontend has no test runner yet; `npm run lint` is defined but has no ESLint config, so it
-currently fails. Both are known gaps rather than oversights.
+The frontend has no test runner yet; that is a known gap rather than an oversight.
 
 ### Running CI before pushing
 
@@ -680,8 +742,11 @@ git config core.hooksPath .githooks # run it on every git push (skip once: git p
 
 ## Desktop app
 
-Electron dev mode does **not** spawn its own backend or bundle the frontend — it opens a window
-pointed at your already-running Vite dev server. Start the backend and frontend as above, then:
+The desktop app is a window onto a CPIntel server, not a copy of it: the page, the API and the
+examination all come from the server, exactly as in a browser, with the examination lockdown
+and the Codeforces window layered on top. In dev mode it opens your running Vite dev server
+(`CPINTEL_DEV_URL` overrides `http://localhost:5173`). Start the backend and frontend as above,
+then:
 
 ```bash
 cd electron
@@ -689,31 +754,25 @@ npm install
 npm run dev
 ```
 
-If you see `Unable to access jarfile .../resources/backend/app.jar`, `NODE_ENV` isn't set to
-`development` — the `dev` script must run Electron with `NODE_ENV=development` (via `cross-env`)
-so `main.ts` skips spawning the packaged backend.
-
-For a production desktop build, which spawns the bundled backend jar and loads the built
-frontend instead of Vite:
+A release build has the server's address stamped in at build time and reads nothing else, so an
+installer cannot be repointed at a server a candidate runs themselves; built without one, it
+refuses to start:
 
 ```bash
-cd backend  && ./mvnw clean package -DskipTests && cd ..
-cd frontend && npm run build && cd ..
-cd electron && npm run build
+cd electron && CPINTEL_SERVER_URL=https://<server> npm run build
 ```
 
-The packaged app, backend jar and frontend dist are bundled together as Electron resources (see
-`extraResources` in `electron/package.json`). The Electron shell wraps the same React SPA used on
-web — there is no separate frontend codebase.
+CI does this on a `v*` tag, against the repository variable `CPINTEL_SERVER_URL`. The Electron
+shell wraps the same React SPA used on web — there is no separate frontend codebase.
 
-The desktop build is also where contest monitoring is strongest: the away-time accounting lives
+The desktop build is also where examination monitoring is strongest: the away-time accounting lives
 in the Electron main process, where the page cannot reach it. The browser build does the same
 job with the Page Visibility API and says plainly that it is the weaker kind.
 
 It is also the easier place to connect Codeforces: the app signs you in through a window it owns
 rather than asking you to run a helper, and the sign-in persists, so reconnecting an expired
 session is one click. See [Connecting Codeforces](#connecting-codeforces). Connecting is refused
-while a contest lockdown is engaged — a full browser window mid-round would walk around
+while an examination lockdown is engaged — a full browser window mid-round would walk around
 everything the lock is doing, so it is something to do before the round starts.
 
 ## Running code
@@ -789,11 +848,13 @@ endpoint is a plain authenticated POST.
 ```
 backend/    Spring Boot API, Flyway migrations, analytics engine, integrations
 frontend/   React SPA — pages, the shared workspace components, hooks
-electron/   Desktop wrapper and contest monitoring
+electron/   Desktop wrapper, examination monitoring and the Codeforces window
+extension/  Browser extension that fetches Codeforces pages for the website
+deploy/     The runner container's seccomp profile
 nginx/      Reverse proxy config
 monitoring/ Prometheus/Grafana/Loki config
 docs/       Architecture, requirements and feature notes
-scripts/    Dev convenience scripts
+scripts/    Backup/restore, local CI, DOMjudge probe, 200-contestant simulation, dev helpers
 ```
 
 ## License

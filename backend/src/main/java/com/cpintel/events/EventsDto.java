@@ -8,6 +8,7 @@ import jakarta.validation.constraints.Size;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 
 /**
  * The shapes contests and examinations are spoken about in.
@@ -162,6 +163,9 @@ public class EventsDto {
     ) {}
 
     public record ProblemsRequest(@NotNull List<ProblemRequest> problems) {}
+
+    /** One problem of the linked judge contest: its label, its name, the judge's own id. */
+    public record JudgeProblem(String label, String title, String externalId) {}
 
     /**
      * A contest or examination, as an admin fills it in.
@@ -462,7 +466,9 @@ public class EventsDto {
         /** Whether something on it was still being judged when the board was computed. */
         boolean pending,
         /** First to solve this problem. */
-        boolean firstSolve
+        boolean firstSolve,
+        /** Marks earned on it: the problem's marks once solved, otherwise zero. */
+        double marks
     ) {}
 
     public record LeaderboardRow(
@@ -471,7 +477,9 @@ public class EventsDto {
         String username,
         String fullName,
         int solved,
-        /** Solve times plus penalties, in seconds. Lower is better among equal solve counts. */
+        /** Marks for the problems solved. The ranking's first key. */
+        double score,
+        /** Solve times plus penalties, in seconds. Lower is better among equal scores. */
         long totalSeconds,
         List<LeaderboardCell> cells
     ) {}
@@ -479,6 +487,13 @@ public class EventsDto {
     /** A computed board, as stored between refreshes. */
     public record LeaderboardStandings(
         List<String> problems,
+        /**
+         * What each problem is worth, by label. When the admin set no marks at all, every problem
+         * is worth one, so the score is the solve count and the board ranks as it always did.
+         */
+        Map<String, Double> marks,
+        /** Whether any marks were set, as opposed to the one-per-problem fallback. */
+        boolean marked,
         List<LeaderboardRow> rows,
         int penaltyMinutes,
         /** Submissions still being judged when this was computed. */

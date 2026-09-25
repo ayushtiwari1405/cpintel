@@ -1,6 +1,6 @@
 import { apiClient } from './client'
 import type {
-  ApiResponse, EventDetail, EventKind, EventLifecycle, EventProblem, EventSummary,
+  ApiResponse, EventDetail, EventKind, EventLifecycle, EventProblem, EventSummary, JudgeProblem,
   ExamClientEvent, ExamFlagReport, ExamLeaderboard, ExamLeaderboardSettings, ExamLogPage,
   ExamMonitorSnapshot, ExamPasswordStatus, ExamEventType,
   IssuedPasscode, LanguageChoice, MyExam, MyExamSubmission, TeamAnalytics,
@@ -145,6 +145,11 @@ export const adminEventsApi = {
   unassignUser: (eventId: number, userId: number) =>
     apiClient.delete<ApiResponse<EventDetail>>(
       `/admin/events/${eventId}/assignments/users/${userId}`).then(r => r.data),
+
+  /** The linked DOMjudge contest's problems, which the Problems tab starts from. */
+  judgeProblems: (eventId: number) =>
+    apiClient.get<ApiResponse<JudgeProblem[]>>(`/admin/events/${eventId}/judge-problems`)
+      .then(r => r.data),
 
   /** The whole list at once: ordering and marks are a set that has to stay consistent. */
   setProblems: (eventId: number, problems: Omit<EventProblem, 'problemId'>[]) =>

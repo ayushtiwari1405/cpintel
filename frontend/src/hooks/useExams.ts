@@ -162,6 +162,21 @@ export function useExamFlags(eventId: number | null, live = true) {
   })
 }
 
+/**
+ * The linked DOMjudge contest's problems. Fetched on demand only: it is a read made through the
+ * judge, and the tab asks for it once rather than on every render.
+ */
+export function useJudgeProblems(eventId: number | null, enabled: boolean) {
+  const isAdmin = useIsAdmin()
+  return useQuery({
+    queryKey: ['admin', 'judge-problems', eventId],
+    queryFn: () => adminEventsApi.judgeProblems(eventId!).then(r => r.data),
+    enabled: isAdmin && eventId != null && enabled,
+    staleTime: 5 * 60_000,
+    retry: false,
+  })
+}
+
 export function useExamLeaderboard(eventId: number | null, live = true) {
   const isAdmin = useIsAdmin()
   return useQuery({

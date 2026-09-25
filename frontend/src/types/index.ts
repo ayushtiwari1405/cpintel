@@ -854,6 +854,13 @@ export interface EventProblem {
   points: number | null
 }
 
+/** One problem of the linked judge contest, as the judge lists it. */
+export interface JudgeProblem {
+  label: string
+  title: string | null
+  externalId: string | null
+}
+
 export interface EventSummary {
   eventId: number
   kind: EventKind
@@ -1078,6 +1085,8 @@ export interface ExamLeaderboardCell {
   solvedAtSeconds: number | null
   pending: boolean
   firstSolve: boolean
+  /** Marks earned on it: the problem's marks once solved, otherwise zero. */
+  marks: number
 }
 
 export interface ExamLeaderboardRow {
@@ -1086,12 +1095,18 @@ export interface ExamLeaderboardRow {
   username: string
   fullName: string | null
   solved: number
+  /** Marks for the problems solved — what the board ranks by first. */
+  score: number
   totalSeconds: number
   cells: ExamLeaderboardCell[]
 }
 
 export interface ExamLeaderboardStandings {
   problems: string[]
+  /** What each problem is worth, by label. One each when no marks were set. */
+  marks: Record<string, number>
+  /** Whether the admin set any marks, as opposed to the one-per-problem fallback. */
+  marked: boolean
   rows: ExamLeaderboardRow[]
   penaltyMinutes: number
   pendingSubmissions: number

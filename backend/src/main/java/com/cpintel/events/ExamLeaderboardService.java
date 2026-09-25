@@ -23,6 +23,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -39,10 +40,14 @@ import java.util.TreeSet;
  * Two candidates who submit a second apart are ordered by that second even if the later one's
  * verdict came back first.
  *
- * <p>Order: more problems solved first; among equal counts, less total time. Total time is, for
- * each solved problem, the time from the start of the paper to the accepted submission, plus the
- * configured penalty for each wrong attempt on it before that. Compilation errors and
- * submissions the judge never accepted are not wrong attempts.
+ * <p>Order: most marks first; among equal marks, anybody who submitted something ahead of
+ * anybody who submitted nothing; then less total time. A solved problem earns the
+ * marks the admin gave it on the Problems tab — all or nothing, since the judge gives a verdict
+ * rather than a partial score. With no marks set anywhere every problem is worth one, which is
+ * ranking by problems solved; once any are set, a problem left blank is worth nothing. Total
+ * time is, for each solved problem that earned marks, the time from the start of the paper to the accepted
+ * submission, plus the configured penalty for each wrong attempt on it before that. Compilation
+ * errors and submissions the judge never accepted are not wrong attempts.
  *
  * <p>What candidates see is a snapshot, recomputed at most every
  * {@code leaderboardRefreshMinutes} while the paper runs and stored on the event so every
@@ -208,11 +213,25 @@ public class ExamLeaderboardService {
         List<CodeSubmission> rows = attempts(event, participants);
         rows = refreshPending(event, rows, participants);
 
-        List<String> labels = labels(event, rows);
+        List<ContestProblem> listed = problemRepository
+            .findByContestContestIdOrderByOrderingAscLabelAsc(event.getContestId());
+        List<String> labels = labels(listed, rows);
         Map<Long, User> users = new HashMap<>();
         for (User user : userRepository.findAllById(participants)) users.put(user.getUserId(), user);
 
-        return rank(event, labels, users, rows, now);
+        return rank(event, labels, marks(listed), users, rows, now);
+    }
+
+    /** Marks by label, for the problems the admin gave any. */
+    private static Map<String, Double> marks(List<ContestProblem> listed) {
+        Map<String, Double> marks = new HashMap<>();
+        for (ContestProblem problem : listed) {
+            if (problem.getLabel() != null && problem.getPoints() != null) {
+                marks.put(problem.getLabel().toUpperCase(Locale.ROOT),
+                    problem.getPoints().doubleValue());
+            }
+        }
+        return marks;
     }
 
     /** This paper's attempts: its judge contest, its candidates, inside its window. */
@@ -256,9 +275,8 @@ public class ExamLeaderboardService {
     }
 
     /** The paper's problems in order, or whatever was submitted to if none are listed. */
-    private List<String> labels(GroupContest event, List<CodeSubmission> rows) {
-        List<String> listed = problemRepository
-            .findByContestContestIdOrderByOrderingAscLabelAsc(event.getContestId()).stream()
+    private static List<String> labels(List<ContestProblem> problems, List<CodeSubmission> rows) {
+        List<String> listed = problems.stream()
             .map(ContestProblem::getLabel)
             .filter(label -> label != null && !label.isBlank())
             .map(label -> label.toUpperCase(Locale.ROOT))
@@ -275,8 +293,15 @@ public class ExamLeaderboardService {
 
     /** The ranking itself. Package-visible for the tests. */
     EventsDto.LeaderboardStandings rank(GroupContest event, List<String> labels,
+                                        Map<String, Double> setMarks,
                                         Map<Long, User> users, List<CodeSubmission> rows,
                                         Instant now) {
+        boolean marked = !setMarks.isEmpty();
+        Map<String, Double> worth = new LinkedHashMap<>();
+        for (String label : labels) {
+            worth.put(label, marked ? setMarks.getOrDefault(label, 0.0) : 1.0);
+        }
+
         long penaltySeconds = 60L * (event.getWrongPenaltyMinutes() == null
             ? 0 : event.getWrongPenaltyMinutes());
         Instant start = event.getStartsAt();
@@ -296,8 +321,11 @@ public class ExamLeaderboardService {
         List<Scored> scored = new ArrayList<>();
         for (User user : users.values()) {
             Map<String, List<CodeSubmission>> mine = byUser.getOrDefault(user.getUserId(), Map.of());
+            // Any submission on one of the paper's problems, whatever became of it.
+            boolean attempted = !mine.isEmpty();
             List<EventsDto.LeaderboardCell> cells = new ArrayList<>(labels.size());
             int solved = 0;
+            double score = 0;
             long total = 0;
             long lastSolve = 0;
 
@@ -319,19 +347,30 @@ public class ExamLeaderboardService {
                     else if (!NOT_COUNTED.contains(verdict)) wrong++;
                 }
 
+                double earned = 0;
                 if (solvedAt != null) {
                     solved++;
-                    total += solvedAt + wrong * penaltySeconds;
-                    lastSolve = Math.max(lastSolve, solvedAt);
+                    earned = worth.get(label);
+                    score += earned;
+                    // Time is the tie-break between equal marks, so only a solve that earned
+                    // marks spends it: a problem worth nothing must not rank somebody below a
+                    // candidate who solved nothing at all.
+                    if (earned > 0) {
+                        total += solvedAt + wrong * penaltySeconds;
+                        lastSolve = Math.max(lastSolve, solvedAt);
+                    }
                 }
                 cells.add(new EventsDto.LeaderboardCell(
-                    label, solvedAt != null, wrong, solvedAt, pending, false));
+                    label, solvedAt != null, wrong, solvedAt, pending, false, earned));
             }
-            scored.add(new Scored(user, solved, total, lastSolve, cells));
+            scored.add(new Scored(user, solved, score, attempted, total, lastSolve, cells));
         }
 
         scored.sort(Comparator
-            .comparingInt(Scored::solved).reversed()
+            .comparingDouble(Scored::score).reversed()
+            // Among equal marks — nearly always nothing — having tried something ranks above
+            // not having submitted at all.
+            .thenComparing(Scored::attempted, Comparator.reverseOrder())
             .thenComparingLong(Scored::total)
             .thenComparingLong(Scored::lastSolve)
             .thenComparing(s -> s.user().getUsername(), String.CASE_INSENSITIVE_ORDER));
@@ -349,22 +388,24 @@ public class ExamLeaderboardService {
         Scored previous = null;
         for (int i = 0; i < scored.size(); i++) {
             Scored s = scored.get(i);
-            // Equal solves and equal time share a rank; the next distinct one skips past them.
-            if (previous == null || previous.solved() != s.solved() || previous.total() != s.total()) {
+            // Equal marks, attempts and time share a rank; the next distinct one skips past them.
+            if (previous == null || previous.score() != s.score()
+                    || previous.attempted() != s.attempted() || previous.total() != s.total()) {
                 rank = i + 1;
             }
             previous = s;
             List<EventsDto.LeaderboardCell> cells = s.cells().stream()
                 .map(c -> c.solved() && c.solvedAtSeconds().equals(firstSolve.get(c.label()))
                     ? new EventsDto.LeaderboardCell(c.label(), true, c.wrongAttempts(),
-                        c.solvedAtSeconds(), c.pending(), true)
+                        c.solvedAtSeconds(), c.pending(), true, c.marks())
                     : c)
                 .toList();
             out.add(new EventsDto.LeaderboardRow(rank, s.user().getUserId(),
-                s.user().getUsername(), s.user().getFullName(), s.solved(), s.total(), cells));
+                s.user().getUsername(), s.user().getFullName(), s.solved(), s.score(), s.total(),
+                cells));
         }
 
-        return new EventsDto.LeaderboardStandings(labels, out,
+        return new EventsDto.LeaderboardStandings(labels, worth, marked, out,
             (int) (penaltySeconds / 60), pendingTotal, now);
     }
 
@@ -380,6 +421,7 @@ public class ExamLeaderboardService {
         return event;
     }
 
-    private record Scored(User user, int solved, long total, long lastSolve,
+    private record Scored(User user, int solved, double score, boolean attempted, long total,
+                          long lastSolve,
                           List<EventsDto.LeaderboardCell> cells) {}
 }

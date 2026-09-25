@@ -23,6 +23,11 @@ export function clock(seconds: number): string {
   return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`
 }
 
+/** Marks as a person would write them: 30, 12.5 — never 30.0. */
+function marks(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/0+$/, '')
+}
+
 function Cell({ cell }: { cell: ExamLeaderboardCell | undefined }) {
   if (!cell || (!cell.solved && cell.wrongAttempts === 0 && !cell.pending)) {
     return <td className="px-2 py-2 text-center text-gray-800">·</td>
@@ -75,9 +80,10 @@ function Notice({ icon: Icon, title, children }: {
 /**
  * An examination's leaderboard.
  *
- * <p>Ranked by the server: problems solved, then total time — each solve timed from when the
+ * <p>Ranked by the server: total marks, then total time — each solve timed from when the
  * accepted code was sent, not from when its verdict came back, plus any penalty per earlier
- * wrong attempt. The board is a snapshot recomputed on the admin's schedule, which is said on
+ * wrong attempt. With no marks set every problem is worth one, so marks are the solve count and
+ * the Marks column is left out as a duplicate of Solved. The board is a snapshot recomputed on the admin's schedule, which is said on
  * it so nobody reads a fifteen-minute-old board as live.
  */
 export function ExamLeaderboardView({ board, isLoading, meId, admin }: Props) {
@@ -107,6 +113,10 @@ export function ExamLeaderboardView({ board, isLoading, meId, admin }: Props) {
   }
 
   const { standings } = board
+  // A snapshot stored before marks existed has neither field; it ranks by solves.
+  const marked = standings.marked === true
+  const worth = standings.marks ?? {}
+  const columns = (marked ? 5 : 4) + standings.problems.length
   // The server only schedules a next update while the paper runs.
   const final = !board.nextRefreshAt
 
@@ -123,7 +133,7 @@ export function ExamLeaderboardView({ board, isLoading, meId, admin }: Props) {
           )}
         </span>
         <span>
-          Ranked by solved, then time
+          {marked ? 'Ranked by marks, then time' : 'Ranked by solved, then time'}
           {standings.penaltyMinutes > 0
             ? ` · +${standings.penaltyMinutes} min per wrong attempt`
             : ' · no penalty for wrong attempts'}
@@ -137,17 +147,25 @@ export function ExamLeaderboardView({ board, isLoading, meId, admin }: Props) {
             <tr className="border-b border-gray-800 text-xs text-gray-500">
               <th className="px-3 py-2 text-left font-medium">#</th>
               <th className="px-3 py-2 text-left font-medium">Candidate</th>
+              {marked && <th className="px-3 py-2 text-right font-medium">Marks</th>}
               <th className="px-3 py-2 text-right font-medium">Solved</th>
               <th className="px-3 py-2 text-right font-medium">Time</th>
               {standings.problems.map(label => (
-                <th key={label} className="px-2 py-2 text-center font-medium">{label}</th>
+                <th key={label} className="px-2 py-2 text-center font-medium">
+                  {label}
+                  {marked && (
+                    <span className="block text-[10px] font-normal tabular-nums text-gray-600">
+                      {marks(worth[label] ?? 0)}
+                    </span>
+                  )}
+                </th>
               ))}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-800/60">
             {standings.rows.length === 0 && (
               <tr>
-                <td colSpan={4 + standings.problems.length}
+                <td colSpan={columns}
                   className="px-4 py-10 text-center text-sm text-gray-600">
                   Nobody is assigned to this examination.
                 </td>
@@ -169,7 +187,13 @@ export function ExamLeaderboardView({ board, isLoading, meId, admin }: Props) {
                       <span className="ml-2 text-xs text-gray-600">{row.fullName}</span>
                     )}
                   </td>
-                  <td className="px-3 py-2 text-right tabular-nums text-gray-200">{row.solved}</td>
+                  {marked && (
+                    <td className="px-3 py-2 text-right font-medium tabular-nums text-gray-100">
+                      {marks(row.score ?? 0)}
+                    </td>
+                  )}
+                  <td className={clsx('px-3 py-2 text-right tabular-nums',
+                    marked ? 'text-gray-400' : 'text-gray-200')}>{row.solved}</td>
                   <td className="px-3 py-2 text-right tabular-nums text-gray-400">
                     {row.solved > 0 ? clock(row.totalSeconds) : '—'}
                   </td>

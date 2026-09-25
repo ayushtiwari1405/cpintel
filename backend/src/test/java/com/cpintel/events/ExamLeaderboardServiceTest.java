@@ -24,8 +24,9 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.mock;
 
 /**
- * How an examination's leaderboard orders people: solved count, then time — where time is when
- * the accepted code was sent, not when its verdict arrived — plus a penalty per wrong attempt.
+ * How an examination's leaderboard orders people: marks, then time — where time is when the
+ * accepted code was sent, not when its verdict arrived — plus a penalty per wrong attempt. With
+ * no marks set, every problem is worth one and marks are the solve count.
  */
 class ExamLeaderboardServiceTest {
 
@@ -35,6 +36,7 @@ class ExamLeaderboardServiceTest {
     private GroupContest exam;
     private final Map<Long, User> users = new LinkedHashMap<>();
     private final List<CodeSubmission> rows = new ArrayList<>();
+    private final Map<String, Double> marks = new LinkedHashMap<>();
 
     @BeforeEach
     void setUp() {
@@ -56,7 +58,7 @@ class ExamLeaderboardServiceTest {
     }
 
     private EventsDto.LeaderboardStandings rank() {
-        return service.rank(exam, List.of("A", "B"), users, rows, START.plusSeconds(9000));
+        return service.rank(exam, List.of("A", "B"), marks, users, rows, START.plusSeconds(9000));
     }
 
     private List<String> order() {
@@ -128,5 +130,86 @@ class ExamLeaderboardServiceTest {
         assertEquals(3, board.rows().get(2).rank());
         assertTrue(board.rows().get(2).cells().get(0).pending());
         assertEquals(1, board.pendingSubmissions());
+    }
+
+    @Test
+    @DisplayName("Most marks ranks first, even with fewer problems solved")
+    void marksFirst() {
+        marks.put("A", 30.0);
+        marks.put("B", 100.0);
+        sent(1, "A", 100, "OK");
+        sent(1, "B", 9000 - 1, "WRONG_ANSWER");
+        sent(2, "B", 5000, "OK");
+        sent(3, "A", 50, "OK");
+
+        EventsDto.LeaderboardStandings board = rank();
+        assertEquals(List.of("user2", "user3", "user1"), order());
+        assertEquals(100.0, board.rows().get(0).score());
+        assertEquals(100.0, board.rows().get(0).cells().get(1).marks());
+        assertEquals(0.0, board.rows().get(0).cells().get(0).marks());
+        assertTrue(board.marked());
+    }
+
+    @Test
+    @DisplayName("Equal marks fall back to less time")
+    void equalMarksByTime() {
+        marks.put("A", 50.0);
+        marks.put("B", 50.0);
+        sent(1, "B", 2000, "OK");
+        sent(2, "A", 1000, "OK");
+
+        assertEquals(List.of("user2", "user1", "user3"), order());
+    }
+
+    @Test
+    @DisplayName("Once any marks are set, a problem left blank is worth nothing")
+    void unmarkedProblemWorthNothing() {
+        marks.put("A", 10.0);
+        sent(1, "B", 100, "OK");
+        sent(2, "A", 5000, "OK");
+
+        EventsDto.LeaderboardStandings board = rank();
+        assertEquals(List.of("user2", "user1", "user3"), order());
+        // user1's solve earned nothing and spent no time, but they attempted: above user3.
+        assertEquals(0.0, board.rows().get(1).score());
+        assertEquals(1, board.rows().get(1).solved());
+        assertEquals(0, board.rows().get(1).totalSeconds());
+        assertEquals(2, board.rows().get(1).rank());
+        assertEquals(3, board.rows().get(2).rank());
+        assertEquals(0.0, board.marks().get("B"));
+    }
+
+    @Test
+    @DisplayName("With no marks set, every problem is worth one")
+    void unmarkedBoardCountsSolves() {
+        sent(1, "A", 100, "OK");
+        sent(2, "A", 200, "OK");
+        sent(2, "B", 300, "OK");
+
+        EventsDto.LeaderboardStandings board = rank();
+        assertFalse(board.marked());
+        assertEquals(2.0, board.rows().get(0).score());
+        assertEquals("user2", board.rows().get(0).username());
+    }
+
+    @Test
+    @DisplayName("Having attempted something ranks above having submitted nothing")
+    void attemptedAboveNothing() {
+        // user3 sorts after user1 by name, so only the attempt can put them ahead.
+        sent(3, "B", 500, "WRONG_ANSWER");
+
+        EventsDto.LeaderboardStandings board = rank();
+        assertEquals(List.of("user3", "user1", "user2"), order());
+        assertEquals(1, board.rows().get(0).rank());
+        assertEquals(2, board.rows().get(1).rank());
+        assertEquals(2, board.rows().get(2).rank());
+    }
+
+    @Test
+    @DisplayName("A compilation error still counts as an attempt")
+    void compileErrorIsAnAttempt() {
+        sent(2, "A", 100, "COMPILATION_ERROR");
+
+        assertEquals("user2", order().get(0));
     }
 }

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import {
   AlertTriangle, ArrowLeft, Code2, Eye, Flag, KeyRound, Loader2, Lock, Monitor, Plus, Save,
@@ -13,14 +13,14 @@ import { LifecyclePill } from '@/pages/admin/AdminExamsPage'
 import {
   useAdminEvent, useAssignToEvent, useDeleteEvent, useEventLanguageCatalog, useExamFlags,
   useExamLeaderboard, useExamLeaderboardSettings, useExamLogs, useExamMonitor,
-  useRefreshExamLeaderboard, useSetLifecycle, useSetProblems, useUnassignTeam, useUnassignUser,
-  useUpdateEvent,
+  useJudgeProblems, useRefreshExamLeaderboard, useSetLifecycle, useSetProblems, useUnassignTeam,
+  useUnassignUser, useUpdateEvent,
 } from '@/hooks/useExams'
 import { useAdminGroups } from '@/hooks/useGroups'
 import { useAdminUsers } from '@/hooks/useAdmin'
 import type {
   DesktopPolicy, EventDetail, EventProblem, ExamEventType, ExamFlag, ExamFlagKind, ExamFlagReport,
-  ExamLeaderboardSettings, ExamMonitorRow,
+  ExamLeaderboardSettings, ExamMonitorRow, JudgeProblem,
 } from '@/types'
 
 type Tab = 'settings' | 'people' | 'problems' | 'passwords' | 'monitor' | 'logs' | 'leaderboard'
@@ -625,67 +625,180 @@ function PeopleTab({ detail }: { detail: EventDetail }) {
 
 // ------------------------------------------------------------------ problems
 
+type ProblemDraft = Omit<EventProblem, 'problemId'>
+
+/**
+ * The judge's problems, in the judge's order, carrying over whatever marks were already given to
+ * a label. Rows the judge does not list are dropped: a submission can only ever name one of the
+ * judge's labels, so a row for anything else could never be solved.
+ */
+function fromJudge(judge: JudgeProblem[], current: ProblemDraft[]): ProblemDraft[] {
+  const marks = new Map(current.map(row => [row.label.trim().toUpperCase(), row.points]))
+  return judge.map((problem, index) => ({
+    label: problem.label,
+    title: problem.title ?? '',
+    externalId: problem.externalId ?? '',
+    ordering: index,
+    points: marks.get(problem.label.toUpperCase()) ?? null,
+  }))
+}
+
+/**
+ * Which problems the paper has and what each is worth.
+ *
+ * <p>On DOMjudge the list comes from the judge: the tab reads the linked contest's problems and
+ * the admin only fills in marks. The leaderboard ranks by those marks, so the labels have to be
+ * the judge's own — they are what every submission is recorded under. Typing the list by hand is
+ * still there for when the judge cannot be read.
+ */
 function ProblemsTab({ detail }: { detail: EventDetail }) {
   const save = useSetProblems()
-  const [rows, setRows] = useState<Omit<EventProblem, 'problemId'>[]>(
-    detail.problems.length > 0
-      ? detail.problems.map(({ problemId: _ignored, ...rest }) => rest)
+  const onJudge = detail.event.platform === 'DOMJUDGE'
+  const judge = useJudgeProblems(detail.event.eventId, onJudge)
+  const judgeList = useMemo(() => judge.data ?? [], [judge.data])
+  const fromTheJudge = onJudge && judgeList.length > 0
+
+  const saved: ProblemDraft[] = detail.problems.map(({ problemId: _ignored, ...rest }) => rest)
+  const [rows, setRows] = useState<ProblemDraft[]>(
+    saved.length > 0 ? saved
+      : onJudge ? []
       : [{ label: 'A', title: '', externalId: '', ordering: 0, points: null }])
+
+  // Nothing saved yet: start from the judge's list as soon as it arrives.
+  const [seeded, setSeeded] = useState(saved.length > 0)
+  useEffect(() => {
+    if (!seeded && judgeList.length > 0) {
+      setRows(current => fromJudge(judgeList, current))
+      setSeeded(true)
+    }
+  }, [seeded, judgeList])
 
   const update = (index: number, patch: Partial<EventProblem>) => {
     setRows(current => current.map((row, i) => i === index ? { ...row, ...patch } : row))
   }
 
+  const judgeLabels = new Set(judgeList.map(p => p.label.toUpperCase()))
+  const missing = fromTheJudge
+    ? judgeList.filter(p => !rows.some(r => r.label.trim().toUpperCase() === p.label.toUpperCase()))
+    : []
+  const strays = fromTheJudge
+    ? rows.filter(r => r.label.trim() && !judgeLabels.has(r.label.trim().toUpperCase()))
+    : []
+  const total = rows.reduce((sum, row) => sum + (row.points ?? 0), 0)
+  const anyMarks = rows.some(row => row.points != null)
+  const locked = detail.settingsLocked
+  const judgeError = (judge.error as { response?: { data?: { message?: string } } } | null)
+    ?.response?.data?.message
+
   return (
     <Panel
       title="Problems"
-      description="Order and marks live here; statements, tests and verdicts stay on the judge"
+      description={onJudge
+        ? 'Read from the linked DOMjudge contest — give each problem its marks. The leaderboard '
+          + 'ranks by total marks, then time'
+        : 'Order and marks live here; statements, tests and verdicts stay on the judge'}
       actions={
-        <button
-          onClick={() => save.mutate({
-            eventId: detail.event.eventId,
-            problems: rows
-              .filter(row => row.label.trim())
-              .map((row, index) => ({ ...row, ordering: index })),
-          })}
-          disabled={save.isPending || detail.settingsLocked}
-          title={detail.settingsLocked ? 'It has started, so its problems are fixed' : undefined}
-          className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs
-                     font-medium text-white transition-colors hover:bg-indigo-500
-                     disabled:opacity-40"
-        >
-          {save.isPending ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
-          Save list
-        </button>
+        <div className="flex items-center gap-2">
+          {onJudge && (
+            <button
+              onClick={() => judge.refetch().then(r => {
+                if (r.data && r.data.length > 0) setRows(current => fromJudge(r.data!, current))
+              })}
+              disabled={judge.isFetching || locked}
+              title="Replace the list with the judge's, keeping the marks already given"
+              className="flex items-center gap-1.5 rounded-lg border border-gray-800 px-3 py-1.5
+                         text-xs text-gray-300 transition-colors hover:border-gray-700
+                         disabled:opacity-40"
+            >
+              <RefreshCw size={12} className={judge.isFetching ? 'animate-spin' : undefined} />
+              Reload from DOMjudge
+            </button>
+          )}
+          <button
+            onClick={() => save.mutate({
+              eventId: detail.event.eventId,
+              problems: rows
+                .filter(row => row.label.trim())
+                .map((row, index) => ({ ...row, ordering: index })),
+            })}
+            disabled={save.isPending || locked}
+            title={locked ? 'It has started, so its problems are fixed' : undefined}
+            className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs
+                       font-medium text-white transition-colors hover:bg-indigo-500
+                       disabled:opacity-40"
+          >
+            {save.isPending ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+            Save list
+          </button>
+        </div>
       }
     >
       <div className="space-y-2 p-4">
+        {onJudge && judge.isLoading && (
+          <p className="flex items-center gap-2 text-xs text-gray-500">
+            <Loader2 size={12} className="animate-spin" /> Reading the contest's problems from
+            DOMjudge…
+          </p>
+        )}
+        {onJudge && judge.isError && (
+          <p className="flex items-start gap-2 rounded-lg border border-amber-500/20
+            bg-amber-500/5 px-3 py-2 text-xs text-amber-300">
+            <AlertTriangle size={13} className="mt-0.5 shrink-0" />
+            <span>
+              {judgeError ?? 'Could not read the problems from DOMjudge.'} You can still enter
+              them by hand; use the judge's labels (A, B, C…), since submissions are recorded
+              under those.
+            </span>
+          </p>
+        )}
+        {(missing.length > 0 || strays.length > 0) && !locked && (
+          <p className="flex items-start gap-2 rounded-lg border border-amber-500/20
+            bg-amber-500/5 px-3 py-2 text-xs text-amber-300">
+            <AlertTriangle size={13} className="mt-0.5 shrink-0" />
+            <span>
+              This list differs from the judge's.
+              {missing.length > 0 && <> Not here: {missing.map(p => p.label).join(', ')}.</>}
+              {strays.length > 0 && <> Not on the judge: {strays.map(r => r.label).join(', ')}
+                {' '}— nobody can solve these.</>}
+              {' '}Reload from DOMjudge to match it.
+            </span>
+          </p>
+        )}
+
         {rows.map((row, index) => (
           <div key={index} className="flex flex-wrap items-end gap-2">
             <label className="flex w-20 flex-col gap-1">
               <span className="text-xs text-gray-500">Label</span>
               <input value={row.label} maxLength={16} className={INPUT}
+                readOnly={fromTheJudge} disabled={locked}
                 onChange={e => update(index, { label: e.target.value })} />
             </label>
             <label className="flex min-w-[12rem] flex-1 flex-col gap-1">
               <span className="text-xs text-gray-500">Title</span>
               <input value={row.title ?? ''} maxLength={200} className={INPUT}
+                readOnly={fromTheJudge} disabled={locked}
                 onChange={e => update(index, { title: e.target.value })} />
             </label>
-            <label className="flex w-36 flex-col gap-1">
-              <span className="text-xs text-gray-500">Judge id</span>
-              <input value={row.externalId ?? ''} maxLength={100} className={INPUT}
-                onChange={e => update(index, { externalId: e.target.value })} />
-            </label>
+            {!fromTheJudge && (
+              <label className="flex w-36 flex-col gap-1">
+                <span className="text-xs text-gray-500">Judge id</span>
+                <input value={row.externalId ?? ''} maxLength={100} className={INPUT}
+                  disabled={locked}
+                  onChange={e => update(index, { externalId: e.target.value })} />
+              </label>
+            )}
             <label className="flex w-24 flex-col gap-1">
               <span className="text-xs text-gray-500">Marks</span>
-              <input type="number" value={row.points ?? ''} className={INPUT}
+              <input type="number" min={0} step="any" value={row.points ?? ''} className={INPUT}
+                disabled={locked}
                 onChange={e => update(index, {
                   points: e.target.value === '' ? null : Number(e.target.value) })} />
             </label>
             <button
               onClick={() => setRows(current => current.filter((_, i) => i !== index))}
-              className="rounded-lg border border-gray-800 p-2 text-gray-500 hover:text-red-400"
+              disabled={locked}
+              className="rounded-lg border border-gray-800 p-2 text-gray-500 hover:text-red-400
+                         disabled:opacity-40"
               aria-label="Remove problem"
             >
               <Trash2 size={14} />
@@ -693,15 +806,30 @@ function ProblemsTab({ detail }: { detail: EventDetail }) {
           </div>
         ))}
 
-        <button
-          onClick={() => setRows(current => [...current, {
-            label: nextLabel(current.map(r => r.label)),
-            title: '', externalId: '', ordering: current.length, points: null,
-          }])}
-          className="flex items-center gap-1.5 text-xs text-indigo-400 hover:text-indigo-300"
-        >
-          <Plus size={12} /> Add a problem
-        </button>
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+          {!fromTheJudge ? (
+            <button
+              onClick={() => setRows(current => [...current, {
+                label: nextLabel(current.map(r => r.label)),
+                title: '', externalId: '', ordering: current.length, points: null,
+              }])}
+              disabled={locked}
+              className="flex items-center gap-1.5 text-xs text-indigo-400 hover:text-indigo-300
+                         disabled:opacity-40"
+            >
+              <Plus size={12} /> Add a problem
+            </button>
+          ) : <span />}
+          {rows.length > 0 && (
+            <span className="text-xs text-gray-500">
+              {anyMarks
+                ? <>Total <span className="tabular-nums text-gray-300">{total}</span> marks · a
+                    problem left blank is worth nothing</>
+                : 'No marks set — every problem counts as one, so the leaderboard ranks by '
+                  + 'problems solved'}
+            </span>
+          )}
+        </div>
       </div>
     </Panel>
   )

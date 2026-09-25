@@ -8,6 +8,7 @@ import com.cpintel.events.ExamFlagService;
 import com.cpintel.events.ExamLeaderboardService;
 import com.cpintel.events.ExamMonitorService;
 import com.cpintel.events.ExamPasswordService;
+import com.cpintel.events.JudgeProblemService;
 import com.cpintel.security.Roles;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -50,6 +51,7 @@ public class AdminEventController {
     private final ExamFlagService flags;
     private final ExamLeaderboardService leaderboard;
     private final ExamPasswordService passwords;
+    private final JudgeProblemService judgeProblems;
 
     // ------------------------------------------------------------------ reads
 
@@ -150,6 +152,15 @@ public class AdminEventController {
 
     // -------------------------------------------------------------- problems
 
+    @GetMapping("/{eventId}/judge-problems")
+    @Operation(summary = "The problems of the linked DOMjudge contest, as the judge lists them",
+        description = "What the Problems tab starts from, so an admin only assigns marks. "
+            + "Read through the service account, or an assigned candidate's attached login.")
+    public ResponseEntity<ApiResponse<List<EventsDto.JudgeProblem>>> judgeProblems(
+        @PathVariable Long eventId) {
+        return ResponseEntity.ok(ApiResponse.ok(judgeProblems.problems(eventId)));
+    }
+
     @PutMapping("/{eventId}/problems")
     @Operation(summary = "Set the problems, their order and what each is worth",
         description = "The whole list at once: ordering and marks are a set that has to stay "
@@ -188,7 +199,8 @@ public class AdminEventController {
 
     @GetMapping("/{eventId}/leaderboard")
     @Operation(summary = "This examination's leaderboard, whatever candidates are shown",
-        description = "Ranked by problems solved, then total time: each solve timed from when "
+        description = "Ranked by marks (each problem's, from the Problems tab), then total "
+            + "time: each solve timed from when "
             + "the accepted code was sent, plus the configured penalty per earlier wrong "
             + "attempt. The same snapshot candidates see, recomputed on its schedule.")
     public ResponseEntity<ApiResponse<EventsDto.Leaderboard>> leaderboard(

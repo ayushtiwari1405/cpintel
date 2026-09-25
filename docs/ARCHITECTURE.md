@@ -6,10 +6,17 @@
 - [Entity-relationship diagram](#entity-relationship-diagram)
 - [Why the analytics engine lives in Java](#why-the-analytics-engine-lives-in-java)
 - [Why MongoDB for submissions](#why-mongodb-for-submissions)
+- [Running code on a shared server](#running-code-on-a-shared-server)
+- [Codeforces through the user's browser](#codeforces-through-the-users-browser)
 - [The problem-solving workspace](#the-problem-solving-workspace)
+- [Languages, and the three vocabularies for them](#languages-and-the-three-vocabularies-for-them)
 - [Personal files, and who decides they are available](#personal-files-and-who-decides-they-are-available)
+- [Passwords, and who knows them](#passwords-and-who-knows-them)
 - [The admin console, and how anyone becomes an admin](#the-admin-console-and-how-anyone-becomes-an-admin)
-- [Contest monitoring, and why it stopped trying to lock anything](#contest-monitoring-and-why-it-stopped-trying-to-lock-anything)
+- [Getting into a live examination](#getting-into-a-live-examination)
+- [An examination's own window](#an-examinations-own-window)
+- [Examination monitoring, and why it stopped trying to lock anything](#examination-monitoring-and-why-it-stopped-trying-to-lock-anything)
+- [The examination leaderboard](#the-examination-leaderboard)
 - [Group contests: ranking a subset of someone else's scoreboard](#group-contests-ranking-a-subset-of-someone-elses-scoreboard)
 
 ## System overview
@@ -60,14 +67,15 @@ flowchart LR
     SCH --> SVC
     SCH --> GRP
     SVC --> CF
-    SVC --> LC
-    SVC --> CC
+    SVC --> DJ
     GRP --> CF
     GRP --> DJ
 ```
 
-The client is one SPA. The Electron shell loads the same build and adds only what a browser
-cannot do — watching the contest window from outside the page.
+The client is one SPA, served by the server. The Electron shell loads it from the deployed
+server — it is a window onto that server, not a copy of it — and adds only what a browser cannot
+do: watching the examination window from outside the page, and holding a Codeforces session in a
+window of its own.
 
 ## Request flow - linking a platform account
 
@@ -123,6 +131,7 @@ erDiagram
     USERS ||--o{ REFRESH_TOKENS : issues
     USERS ||--o{ SYNC_JOBS : triggers
     USERS ||--o{ AUDIT_LOG : appears_in
+    USERS ||--o{ PLACEMENT_RESULTS : takes
 
     USERS {
         bigint user_id PK
@@ -164,6 +173,20 @@ erDiagram
         bigint user_id FK
         numeric unified_score
     }
+    REFRESH_TOKENS {
+        bigint token_id PK
+        bigint user_id FK
+        bigint exam_id FK
+        timestamptz expires_at
+        boolean revoked
+    }
+    PLACEMENT_RESULTS {
+        bigint result_id PK
+        bigint user_id FK
+        integer overall_rating
+        integer nodes_placed
+        timestamptz created_at
+    }
     AUDIT_LOG {
         bigint log_id PK
         bigint user_id
@@ -175,6 +198,11 @@ erDiagram
 
 `AUDIT_LOG.user_id` is deliberately not a foreign key: the trail records failed sign-ins against
 addresses that have no account, and it is meant to outlive the accounts it mentions.
+
+`REFRESH_TOKENS.exam_id` is set on a session opened with an examination sign-in password, so a
+refresh re-issues an examination session rather than a normal one (see [Normal mode and
+examination mode](#normal-mode-and-examination-mode)). `PLACEMENT_RESULTS` holds each run of the
+placement gauntlet, which moves roadmap nodes forward and never back.
 
 ### Teams, contests and examinations
 
@@ -223,6 +251,12 @@ erDiagram
         text desktop_policy
         varchar exam_password
         integer exam_password_gen
+        boolean leaderboard_enabled
+        integer leaderboard_refresh_minutes
+        integer wrong_penalty_minutes
+        boolean leaderboard_final_public
+        text leaderboard_snapshot
+        timestamptz leaderboard_generated_at
     }
     EXAM_PASSCODES {
         bigint passcode_id PK
@@ -283,8 +317,13 @@ building it costs one rate-limited API call per member on Codeforces.
 One table holds contests and examinations, separated by `kind`. Everything downstream — the
 arena, standings, the violation trail — is genuinely the same for both, and a second table
 would have meant a second copy of all of it, drifting. What an examination adds is on the row:
-its place in a lifecycle, the away threshold it measures against, and the desktop policy it
-asks a locked-down client for.
+its place in a lifecycle, the away threshold it measures against, the desktop policy it
+asks a locked-down client for, its room password, and its leaderboard settings and last snapshot.
+
+There is no longer a one-event-per-team-per-judge-contest constraint (dropped in V14): a
+DOMjudge contest is often left running for weeks and reused, so the same team may hold a practice
+round and then a paper on it. Each event's own window decides when it is open — see [An
+examination's own window](#an-examinations-own-window).
 
 `CONTEST_ASSIGNMENTS` is why `group_id` on a contest is nullable. Who may enter is a union of
 three routes — an assigned team, a named individual, or a public contest — and an examination
@@ -302,8 +341,9 @@ them would bury three focus losses in four hundred problem-opened rows.
 
 | Collection | Holds | Why it is not relational |
 |---|---|---|
-| `cf_submissions`, `lc_submissions`, `cc_submissions` | Raw submission history per platform | Three different shapes from three platforms, none of which we control |
-| `code_submissions` | Source code sent from the editor | The only copy for contests CPIntel forwards |
+| `cf_submissions` | Raw Codeforces submission history | A shape we do not control |
+| `cf_statements` | Parsed Codeforces statements, shared between users | Whole documents, read as a unit; only statements the server fetched itself are shared |
+| `code_submissions` | Source code sent from the editor | The only copy for contests CPIntel forwards; also what an examination's leaderboard and post-exam review read |
 | `contest_snapshots` | Scraped contest pages | Whole documents, read as a unit |
 | `activity_feed` | Per-user activity entries | Append-only, never joined |
 | `personal_files` | Uploaded templates and notes, bytes inline | Small by construction; one round trip beats GridFS |
@@ -465,9 +505,9 @@ Two questions are kept apart deliberately, because every real request for this f
 - **Does the deployment have the feature?** Configuration: `cpintel.files.contest-access.enabled-by-default`, which ships `true`.
 - **Does *this contest* offer it?** An admin's rule, held in `contest_file_rules` and resolved by `ContestFilePolicy` - contest rule first, then a deployment-wide rule, then the configured default.
 
-Rules are stored as exceptions rather than a row per contest, so the admin listing is short enough to audit before a round and the normal case costs nothing. Today no rules exist anywhere, so every contest allows personal files.
+Rules are stored as exceptions rather than a row per contest, so the admin listing is short enough to audit before a round and the normal case costs nothing.
 
-The split is what lets the default stay on while one proctored round is off. It is also why the contest page reads files through `/api/compete/{id}/files` rather than `/api/files`: the rule is enforced on every request, not checked once at page load and then trusted. Closing a contest stops that contest serving files; it never takes away someone's own storage, which stays reachable through the library routes.
+The split is what lets the default stay on while one proctored round is off. It is also why the contest page reads files through `/api/compete/{id}/files` rather than `/api/files`: the rule is enforced on every request, not checked once at page load and then trusted. Closing a contest stops that contest serving files; it never takes away someone's own storage, which stays reachable through the library routes — except while that person is sitting an examination. Then `LiveExamGuard` closes the vault's general routes and limits the code archive to that paper's contest, because otherwise "personal files: off" would hold on the exam page and nowhere else: the candidate could open their notes from the vault, or load an old solution from the archive, mid-paper.
 
 A rule lookup that fails falls back to the configured default rather than failing the contest page - during a live round, a panel that should have been hidden beats a page that will not load.
 
@@ -533,13 +573,12 @@ Registration has always created ordinary users, and nothing in the product promo
 the console needed an answer to a question that has no good in-app solution: on a brand new
 deployment, who opens it first?
 
-The answer is `cpintel.admin.bootstrap-email`. It names an account that already exists and
-promotes it at startup — it never creates one. The alternative, seeding an administrator, means
-seeding a password, and a default admin password is the single most reliable way to end up with
-a compromised deployment. Whoever operates the instance registers through the same form as
-everyone else, with their own password, and is promoted afterwards. The setting is idempotent
-and reactivates the account it names as well as promoting it, which makes it the recovery path
-if the last admin is ever locked out.
+The answer is `cpintel.admin.bootstrap-email` (`CPINTEL_ADMIN_EMAIL`). At startup, an account
+with that address is promoted to SUPER_ADMIN; if there is none, one is created — but only when
+the operator has also supplied `CPINTEL_ADMIN_PASSWORD`. There is no default for that password
+anywhere, because a default admin password is the single most reliable way to end up with a
+compromised deployment. The setting is idempotent and reactivates the account it names as well
+as promoting it, which makes it the recovery path if the last admin is ever locked out.
 
 ### The line between the two console tiers
 
@@ -612,9 +651,8 @@ own role, deactivating your own account, and demoting or deactivating the last a
 The UI disables those controls with the reason attached, rather than letting an admin discover
 the rule by tripping over it.
 
-There is also no delete. Removing an account would cascade through its contests, submissions
-and files, and no confirmation dialog makes that recoverable. Deactivating stops someone
-signing in and keeps the history, which is what "remove this person" almost always means.
+Deleting is not an ordinary admin's at all; it is the super admin's, and refused for anybody who
+has sat an examination (above).
 
 ### The audit trail
 
@@ -678,13 +716,34 @@ paper's session to reach anything else. The login tries the account password fir
 candidate's examination passwords for papers whose window (an hour before the start to the end)
 is open.
 
+### Held out of normal mode while the paper runs
+
+`ExamSessionGuard` closes the paper to normal sessions; `ExamLockoutService` closes everything
+else to the paper's candidates. From the paper's start to its end, somebody assigned to it —
+through a team or by name — cannot sign in with their account password, cannot refresh a normal
+session, and any normal request they make is refused with `EXAM_IN_PROGRESS`, which the client
+answers by signing out. A sweep every 30 seconds revokes their normal refresh tokens, so nothing
+quietly resumes when the paper ends. Without this, a candidate could sit the paper on one
+machine in examination mode and read their notes on another in normal mode.
+
+It is held to the paper's own window, not the hour of sign-in lead before it: a candidate may
+still be in normal mode up to the start, and is back in it the moment the paper is over. Admins
+are not candidates and are never held. Because it is asked on every authenticated request, the
+roster comes from a snapshot of running and imminent papers, refreshed on the same 30-second
+sweep; the window itself is compared against the clock per request, so a room locks at its
+start time to the second and only an admin's edit to a running paper takes up to one refresh to
+be seen. `LiveExamGuard` applies the same idea to the vault and code archive (see [Personal
+files](#personal-files-and-who-decides-they-are-available)).
+
 ### Two passwords, because they answer different questions
 
-The **examination password** is one string for the whole paper, read out when the invigilator
-starts it. It means *this sitting has begun*. A **candidate's passcode** is theirs alone,
-printed on the slip on their desk, and means *the person typing this is the person this seat
-belongs to* — which the shared password cannot mean, because by the time the paper starts
-everybody in the room has it.
+The optional **room password** is one string for the whole paper, read out when the invigilator
+starts it. It means *this sitting has begun*. A candidate's **examination sign-in password**
+(`exam_passcodes`) is theirs alone, printed on the slip on their desk, and means *the person
+typing this is the person this seat belongs to* — which the shared password cannot mean,
+because by the time the paper starts everybody in the room has it. The sign-in password is also
+what opens examination mode; the room password, if one was generated, is the unlock screen
+after that.
 
 Neither is ever emailed, and there is deliberately no route that would. The credential in
 somebody's mailbox gets them into CPIntel; getting into the paper additionally needs something
@@ -714,7 +773,7 @@ empty expectation outright, and `ExamPasswordServiceTest` holds that shut.
 
 ### The grant, and what rotation is for
 
-Unlocking mints a grant in Redis, keyed by examination and candidate, living until the window
+Unlocking (typing the room password) mints a grant in Redis, keyed by examination and candidate, living until the window
 closes plus a few minutes of grace — so a candidate submitting in the last second is not
 refused by a grant that expired just before the clock did. Redis rather than a column for the
 same reason the monitor heartbeat is: it is state about a session in progress, it must vanish
@@ -730,6 +789,21 @@ None of it is proof. A candidate can read their code down a phone the way they c
 question out. What it makes impossible is sitting the paper without anybody in the room handing
 you anything, and the session log stays the thing an invigilator actually reads.
 
+## An examination's own window
+
+A judge contest's window is not the answer to "is this open for me". A DOMjudge contest is often
+left running for weeks and reused — a practice round one week, a paper the next — and each event
+laid over it has its own start and end. `EventWindow` applies the event's window to the contest
+info the workspace receives and refuses submissions outside it, so a round that has ended stops
+taking submissions even while the judge contest keeps running. Somebody with no event on the
+contest keeps the judge's window: nothing was set for them.
+
+The same window scopes what belongs to the event. The live submissions list, the code archive
+(source included) and the post-exam review show only submissions made inside the paper's window,
+so a practice round on the same judge contest the week before does not leak into the paper, and
+the examination page shows one clock — the paper's time remaining. The desktop lock and the away
+monitor follow that window too.
+
 ## Examination monitoring, and why it stopped trying to lock anything
 
 **Only examinations are monitored.** Not by default — at all. `EventService.lockdownFor`
@@ -743,9 +817,9 @@ accident.
 
 The desktop build watches for the candidate leaving the examination window while a paper is
 running, warns them when they have been gone longer than the threshold, and reports the long
-absences to whoever is running it. It engages from `CompetePage` off `contest.running`
-rather than from a button, and releases when the round ends, the contest is closed, or the page
-unmounts.
+absences to whoever is running it. It engages from the examination workspace off the paper's
+own window (see above) rather than from a button, and releases when the paper ends, the paper is
+closed, or the page unmounts.
 
 It used to try to do much more. An earlier version grabbed Alt+Tab and the Super key
 system-wide through `globalShortcut`, refused a long list of keystrokes through
@@ -792,7 +866,7 @@ because switching tabs fires the first and switching applications often only fir
 
 This is deliberately weaker, and the product says so rather than hiding it. A background tab
 can be throttled or frozen, and anything running in the page can be closed outright, so the
-numbers are a floor rather than a measurement. That is why a contest sat in a browser also
+numbers are a floor rather than a measurement. That is why an examination sat in a browser also
 reports `LOCKDOWN_UNAVAILABLE`: an admin sees that this is the weaker kind of monitoring rather
 than seeing a suspiciously clean record.
 
@@ -809,13 +883,72 @@ clipboard is read when the window loses focus and compared when it returns, and 
 that changed while the contestant was elsewhere is discarded. Copying and pasting inside the app
 are untouched.
 
+### Reading the session log
+
+An examination of two hundred people produces tens of thousands of rows, and nobody reads them.
+The admin's session log therefore opens on two lists. **Students** is every assigned candidate
+with their event count, focus losses, time away, submissions and flag count, each opening onto
+that candidate's own log. **Suspicious activity** (`ExamFlagService`, `GET
+/admin/events/{id}/flags`) is the handful worth a human look: a single absence of 60 seconds or
+more, five or more focus losses, more than one sign-in (ranked higher when from different
+addresses), a first submission on a problem within 30 seconds of opening it, desktop
+restrictions firing, and anything the server already recorded as suspicious. Thresholds live
+under `cpintel.exams.flags.*`.
+
+The list is derived from the session log and the audit trail on every read and never stored. That
+keeps it a view over observations rather than a record of accusations: change a threshold and
+last month's list changes with it, and nothing is ever written against a candidate's name. Each
+flag says what was seen and by how much it passed the threshold; whether four minutes away was
+cheating or illness is for the person reading it.
+
+## The examination leaderboard
+
+The contest arena's sidebar board is DOMjudge's own scoreboard. An examination's is not: it is
+ranked by `ExamLeaderboardService` from CPIntel's own submission archive. The archive row is
+written the moment CPIntel sends the code, before the judge has seen it, so a solve is timed from
+when the candidate submitted. Two candidates a second apart are ordered by that second even if a
+busy judge answered the later one first — which, in a room of two hundred submitting at the
+bell, it will.
+
+Order is most marks, then less total time. The marks are the ones the admin gave each problem on
+the Problems tab, which for a DOMjudge paper starts from the judge's own problem list
+(`JudgeProblemService`, `GET /admin/events/{id}/judge-problems`) so the labels are guaranteed to
+be the ones submissions are recorded under. A solve earns all of a problem's marks — the judge
+gives a verdict, not a partial score. With no marks set anywhere every problem is worth one, so a
+paper nobody marked ranks by problems solved exactly as before; once any are set, a blank problem
+is worth nothing.
+
+Among equal marks — in practice, usually none — a candidate who submitted anything to the
+paper's problems ranks above one who submitted nothing, whatever the verdict (a compilation
+error counts). Someone who tried and failed has done something someone who never submitted has
+not, and a board that shared a rank between them would say otherwise.
+
+Total time is the next tie-break: for each solved problem that earned marks, the
+time from the start of the paper to the accepted submission plus the configured penalty for each
+wrong attempt before it. A solve worth nothing adds no time — otherwise solving a zero-mark
+problem would rank somebody below a candidate who solved nothing. Compilation errors and
+submissions the judge never accepted are not wrong attempts.
+
+The admin has no DOMjudge login of their own, so the problem list is read through the service
+account, or else as the first assigned candidate with an attached login: a contest's problem
+list is the same for every team, so whose credentials read it does not change the answer.
+
+It is a snapshot stored on the examination row (`leaderboard_snapshot`), recomputed at most every
+`leaderboard_refresh_minutes` while the paper runs, so every backend instance serves the same
+board and two hundred candidates polling cost one computation. Pending verdicts are fetched from
+the judge before each recompute. After the end it keeps settling for ten minutes, to pick up
+verdicts still being judged at the bell, and is then final. The admin can switch it off
+(candidates see "Leaderboard disabled"), recompute on demand, and decide whether the final
+standings are released — the one result a candidate can see afterwards under Past examinations,
+and only when an admin chose to publish it.
+
 ## Group contests: ranking a subset of someone else's scoreboard
 
 An admin can lay a *group* over a contest that is running on Codeforces or DOMjudge. CPIntel
 does not host the contest — the clock, the problems and the real scoreboard all belong to the
 judge. What it adds is a named subset of users, ranked against each other out of a board that
-may hold thousands of people nobody here is measuring, plus whatever the desktop lock reported
-about how they sat it.
+may hold thousands of people nobody here is measuring. A group contest is not monitored; that
+is what an examination is for.
 
 The group is the durable object and contests come and go beneath it. A class or a training
 squad is the same set of people across every round they sit, and re-entering thirty names per
@@ -855,36 +988,43 @@ turns a configuration mistake into what looks like a bad result. The admin scree
 unmatched members so the mismatch is fixable.
 
 Finding people differs by judge. Codeforces members are matched through their linked platform
-account, with a per-membership override as a fallback. DOMjudge has nothing to derive from —
-CPIntel has no notion of a DOMjudge team — so the override is the only answer there, and the
-Codeforces handle is deliberately *not* used as a fallback, since it would match the wrong
-person or nobody and look like a scoring bug.
+account, with a per-membership override as a fallback. On DOMjudge an admin attaches each
+member's DOMjudge login (singly, or in bulk through the roster import); it is verified against
+the judge's `/user`, must resolve to a team, and is stored AES-256-GCM encrypted under
+`CPINTEL_DOMJUDGE_CREDENTIAL_KEY` with an expiry. The arena then competes as that login, so the
+judge attributes every submission to the member's own team, and the board matches on that exact
+team id. Where no login is attached, the membership's team name is matched against the judge's
+team names instead. The Codeforces handle is deliberately *not* used as a fallback on DOMjudge,
+since it would match the wrong person or nobody and look like a scoring bug.
 
-### Violations are observations, not accusations
+A DOMjudge password changed from CPIntel is sent to the judge first and replaces the stored one
+only once the judge accepts it, so a rejected change leaves a working login in place.
 
-While a group contest is live, the desktop lock reports what it observed to the admin running
-the group: focus losses and their duration, clipboard content that appeared while the window
-was away, refused keystrokes, and three findings about the lock itself — that it was never
-available (a browser), that the OS refused some shortcuts, or that it was released early.
+### Observations, not accusations
 
-Several design choices exist to keep this from being read as a verdict:
+This applies to examinations, whose monitor reports focus losses and their duration, clipboard
+content that appeared while the window was away, restrictions that fired, and findings about the
+lock itself — that it was never available (a browser), that the OS refused part of the policy,
+or that it was released early. Several design choices exist to keep this from being read as a
+verdict:
 
 - **No single score.** There is no honest way to weigh ninety seconds away from the window
   against a discarded clipboard, so the counts are shown side by side and left for a person to
-  weigh. A total would be treated as guilt by whoever saw it next.
+  weigh. A total would be treated as guilt by whoever saw it next. The suspicious-activity list
+  names individual observations over a threshold, never a sum.
 - **A clean record proves nothing either.** On Windows and macOS the lock cannot take Alt+Tab
-  from the operating system at all, so the admin screen says so rather than implying the
-  absence of events means the absence of switching.
-- **The contestant is told.** The compete page shows a banner naming the group and saying
-  plainly that time outside the window is reported. A lock that watches someone without telling
-  them is a different and much worse product.
+  from the operating system at all, and a second device is invisible to it, so the admin screen
+  says so rather than implying the absence of events means the absence of switching.
+- **The candidate is told.** The examination page says plainly that they are monitored and what
+  the threshold is. A lock that watches someone without telling them is a different and much
+  worse product.
 
-Reports are accepted only from the person they are about, only for a contest they are a member
-of, and only for a timestamp inside the contest window — a few minutes of clock skew is pulled
-to the boundary, anything wildly outside is dropped, so a wrong or dishonest client clock
-cannot attach an event to a round it does not belong to. Every event carries a client-generated
-id with a unique index behind it, because the desktop app retries failed reports and without
-that one focus loss on a flaky connection would become five.
+Reports are accepted only from the person they are about, only for an examination they are
+assigned to, and only for a timestamp inside its window — a few minutes of clock skew is pulled
+to the boundary, anything wildly outside is dropped, so a wrong or dishonest client clock cannot
+attach an event to a paper it does not belong to. Every event carries a client-generated id with
+a unique index behind it, because the desktop app retries failed reports and without that one
+focus loss on a flaky connection would become five.
 
 The participant's own view is a separate controller rather than the same one with a role check,
 so there is no shared code path where a filter could be forgotten. They see their own placing
