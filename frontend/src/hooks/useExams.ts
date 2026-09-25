@@ -134,6 +134,17 @@ export function useExamMonitor(eventId: number | null, live = true) {
   })
 }
 
+/** The suspicious-activity list. Polled gently while the paper runs; computed server-side. */
+export function useExamFlags(eventId: number | null, live = true) {
+  const isAdmin = useIsAdmin()
+  return useQuery({
+    queryKey: ['admin', 'exam-flags', eventId],
+    queryFn: () => adminEventsApi.flags(eventId!).then(r => r.data),
+    enabled: isAdmin && eventId != null,
+    refetchInterval: live ? 15_000 : false,
+  })
+}
+
 export function useExamLogs(eventId: number | null, query: LogQuery) {
   const isAdmin = useIsAdmin()
   return useQuery({

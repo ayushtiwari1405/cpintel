@@ -4,6 +4,7 @@ import com.cpintel.common.ApiResponse;
 import com.cpintel.common.Languages;
 import com.cpintel.events.EventService;
 import com.cpintel.events.EventsDto;
+import com.cpintel.events.ExamFlagService;
 import com.cpintel.events.ExamMonitorService;
 import com.cpintel.events.ExamPasswordService;
 import com.cpintel.security.Roles;
@@ -45,6 +46,7 @@ public class AdminEventController {
 
     private final EventService events;
     private final ExamMonitorService monitor;
+    private final ExamFlagService flags;
     private final ExamPasswordService passwords;
 
     // ------------------------------------------------------------------ reads
@@ -169,6 +171,15 @@ public class AdminEventController {
     public ResponseEntity<ApiResponse<EventsDto.MonitorSnapshot>> monitor(
         @PathVariable Long eventId) {
         return ResponseEntity.ok(ApiResponse.ok(monitor.snapshot(eventId)));
+    }
+
+    @GetMapping("/{eventId}/flags")
+    @Operation(summary = "Suspicious activity in this examination",
+        description = "Long or repeated absences, repeated sign-ins, very fast first submissions "
+            + "and anything the system itself marked. Computed from the log on every read; "
+            + "each entry is something worth a look, not a finding.")
+    public ResponseEntity<ApiResponse<EventsDto.FlagReport>> flags(@PathVariable Long eventId) {
+        return ResponseEntity.ok(ApiResponse.ok(flags.flags(eventId)));
     }
 
     /**

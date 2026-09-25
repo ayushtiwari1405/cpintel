@@ -1,22 +1,25 @@
 import { useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import {
-  AlertTriangle, Code2, Eye, KeyRound, Loader2, Lock, Monitor, Plus, Save, ScrollText, Settings2,
-  Trash2, Users,
+  AlertTriangle, ArrowLeft, Code2, Eye, Flag, KeyRound, Loader2, Lock, Monitor, Plus, Save,
+  ScrollText, Settings2, Trash2, Users,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 
-import { Ago, EmptyRow, Panel, Pill, StatCard } from '@/components/admin/AdminUi'
+import { Ago, EmptyRow, Pager, Panel, Pill, StatCard } from '@/components/admin/AdminUi'
 import { ExamPasswordsTab } from '@/components/admin/ExamPasswordsTab'
 import { LifecyclePill } from '@/pages/admin/AdminExamsPage'
 import {
-  useAdminEvent, useAssignToEvent, useDeleteEvent, useEventLanguageCatalog, useExamLogs,
-  useExamMonitor, useSetLifecycle, useSetProblems, useUnassignTeam, useUnassignUser,
+  useAdminEvent, useAssignToEvent, useDeleteEvent, useEventLanguageCatalog, useExamFlags,
+  useExamLogs, useExamMonitor, useSetLifecycle, useSetProblems, useUnassignTeam, useUnassignUser,
   useUpdateEvent,
 } from '@/hooks/useExams'
 import { useAdminGroups } from '@/hooks/useGroups'
 import { useAdminUsers } from '@/hooks/useAdmin'
-import type { DesktopPolicy, EventDetail, EventProblem, ExamEventType } from '@/types'
+import type {
+  DesktopPolicy, EventDetail, EventProblem, ExamEventType, ExamFlag, ExamFlagKind, ExamFlagReport,
+  ExamMonitorRow,
+} from '@/types'
 
 type Tab = 'settings' | 'people' | 'problems' | 'passwords' | 'monitor' | 'logs'
 
@@ -107,7 +110,7 @@ export default function AdminExamDetailPage() {
       {tab === 'problems' && <ProblemsTab detail={detail} />}
       {tab === 'passwords' && <ExamPasswordsTab eventId={id} />}
       {tab === 'monitor'  && <MonitorTab eventId={id} live={event.lifecycle === 'ACTIVE'} />}
-      {tab === 'logs'     && <LogsTab eventId={id} />}
+      {tab === 'logs'     && <LogsTab eventId={id} live={event.lifecycle === 'ACTIVE'} />}
     </div>
   )
 }
@@ -836,84 +839,366 @@ const TYPE_TONE: Record<string, 'gray' | 'green' | 'amber' | 'red' | 'indigo'> =
   SUSPICIOUS_ACTIVITY: 'amber',
 }
 
-function LogsTab({ eventId }: { eventId: number }) {
+type LogsView = 'students' | 'flags'
+
+/**
+ * The session log, read two ways.
+ *
+ * <p>"Students" is the roster: everyone assigned, with the counts that matter, and a click opens
+ * that one person's log. "Suspicious activity" is the short list of things worth a look —
+ * long or repeated absences, repeated sign-ins, very fast first submissions — computed by the
+ * server from the same log. Either way, a name leads to the full record behind it.
+ */
+function LogsTab({ eventId, live }: { eventId: number; live: boolean }) {
+  const [view, setView] = useState<LogsView>('students')
+  const [selected, setSelected] = useState<{ userId: number; username: string } | null>(null)
+
+  const { data: snapshot, isLoading: rosterLoading } = useExamMonitor(eventId, live)
+  const { data: report, isLoading: flagsLoading } = useExamFlags(eventId, live)
+
+  const flagCounts = useMemo(() => {
+    const counts = new Map<number, { total: number; high: number }>()
+    for (const flag of report?.flags ?? []) {
+      const entry = counts.get(flag.userId) ?? { total: 0, high: 0 }
+      entry.total++
+      if (flag.severity === 'HIGH') entry.high++
+      counts.set(flag.userId, entry)
+    }
+    return counts
+  }, [report])
+
+  if (selected) {
+    return (
+      <CandidateLog
+        eventId={eventId}
+        userId={selected.userId}
+        username={selected.username}
+        flags={report?.flags.filter(f => f.userId === selected.userId) ?? []}
+        onBack={() => setSelected(null)}
+      />
+    )
+  }
+
+  const open = (userId: number, username: string) => setSelected({ userId, username })
+  const flagTotal = report?.flags.length ?? 0
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-1 rounded-lg border border-gray-800
+        bg-gray-900 p-1 w-fit">
+        {([
+          { id: 'students' as LogsView, label: 'Students', icon: Users },
+          { id: 'flags' as LogsView, label: 'Suspicious activity', icon: Flag },
+        ]).map(({ id, label, icon: Icon }) => (
+          <button
+            key={id}
+            onClick={() => setView(id)}
+            className={clsx(
+              'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium',
+              'transition-colors',
+              view === id
+                ? 'bg-indigo-600/20 text-indigo-300'
+                : 'text-gray-500 hover:text-gray-300'
+            )}
+          >
+            <Icon size={13} /> {label}
+            {id === 'flags' && flagTotal > 0 && (
+              <span className="rounded-full bg-amber-500/20 px-1.5 text-[10px] text-amber-300">
+                {flagTotal}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {view === 'students' && (
+        <StudentList
+          rows={snapshot?.rows}
+          loading={rosterLoading}
+          flagCounts={flagCounts}
+          onOpen={open}
+        />
+      )}
+      {view === 'flags' && (
+        <FlagList report={report} loading={flagsLoading} onOpen={open} />
+      )}
+    </div>
+  )
+}
+
+function StudentList({ rows, loading, flagCounts, onOpen }: {
+  rows: ExamMonitorRow[] | undefined
+  loading: boolean
+  flagCounts: Map<number, { total: number; high: number }>
+  onOpen: (userId: number, username: string) => void
+}) {
+  const [search, setSearch] = useState('')
+  const needle = search.trim().toLowerCase()
+  const shown = (rows ?? []).filter(row => !needle
+    || row.username.toLowerCase().includes(needle)
+    || (row.fullName ?? '').toLowerCase().includes(needle))
+
+  return (
+    <Panel
+      title="Students"
+      description={rows
+        ? `${rows.length} candidate${rows.length === 1 ? '' : 's'} · click one to read their log`
+        : 'Everyone assigned to this examination'}
+      actions={
+        <div className="w-48">
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search by name"
+            className={INPUT}
+          />
+        </div>
+      }
+    >
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-gray-800 text-left text-xs text-gray-500">
+              <th className="px-4 py-2 font-medium">Candidate</th>
+              <th className="px-4 py-2 font-medium">Status</th>
+              <th className="px-4 py-2 font-medium">Events</th>
+              <th className="px-4 py-2 font-medium">Focus losses</th>
+              <th className="px-4 py-2 font-medium">Time away</th>
+              <th className="px-4 py-2 font-medium">Submissions</th>
+              <th className="px-4 py-2 font-medium">Flags</th>
+              <th className="px-4 py-2 font-medium">Last seen</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-800">
+            {loading && <EmptyRow colSpan={8}>Reading the roster…</EmptyRow>}
+            {!loading && shown.length === 0 && (
+              <EmptyRow colSpan={8}>
+                {needle ? 'Nobody matches that search.' : 'Nobody is assigned to this examination yet.'}
+              </EmptyRow>
+            )}
+            {shown.map(row => {
+              const flags = flagCounts.get(row.userId)
+              return (
+                <tr
+                  key={row.userId}
+                  onClick={() => onOpen(row.userId, row.username)}
+                  className="cursor-pointer transition-colors hover:bg-gray-800/40"
+                >
+                  <td className="px-4 py-2.5">
+                    <span className="text-gray-200">{row.username}</span>
+                    {row.fullName && (
+                      <span className="ml-2 text-xs text-gray-600">{row.fullName}</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-2.5">
+                    <Pill tone={STATUS_TONE[row.status] ?? 'gray'}>
+                      {row.status.toLowerCase().replace('_', ' ')}
+                    </Pill>
+                  </td>
+                  <td className="px-4 py-2.5 tabular-nums text-gray-400">{row.events}</td>
+                  <td className="px-4 py-2.5 tabular-nums text-gray-400">{row.focusLosses}</td>
+                  <td className="px-4 py-2.5 tabular-nums text-gray-400">
+                    {row.awayMs > 0 ? duration(row.awayMs) : '—'}
+                  </td>
+                  <td className="px-4 py-2.5 tabular-nums text-gray-400">{row.submissions}</td>
+                  <td className="px-4 py-2.5">
+                    {flags
+                      ? <Pill tone={flags.high > 0 ? 'red' : 'amber'}>{flags.total}</Pill>
+                      : <span className="text-gray-600">—</span>}
+                  </td>
+                  <td className="px-4 py-2.5 text-xs text-gray-500">
+                    <Ago at={row.lastActivityAt} fallback="never" />
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </Panel>
+  )
+}
+
+const FLAG_LABEL: Record<ExamFlagKind, string> = {
+  LONG_AWAY: 'long time away',
+  FREQUENT_AWAY: 'away many times',
+  MULTIPLE_SIGN_INS: 'multiple sign-ins',
+  FAST_SUBMISSION: 'fast submission',
+  LOCKDOWN: 'desktop restriction',
+  FLAGGED: 'flagged by system',
+}
+
+function FlagList({ report, loading, onOpen }: {
+  report: ExamFlagReport | undefined
+  loading: boolean
+  onOpen: (userId: number, username: string) => void
+}) {
+  const [kind, setKind] = useState<ExamFlagKind | ''>('')
+  const shown = (report?.flags ?? []).filter(flag => !kind || flag.kind === kind)
+
+  return (
+    <div className="space-y-4">
+      <Panel
+        title="Suspicious activity"
+        description={report
+          ? `Away ${report.longAwaySeconds}s+ at once, away ${report.frequentAwayCount}+ times, `
+            + `signed in more than once, or a first submission under `
+            + `${report.fastSubmissionSeconds}s after opening the problem`
+          : 'Things in this examination worth a look'}
+        actions={
+          <div className="w-48">
+            <select value={kind} className={INPUT}
+              onChange={e => setKind(e.target.value as ExamFlagKind | '')}>
+              <option value="">Every kind</option>
+              {(Object.keys(FLAG_LABEL) as ExamFlagKind[]).map(value => (
+                <option key={value} value={value}>{FLAG_LABEL[value]}</option>
+              ))}
+            </select>
+          </div>
+        }
+      >
+        <FlagTable flags={shown} loading={loading} onOpen={onOpen} />
+      </Panel>
+
+      <p className="flex items-start gap-2 px-1 text-xs leading-relaxed text-gray-600">
+        <AlertTriangle size={12} className="mt-0.5 flex-shrink-0" />
+        Each row is something worth a look, not a finding. Click a name to read the whole session
+        around it before drawing any conclusion.
+      </p>
+    </div>
+  )
+}
+
+function FlagTable({ flags, loading, onOpen }: {
+  flags: ExamFlag[]
+  loading: boolean
+  onOpen?: (userId: number, username: string) => void
+}) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-gray-800 text-left text-xs text-gray-500">
+            <th className="px-4 py-2 font-medium">When</th>
+            {onOpen && <th className="px-4 py-2 font-medium">Candidate</th>}
+            <th className="px-4 py-2 font-medium">What</th>
+            <th className="px-4 py-2 font-medium">Problem</th>
+            <th className="px-4 py-2 font-medium">Detail</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-800">
+          {loading && <EmptyRow colSpan={onOpen ? 5 : 4}>Reading the log…</EmptyRow>}
+          {!loading && flags.length === 0 && (
+            <EmptyRow colSpan={onOpen ? 5 : 4}>Nothing has crossed a threshold.</EmptyRow>
+          )}
+          {flags.map((flag, index) => (
+            <tr key={`${flag.userId}-${flag.kind}-${flag.occurredAt}-${index}`}
+              className="transition-colors hover:bg-gray-800/40">
+              <td className="px-4 py-2 text-xs text-gray-500"
+                title={flag.occurredAt ? new Date(flag.occurredAt).toLocaleString() : undefined}>
+                {flag.occurredAt ? new Date(flag.occurredAt).toLocaleTimeString() : '—'}
+              </td>
+              {onOpen && (
+                <td className="px-4 py-2">
+                  <button
+                    onClick={() => onOpen(flag.userId, flag.username)}
+                    className="text-gray-300 hover:text-indigo-400"
+                    title="Read this candidate's log"
+                  >
+                    {flag.username}
+                  </button>
+                  {flag.fullName && (
+                    <span className="ml-2 text-xs text-gray-600">{flag.fullName}</span>
+                  )}
+                </td>
+              )}
+              <td className="px-4 py-2">
+                <Pill tone={flag.severity === 'HIGH' ? 'red' : 'amber'}>
+                  {FLAG_LABEL[flag.kind] ?? flag.kind.toLowerCase()}
+                </Pill>
+              </td>
+              <td className="px-4 py-2 text-gray-400">{flag.problemLabel ?? '—'}</td>
+              <td className="px-4 py-2 text-xs text-gray-500">{flag.detail ?? '—'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+/** One candidate's whole session, newest first, with their flags above it. */
+function CandidateLog({ eventId, userId, username, flags, onBack }: {
+  eventId: number
+  userId: number
+  username: string
+  flags: ExamFlag[]
+  onBack: () => void
+}) {
   const [type, setType] = useState<ExamEventType | ''>('')
-  const [teamId, setTeamId] = useState<number | ''>('')
-  const [userId, setUserId] = useState<number | ''>('')
   const [page, setPage] = useState(0)
 
-  const { data: teams } = useAdminGroups()
   const { data: logs, isLoading } = useExamLogs(eventId, {
+    userId,
     type: type || undefined,
-    teamId: teamId === '' ? undefined : Number(teamId),
-    userId: userId === '' ? undefined : Number(userId),
     page,
     size: 100,
   })
 
   return (
     <div className="space-y-4">
+      <button
+        onClick={onBack}
+        className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-200"
+      >
+        <ArrowLeft size={13} /> All students
+      </button>
+
+      {flags.length > 0 && (
+        <Panel
+          title="Flagged for a look"
+          description={`${flags.length} thing${flags.length === 1 ? '' : 's'} in ${username}'s `
+            + 'session crossed a threshold'}
+        >
+          <FlagTable flags={flags} loading={false} />
+        </Panel>
+      )}
+
       <Panel
-        title="Session log"
+        title={`${username} — session log`}
         description={logs
           ? `${logs.total} event${logs.total === 1 ? '' : 's'} · kept for ${logs.retentionDays} days`
-          : 'Everything recorded during this examination'}
-      >
-        <div className="flex flex-wrap items-end gap-2 border-b border-gray-800 p-4">
-          <label className="flex flex-col gap-1">
-            <span className="text-xs text-gray-500">Event type</span>
+          : 'Everything recorded for this candidate'}
+        actions={
+          <div className="w-48">
             <select value={type} className={INPUT}
               onChange={e => { setType(e.target.value as ExamEventType | ''); setPage(0) }}>
-              <option value="">Everything</option>
+              <option value="">Every event</option>
               {logs?.types.map(value => (
                 <option key={value} value={value}>
                   {value.toLowerCase().replace(/_/g, ' ')}
                 </option>
               ))}
             </select>
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-xs text-gray-500">Team</span>
-            <select value={teamId} className={INPUT}
-              onChange={e => {
-                setTeamId(e.target.value === '' ? '' : Number(e.target.value))
-                setUserId('')
-                setPage(0)
-              }}>
-              <option value="">Everyone</option>
-              {teams?.map(team => (
-                <option key={team.groupId} value={team.groupId}>{team.name}</option>
-              ))}
-            </select>
-          </label>
-          {userId !== '' && (
-            <button
-              onClick={() => { setUserId(''); setPage(0) }}
-              className="rounded-lg border border-gray-800 px-3 py-2 text-xs text-gray-400
-                         hover:text-gray-200"
-            >
-              Clear person filter
-            </button>
-          )}
-        </div>
-
+          </div>
+        }
+      >
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-800 text-left text-xs text-gray-500">
                 <th className="px-4 py-2 font-medium">When</th>
-                <th className="px-4 py-2 font-medium">Candidate</th>
                 <th className="px-4 py-2 font-medium">Event</th>
                 <th className="px-4 py-2 font-medium">Problem</th>
                 <th className="px-4 py-2 font-medium">Detail</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-800">
-              {isLoading && <EmptyRow colSpan={5}>Reading the log…</EmptyRow>}
+              {isLoading && <EmptyRow colSpan={4}>Reading the log…</EmptyRow>}
               {!isLoading && logs?.entries.length === 0 && (
-                <EmptyRow colSpan={5}>
-                  Nothing recorded for this filter. An examination that has not been sat yet has
-                  an empty log, which is not the same as a clean one.
+                <EmptyRow colSpan={4}>
+                  Nothing recorded for this candidate. Not having sat the examination leaves an
+                  empty log, which is not the same as a clean one.
                 </EmptyRow>
               )}
               {logs?.entries.map(entry => (
@@ -921,15 +1206,6 @@ function LogsTab({ eventId }: { eventId: number }) {
                   <td className="px-4 py-2 text-xs text-gray-500"
                     title={new Date(entry.occurredAt).toLocaleString()}>
                     {new Date(entry.occurredAt).toLocaleTimeString()}
-                  </td>
-                  <td className="px-4 py-2">
-                    <button
-                      onClick={() => { setUserId(entry.userId); setPage(0) }}
-                      className="text-gray-300 hover:text-indigo-400"
-                      title="Show only this candidate"
-                    >
-                      {entry.username}
-                    </button>
                   </td>
                   <td className="px-4 py-2">
                     <Pill tone={TYPE_TONE[entry.type] ?? 'gray'}>
@@ -951,27 +1227,8 @@ function LogsTab({ eventId }: { eventId: number }) {
           </table>
         </div>
 
-        {logs && logs.totalPages > 1 && (
-          <div className="flex items-center justify-between border-t border-gray-800 px-4 py-2
-            text-xs text-gray-500">
-            <span>Page {logs.page + 1} of {logs.totalPages}</span>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setPage(p => Math.max(0, p - 1))}
-                disabled={logs.page === 0}
-                className="rounded border border-gray-800 px-2 py-1 disabled:opacity-40"
-              >
-                Newer
-              </button>
-              <button
-                onClick={() => setPage(p => p + 1)}
-                disabled={logs.page + 1 >= logs.totalPages}
-                className="rounded border border-gray-800 px-2 py-1 disabled:opacity-40"
-              >
-                Older
-              </button>
-            </div>
-          </div>
+        {logs && (
+          <Pager page={logs.page} totalPages={logs.totalPages} total={logs.total} onPage={setPage} />
         )}
       </Panel>
     </div>

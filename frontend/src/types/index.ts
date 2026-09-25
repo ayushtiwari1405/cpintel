@@ -1038,6 +1038,29 @@ export interface ExamMonitorSnapshot {
   notStarted: number
 }
 
+export type ExamFlagKind =
+  | 'LONG_AWAY' | 'FREQUENT_AWAY' | 'MULTIPLE_SIGN_INS' | 'FAST_SUBMISSION' | 'LOCKDOWN'
+  | 'FLAGGED'
+
+/** Something in a session worth a human look — computed from the log, never a finding. */
+export interface ExamFlag {
+  userId: number
+  username: string
+  fullName: string | null
+  kind: ExamFlagKind
+  severity: 'HIGH' | 'MEDIUM'
+  problemLabel: string | null
+  detail: string | null
+  occurredAt: string | null
+}
+
+export interface ExamFlagReport {
+  flags: ExamFlag[]
+  longAwaySeconds: number
+  frequentAwayCount: number
+  fastSubmissionSeconds: number
+}
+
 export interface ParticipationRow {
   eventId: number
   kind: EventKind

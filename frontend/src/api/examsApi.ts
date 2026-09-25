@@ -1,7 +1,8 @@
 import { apiClient } from './client'
 import type {
   ApiResponse, EventDetail, EventKind, EventLifecycle, EventProblem, EventSummary,
-  ExamClientEvent, ExamLogPage, ExamMonitorSnapshot, ExamPasswordStatus, ExamEventType,
+  ExamClientEvent, ExamFlagReport, ExamLogPage, ExamMonitorSnapshot, ExamPasswordStatus,
+  ExamEventType,
   IssuedPasscode, LanguageChoice, MyExam, MyExamSubmission, TeamAnalytics,
 } from '@/types'
 
@@ -147,6 +148,10 @@ export const adminEventsApi = {
 
   monitor: (eventId: number) =>
     apiClient.get<ApiResponse<ExamMonitorSnapshot>>(`/admin/events/${eventId}/monitor`)
+      .then(r => r.data),
+
+  flags: (eventId: number) =>
+    apiClient.get<ApiResponse<ExamFlagReport>>(`/admin/events/${eventId}/flags`)
       .then(r => r.data),
 
   logs: (eventId: number, query: LogQuery) =>

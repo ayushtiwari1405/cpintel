@@ -410,6 +410,36 @@ public class EventsDto {
         int notStarted
     ) {}
 
+    // ------------------------------------------------------- suspicious activity
+
+    /**
+     * One thing in a session worth a human look.
+     *
+     * <p>Computed from the log on every read rather than stored, so changing a threshold changes
+     * the list for past examinations too, and nothing here is ever written against a candidate.
+     * {@code kind} is LONG_AWAY, FREQUENT_AWAY, MULTIPLE_SIGN_INS, FAST_SUBMISSION, LOCKDOWN or
+     * FLAGGED (something the system itself recorded as suspicious, such as a wrong password).
+     */
+    public record Flag(
+        Long userId,
+        String username,
+        String fullName,
+        String kind,
+        /** HIGH or MEDIUM — how far past the threshold, not how guilty. */
+        String severity,
+        String problemLabel,
+        String detail,
+        Instant occurredAt
+    ) {}
+
+    public record FlagReport(
+        List<Flag> flags,
+        /** The thresholds the list was computed with, so the page can say what it means. */
+        int longAwaySeconds,
+        int frequentAwayCount,
+        int fastSubmissionSeconds
+    ) {}
+
     // ------------------------------------------------------------ analytics
 
     /** One person's history with the events they were assigned. */

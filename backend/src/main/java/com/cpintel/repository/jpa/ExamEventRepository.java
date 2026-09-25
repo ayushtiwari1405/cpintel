@@ -11,6 +11,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 
 @Repository
@@ -55,6 +56,19 @@ public interface ExamEventRepository
             WHERE e2.contest.contestId = :contestId AND e2.user.userId = e.user.userId)
         """)
     List<ExamEvent> latestPerUser(@Param("contestId") Long contestId);
+
+    /**
+     * The rows of a few types for a whole examination, oldest first, with the candidate loaded.
+     * What the suspicious-activity list is computed from; bounded by the types asked for, so the
+     * noisy PROBLEM_OPENED stream is only read when the caller needs it.
+     */
+    @Query("""
+        SELECT e FROM ExamEvent e JOIN FETCH e.user
+        WHERE e.contest.contestId = :contestId AND e.type IN :types
+        ORDER BY e.occurredAt ASC
+        """)
+    List<ExamEvent> findTypesForContest(@Param("contestId") Long contestId,
+                                        @Param("types") Collection<String> types);
 
     List<ExamEvent> findByContestContestIdAndUserUserIdOrderByOccurredAtDesc(
         Long contestId, Long userId, Pageable pageable);

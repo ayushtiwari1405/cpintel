@@ -21,6 +21,10 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, Long>,
 
     List<AuditLog> findAllByOrderByCreatedAtDesc(Pageable pageable);
 
+    /** Every row of one action against one entity, oldest first — e.g. sign-ins to one exam. */
+    List<AuditLog> findByActionAndEntityTypeAndEntityIdOrderByCreatedAtAsc(
+        String action, String entityType, String entityId);
+
     /**
      * The actions actually present in the trail, for the filter list.
      *

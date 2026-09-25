@@ -9,6 +9,7 @@ import com.cpintel.controller.AdminOverviewController;
 import com.cpintel.events.EventAnalyticsService;
 import com.cpintel.events.EventService;
 import com.cpintel.events.ExamEventService;
+import com.cpintel.events.ExamFlagService;
 import com.cpintel.events.ExamMonitorService;
 import com.cpintel.events.ExamPasswordService;
 import com.cpintel.files.ContestFilePolicy;
@@ -58,6 +59,7 @@ class AdminConsoleAuthorizationTest extends AuthorizationTestBase {
     @MockBean private EventService events;
     @MockBean private ExamEventService examEvents;
     @MockBean private ExamMonitorService examMonitor;
+    @MockBean private ExamFlagService examFlags;
     @MockBean private ExamPasswordService examPasswords;
     @MockBean private GroupMemberRepository members;
     @MockBean private com.cpintel.repository.jpa.GroupContestRepository groupContests;
