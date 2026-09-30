@@ -304,12 +304,11 @@ public class DomjudgeAccountService {
         DomjudgeCredentialStore.Stored stored = credentials.find(classroomId, userId);
         if (stored == null) return DomjudgeDto.AccountStatus.unlinked();
 
-        Duration ttl = credentials.timeToLive(classroomId, userId);
         return new DomjudgeDto.AccountStatus(
             true, stored.username(), stored.name(),
             stored.teamId(), stored.teamName(),
             stored.assignedTeamId(), stored.assignedTeamName(), stored.teamMismatch(),
-            stored.provisioned(), ttl == null ? null : ttl.toSeconds());
+            stored.provisioned());
     }
 
     // ------------------------------------------------------------ contest list

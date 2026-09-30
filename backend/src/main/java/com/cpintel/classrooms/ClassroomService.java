@@ -88,6 +88,23 @@ public class ClassroomService {
         return classrooms.findManagedBy(adminId).stream().map(Classroom::getClassroomId).toList();
     }
 
+    /**
+     * Whether an admin may see a person's account at all: someone enrolled in a classroom they
+     * run, or themselves. A superadmin sees everyone.
+     */
+    public boolean canSeeUser(Long adminId, Long userId) {
+        if (isSuperAdmin()) return true;
+        if (adminId != null && adminId.equals(userId)) return true;
+        List<Long> managed = classrooms.findManagedBy(adminId).stream()
+            .map(Classroom::getClassroomId).toList();
+        return !managed.isEmpty() && members.existsByUserUserIdAndClassroomIdIn(userId, managed);
+    }
+
+    /** As {@link #canSeeUser}, answering "no such user" so an id does not confirm an account. */
+    public void requireVisibleUser(Long adminId, Long userId) {
+        if (!canSeeUser(adminId, userId)) throw ApiException.notFound("No such user");
+    }
+
     public boolean isMember(Long classroomId, Long userId) {
         return classroomId != null && userId != null
             && members.existsByClassroomIdAndUserUserId(classroomId, userId);
@@ -116,7 +133,7 @@ public class ClassroomService {
             User user = member.getUser();
             out.add(new ClassroomsDto.Member(user.getUserId(), user.getUsername(),
                 user.getFullName(), user.getEmail(), member.getDomjudgeUsername(),
-                credentials.exists(classroomId, user.getUserId()), member.getJoinedAt()));
+                member.getDomjudgeLogin() != null, member.getJoinedAt()));
         }
         return out;
     }
@@ -328,10 +345,11 @@ public class ClassroomService {
         for (Long id : members.classroomIdsOf(userId)) {
             Classroom classroom = classrooms.findById(id).orElse(null);
             if (classroom == null || !Boolean.TRUE.equals(classroom.getIsActive())) continue;
-            String login = members.findByClassroomIdAndUserUserId(id, userId)
-                .map(ClassroomMember::getDomjudgeUsername).orElse(null);
+            ClassroomMember member = members.findByClassroomIdAndUserUserId(id, userId).orElse(null);
+            boolean attached = member != null && member.getDomjudgeLogin() != null;
             out.add(new ClassroomsDto.MyClassroom(id, classroom.getName(),
-                classroom.getDescription(), credentials.exists(id, userId), login));
+                classroom.getDescription(), attached,
+                attached ? member.getDomjudgeUsername() : null));
         }
         out.sort(Comparator.comparing(ClassroomsDto.MyClassroom::name,
             String.CASE_INSENSITIVE_ORDER));

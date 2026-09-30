@@ -954,9 +954,10 @@ Three things that assumed a single judge now carry the classroom:
 - **Clients.** `DomjudgeJudges` builds one `DomjudgeClient` per classroom, each with its own
   web session and its own record of which statement and sample routes that build answers on.
   A client is rebuilt when the classroom's judge settings change.
-- **Logins.** A contestant's login is keyed `dj:cred:<classroom>:<user>`, so a student in two
-  classrooms holds two logins side by side. `classroom_members` records the non-secret half
-  (who is enrolled, and which DOMjudge username), so listings need no decryption.
+- **Logins.** A contestant's login is stored on their `classroom_members` row, sealed with
+  `SecretBox`, so a student in two classrooms holds two logins side by side. It lasts as long as
+  the enrolment and is backed up with it. The DOMjudge username sits beside it in the clear, so
+  listings need no decryption.
 - **Contest ids.** A DOMjudge contest id is only unique on its own instance, so CPIntel names
   one `<classroom>~<contest>` (`JudgeContestRef`) everywhere it stores or routes it: events,
   the Mongo archive, file rules, exam sessions and the arena's URLs. Because the id is
@@ -1023,7 +1024,7 @@ account, with a per-membership override as a fallback. On DOMjudge an admin atta
 member's DOMjudge login for the group's classroom (singly, or in bulk through the roster import);
 it is verified against
 the judge's `/user`, must resolve to a team, and is stored AES-256-GCM encrypted under
-`CPINTEL_DOMJUDGE_CREDENTIAL_KEY` with an expiry. The arena then competes as that login, so the
+`CPINTEL_DOMJUDGE_CREDENTIAL_KEY` on the student's enrolment in that classroom. The arena then competes as that login, so the
 judge attributes every submission to the member's own team, and the board matches on that exact
 team id. Where no login is attached, the membership's team name is matched against the judge's
 team names instead. The Codeforces handle is deliberately *not* used as a fallback on DOMjudge,

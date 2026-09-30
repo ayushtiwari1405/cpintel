@@ -307,7 +307,6 @@ Everything below has a working default; only the secrets in `.env` genuinely nee
 | `CPINTEL_RATE_LIMIT_ENABLED` | `true` | Per-account and per-address throttling on sign-in, runs and syncs |
 | `CPINTEL_MIN_DESKTOP_VERSION` | `0.0.0` | Desktop builds below this are told to update |
 | `CPINTEL_DOMJUDGE_CREDENTIAL_KEY` | *(unset)* | **Required to attach contestants' accounts.** AES-256-GCM key for the per-contestant, per-classroom DOMjudge logins and for classroom service-account passwords |
-| `CPINTEL_DOMJUDGE_CREDENTIAL_TTL_DAYS` | `30` | Attached credentials expire on their own, so a round nobody cleaned up after does not leave passwords on file |
 | `CPINTEL_PROCTOR_HEARTBEAT_TTL` | `45` | How long one monitoring heartbeat vouches for. Submissions into a monitored examination are refused without a fresh one |
 | `CPINTEL_PROCTOR_HEARTBEAT_INTERVAL` | `15` | How often the page sends one |
 | `CPINTEL_EXAM_PASSWORD_KEY` | *(unset)* | **Required for examinations.** AES-256-GCM key for each candidate's examination sign-in password and the optional room password. Without it no sign-in password can be issued, so no examination can be sat |
@@ -348,6 +347,13 @@ Outside `prod` the same problems are logged as warnings and startup continues, s
 The Postgres, MongoDB and Redis ports are published to `127.0.0.1` only. They are exposed at all
 so the backend can run on the host during development; nothing outside the machine needs to reach
 a datastore directly.
+
+
+Every encrypted value (DOMjudge logins, classroom service passwords, examination passwords and
+codes, Codeforces sessions) is stored as `v1:` followed by the ciphertext. The prefix names the
+key that sealed it, so a key can be rotated later: a new key becomes `v2` and old values are
+re-sealed, with nothing guessing which key a value belongs to. Losing a key still means those
+values are gone, so keep a copy of the keys off the server.
 
 ### Roles and accounts
 
@@ -500,6 +506,11 @@ with a different DOMjudge account in each, and both logins are kept side by side
 - **The audit log follows the classroom.** An admin reads the entries of the classrooms they run
   and their own actions; deployment-wide entries such as other people's sign-ins are for a
   superadmin. The same rule applies to the overview's recent activity and a user's activity.
+- **Accounts follow the classroom too.** An admin's user list and user pages show only
+  students enrolled in the classrooms they run, plus their own account. Someone new is
+  brought in by importing a roster into one of their teams.
+- **DOMjudge logins last as long as the enrolment.** They are stored encrypted with the
+  student's enrolment in Postgres, so they don't expire mid-semester and they're in the backups.
 - **Admins use the console only.** The student pages (dashboard, practice, compete and so on)
   are hidden for admins and superadmins.
 - **Enrolment follows from everything else.** Adding someone to a team, importing a roster or

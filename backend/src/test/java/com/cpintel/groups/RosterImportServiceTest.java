@@ -318,7 +318,7 @@ class RosterImportServiceTest {
 
         private DomjudgeDto.AccountStatus attached(String team) {
             return new DomjudgeDto.AccountStatus(true, "team01", null, "7", team,
-                null, null, false, null, null);
+                null, null, false, null);
         }
 
         @Test

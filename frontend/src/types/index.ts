@@ -332,7 +332,6 @@ export interface DomjudgeAccount {
   assignedTeamName: string | null
   teamMismatch: boolean
   provisioned: string | null
-  expiresInSeconds: number | null
 }
 
 /** One team an admin may put somebody in. */

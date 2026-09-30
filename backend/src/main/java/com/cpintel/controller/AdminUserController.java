@@ -38,14 +38,16 @@ public class AdminUserController {
     private final EventAnalyticsService analytics;
 
     @GetMapping
-    @Operation(summary = "Search and page through accounts")
+    @Operation(summary = "Search the accounts in the classrooms you run (all, for a superadmin)")
     public ResponseEntity<ApiResponse<AdminDto.UserPage>> list(
+        @AuthenticationPrincipal Long adminId,
         @RequestParam(required = false) String query,
         @RequestParam(required = false) String role,
         @RequestParam(required = false) Boolean active,
         @RequestParam(defaultValue = "0") int page,
         @RequestParam(defaultValue = "25") int size) {
-        return ResponseEntity.ok(ApiResponse.ok(users.list(query, role, active, page, size)));
+        return ResponseEntity.ok(ApiResponse.ok(
+            users.list(adminId, query, role, active, page, size)));
     }
 
     @GetMapping("/{userId}")

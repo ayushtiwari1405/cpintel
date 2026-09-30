@@ -68,7 +68,7 @@ class DomjudgePasswordImportServiceTest {
 
     private DomjudgeDto.AccountStatus status(String team) {
         return new DomjudgeDto.AccountStatus(true, "x", null, "7", team, null, null, false,
-            null, null);
+            null);
     }
 
     @Test

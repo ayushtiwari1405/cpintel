@@ -101,9 +101,26 @@ class ClassroomAccessInterceptorTest {
     }
 
     @Test
+    @DisplayName("an account is only reachable by the admins of a classroom it is in")
+    void userRoutes() {
+        doThrow(ApiException.notFound("No such user"))
+            .when(classrooms).requireVisibleUser(ADMIN, 12L);
+        assertThrows(ApiException.class,
+            () -> call("/api/v1/admin/users/12/password", Map.of("userId", "12")));
+    }
+
+    @Test
+    @DisplayName("a user id elsewhere is not an account route")
+    void userIdElsewhere() throws Exception {
+        assertTrue(call("/api/v1/admin/classrooms/1/members/12",
+            Map.of("classroomId", "1", "userId", "12")));
+        verify(classrooms, never()).requireVisibleUser(any(), any());
+    }
+
+    @Test
     @DisplayName("routes without these ids are left alone")
     void unrelated() throws Exception {
-        assertTrue(call("/api/v1/admin/users/12", Map.of("userId", "12")));
+        assertTrue(call("/api/v1/admin/contest-files/default", Map.of("platform", "CODEFORCES")));
         verifyNoInteractions(classrooms);
     }
 }

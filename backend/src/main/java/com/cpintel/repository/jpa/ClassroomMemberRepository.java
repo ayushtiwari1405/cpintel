@@ -24,5 +24,7 @@ public interface ClassroomMemberRepository extends JpaRepository<ClassroomMember
 
     long countByClassroomId(Long classroomId);
 
+    boolean existsByUserUserIdAndClassroomIdIn(Long userId, java.util.Collection<Long> classroomIds);
+
     void deleteByClassroomIdAndUserUserId(Long classroomId, Long userId);
 }

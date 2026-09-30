@@ -64,7 +64,7 @@ class AdminUserAuthorizationTest extends AuthorizationTestBase {
         @Test
         @DisplayName("an admin may read it")
         void adminAllowed() throws Exception {
-            when(users.list(any(), any(), any(), anyInt(), anyInt()))
+            when(users.list(any(), any(), any(), any(), anyInt(), anyInt()))
                 .thenReturn(new AdminDto.UserPage(java.util.List.of(), 0, 25, 0L, 0));
 
             mvc.perform(get("/api/v1/admin/users").with(asAdmin()))
@@ -74,7 +74,7 @@ class AdminUserAuthorizationTest extends AuthorizationTestBase {
         @Test
         @DisplayName("a super admin may read it — the role hierarchy is doing its job")
         void superAdminAllowed() throws Exception {
-            when(users.list(any(), any(), any(), anyInt(), anyInt()))
+            when(users.list(any(), any(), any(), any(), anyInt(), anyInt()))
                 .thenReturn(new AdminDto.UserPage(java.util.List.of(), 0, 25, 0L, 0));
 
             mvc.perform(get("/api/v1/admin/users").with(asSuperAdmin()))

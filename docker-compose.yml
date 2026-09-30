@@ -55,11 +55,15 @@ services:
   redis:
     image: redis:7.2-alpine
     container_name: cpintel-redis
+    # noeviction, not an LRU policy: Redis holds exam access grants and the revoked-sign-in
+    # lists, and silently dropping those would lock a candidate out mid-paper or bring a
+    # revoked session back. A full Redis refuses writes instead; the caches survive that
+    # (CacheErrorConfig), and 512mb is far above what a deployment of this size uses.
     command: >
       redis-server
       --requirepass ${REDIS_PASSWORD}
-      --maxmemory 256mb
-      --maxmemory-policy allkeys-lru
+      --maxmemory 512mb
+      --maxmemory-policy noeviction
       --save 60 1
     ports:
       # Bound to loopback, not 0.0.0.0. These publishes exist so the backend can run on
@@ -107,7 +111,6 @@ services:
       # contest-wide reads the shared cache needs, and the CREDENTIAL_KEY is what encrypts the
       # attached logins at rest.
       CPINTEL_DOMJUDGE_CREDENTIAL_KEY: ${CPINTEL_DOMJUDGE_CREDENTIAL_KEY:-}
-      CPINTEL_DOMJUDGE_CREDENTIAL_TTL_DAYS: ${CPINTEL_DOMJUDGE_CREDENTIAL_TTL_DAYS:-30}
       CPINTEL_EXAM_RETENTION_DAYS: ${CPINTEL_EXAM_RETENTION_DAYS:-365}
       # Run goes to the runner container below; the backend never executes submitted code.
       CPINTEL_RUNNER_URL: http://runner:8090

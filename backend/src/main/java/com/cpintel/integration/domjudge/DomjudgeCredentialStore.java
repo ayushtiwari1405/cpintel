@@ -1,54 +1,50 @@
 package com.cpintel.integration.domjudge;
 
+import com.cpintel.common.SecretBox;
+import com.cpintel.entity.ClassroomMember;
 import com.cpintel.exception.ApiException;
+import com.cpintel.repository.jpa.ClassroomMemberRepository;
+import com.cpintel.repository.jpa.ClassroomRepository;
+import com.cpintel.repository.jpa.UserRepository;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-import javax.crypto.Cipher;
-import javax.crypto.SecretKey;
-import javax.crypto.spec.GCMParameterSpec;
-import javax.crypto.spec.SecretKeySpec;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.SecureRandom;
-import java.time.Duration;
 import java.time.Instant;
-import java.util.Base64;
 
 /**
- * Holds the DOMjudge login a contestant competes under, so the arena can act as them.
+ * Holds the DOMjudge login a contestant competes under in each classroom, so the arena can act
+ * as them.
  *
  * <p><b>This stores a password, and that is a real step down from the Codeforces path.</b>
  * {@link com.cpintel.practice.CfSessionStore} deliberately holds a session rather than a
  * password, because a leaked session expires and can be revoked by its owner from Codeforces'
  * own settings page, and a leaked password is none of those things. DOMjudge's API speaks HTTP
  * Basic and issues no session token an API client can hold instead, so submitting as a
- * contestant means replaying their password on every call. There is no version of that which
- * is as safe as the Codeforces arrangement, and pretending otherwise in a comment would not
- * make it so.
+ * contestant means replaying their password on every call.
  *
  * <p>What is done about it, given the requirement stands:
  *
  * <ul>
- *   <li><b>Redis only, never Postgres or Mongo.</b> The durable stores are backed up, replicated
- *       and dumped into places a password should not travel to. Redis here is a cache with a
- *       TTL, so the blast radius of a stale backup is bounded by that TTL.
- *   <li><b>AES-256-GCM at rest</b>, under a key that lives in the environment rather than in
- *       the database — so a dump of Redis alone yields nothing.
- *   <li><b>A TTL.</b> Credentials provisioned for a contest expire on their own. Somebody who
- *       forgets to clean up after a round is not left holding passwords indefinitely.
+ *   <li><b>Sealed at rest</b> ({@link SecretBox}, AES-256-GCM) under a key that lives in the
+ *       environment rather than in the database, so a database dump alone yields nothing.
+ *   <li><b>On the enrolment, in Postgres.</b> A login lives exactly as long as the student is in
+ *       the classroom, and is backed up with it. It used to sit in Redis with a 30-day expiry;
+ *       that expiry was not renewed by use, so a class imported at the start of a semester lost
+ *       its logins partway through it, and Redis was neither backed up nor safe from eviction.
  *   <li><b>Write-only across the API.</b> No endpoint returns the password, and neither does
  *       {@link Stored#toString()} — Lombok is deliberately not used here for that reason.
  * </ul>
  *
- * <p>The team is resolved once, when the credentials are provisioned, and cached alongside
- * them. That is what makes the arena's reads cheap: the judge attributes a submission to the
- * team behind the account, and knowing which team that is without asking again turns "whose
+ * <p>The team is resolved once, when the credentials are provisioned, and kept alongside them.
+ * That is what makes the arena's reads cheap: the judge attributes a submission to the team
+ * behind the account, and knowing which team that is without asking again turns "whose
  * submissions are these" into a string comparison.
  */
 @Service
@@ -56,20 +52,20 @@ import java.util.Base64;
 @Slf4j
 public class DomjudgeCredentialStore {
 
-    private static final String KEY_PREFIX = "dj:cred:";
-    private static final int GCM_TAG_BITS = 128;
-    private static final int IV_LENGTH = 12;
+    /** Where logins lived before V18. Read only to move them across. */
+    private static final String LEGACY_PREFIX = "dj:cred:";
 
+    private final ClassroomMemberRepository members;
+    private final ClassroomRepository classrooms;
+    private final UserRepository users;
     private final StringRedisTemplate redis;
     private final ObjectMapper objectMapper = new ObjectMapper()
         .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
-    private final SecureRandom random = new SecureRandom();
 
     @Value("${cpintel.domjudge.credential-key:}")
     private String credentialKey;
 
-    @Value("${cpintel.domjudge.credential-ttl-days:30}")
-    private long credentialTtlDays;
+    private volatile SecretBox box;
 
     /**
      * One contestant's DOMjudge login, plus what it resolved to and what an admin decided.
@@ -138,41 +134,41 @@ public class DomjudgeCredentialStore {
         return credentialKey != null && !credentialKey.isBlank();
     }
 
-    /**
-     * One login per classroom, not per person.
-     *
-     * <p>A student in two classrooms sits on two judges with two team accounts, and both have
-     * to be usable — keying on the user alone meant attaching the second login silently
-     * replaced the first.
-     */
-    private static String key(Long classroomId, Long userId) {
-        return KEY_PREFIX + classroomId + ":" + userId;
-    }
-
+    /** Attaches a login, enrolling the student in the classroom if they were not already. */
+    @Transactional
     public void save(Long classroomId, Long userId, Stored credentials) {
         requireKey();
+        String sealed;
         try {
-            String json = objectMapper.writeValueAsString(credentials);
-            redis.opsForValue().set(key(classroomId, userId), encrypt(json),
-                Duration.ofDays(credentialTtlDays));
+            sealed = box().seal(objectMapper.writeValueAsString(credentials));
         } catch (Exception e) {
             // The message deliberately carries no detail from the cause: a serialisation error
             // on this object could otherwise echo the field it failed on.
             throw new IllegalStateException("Could not persist DOMjudge credentials");
         }
+        ClassroomMember member = members.findByClassroomIdAndUserUserId(classroomId, userId)
+            .orElseGet(() -> ClassroomMember.builder()
+                .classroomId(classroomId)
+                .user(users.getReferenceById(userId))
+                .build());
+        member.setDomjudgeLogin(sealed);
+        member.setDomjudgeUsername(credentials.username());
+        member.setDomjudgeAttachedAt(Instant.now());
+        members.save(member);
         log.info("Stored DOMjudge credentials for user {} in classroom {} (dj user={}, team={})",
             userId, classroomId, credentials.username(), credentials.teamId());
     }
 
     public Stored find(Long classroomId, Long userId) {
-        if (!isConfigured() || classroomId == null) return null;
-        String blob = redis.opsForValue().get(key(classroomId, userId));
-        if (blob == null) return null;
+        if (!isConfigured() || classroomId == null || userId == null) return null;
+        String sealed = members.findByClassroomIdAndUserUserId(classroomId, userId)
+            .map(ClassroomMember::getDomjudgeLogin).orElse(null);
+        if (sealed == null) return null;
         try {
-            return objectMapper.readValue(decrypt(blob), Stored.class);
+            return objectMapper.readValue(box().open(sealed), Stored.class);
         } catch (Exception e) {
-            // A key rotation invalidates every stored blob at once. That reads as "not linked",
-            // which is recoverable by re-provisioning, rather than as a server error.
+            // A changed key makes every stored login unreadable at once. That reads as "not
+            // linked", which is recoverable by re-attaching, rather than as a server error.
             log.warn("Could not read DOMjudge credentials for user {} in classroom {}: {}",
                 userId, classroomId, e.getClass().getSimpleName());
             return null;
@@ -197,83 +193,92 @@ public class DomjudgeCredentialStore {
 
     /** Whether a login is attached, without decrypting it — for listings. */
     public boolean exists(Long classroomId, Long userId) {
-        return Boolean.TRUE.equals(redis.hasKey(key(classroomId, userId)));
+        return members.findByClassroomIdAndUserUserId(classroomId, userId)
+            .map(m -> m.getDomjudgeLogin() != null).orElse(false);
     }
 
+    /** Detaches the login and keeps the enrolment. */
+    @Transactional
     public void delete(Long classroomId, Long userId) {
-        redis.delete(key(classroomId, userId));
-    }
-
-    /** How long the stored credentials have left, for the admin screen. */
-    public Duration timeToLive(Long classroomId, Long userId) {
-        Long seconds = redis.getExpire(key(classroomId, userId));
-        return seconds == null || seconds < 0 ? null : Duration.ofSeconds(seconds);
+        members.findByClassroomIdAndUserUserId(classroomId, userId).ifPresent(member -> {
+            member.setDomjudgeLogin(null);
+            member.setDomjudgeUsername(null);
+            member.setDomjudgeAttachedAt(null);
+            members.save(member);
+        });
     }
 
     /**
-     * Moves logins stored before classrooms existed ({@code dj:cred:<user>}) into one.
+     * Moves logins still in Redis into Postgres: those from before classrooms
+     * ({@code dj:cred:<user>}, into {@code fallbackClassroomId}) and those from before V18
+     * ({@code dj:cred:<classroom>:<user>}).
      *
-     * <p>Run once at startup by {@code ClassroomBootstrap}; anything already moved no longer
-     * matches, so running it again does nothing. The TTL travels with the key.
+     * <p>Run at startup by {@code ClassroomBootstrap}. A moved key is deleted, so running it
+     * again does nothing. A login already attached in Postgres wins over the Redis copy.
      *
-     * @return the users whose login was moved, so enrolment can be recorded for them
+     * @return how many logins were moved
      */
-    public java.util.List<Long> adoptLegacy(Long classroomId) {
-        java.util.List<Long> moved = new java.util.ArrayList<>();
-        var options = org.springframework.data.redis.core.ScanOptions.scanOptions()
-            .match(KEY_PREFIX + "*").count(500).build();
+    public int adoptFromRedis(Long fallbackClassroomId) {
+        if (!isConfigured()) return 0;
+        int moved = 0;
+        ScanOptions options = ScanOptions.scanOptions().match(LEGACY_PREFIX + "*").count(500).build();
+        java.util.List<String> keys = new java.util.ArrayList<>();
         try (var cursor = redis.scan(options)) {
-            while (cursor.hasNext()) {
-                String legacy = cursor.next();
-                String rest = legacy.substring(KEY_PREFIX.length());
-                if (rest.indexOf(':') >= 0) continue;
-                try {
-                    Long userId = Long.parseLong(rest);
-                    if (Boolean.TRUE.equals(redis.renameIfAbsent(legacy, key(classroomId, userId)))) {
-                        moved.add(userId);
-                    }
-                } catch (NumberFormatException ignored) {
-                    // Not one of ours.
+            while (cursor.hasNext()) keys.add(cursor.next());
+        }
+        for (String key : keys) {
+            String[] parts = key.substring(LEGACY_PREFIX.length()).split(":");
+            try {
+                Long classroomId = parts.length == 2 ? Long.valueOf(parts[0]) : fallbackClassroomId;
+                Long userId = Long.valueOf(parts[parts.length - 1]);
+                String blob = redis.opsForValue().get(key);
+                if (classroomId != null && blob != null && classrooms.existsById(classroomId)
+                        && users.existsById(userId) && !exists(classroomId, userId)) {
+                    save(classroomId, userId, objectMapper.readValue(box().open(blob), Stored.class));
+                    moved++;
                 }
+                redis.delete(key);
+            } catch (NumberFormatException e) {
+                // Not one of ours.
+            } catch (Exception e) {
+                log.warn("Could not move DOMjudge login {} out of Redis: {}",
+                    key, e.getClass().getSimpleName());
             }
         }
-        if (!moved.isEmpty()) {
-            log.info("Moved {} DOMjudge login(s) from before classrooms into classroom {}",
-                moved.size(), classroomId);
-        }
+        if (moved > 0) log.info("Moved {} DOMjudge login(s) from Redis into Postgres", moved);
         return moved;
     }
 
     // ------------------------------------------------------------- secrets
 
     /**
-     * Encrypts a classroom's service-account password under the same key as the logins.
-     *
-     * <p>That one lives in Postgres rather than Redis, because it belongs to the classroom and
-     * must not expire under it; the key being in the environment is what keeps a database dump
-     * from yielding it.
+     * Seals a classroom's service-account password under the same key as the logins.
      */
     public String seal(String plain) {
         requireKey();
-        try {
-            return encrypt(plain);
-        } catch (Exception e) {
-            throw new IllegalStateException("Could not encrypt a DOMjudge secret");
-        }
+        return box().seal(plain);
     }
 
     /** The reverse of {@link #seal}, or null when the key cannot open it (e.g. after rotation). */
     public String open(String sealed) {
         if (sealed == null || !isConfigured()) return null;
         try {
-            return decrypt(sealed);
+            return box().open(sealed);
         } catch (Exception e) {
             log.warn("Could not decrypt a DOMjudge secret: {}", e.getClass().getSimpleName());
             return null;
         }
     }
 
-    // ---------------------------------------------------------------- crypto
+    private SecretBox box() {
+        SecretBox current = box;
+        if (current == null) {
+            requireKey();
+            current = new SecretBox(credentialKey);
+            box = current;
+        }
+        return current;
+    }
 
     private void requireKey() {
         if (!isConfigured()) {
@@ -281,39 +286,5 @@ public class DomjudgeCredentialStore {
                 "CPINTEL_DOMJUDGE_CREDENTIAL_KEY is not set, so DOMjudge credentials cannot be "
                     + "stored. Set it and restart before attaching accounts.");
         }
-    }
-
-    private SecretKey key() {
-        try {
-            byte[] digest = MessageDigest.getInstance("SHA-256")
-                .digest(credentialKey.getBytes(StandardCharsets.UTF_8));
-            return new SecretKeySpec(digest, "AES");
-        } catch (Exception e) {
-            throw new IllegalStateException("Cannot derive DOMjudge credential key", e);
-        }
-    }
-
-    private String encrypt(String plain) throws Exception {
-        byte[] iv = new byte[IV_LENGTH];
-        random.nextBytes(iv);
-        Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-        cipher.init(Cipher.ENCRYPT_MODE, key(), new GCMParameterSpec(GCM_TAG_BITS, iv));
-        byte[] ct = cipher.doFinal(plain.getBytes(StandardCharsets.UTF_8));
-
-        byte[] out = new byte[iv.length + ct.length];
-        System.arraycopy(iv, 0, out, 0, iv.length);
-        System.arraycopy(ct, 0, out, iv.length, ct.length);
-        return Base64.getEncoder().encodeToString(out);
-    }
-
-    private String decrypt(String blob) throws Exception {
-        byte[] raw = Base64.getDecoder().decode(blob);
-        byte[] iv = new byte[IV_LENGTH];
-        System.arraycopy(raw, 0, iv, 0, IV_LENGTH);
-
-        Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-        cipher.init(Cipher.DECRYPT_MODE, key(), new GCMParameterSpec(GCM_TAG_BITS, iv));
-        return new String(cipher.doFinal(raw, IV_LENGTH, raw.length - IV_LENGTH),
-            StandardCharsets.UTF_8);
     }
 }

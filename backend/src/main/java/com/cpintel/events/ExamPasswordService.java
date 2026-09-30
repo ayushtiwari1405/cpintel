@@ -15,16 +15,11 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import javax.crypto.Cipher;
-import javax.crypto.SecretKey;
-import javax.crypto.spec.GCMParameterSpec;
-import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -74,8 +69,6 @@ import java.util.Set;
 @Slf4j
 public class ExamPasswordService {
 
-    private static final int GCM_TAG_BITS = 128;
-    private static final int IV_LENGTH = 12;
 
     /**
      * The alphabet codes are drawn from.
@@ -454,28 +447,24 @@ public class ExamPasswordService {
 
     // ---------------------------------------------------------------- crypto
 
-    private SecretKey key() {
-        try {
-            byte[] digest = MessageDigest.getInstance("SHA-256")
-                .digest(passwordKey.getBytes(StandardCharsets.UTF_8));
-            return new SecretKeySpec(digest, "AES");
-        } catch (Exception e) {
-            throw new IllegalStateException("Cannot derive the examination password key", e);
+    private volatile com.cpintel.common.SecretBox box;
+
+    private com.cpintel.common.SecretBox box() {
+        com.cpintel.common.SecretBox current = box;
+        if (current == null) {
+            try {
+                current = new com.cpintel.common.SecretBox(passwordKey);
+            } catch (IllegalArgumentException e) {
+                throw new IllegalStateException("Cannot derive the examination password key", e);
+            }
+            box = current;
         }
+        return current;
     }
 
     private String encrypt(String plain) {
         try {
-            byte[] iv = new byte[IV_LENGTH];
-            random.nextBytes(iv);
-            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-            cipher.init(Cipher.ENCRYPT_MODE, key(), new GCMParameterSpec(GCM_TAG_BITS, iv));
-            byte[] ct = cipher.doFinal(plain.getBytes(StandardCharsets.UTF_8));
-
-            byte[] out = new byte[iv.length + ct.length];
-            System.arraycopy(iv, 0, out, 0, iv.length);
-            System.arraycopy(ct, 0, out, iv.length, ct.length);
-            return Base64.getEncoder().encodeToString(out);
+            return box().seal(plain);
         } catch (Exception e) {
             // No detail from the cause: it could otherwise echo what was being encrypted.
             throw new IllegalStateException("Could not store an examination password");
@@ -493,14 +482,7 @@ public class ExamPasswordService {
     private String decrypt(String blob) {
         if (blob == null) return "";
         try {
-            byte[] raw = Base64.getDecoder().decode(blob);
-            byte[] iv = new byte[IV_LENGTH];
-            System.arraycopy(raw, 0, iv, 0, IV_LENGTH);
-
-            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-            cipher.init(Cipher.DECRYPT_MODE, key(), new GCMParameterSpec(GCM_TAG_BITS, iv));
-            return new String(cipher.doFinal(raw, IV_LENGTH, raw.length - IV_LENGTH),
-                StandardCharsets.UTF_8);
+            return box().open(blob);
         } catch (Exception e) {
             log.warn("Could not read a stored examination password ({}). "
                 + "Has CPINTEL_EXAM_PASSWORD_KEY changed? Regenerate to recover.",

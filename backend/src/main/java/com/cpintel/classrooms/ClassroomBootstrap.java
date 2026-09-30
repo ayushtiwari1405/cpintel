@@ -26,7 +26,8 @@ import org.springframework.stereotype.Component;
  * reach is moved here, and each step does nothing once done:
  *
  * <ol>
- *   <li>Logins stored per user ({@code dj:cred:<user>}) move under that classroom.</li>
+ *   <li>DOMjudge logins still in Redis move into Postgres: ones stored per user before
+ *       classrooms go into that classroom, per-classroom ones into their own.</li>
  *   <li>Archived submissions and file rules that name a bare DOMjudge contest id are
  *       qualified with that classroom, matching what V16 did to the events.</li>
  * </ol>
@@ -43,7 +44,6 @@ import org.springframework.stereotype.Component;
 public class ClassroomBootstrap implements ApplicationRunner {
 
     private final ClassroomRepository classrooms;
-    private final ClassroomService classroomService;
     private final DomjudgeCredentialStore credentials;
     private final MongoTemplate mongo;
 
@@ -62,17 +62,7 @@ public class ClassroomBootstrap implements ApplicationRunner {
     }
 
     private void adoptLogins(Long classroomId) {
-        if (!credentials.isConfigured()) return;
-        for (Long userId : credentials.adoptLegacy(classroomId)) {
-            DomjudgeCredentialStore.Stored stored = credentials.find(classroomId, userId);
-            try {
-                classroomService.recordLogin(classroomId, userId,
-                    stored == null ? null : stored.username());
-            } catch (Exception e) {
-                log.debug("Could not enrol user {} in classroom {}: {}",
-                    userId, classroomId, e.getMessage());
-            }
-        }
+        credentials.adoptFromRedis(classroomId);
     }
 
     private void qualifyArchive(Long classroomId) {

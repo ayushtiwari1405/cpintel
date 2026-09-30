@@ -87,13 +87,15 @@ public class AdminUserService {
     private final MailService mail;
     private final com.cpintel.repository.mongo.CfSubmissionRepository cfSubmissionRepository;
     private final AdminAuditService auditReader;
+    private final com.cpintel.classrooms.ClassroomService classrooms;
 
     // ------------------------------------------------------------------ reads
 
-    public AdminDto.UserPage list(String query, String role, Boolean active, int page, int size) {
+    public AdminDto.UserPage list(Long readerId, String query, String role, Boolean active,
+                                  int page, int size) {
         int capped = Math.clamp(size, 1, MAX_PAGE_SIZE);
         Page<User> found = userRepository.findAll(
-            filter(query, role, active),
+            visibleTo(readerId).and(filter(query, role, active)),
             PageRequest.of(Math.max(page, 0), capped, Sort.by(Sort.Direction.DESC, "createdAt")));
 
         Map<Long, Instant> lastLogins = lastLogins(found.getContent());
@@ -538,6 +540,24 @@ public class AdminUserService {
      * email, a real name — with the role and status filters applied as separate predicates so
      * they combine rather than compete.
      */
+    /**
+     * The accounts one admin may see: those enrolled in a classroom they run, and their own. A
+     * superadmin sees every account.
+     */
+    private Specification<User> visibleTo(Long readerId) {
+        List<Long> managed = classrooms.managedIds(readerId);
+        if (managed == null) return (root, criteria, cb) -> cb.conjunction();
+        return (root, criteria, cb) -> {
+            var own = cb.equal(root.get("userId"), readerId);
+            if (managed.isEmpty()) return own;
+            var enrolled = criteria.subquery(Long.class);
+            var member = enrolled.from(com.cpintel.entity.ClassroomMember.class);
+            enrolled.select(member.get("user").get("userId"))
+                .where(member.get("classroomId").in(managed));
+            return cb.or(own, root.get("userId").in(enrolled));
+        };
+    }
+
     private Specification<User> filter(String query, String role, Boolean active) {
         return (root, criteria, cb) -> {
             List<jakarta.persistence.criteria.Predicate> predicates = new ArrayList<>();

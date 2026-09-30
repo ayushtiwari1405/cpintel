@@ -28,6 +28,8 @@ import java.util.Map;
  *   <li>{@code {eventId}}, and {@code {contestId}} under {@code /admin/groups}: the event's</li>
  *   <li>{@code {contestId}} under {@code /admin/contest-files}: the classroom a qualified
  *       DOMjudge id names. A Codeforces contest belongs to no classroom.</li>
+ *   <li>{@code {userId}} under {@code /admin/users}: the account must be enrolled in one of
+ *       the admin's classrooms, or be the admin's own.</li>
  * </ul>
  *
  * <p>Ids carried in a request body (a team to assign, a team to move someone to) are checked
@@ -56,6 +58,12 @@ public class ClassroomAccessInterceptor implements HandlerInterceptor {
         if (vars == null || vars.isEmpty()) return true;
 
         Long adminId = currentUser();
+
+        // An account is visible to the admins of the classrooms it is enrolled in.
+        String userId = vars.get("userId");
+        if (userId != null && path.startsWith(ADMIN + "users/")) {
+            classrooms.requireVisibleUser(adminId, number(userId));
+        }
 
         String classroomId = vars.get("classroomId");
         if (classroomId != null) classrooms.requireManaged(adminId, number(classroomId));

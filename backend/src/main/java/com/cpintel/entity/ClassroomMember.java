@@ -8,9 +8,9 @@ import java.time.Instant;
 /**
  * A student enrolled in a classroom.
  *
- * <p>The judge login itself is a secret and lives in Redis ({@code DomjudgeCredentialStore});
- * this row is the half that is not, so an admin can see who is linked to which judge without
- * decrypting anything, and so enrolment outlives a login's TTL.
+ * <p>It also holds the student's DOMjudge login for this classroom, sealed, so the login lives
+ * exactly as long as the enrolment and is backed up with it. The username beside it is kept in
+ * the clear so an admin can see who is linked where without decrypting anything.
  */
 @Entity
 @Table(name = "classroom_members")
@@ -36,6 +36,16 @@ public class ClassroomMember {
     /** The DOMjudge login attached for this classroom, or null when none is. */
     @Column(name = "domjudge_username", length = 100)
     private String domjudgeUsername;
+
+    /**
+     * The login itself, sealed ({@code SecretBox}), or null when none is attached. Read and
+     * written only through {@code DomjudgeCredentialStore}.
+     */
+    @Column(name = "domjudge_login")
+    private String domjudgeLogin;
+
+    @Column(name = "domjudge_attached_at")
+    private Instant domjudgeAttachedAt;
 
     @Column(name = "joined_at", nullable = false)
     private Instant joinedAt;

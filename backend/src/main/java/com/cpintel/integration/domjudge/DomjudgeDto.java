@@ -85,13 +85,11 @@ public class DomjudgeDto {
          * looking at it can tell which.
          */
         boolean teamMismatch,
-        Instant provisioned,
-        /** Null when nothing is attached, or when the store could not report an expiry. */
-        Long expiresInSeconds
+        Instant provisioned
     ) {
         public static AccountStatus unlinked() {
             return new AccountStatus(false, null, null, null, null, null, null,
-                false, null, null);
+                false, null);
         }
     }
 

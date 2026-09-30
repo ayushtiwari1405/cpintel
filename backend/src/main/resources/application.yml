@@ -214,9 +214,6 @@ cpintel:
     # Unlike the Codeforces session key this protects an actual password - see
     # DomjudgeCredentialStore for why that is unavoidable and what bounds it.
     credential-key: ${CPINTEL_DOMJUDGE_CREDENTIAL_KEY:}
-    # Attached credentials expire on their own, so a round nobody cleaned up after does not
-    # leave passwords on file indefinitely.
-    credential-ttl-days: ${CPINTEL_DOMJUDGE_CREDENTIAL_TTL_DAYS:30}
 
   exams:
     # How long an examination's session log is kept.
