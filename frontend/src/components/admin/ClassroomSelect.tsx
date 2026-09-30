@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { useAdminClassrooms } from '@/hooks/useClassrooms'
+import { useIsSuperAdmin } from '@/hooks/useAdmin'
 
 interface Props {
   value: number | null
@@ -18,6 +19,7 @@ interface Props {
  */
 export function ClassroomSelect({ value, onChange, allowAll, className }: Props) {
   const { data: classrooms, isLoading } = useAdminClassrooms()
+  const isSuper = useIsSuperAdmin()
   const active = useMemo(() => classrooms?.filter(c => c.active) ?? [], [classrooms])
 
   useEffect(() => {
@@ -27,7 +29,9 @@ export function ClassroomSelect({ value, onChange, allowAll, className }: Props)
   if (!isLoading && active.length === 0 && !allowAll) {
     return (
       <span className="text-xs text-amber-400">
-        No classroom yet — <Link to="/admin/classrooms" className="underline">create one</Link> first.
+        {isSuper
+          ? <>No classroom yet — <Link to="/admin/classrooms" className="underline">create one</Link> first.</>
+          : 'You are not in a classroom yet. Ask a superadmin to add you to one.'}
       </span>
     )
   }

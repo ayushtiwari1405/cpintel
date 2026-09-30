@@ -49,9 +49,13 @@ public abstract class AuthorizationTestBase {
     @MockBean protected RateLimitProperties rateLimitProperties;
     // The filters count throttles through this; the slice has no meter registry.
     @MockBean protected AppMetrics appMetrics;
+    // Classroom scoping is tested on its own (ClassroomAccessInterceptorTest). Here the role
+    // rules are the subject, so it lets everything through.
+    @MockBean protected com.cpintel.classrooms.ClassroomAccessInterceptor classroomAccess;
 
     @BeforeEach
-    void allowRateLimits() {
+    void allowRateLimits() throws Exception {
+        when(classroomAccess.preHandle(any(), any(), any())).thenReturn(true);
         // Throttling is tested on its own. Here it must never be the reason a request is
         // refused, or a 429 would masquerade as an authorisation result.
         when(rateLimitService.tryAcquire(anyString(), any(), any())).thenReturn(true);

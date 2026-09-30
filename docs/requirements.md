@@ -95,15 +95,16 @@ the lab browsers trust.
 
 ### 1.4 DOMjudge
 
-Contests and examinations are judged on the existing DOMjudge. CPIntel submits to it on each
-student's behalf.
+Contests and examinations are judged on DOMjudge. CPIntel submits to it on each student's
+behalf. Each classroom has its own DOMjudge instance; a superadmin creates the classrooms and
+enters these details in the admin console, not in `.env`.
 
-- [ ] **DOMjudge's URL as seen from the CPIntel server** — *Required.*
-- [ ] **One DOMjudge account per candidate** — *Required.* Username and password for each. A
-  CPIntel admin attaches them to the students' CPIntel accounts.
+- [ ] **Each classroom's DOMjudge URL, as seen from the CPIntel server** — *Required.*
+- [ ] **One DOMjudge account per candidate per classroom** — *Required.* Username and password
+  for each. A CPIntel admin attaches them to the students' CPIntel accounts.
 - [ ] **The DOMjudge contests themselves** — *Required.* Contest IDs, with start and end times
   that match what is set in CPIntel.
-- [ ] **A DOMjudge service account** — *Optional.* Recommended for large sittings: one request
+- [ ] **A DOMjudge service account per classroom** — *Optional.* Recommended for large sittings: one request
   then serves the whole room instead of one per student. Check its permissions first with
   `scripts/domjudge-probe.sh`.
 
@@ -127,9 +128,7 @@ off the server: losing the keys makes stored exam passwords and DOMjudge logins 
 | `CPINTEL_RUNNER_TOKEN` | Required | Random key; lets the API talk to the code sandbox |
 | `CPINTEL_DOMAIN` | Required | The hostname only, e.g. `cpintel.college.edu` |
 | `CPINTEL_PUBLIC_URL` | Required | `https://` plus the hostname |
-| `CPINTEL_DOMJUDGE_URL` | Required | From 1.4 |
 | `CPINTEL_ADMIN_EMAIL` / `CPINTEL_ADMIN_PASSWORD` | First boot | Creates the first super admin. Remove the password afterwards |
-| `CPINTEL_DOMJUDGE_USER` / `CPINTEL_DOMJUDGE_PASSWORD` | Depends | Only with the service account from 1.4 |
 | `CPINTEL_ACME_EMAIL` | Depends | Only with Let's Encrypt; receives certificate expiry notices |
 | `CPINTEL_LAB_NETWORKS` | Depends | Only if the lab is behind NAT; the address range from 1.2 |
 | `CPINTEL_BACKUP_REMOTE` | Optional | Where nightly backups are copied (1.7) |

@@ -7,7 +7,7 @@ import {
   useAdminClassroom, useArchiveClassroom, useCheckJudge, useClassroomMemberActions,
   useClassroomMembers, useClassroomStaff, useClassroomStaffActions, useUpdateClassroom,
 } from '@/hooks/useClassrooms'
-import { useAdminUsers } from '@/hooks/useAdmin'
+import { useAdminUsers, useIsSuperAdmin } from '@/hooks/useAdmin'
 import { useAdminGroups } from '@/hooks/useGroups'
 import { Ago, EmptyRow, Panel, Pill } from '@/components/admin/AdminUi'
 import type { ClassroomSummary } from '@/types'
@@ -54,6 +54,7 @@ function Settings({ room }: { room: ClassroomSummary }) {
   const update = useUpdateClassroom(room.classroomId)
   const archive = useArchiveClassroom(room.classroomId)
   const check = useCheckJudge(room.classroomId)
+  const isSuper = useIsSuperAdmin()
 
   const [name, setName] = useState(room.name)
   const [description, setDescription] = useState(room.description ?? '')
@@ -90,14 +91,14 @@ function Settings({ room }: { room: ClassroomSummary }) {
       actions={
         <div className="flex items-center gap-2">
           {!room.active && <Pill tone="gray">archived</Pill>}
-          <button
+          {isSuper && <button
             onClick={() => archive.mutate(!room.active)}
             disabled={archive.isPending}
             className="rounded-md border border-gray-800 px-2 py-1 text-xs text-gray-400
                        hover:border-gray-700 hover:text-gray-200"
           >
             {room.active ? 'Archive' : 'Restore'}
-          </button>
+          </button>}
         </div>
       }
     >
@@ -286,12 +287,13 @@ function Members({ classroomId }: { classroomId: number }) {
 function Staff({ classroomId }: { classroomId: number }) {
   const { data: staff } = useClassroomStaff(classroomId)
   const { add, remove } = useClassroomStaffActions(classroomId)
+  const isSuper = useIsSuperAdmin()
   const [search, setSearch] = useState('')
   const { data: admins } = useAdminUsers({ query: search, role: 'ADMIN', size: 8 })
   const already = new Set(staff?.map(s => s.userId))
 
   return (
-    <Panel title="Staff" description="Admins who run this classroom. Superadmins run all of them">
+    <Panel title="Admins" description="Admins who run this classroom — any number of them. Superadmins run every classroom">
       <div className="flex flex-wrap gap-1.5 p-4">
         {staff?.map(s => (
           <span key={s.userId}
@@ -299,8 +301,8 @@ function Staff({ classroomId }: { classroomId: number }) {
                        text-xs text-gray-300">
             {s.username}
             {s.owner
-              ? <Pill tone="indigo">owner</Pill>
-              : (
+              ? <Pill tone="indigo">created it</Pill>
+              : isSuper && (
                 <button onClick={() => remove.mutate(s.userId)} aria-label={`Remove ${s.username}`}
                   className="text-gray-600 hover:text-red-400">
                   <UserMinus size={12} />
@@ -310,7 +312,7 @@ function Staff({ classroomId }: { classroomId: number }) {
         ))}
         {staff?.length === 0 && <span className="text-xs text-gray-600">Nobody besides superadmins.</span>}
       </div>
-      <div className="space-y-2 border-t border-gray-800 p-4">
+      {isSuper && <div className="space-y-2 border-t border-gray-800 p-4">
         <input value={search} onChange={e => setSearch(e.target.value)}
           placeholder="Add an admin by username" className={`${field} w-full max-w-md`} />
         {search.trim() !== '' && (
@@ -325,7 +327,7 @@ function Staff({ classroomId }: { classroomId: number }) {
             ))}
           </div>
         )}
-      </div>
+      </div>}
     </Panel>
   )
 }

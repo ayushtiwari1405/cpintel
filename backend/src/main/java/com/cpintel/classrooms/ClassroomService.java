@@ -32,8 +32,9 @@ import java.util.Optional;
 /**
  * Classrooms: who runs them, who is enrolled, and which judge each one owns.
  *
- * <p><b>Who may do what.</b> Only admins create classrooms. A superadmin sees and runs all of
- * them; any other admin runs the ones they created or were added to as staff. Students see the
+ * <p><b>Who may do what.</b> Only a superadmin creates, archives and staffs classrooms, and a
+ * superadmin runs all of them. Any number of admins can be added to a classroom; each runs the
+ * ones they were added to, and cannot open any other by id ({@link ClassroomAccessInterceptor}). Students see the
  * classrooms they are enrolled in and nothing else — including on the judge, because the arena
  * refuses a classroom's contests to anyone not enrolled in it ({@code ExamSessionGuard}).
  *
@@ -76,7 +77,7 @@ public class ClassroomService {
         Classroom classroom = require(classroomId);
         if (!canManage(adminId, classroom)) {
             throw ApiException.forbidden("You do not run the classroom \""
-                + classroom.getName() + "\". Ask its owner or a superadmin to add you.");
+                + classroom.getName() + "\". A superadmin can add you to it.");
         }
         return classroom;
     }

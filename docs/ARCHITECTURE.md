@@ -966,8 +966,11 @@ Three things that assumed a single judge now carry the classroom:
 
 Access follows the classroom. The arena refuses a classroom's contests to anyone not enrolled
 in it (`ExamSessionGuard`); otherwise a service account would read any classroom's statements
-for anyone who typed the qualified id. Admins run the classrooms they own or were added to as
-staff, and superadmins run all of them. Enrolment happens automatically when someone is added
+for anyone who typed the qualified id. Only a superadmin creates, archives and staffs classrooms.
+Any number of admins can be added to one, and each runs only the classrooms they were added to.
+`ClassroomAccessInterceptor` enforces that on every admin route by reading the classroom, team
+or event id in the path, so a route added later is covered without its own check. Admins use the
+console only; the student pages are hidden from them. Enrolment happens automatically when someone is added
 to a group, imported in a roster, attached a login or assigned an event.
 
 ## Group contests: ranking a subset of someone else's scoreboard

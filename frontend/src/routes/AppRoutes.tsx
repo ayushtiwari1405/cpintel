@@ -1,7 +1,7 @@
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
 import { useAuth } from '@/contexts/AuthContext'
-import { isAdmin } from '@/utils/roles'
+import { homeFor, isAdmin } from '@/utils/roles'
 import { lazy, Suspense } from 'react'
 import { LoadingScreen } from '@/components/common/LoadingScreen'
 import { ErrorBoundary } from '@/components/common/ErrorBoundary'
@@ -56,7 +56,23 @@ function ExamModePage() {
 
 function GuestRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth()
-  return !isAuthenticated ? <>{children}</> : <Navigate to="/dashboard" replace />
+  const { user } = useAuth()
+  return !isAuthenticated ? <>{children}</> : <Navigate to={homeFor(user)} replace />
+}
+
+/** The landing page for whoever is signed in. */
+function Home() {
+  const { user } = useAuth()
+  return <Navigate to={homeFor(user)} replace />
+}
+
+/**
+ * The student pages. Admins and superadmins run the console and are not students here, so
+ * they are sent to it instead — the sidebar does not offer these pages to them either.
+ */
+function StudentOnly() {
+  const { user } = useAuth()
+  return isAdmin(user) ? <Navigate to="/admin" replace /> : <Outlet />
 }
 
 /**
@@ -77,7 +93,7 @@ export function AppRoutes() {
     <ErrorBoundary scope="this page">
       <Suspense fallback={<LoadingScreen />}>
       <Routes>
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/" element={<Home />} />
 
         <Route path="/login" element={
           <GuestRoute><LoginPage /></GuestRoute>
@@ -103,6 +119,7 @@ export function AppRoutes() {
         <Route element={
           <ProtectedRoute><AppLayout /></ProtectedRoute>
         }>
+          <Route element={<StudentOnly />}>
           <Route path="/dashboard"       element={<DashboardPage />} />
           <Route path="/analytics"       element={<AnalyticsPage />} />
           {/* Hidden for now (see the sidebar); a bookmark lands on the roadmap instead. */}
@@ -124,12 +141,14 @@ export function AppRoutes() {
           <Route path="/exam"            element={
             <ErrorBoundary scope="the examination"><ExamModePage /></ErrorBoundary>} />
           <Route path="/platforms"       element={<PlatformsPage />} />
-          <Route path="/profile"         element={<ProfilePage />} />
           {/* A team is stored as a contest group; the name people use for it is "team",
               which is what the navigation and every screen say. The old path still works so
               a bookmark from before the rename does not dead-end. */}
           <Route path="/teams"           element={<GroupsPage />} />
           <Route path="/groups"          element={<Navigate to="/teams" replace />} />
+          </Route>
+
+          <Route path="/profile"         element={<ProfilePage />} />
 
           <Route path="/admin"               element={<AdminRoute><AdminOverview /></AdminRoute>} />
           <Route path="/admin/users"         element={<AdminRoute><AdminUsers /></AdminRoute>} />
@@ -151,7 +170,7 @@ export function AppRoutes() {
             element={<AdminRoute><AdminExamDetail /></AdminRoute>} />
         </Route>
 
-        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        <Route path="*" element={<Home />} />
       </Routes>
       </Suspense>
     </ErrorBoundary>

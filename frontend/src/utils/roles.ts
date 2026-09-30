@@ -17,6 +17,14 @@ export function isSuperAdmin(user: Pick<User, 'role'> | null | undefined): boole
   return user?.role === 'SUPER_ADMIN'
 }
 
+/**
+ * Where someone lands after signing in. Admins and superadmins work in the console and have no
+ * use for the student pages, so theirs is the admin overview.
+ */
+export function homeFor(user: Pick<User, 'role'> | null | undefined): string {
+  return isAdmin(user) ? '/admin' : '/dashboard'
+}
+
 const LABELS: Record<Role, string> = {
   USER:        'User',
   ADMIN:       'Admin',

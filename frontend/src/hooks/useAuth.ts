@@ -4,6 +4,7 @@ import { userApi } from '@/api/userApi'
 import { useAuthStore } from '@/store/authStore'
 import { useToast } from '@/components/common/Toaster'
 import { useNavigate } from 'react-router-dom'
+import { homeFor } from '@/utils/roles'
 
 export function useLogin() {
   const { setAccessToken, setUser, setSession } = useAuthStore()
@@ -18,7 +19,7 @@ export function useLogin() {
       // The examination password opens the paper it belongs to and nothing else.
       const exam = res.data.mode === 'EXAM' && res.data.examId != null
       setSession(exam ? 'EXAM' : 'NORMAL', exam ? res.data.examId! : null)
-      navigate(exam ? '/exam' : '/dashboard')
+      navigate(exam ? '/exam' : homeFor(res.data.user))
     },
     onError: (err: any) => {
       toast.push('error', err.response?.data?.message ?? 'Login failed')

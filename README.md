@@ -306,8 +306,6 @@ Everything below has a working default; only the secrets in `.env` genuinely nee
 | `CPINTEL_STANDINGS_REFRESH_MS` | `180000` | How often live group boards are rebuilt |
 | `CPINTEL_RATE_LIMIT_ENABLED` | `true` | Per-account and per-address throttling on sign-in, runs and syncs |
 | `CPINTEL_MIN_DESKTOP_VERSION` | `0.0.0` | Desktop builds below this are told to update |
-| `CPINTEL_DOMJUDGE_URL` | *(unset)* | Read once at startup to give the first classroom its judge (see [Classrooms](#classrooms)). After that each classroom's own judge setting is what counts |
-| `CPINTEL_DOMJUDGE_USER` / `_PASSWORD` | *(unset)* | Read once, with the URL, as that classroom's **optional** service account. It buys the contest-wide reads that let one fetch serve the whole room. Set per classroom from then on |
 | `CPINTEL_DOMJUDGE_CREDENTIAL_KEY` | *(unset)* | **Required to attach contestants' accounts.** AES-256-GCM key for the per-contestant, per-classroom DOMjudge logins and for classroom service-account passwords |
 | `CPINTEL_DOMJUDGE_CREDENTIAL_TTL_DAYS` | `30` | Attached credentials expire on their own, so a round nobody cleaned up after does not leave passwords on file |
 | `CPINTEL_PROCTOR_HEARTBEAT_TTL` | `45` | How long one monitoring heartbeat vouches for. Submissions into a monitored examination are refused without a fresh one |
@@ -494,9 +492,13 @@ the teams (sections) inside it, and its contests and examinations. Each classroo
 judge URL, and no two classrooms share one. A student taking two courses is in two classrooms,
 with a different DOMjudge account in each, and both logins are kept side by side.
 
-- **Admins create classrooms** from `/admin/classrooms`: a name, the judge's root URL and,
-  optionally, a service account. Saving checks the judge answers. A superadmin sees every
-  classroom; any other admin sees the ones they created or were added to as staff.
+- **Only a superadmin creates classrooms**, from `/admin/classrooms`: a name, the judge's root
+  URL and, optionally, a service account. Saving checks the judge answers. The superadmin also
+  archives classrooms and decides which admins run each one, and a classroom can have any
+  number of them. An admin sees, and can open by id, only the classrooms they were added to,
+  along with those classrooms' teams, events and logins.
+- **Admins use the console only.** The student pages (dashboard, practice, compete and so on)
+  are hidden for admins and superadmins.
 - **Enrolment follows from everything else.** Adding someone to a team, importing a roster or
   attaching a login enrols them in that team's classroom. To put a student already in one
   classroom into another, import them into a team in the second classroom as before. The
@@ -512,10 +514,11 @@ Inside CPIntel, a DOMjudge contest is named `<classroom>~<contest>` (e.g. `3~dem
 contest ids are only unique per judge. You still type the judge's own id in forms; the
 qualified form shows up in arena URLs and in the API.
 
-Upgrading a deployment from before classrooms: migration V16 moves every existing team and
-event into a "Default classroom". At the next start, that classroom gets `CPINTEL_DOMJUDGE_URL`
-and its service account, and the logins, archived submissions and file rules stored before are
-moved into it.
+Upgrading a deployment from before classrooms: migration V16 builds a "Default classroom" from
+the existing data. Every team and event goes into it, and everyone in them is enrolled. It
+starts with no judge: an admin sets its DOMjudge URL from its page. At the next start, the
+DOMjudge logins, archived submissions and file rules stored before are moved into it. Nothing
+DOMjudge-related is read from `.env`.
 
 ### Running a team contest
 

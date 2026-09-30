@@ -8,7 +8,6 @@ import com.cpintel.integration.domjudge.JudgeContestRef;
 import com.cpintel.repository.jpa.ClassroomRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.core.annotation.Order;
@@ -16,28 +15,24 @@ import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
 
-import java.util.List;
 
 /**
- * Carries a deployment from the single-judge era into classrooms, once, at startup.
+ * Finishes moving a deployment from before classrooms into the one V16 made, once, at startup.
  *
- * <p>V16 moved every existing team and event into one classroom but could not give it a judge,
- * because the judge was named in the environment and a SQL migration cannot read that. This
- * finishes the job, and each step is a no-op once done:
+ * <p>V16 builds that classroom from what is already in the database: every existing team and
+ * event goes into it, and everyone in them is enrolled. It has no judge yet; an admin sets its
+ * DOMjudge URL from the console, and nothing is read from the environment. What SQL cannot
+ * reach is moved here, and each step does nothing once done:
  *
  * <ol>
- *   <li>The classroom left without a URL gets {@code CPINTEL_DOMJUDGE_URL}, and the service
- *       account beside it. On a fresh deployment with no classrooms at all, those settings
- *       become the first classroom, so an operator who set them is not left with nothing.</li>
  *   <li>Logins stored per user ({@code dj:cred:<user>}) move under that classroom.</li>
  *   <li>Archived submissions and file rules that name a bare DOMjudge contest id are
  *       qualified with that classroom, matching what V16 did to the events.</li>
  * </ol>
  *
- * <p>After this the {@code CPINTEL_DOMJUDGE_URL/USER/PASSWORD} variables are read by nothing
- * else; classrooms are managed from the admin console.
+ * <p>That classroom is the oldest one. A deployment with no classrooms had no teams or events
+ * either, so there is nothing of the old kind to move.
  *
  * <p>Ordered first, so {@code ContestFileRuleBackfill} sees qualified ids.
  */
@@ -52,72 +47,18 @@ public class ClassroomBootstrap implements ApplicationRunner {
     private final DomjudgeCredentialStore credentials;
     private final MongoTemplate mongo;
 
-    @Value("${cpintel.domjudge.base-url:}")
-    private String legacyUrl;
-
-    @Value("${cpintel.domjudge.username:}")
-    private String legacyUsername;
-
-    @Value("${cpintel.domjudge.password:}")
-    private String legacyPassword;
-
     @Override
     public void run(ApplicationArguments args) {
         try {
-            Classroom legacy = adoptEnvironment();
-            if (legacy == null) return;
-            Long id = legacy.getClassroomId();
-            adoptLogins(id);
-            qualifyArchive(id);
+            Classroom first = classrooms.findAll().stream()
+                .min(java.util.Comparator.comparing(Classroom::getClassroomId))
+                .orElse(null);
+            if (first == null) return;
+            adoptLogins(first.getClassroomId());
+            qualifyArchive(first.getClassroomId());
         } catch (Exception e) {
             log.warn("Could not finish moving to classrooms: {}", e.getMessage());
         }
-    }
-
-    /** The classroom the single-judge era's data belongs to, or null when there is none. */
-    private Classroom adoptEnvironment() {
-        List<Classroom> all = classrooms.findAll();
-        String url = StringUtils.hasText(legacyUrl)
-            ? ClassroomService.normaliseUrl(legacyUrl) : null;
-
-        Classroom target = all.stream()
-            .filter(c -> !StringUtils.hasText(c.getDomjudgeUrl()))
-            .findFirst()
-            .orElse(null);
-
-        if (target == null && all.isEmpty() && url != null) {
-            target = Classroom.builder().name("Default classroom")
-                .description("Created from CPINTEL_DOMJUDGE_URL.").build();
-        }
-        if (target == null) {
-            // Already migrated. The classroom on the environment's URL, if any, is still the
-            // one legacy rows belong to.
-            return url == null ? null : classrooms.findByDomjudgeUrl(url).orElse(null);
-        }
-        if (url == null) {
-            log.warn("Classroom {} has no DOMjudge URL, and CPINTEL_DOMJUDGE_URL is not set. "
-                + "Set its judge from the admin console.", target.getClassroomId());
-            return target.getClassroomId() == null ? null : target;
-        }
-        if (classrooms.findByDomjudgeUrl(url).isPresent()) {
-            log.warn("CPINTEL_DOMJUDGE_URL {} already belongs to another classroom; leaving "
-                + "classroom {} without a judge.", url, target.getClassroomId());
-            return target.getClassroomId() == null ? null : target;
-        }
-
-        target.setDomjudgeUrl(url);
-        if (StringUtils.hasText(legacyUsername) && StringUtils.hasText(legacyPassword)) {
-            if (credentials.isConfigured()) {
-                target.setServiceUsername(legacyUsername.trim());
-                target.setServicePassword(credentials.seal(legacyPassword));
-            } else {
-                log.warn("CPINTEL_DOMJUDGE_CREDENTIAL_KEY is not set, so the service account "
-                    + "in CPINTEL_DOMJUDGE_USER cannot be stored on the classroom.");
-            }
-        }
-        target = classrooms.save(target);
-        log.info("Classroom {} now uses the judge at {}", target.getClassroomId(), url);
-        return target;
     }
 
     private void adoptLogins(Long classroomId) {

@@ -75,7 +75,7 @@ export class ErrorBoundary extends Component<Props, State> {
               <RotateCcw size={14} /> Try again
             </button>
             <button
-              onClick={() => window.location.assign('/dashboard')}
+              onClick={() => window.location.assign('/')}
               className="rounded-lg border border-gray-800 px-3 py-2 text-sm text-gray-300
                          transition-colors hover:bg-gray-800"
             >

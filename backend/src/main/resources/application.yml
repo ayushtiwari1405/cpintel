@@ -207,14 +207,8 @@ cpintel:
     standings-initial-delay-ms: 60000
 
   domjudge:
-    # Self-hosted, so nothing here works until an operator points it at an instance. Leave the
-    # credentials empty for a contest whose scoreboard is public.
-    base-url: ${CPINTEL_DOMJUDGE_URL:}
-    # Optional. A service account lets the group standings board and the shared contest cache
-    # make contest-wide reads, which a plain team account is refused. The compete arena works
-    # without it by reading as each contestant instead - at the cost of the fan-out.
-    username: ${CPINTEL_DOMJUDGE_USER:}
-    password: ${CPINTEL_DOMJUDGE_PASSWORD:}
+    # Each classroom names its own DOMjudge (and optional service account) from the admin
+    # console, so there is no judge address here.
     # AES-256-GCM key for the per-contestant DOMjudge logins an admin attaches. Required
     # before any account can be attached; without it the arena has nothing to compete as.
     # Unlike the Codeforces session key this protects an actual password - see

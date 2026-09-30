@@ -106,9 +106,6 @@ services:
       # an admin; the USER/PASSWORD pair below is an optional service account that buys the
       # contest-wide reads the shared cache needs, and the CREDENTIAL_KEY is what encrypts the
       # attached logins at rest.
-      CPINTEL_DOMJUDGE_URL: ${CPINTEL_DOMJUDGE_URL:-}
-      CPINTEL_DOMJUDGE_USER: ${CPINTEL_DOMJUDGE_USER:-}
-      CPINTEL_DOMJUDGE_PASSWORD: ${CPINTEL_DOMJUDGE_PASSWORD:-}
       CPINTEL_DOMJUDGE_CREDENTIAL_KEY: ${CPINTEL_DOMJUDGE_CREDENTIAL_KEY:-}
       CPINTEL_DOMJUDGE_CREDENTIAL_TTL_DAYS: ${CPINTEL_DOMJUDGE_CREDENTIAL_TTL_DAYS:-30}
       CPINTEL_EXAM_RETENTION_DAYS: ${CPINTEL_EXAM_RETENTION_DAYS:-365}

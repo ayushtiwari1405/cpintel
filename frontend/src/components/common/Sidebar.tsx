@@ -90,7 +90,10 @@ export function Sidebar({ open, onToggle, locked, examMode }: Props) {
           locked && 'pointer-events-none opacity-40')}
         aria-disabled={locked || undefined}
       >
-        {navItems.map(({ to, icon: Icon, label }) => (
+        {/* Admins run the console and are not students here, so the student pages are not
+            offered to them — only their profile, for their own password. */}
+        {navItems.filter(item => !showAdmin || item.to === '/profile')
+          .map(({ to, icon: Icon, label }) => (
           <NavLink key={to} to={to} className={linkClass}>
             <Icon size={18} className="flex-shrink-0" />
             {open && <span>{label}</span>}

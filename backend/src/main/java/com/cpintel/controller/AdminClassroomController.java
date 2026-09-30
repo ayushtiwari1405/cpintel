@@ -3,6 +3,7 @@ package com.cpintel.controller;
 import com.cpintel.classrooms.ClassroomService;
 import com.cpintel.classrooms.ClassroomsDto;
 import com.cpintel.common.ApiResponse;
+import com.cpintel.security.Roles;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -20,6 +21,8 @@ import java.util.List;
 @RequestMapping("/api/v1/admin/classrooms")
 @RequiredArgsConstructor
 @PreAuthorize("hasRole('ADMIN')")
+// Any admin may work inside the classrooms they run; creating, archiving and staffing a
+// classroom is the superadmin's alone.
 @Tag(name = "Admin", description = "Classrooms, each with its own DOMjudge")
 @SecurityRequirement(name = "bearerAuth")
 public class AdminClassroomController {
@@ -35,6 +38,7 @@ public class AdminClassroomController {
 
     @PostMapping
     @Operation(summary = "Create a classroom on a DOMjudge instance")
+    @PreAuthorize(Roles.HAS_SUPER)
     public ResponseEntity<ApiResponse<ClassroomsDto.ClassroomSummary>> create(
         @AuthenticationPrincipal Long adminId,
         @Valid @RequestBody ClassroomsDto.ClassroomRequest req,
@@ -62,6 +66,7 @@ public class AdminClassroomController {
 
     @PostMapping("/{classroomId}/archive")
     @Operation(summary = "Archive a classroom")
+    @PreAuthorize(Roles.HAS_SUPER)
     public ResponseEntity<ApiResponse<Void>> archive(
         @AuthenticationPrincipal Long adminId, @PathVariable Long classroomId,
         HttpServletRequest httpReq) {
@@ -71,6 +76,7 @@ public class AdminClassroomController {
 
     @PostMapping("/{classroomId}/restore")
     @Operation(summary = "Bring an archived classroom back")
+    @PreAuthorize(Roles.HAS_SUPER)
     public ResponseEntity<ApiResponse<Void>> restore(
         @AuthenticationPrincipal Long adminId, @PathVariable Long classroomId,
         HttpServletRequest httpReq) {
@@ -119,6 +125,7 @@ public class AdminClassroomController {
 
     @PostMapping("/{classroomId}/staff")
     @Operation(summary = "Let another admin run the classroom")
+    @PreAuthorize(Roles.HAS_SUPER)
     public ResponseEntity<ApiResponse<Void>> addStaff(
         @AuthenticationPrincipal Long adminId, @PathVariable Long classroomId,
         @Valid @RequestBody ClassroomsDto.StaffRequest req, HttpServletRequest httpReq) {
@@ -128,6 +135,7 @@ public class AdminClassroomController {
 
     @DeleteMapping("/{classroomId}/staff/{userId}")
     @Operation(summary = "Stop an admin running the classroom")
+    @PreAuthorize(Roles.HAS_SUPER)
     public ResponseEntity<ApiResponse<Void>> removeStaff(
         @AuthenticationPrincipal Long adminId, @PathVariable Long classroomId,
         @PathVariable Long userId, HttpServletRequest httpReq) {

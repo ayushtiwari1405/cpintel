@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowRight, Loader2, Plus, School } from 'lucide-react'
 import { useAdminClassrooms, useCreateClassroom } from '@/hooks/useClassrooms'
+import { useIsSuperAdmin } from '@/hooks/useAdmin'
 import { Ago, EmptyRow, Panel, Pill } from '@/components/admin/AdminUi'
 
 const field = `rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 text-sm text-gray-200
@@ -17,6 +18,8 @@ const field = `rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 text-sm t
 export default function AdminClassroomsPage() {
   const { data: classrooms, isLoading } = useAdminClassrooms()
   const create = useCreateClassroom()
+  // Only a superadmin creates classrooms and decides which admins run each one.
+  const isSuper = useIsSuperAdmin()
 
   const [name, setName] = useState('')
   const [url, setUrl] = useState('')
@@ -62,8 +65,9 @@ export default function AdminClassroomsPage() {
               {isLoading && <EmptyRow colSpan={7}>Loading classrooms…</EmptyRow>}
               {!isLoading && classrooms?.length === 0 && (
                 <EmptyRow colSpan={7}>
-                  No classrooms you run yet. Create one below for each DOMjudge instance, or ask
-                  a superadmin to add you to an existing one.
+                  {isSuper
+                    ? 'No classrooms yet. Create one below for each DOMjudge instance.'
+                    : 'You have not been added to a classroom yet. A superadmin adds you.'}
                 </EmptyRow>
               )}
               {classrooms?.map(room => (
@@ -106,6 +110,7 @@ export default function AdminClassroomsPage() {
         </div>
       </Panel>
 
+      {isSuper && (
       <Panel title="New classroom" description="Point it at the DOMjudge this class runs on">
         <div className="grid gap-3 p-4 sm:grid-cols-2">
           <label className="flex flex-col gap-1">
@@ -157,6 +162,7 @@ export default function AdminClassroomsPage() {
           </div>
         </div>
       </Panel>
+      )}
 
       <p className="flex items-start gap-2 px-1 text-xs text-gray-600">
         <School size={13} className="mt-0.5 flex-shrink-0" />

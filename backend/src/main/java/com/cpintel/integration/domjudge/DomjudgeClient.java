@@ -29,11 +29,11 @@ import java.util.Map;
  * plainly what is missing rather than failing with a connection error to an empty host.
  *
  * <p><b>Two identities, deliberately.</b> Every method here comes in two forms: one that uses
- * the deployment's own configured account, and one that takes a contestant's credentials. They
+ * the classroom's own service account, and one that takes a contestant's credentials. They
  * exist for genuinely different jobs and neither replaces the other.
  *
  * <ul>
- *   <li><b>The configured account</b> ({@code cpintel.domjudge.username}) backs the admin-side
+ *   <li><b>The classroom's service account</b> backs the admin-side
  *       group standings board, where one read is fanned out to every member by
  *       {@link com.cpintel.compete.DomjudgeContestCache}. Contest-wide reads — every team,
  *       every submission, the unfrozen scoreboard — generally require it.
