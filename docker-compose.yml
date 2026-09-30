@@ -1,6 +1,15 @@
+# Every container's logs are capped: Docker keeps json-file logs forever by default, and on a
+# small disk that is what eventually fills it. 3 x 10 MB per container is days of history.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
 
   postgres:
+    logging: *default-logging
     image: postgres:16-alpine
     container_name: cpintel-postgres
     environment:
@@ -28,8 +37,13 @@ services:
     restart: unless-stopped
 
   mongodb:
+    logging: *default-logging
     image: mongo:7.0
     container_name: cpintel-mongo
+    # Left alone, WiredTiger takes half of (RAM - 1 GB) for its cache: 3.5 GB on an 8 GB
+    # server, alongside the runner and the backend. CPIntel's Mongo data (the submission
+    # archive, statements, files) is small, so 1 GB is plenty and keeps the box inside its RAM.
+    command: ["--wiredTigerCacheSizeGB", "1"]
     environment:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER}
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
@@ -53,6 +67,7 @@ services:
     restart: unless-stopped
 
   redis:
+    logging: *default-logging
     image: redis:7.2-alpine
     container_name: cpintel-redis
     # noeviction, not an LRU policy: Redis holds exam access grants and the revoked-sign-in
@@ -83,6 +98,7 @@ services:
     restart: unless-stopped
 
   backend:
+    logging: *default-logging
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -175,6 +191,7 @@ services:
   # apparmor:unconfined. If the sandbox still cannot be built, the runner refuses every run
   # rather than running code unsandboxed, and the editor says running is paused.
   runner:
+    logging: *default-logging
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -182,8 +199,8 @@ services:
     container_name: cpintel-runner
     environment:
       RUNNER_TOKEN: ${CPINTEL_RUNNER_TOKEN}
-      # Runs at once; the rest queue for up to 20 seconds. About one per core.
-      RUNNER_CONCURRENCY: ${CPINTEL_RUNNER_CONCURRENCY:-4}
+      # Runs at once; the rest queue for up to 20 seconds. One per core the runner is given.
+      RUNNER_CONCURRENCY: ${CPINTEL_RUNNER_CONCURRENCY:-3}
       RUNNER_TIME_LIMIT_MS: ${CPINTEL_RUNNER_TIME_LIMIT_MS:-5000}
       RUNNER_MEMORY_LIMIT_MB: ${CPINTEL_RUNNER_MEMORY_MB:-512}
     read_only: true
@@ -201,11 +218,14 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "${CPINTEL_RUNNER_CPUS:-4}"
-          memory: ${CPINTEL_RUNNER_MEMORY:-4g}
+          # Sized for a 4-core, 8 GB server: three cores, leaving one for the backend and the
+          # databases while a room is pressing Run, and 3 runs x 512 MB with headroom.
+          cpus: "${CPINTEL_RUNNER_CPUS:-3}"
+          memory: ${CPINTEL_RUNNER_MEMORY:-2g}
           pids: 1024
 
   frontend:
+    logging: *default-logging
     build:
       context: ./frontend
       dockerfile: Dockerfile
@@ -220,6 +240,7 @@ services:
   # Certificate: Let's Encrypt (run with --profile letsencrypt), or your own in ./nginx/certs,
   # or a temporary self-signed one until either exists — see nginx/cpintel-cert.sh.
   nginx:
+    logging: *default-logging
     build:
       context: ./nginx
     container_name: cpintel-nginx
@@ -249,6 +270,7 @@ services:
   # internet can reach on port 80:  docker compose --profile letsencrypt up -d
   # nginx picks the certificate up within a minute of it appearing, and after each renewal.
   certbot:
+    logging: *default-logging
     image: certbot/certbot:v2.11.0
     container_name: cpintel-certbot
     profiles: ["letsencrypt"]
@@ -274,6 +296,7 @@ services:
     restart: unless-stopped
 
   prometheus:
+    logging: *default-logging
     image: prom/prometheus:v2.51.0
     container_name: cpintel-prometheus
     command:
@@ -292,6 +315,7 @@ services:
     profiles: ["monitoring"]
 
   grafana:
+    logging: *default-logging
     image: grafana/grafana:10.4.0
     container_name: cpintel-grafana
     environment:
@@ -313,6 +337,7 @@ services:
     profiles: ["monitoring"]
 
   loki:
+    logging: *default-logging
     image: grafana/loki:2.9.0
     container_name: cpintel-loki
     command: -config.file=/etc/loki/loki.yml

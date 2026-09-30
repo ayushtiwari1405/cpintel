@@ -293,7 +293,7 @@ Everything below has a working default; only the secrets in `.env` genuinely nee
 | `CPINTEL_RUNNER_ENABLED` | `true` | Whether the Run button works at all |
 | `CPINTEL_RUNNER_URL` | blank (`http://runner:8090` in `prod`) | The runner container. Blank runs code inside the backend — dev and desktop only; `prod` refuses to start that way |
 | `CPINTEL_RUNNER_TOKEN` | — | Shared by the backend and the runner container; required whenever a url is set |
-| `CPINTEL_RUNNER_CONCURRENCY` | `4` | Runs executing at once in the runner container; the rest queue for up to 20 s |
+| `CPINTEL_RUNNER_CONCURRENCY` | `3` | Runs executing at once in the runner container; the rest queue for up to 20 s |
 | `CPINTEL_RUNNER_TIME_LIMIT_MS` | `5000` | Wall clock per test case |
 | `CPINTEL_RUNNER_MEMORY_MB` | `512` | Address-space limit per run, for every language |
 | `CPINTEL_RUNNER_CPP` | `g++` | C++ compiler, when running inside the backend (dev/desktop) |
