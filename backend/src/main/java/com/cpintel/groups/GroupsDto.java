@@ -22,6 +22,7 @@ public class GroupsDto {
 
     public record GroupSummary(
         Long groupId,
+        Long classroomId,
         String name,
         String description,
         boolean active,
@@ -51,7 +52,9 @@ public class GroupsDto {
 
     public record GroupRequest(
         @NotBlank @Size(max = 120) String name,
-        @Size(max = 500) String description
+        @Size(max = 500) String description,
+        /** Required when creating; a team cannot move between classrooms. */
+        Long classroomId
     ) {}
 
     /**
@@ -94,7 +97,10 @@ public class GroupsDto {
         Long groupId,
         String groupName,
         String platform,
+        /** As the arena names it: classroom-qualified for DOMjudge ({@code JudgeContestRef}). */
         String externalId,
+        /** The judge's own contest id, for display. */
+        String judgeContestId,
         String name,
         String url,
         Instant startsAt,

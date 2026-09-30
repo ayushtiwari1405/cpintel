@@ -26,4 +26,8 @@ public interface ContestGroupRepository extends JpaRepository<ContestGroup, Long
     List<ContestGroup> findForMember(@Param("userId") Long userId);
 
     boolean existsByNameIgnoreCase(String name);
+
+    boolean existsByClassroomIdAndNameIgnoreCase(Long classroomId, String name);
+
+    long countByClassroomId(Long classroomId);
 }

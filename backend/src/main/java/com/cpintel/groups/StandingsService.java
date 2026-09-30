@@ -192,7 +192,7 @@ public class StandingsService {
         if (!GroupContest.Platform.DOMJUDGE.name().equals(contest.getPlatform())) return null;
 
         DomjudgeCredentialStore.Stored stored =
-            domjudgeCredentials.find(member.getUser().getUserId());
+            domjudgeCredentials.find(contest.getClassroomId(), member.getUser().getUserId());
         return stored == null ? null : stored.effectiveTeamId();
     }
 

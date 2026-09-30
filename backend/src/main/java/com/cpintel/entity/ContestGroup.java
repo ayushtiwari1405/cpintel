@@ -27,6 +27,10 @@ public class ContestGroup extends BaseEntity {
     @Column(name = "group_id")
     private Long groupId;
 
+    /** The classroom this team sits in, and so the judge its events run on. */
+    @Column(name = "classroom_id", nullable = false)
+    private Long classroomId;
+
     @Column(name = "name", nullable = false, length = 120)
     private String name;
 

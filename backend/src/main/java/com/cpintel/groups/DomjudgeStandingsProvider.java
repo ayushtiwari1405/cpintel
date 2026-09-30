@@ -3,6 +3,8 @@ package com.cpintel.groups;
 import com.cpintel.entity.GroupContest;
 import com.cpintel.integration.domjudge.DjModels;
 import com.cpintel.integration.domjudge.DomjudgeClient;
+import com.cpintel.integration.domjudge.DomjudgeJudges;
+import com.cpintel.integration.domjudge.JudgeContestRef;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -33,7 +35,7 @@ import java.util.Map;
 @Slf4j
 public class DomjudgeStandingsProvider implements StandingsProvider {
 
-    private final DomjudgeClient domjudge;
+    private final DomjudgeJudges judges;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -43,7 +45,9 @@ public class DomjudgeStandingsProvider implements StandingsProvider {
 
     @Override
     public List<Result> fetch(GroupContest contest, List<Competitor> competitors) {
-        String contestId = contest.getExternalId().trim();
+        JudgeContestRef ref = JudgeContestRef.parse(contest.getExternalId());
+        DomjudgeClient domjudge = judges.forClassroom(ref.classroomId());
+        String contestId = ref.contestId();
 
         // Both calls are allowed to throw: unlike a single unreadable handle on Codeforces, an
         // unreachable DOMjudge means nothing at all can be read, and reporting that as every

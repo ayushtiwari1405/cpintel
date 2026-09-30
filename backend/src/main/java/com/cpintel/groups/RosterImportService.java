@@ -89,6 +89,7 @@ public class RosterImportService {
     private final PasswordEncoder passwordEncoder;
     private final AuditService auditService;
     private final DomjudgeAccountService domjudgeAccounts;
+    private final com.cpintel.classrooms.ClassroomService classrooms;
 
     /** Matches AdminDto.CreateUserRequest, so a bulk account is never weaker than a typed one. */
     private static final Pattern USERNAME_OK = Pattern.compile("^[a-zA-Z0-9_]+$");
@@ -242,7 +243,11 @@ public class RosterImportService {
 
         // Nothing here is refused by tier any more: every account an import creates is a
         // USER, so there is no privilege for the higher tier to be guarding.
-        DomjudgeCheck judge = new DomjudgeCheck(domjudgeAccounts.unavailableReason());
+        // The group's classroom is the judge every login in this paste is checked against, and
+        // where it is attached — so a student already on another classroom's judge keeps that
+        // login and gains this one beside it.
+        DomjudgeCheck judge = new DomjudgeCheck(group.getClassroomId(),
+            domjudgeAccounts.unavailableReason(group.getClassroomId()));
 
         if (dryRun) {
             List<RowOutcome> checked = new ArrayList<>(outcomes.size());
@@ -357,9 +362,13 @@ public class RosterImportService {
      * reported without asking.
      */
     private static final class DomjudgeCheck {
+        final Long classroomId;
         String unavailable;
 
-        DomjudgeCheck(String unavailable) { this.unavailable = unavailable; }
+        DomjudgeCheck(Long classroomId, String unavailable) {
+            this.classroomId = classroomId;
+            this.unavailable = unavailable;
+        }
     }
 
     /** Why a row's login cannot even be tried, or null when it can. */
@@ -384,7 +393,7 @@ public class RosterImportService {
 
         try {
             DomjudgeAccountService.Verified verified =
-                domjudgeAccounts.verify(row.djUsername(), row.djPassword());
+                domjudgeAccounts.verify(judge.classroomId, row.djUsername(), row.djPassword());
             return planned.withDomjudge(DomjudgeStatus.VERIFIED,
                 "Team " + verified.teamLabel() + ".");
         } catch (ApiException e) {
@@ -412,7 +421,7 @@ public class RosterImportService {
         }
 
         try {
-            DomjudgeDto.AccountStatus status = domjudgeAccounts.provision(
+            DomjudgeDto.AccountStatus status = domjudgeAccounts.provision(judge.classroomId,
                 new DomjudgeDto.ProvisionRequest(userId, source.djUsername(), source.djPassword(),
                     source.fullName(), null));
             String team = status.teamName() != null ? status.teamName() : status.teamId();
@@ -520,6 +529,7 @@ public class RosterImportService {
     }
 
     private void addMember(ContestGroup group, User user, String externalHandle) {
+        classrooms.enroll(group.getClassroomId(), user);
         memberRepository.save(GroupMember.builder()
             .group(group)
             .user(user)

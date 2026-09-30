@@ -20,6 +20,10 @@ public interface CodeSubmissionRepository extends MongoRepository<CodeSubmission
     Optional<CodeSubmission> findByUserIdAndPlatformAndExternalId(
         Long userId, String platform, Long externalId);
 
+    /** A submission id is only unique on one judge; the contest pins which judge. */
+    Optional<CodeSubmission> findByUserIdAndPlatformAndContestIdAndExternalId(
+        Long userId, String platform, String contestId, Long externalId);
+
     List<CodeSubmission> findByUserIdOrderBySubmittedAtDesc(Long userId, Pageable pageable);
 
     /** Everyone's attempts on one judge contest — what an examination leaderboard ranks. */

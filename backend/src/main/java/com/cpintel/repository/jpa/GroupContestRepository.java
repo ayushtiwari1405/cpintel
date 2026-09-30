@@ -111,4 +111,6 @@ public interface GroupContestRepository extends JpaRepository<GroupContest, Long
     int storeLeaderboard(@Param("contestId") Long contestId,
                          @Param("snapshot") String snapshot,
                          @Param("generatedAt") Instant generatedAt);
+
+    long countByClassroomId(Long classroomId);
 }

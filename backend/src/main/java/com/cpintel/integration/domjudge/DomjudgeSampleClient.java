@@ -3,7 +3,6 @@ package com.cpintel.integration.domjudge;
 import com.cpintel.practice.PracticeDto;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 
 import java.io.ByteArrayInputStream;
@@ -42,8 +41,10 @@ import java.util.zip.ZipInputStream;
  * <p>Only test cases flagged {@code sample} are ever read. The secret data a contest is judged
  * on is deliberately never requested, even though the admin credentials this runs under would
  * be allowed to fetch it.
+ *
+ * <p>One per judge, owned by its {@link DomjudgeClient}: which route answers, and what it
+ * returned, is a property of that instance and says nothing about another.
  */
-@Component
 @RequiredArgsConstructor
 @Slf4j
 public class DomjudgeSampleClient {

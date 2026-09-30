@@ -6,6 +6,8 @@ import com.cpintel.entity.GroupContest;
 import com.cpintel.exception.ApiException;
 import com.cpintel.integration.domjudge.DjModels;
 import com.cpintel.integration.domjudge.DomjudgeClient;
+import com.cpintel.integration.domjudge.DomjudgeJudges;
+import com.cpintel.integration.domjudge.JudgeContestRef;
 import com.cpintel.integration.domjudge.DomjudgeCredentialStore;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,7 +33,7 @@ import java.util.List;
 public class JudgeProblemService {
 
     private final EventService events;
-    private final DomjudgeClient domjudge;
+    private final DomjudgeJudges judges;
     private final DomjudgeContestCache cache;
     private final DomjudgeCredentialStore credentials;
 
@@ -41,11 +43,14 @@ public class JudgeProblemService {
             throw ApiException.badRequest(
                 "Only a DOMjudge contest can list its problems here; enter them by hand.");
         }
+        DomjudgeClient domjudge = judges.forClassroom(event.getClassroomId());
         if (!domjudge.isConfigured()) {
-            throw ApiException.badRequest("No DOMjudge instance is configured on this deployment.");
+            throw ApiException.badRequest("This event's classroom has no DOMjudge URL set.");
         }
+        String judgeId = JudgeContestRef.judgeIdOf(event.getExternalId());
 
-        DomjudgeCredentialStore.Stored as = domjudge.hasServiceAccount() ? null : readAs(eventId);
+        DomjudgeCredentialStore.Stored as = domjudge.hasServiceAccount() ? null
+            : readAs(event.getClassroomId(), eventId);
         List<DjModels.ContestProblem> listed;
         try {
             listed = cache.problems(as, event.getExternalId());
@@ -53,7 +58,7 @@ public class JudgeProblemService {
             log.info("Could not list the problems of DOMjudge contest {} for event {}: {}",
                 event.getExternalId(), eventId, e.getMessage());
             throw ApiException.badRequest("DOMjudge did not return the problems of contest "
-                + event.getExternalId() + ". Check the contest id, and that it has problems.");
+                + judgeId + ". Check the contest id, and that it has problems.");
         }
 
         return listed.stream()
@@ -63,9 +68,9 @@ public class JudgeProblemService {
     }
 
     /** Somebody on the roster whose attached login can read the contest. */
-    private DomjudgeCredentialStore.Stored readAs(Long eventId) {
+    private DomjudgeCredentialStore.Stored readAs(Long classroomId, Long eventId) {
         for (Long userId : events.participantIds(eventId)) {
-            DomjudgeCredentialStore.Stored stored = credentials.find(userId);
+            DomjudgeCredentialStore.Stored stored = credentials.find(classroomId, userId);
             if (stored != null) return stored;
         }
         throw ApiException.badRequest("There is no DOMjudge service account, and nobody assigned "

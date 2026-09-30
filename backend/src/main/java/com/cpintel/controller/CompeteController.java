@@ -41,7 +41,8 @@ public class CompeteController {
     public ResponseEntity<ApiResponse<CompeteDto.ContestInfo>> load(
         @AuthenticationPrincipal Long userId,
         @Valid @RequestBody CompeteDto.LoadRequest req) {
-        String contestId = competeService.parseContestId(req.platform(), req.url());
+        String contestId = competeService.parseContestId(userId, req.platform(),
+            req.classroomId(), req.url());
         return ResponseEntity.ok(ApiResponse.ok(
             competeService.contestInfo(userId, req.platform().name(), contestId)));
     }

@@ -4,7 +4,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
-import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.reactive.function.BodyInserters;
@@ -46,8 +45,10 @@ import java.util.regex.Pattern;
  * {@link DomjudgeCredentialStore} for the length of one login and is not retained here. The
  * cookie is in memory only — never Postgres, never Mongo — and expires on its own, so a process
  * restart or an idle hour leaves nothing behind.
+ *
+ * <p>One per judge, owned by its {@link DomjudgeClient}: a session belongs to the instance
+ * that issued it.
  */
-@Component
 @RequiredArgsConstructor
 @Slf4j
 public class DomjudgeWebSession {

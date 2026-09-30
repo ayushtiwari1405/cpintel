@@ -93,8 +93,9 @@ public class CompeteService {
 
     // ------------------------------------------------------------- delegation
 
-    public String parseContestId(CompeteDto.Platform platform, String raw) {
-        return provider(platform).parseContestId(raw);
+    public String parseContestId(Long userId, CompeteDto.Platform platform, Long classroomId,
+                                 String raw) {
+        return provider(platform).parseContestId(userId, classroomId, raw);
     }
 
     public CompeteDto.ContestInfo contestInfo(Long userId, String platform, String contestId) {

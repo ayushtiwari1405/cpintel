@@ -532,7 +532,7 @@ def main() -> int:
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--api", default="http://localhost:8080/api/v1")
     parser.add_argument("--roster", required=True)
-    parser.add_argument("--contest", required=True, help="the DOMjudge contest id")
+    parser.add_argument("--contest", required=True, help="the contest as CPIntel names it, <classroom>~<contest> (provision.py prints it)")
     parser.add_argument("--problemset", default=None,
                         help="the problemset directory (default: out/problemset)")
     parser.add_argument("--users", type=int, default=200)

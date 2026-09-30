@@ -2,12 +2,10 @@ package com.cpintel.integration.domjudge;
 
 import com.cpintel.exception.ApiException;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.MultipartBodyBuilder;
-import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.reactive.function.BodyInserters;
 import org.springframework.web.reactive.function.client.ClientResponse;
@@ -50,7 +48,6 @@ import java.util.Map;
  * where the answer genuinely differs per person. Anything contest-wide still goes through the
  * shared cache on the configured account where one exists.
  */
-@Component
 @Slf4j
 public class DomjudgeClient {
 
@@ -59,34 +56,48 @@ public class DomjudgeClient {
 
     private final WebClient.Builder builder;
 
+    /** The classroom whose judge this is — for messages and logs, never for routing. */
+    private final long classroomId;
+
+    private final String baseUrl;
+    private final String username;
+    private final String password;
+
     /**
-     * A signed-in web session, for the routes the API cannot serve.
-     *
-     * <p>Lazy because the dependency is a cycle on paper: the session needs a client to log in
-     * with, and the client needs a session to read a statement. It is not a cycle in practice —
-     * logging in uses only {@link #plainWebClient()}, which touches nothing here but the base
-     * URL — and {@code @Lazy} is how that is said to Spring without splitting one cohesive
-     * class in two to satisfy the container.
+     * A signed-in web session, for the routes the API cannot serve. One per judge: a session
+     * cookie from one instance means nothing to another.
      */
     private final DomjudgeWebSession webSession;
 
-    @Value("${cpintel.domjudge.base-url:}")
-    private String baseUrl;
+    /** Sample routes differ between DOMjudge builds, so what was learned is per judge too. */
+    private final DomjudgeSampleClient samples;
 
-    @Value("${cpintel.domjudge.username:}")
-    private String username;
-
-    @Value("${cpintel.domjudge.password:}")
-    private String password;
-
-    public DomjudgeClient(WebClient.Builder builder,
-                          @org.springframework.context.annotation.Lazy
-                          DomjudgeWebSession webSession) {
+    /**
+     * One client per classroom's judge, built by {@link DomjudgeJudges} rather than injected:
+     * a deployment talks to as many DOMjudge instances as it has classrooms, so there is no
+     * single one for the container to hand out.
+     */
+    public DomjudgeClient(WebClient.Builder builder, long classroomId, String baseUrl,
+                          String username, String password) {
         this.builder = builder;
-        this.webSession = webSession;
+        this.classroomId = classroomId;
+        this.baseUrl = baseUrl;
+        this.username = username;
+        this.password = password;
+        this.webSession = new DomjudgeWebSession(this);
+        this.samples = new DomjudgeSampleClient(this);
     }
 
-    /** True when an operator has actually pointed this at an instance. */
+    public long classroomId() {
+        return classroomId;
+    }
+
+    /** Sample test cases, read from this judge. */
+    public DomjudgeSampleClient samples() {
+        return samples;
+    }
+
+    /** True when the classroom actually names an instance. */
     public boolean isConfigured() {
         return StringUtils.hasText(baseUrl);
     }
@@ -156,9 +167,7 @@ public class DomjudgeClient {
      */
     WebClient plainWebClient() {
         if (!isConfigured()) {
-            throw ApiException.badRequest(
-                "No DOMjudge instance is configured. Set cpintel.domjudge.base-url "
-                + "(and credentials, if the contest is not public) to use DOMjudge contests.");
+            throw ApiException.badRequest(notConfigured());
         }
         return builder.clone()
             .baseUrl(root())
@@ -236,11 +245,14 @@ public class DomjudgeClient {
         });
     }
 
+    private String notConfigured() {
+        return "Classroom " + classroomId + " has no DOMjudge URL set, so its contests cannot "
+            + "be reached. An admin can set it on the classroom's page.";
+    }
+
     private WebClient clientFor(String base, String user, String secret) {
         if (!isConfigured()) {
-            throw ApiException.badRequest(
-                "No DOMjudge instance is configured. Set cpintel.domjudge.base-url "
-                + "(and credentials, if the contest is not public) to use DOMjudge contests.");
+            throw ApiException.badRequest(notConfigured());
         }
 
         WebClient.Builder configured = builder.clone()
@@ -258,6 +270,59 @@ public class DomjudgeClient {
             configured = configured.defaultHeader(HttpHeaders.AUTHORIZATION, "Basic " + token);
         }
         return configured.build();
+    }
+
+    // ------------------------------------------------------------------ reachability
+
+    /**
+     * Proves the URL is a DOMjudge API and, when there is one, that the service account signs in.
+     *
+     * <p>Run when an admin saves a classroom, so a typo in the URL is found then rather than by
+     * the first student to open an exam. {@code /info} is DOMjudge 8's public route and
+     * {@code /version} the older one; either answering is enough.
+     *
+     * @return the judge's version, when it reports one
+     */
+    public String ping() {
+        WebClient api = clientFor(root() + "/api/v4", null, null);
+        String version = null;
+        try {
+            Map<?, ?> info = null;
+            for (String route : List.of("/info", "/version")) {
+                try {
+                    info = api.get().uri(route).retrieve().bodyToMono(Map.class)
+                        .block(Duration.ofSeconds(10));
+                    break;
+                } catch (WebClientResponseException e) {
+                    if (e.getStatusCode().value() != 404) throw e;
+                }
+            }
+            if (info == null) {
+                throw ApiException.badRequest("Nothing at " + root() + "/api/v4 answers like "
+                    + "DOMjudge. Check the URL: it is the judge's root, without /api.");
+            }
+            Object reported = info.get("domjudge") instanceof Map<?, ?> dj
+                ? dj.get("version") : info.get("api_version");
+            version = reported == null ? null : String.valueOf(reported);
+        } catch (WebClientResponseException e) {
+            throw ApiException.badRequest("DOMjudge at " + root() + " answered "
+                + e.getStatusCode().value() + " to a status check.");
+        } catch (ApiException e) {
+            throw e;
+        } catch (Exception e) {
+            throw ApiException.badRequest("Could not reach DOMjudge at " + root() + ": "
+                + e.getClass().getSimpleName() + ".");
+        }
+
+        if (hasServiceAccount()) {
+            try {
+                whoami(null);
+            } catch (ApiException e) {
+                throw ApiException.badRequest("DOMjudge is reachable, but the service account "
+                    + "was refused: " + e.getMessage());
+            }
+        }
+        return version;
     }
 
     // ------------------------------------------------------------------ identity

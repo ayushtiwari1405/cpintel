@@ -38,6 +38,7 @@ class RosterImportServiceTest {
 
     private static final Long ADMIN_ID = 7L;
     private static final Long GROUP_ID = 3L;
+    private static final Long CLASSROOM = 3L;
 
     private ContestGroupRepository groups;
     private GroupMemberRepository members;
@@ -57,6 +58,7 @@ class RosterImportServiceTest {
         ContestGroup group = new ContestGroup();
         group.setGroupId(GROUP_ID);
         group.setIsActive(true);
+        group.setClassroomId(CLASSROOM);
         when(groups.findById(GROUP_ID)).thenReturn(Optional.of(group));
 
         when(users.findByEmail(anyString())).thenReturn(Optional.empty());
@@ -76,7 +78,8 @@ class RosterImportServiceTest {
         domjudge = mock(DomjudgeAccountService.class);
 
         service = new RosterImportService(groups, members, users, scores, encoder,
-            mock(AuditService.class), domjudge);
+            mock(AuditService.class), domjudge,
+            mock(com.cpintel.classrooms.ClassroomService.class));
     }
 
     private RosterImportService.ImportResult run(String text, boolean dryRun, boolean superAdmin) {
@@ -321,7 +324,7 @@ class RosterImportServiceTest {
         @Test
         @DisplayName("the preview checks the login against the judge and stores nothing")
         void previewVerifies() {
-            when(domjudge.verify("team01", "pw1"))
+            when(domjudge.verify(CLASSROOM, "team01", "pw1"))
                 .thenReturn(new DomjudgeAccountService.Verified(null, null, "7", "Team 01"));
 
             var result = run("email,djUsername,djPassword\nasha@uni.edu,team01,pw1\n",
@@ -330,13 +333,13 @@ class RosterImportServiceTest {
             var row = result.rows().get(0);
             assertEquals(RosterImportService.DomjudgeStatus.VERIFIED, row.domjudgeStatus());
             assertEquals(1, result.domjudgeOk());
-            verify(domjudge, never()).provision(any());
+            verify(domjudge, never()).provision(anyLong(), any());
         }
 
         @Test
         @DisplayName("a wrong password shows in the preview, before any account exists")
         void previewReportsRejection() {
-            when(domjudge.verify("team01", "wrong"))
+            when(domjudge.verify(CLASSROOM, "team01", "wrong"))
                 .thenThrow(ApiException.badRequest("DOMjudge rejected that username and password."));
 
             var result = run("email,djUsername,djPassword\nasha@uni.edu,team01,wrong\n",
@@ -352,7 +355,7 @@ class RosterImportServiceTest {
         @Test
         @DisplayName("a new account is named after the DOMjudge login")
         void usernameFollowsLogin() {
-            when(domjudge.provision(any())).thenReturn(attached("Team 01"));
+            when(domjudge.provision(anyLong(), any())).thenReturn(attached("Team 01"));
 
             var result = run("email,djUsername,djPassword\nasha@uni.edu,team01,pw1\n",
                 false, true);
@@ -364,7 +367,7 @@ class RosterImportServiceTest {
         @Test
         @DisplayName("an explicit username column still wins over the login")
         void explicitUsernameWins() {
-            when(domjudge.provision(any())).thenReturn(attached("Team 01"));
+            when(domjudge.provision(anyLong(), any())).thenReturn(attached("Team 01"));
 
             run("email,username,djUsername,djPassword\nasha@uni.edu,asha,team01,pw1\n",
                 false, true);
@@ -375,14 +378,14 @@ class RosterImportServiceTest {
         @Test
         @DisplayName("attaches the login to the new account and scores them under the judge's team")
         void attachesAndUsesJudgeTeam() {
-            when(domjudge.provision(any())).thenReturn(attached("Team 01"));
+            when(domjudge.provision(anyLong(), any())).thenReturn(attached("Team 01"));
 
             var result = run("email,fullName,djUsername,djPassword\n"
                 + "asha@uni.edu,Asha Rao,team01,pw1\n", false, true);
 
             ArgumentCaptor<DomjudgeDto.ProvisionRequest> req =
                 ArgumentCaptor.forClass(DomjudgeDto.ProvisionRequest.class);
-            verify(domjudge).provision(req.capture());
+            verify(domjudge).provision(eq(CLASSROOM), req.capture());
             assertEquals(101L, req.getValue().userId());
             assertEquals("team01", req.getValue().username());
             assertEquals("pw1", req.getValue().password());
@@ -397,7 +400,7 @@ class RosterImportServiceTest {
         @Test
         @DisplayName("a failed attach still creates the account and adds the member")
         void failedAttachKeepsTheAccount() {
-            when(domjudge.provision(any()))
+            when(domjudge.provision(anyLong(), any()))
                 .thenThrow(ApiException.badRequest("DOMjudge rejected that username and password."));
 
             var result = run("email,djUsername,djPassword\nasha@uni.edu,team01,pw1\n",
@@ -417,46 +420,46 @@ class RosterImportServiceTest {
             when(users.findByUsername("team01"))
                 .thenReturn(Optional.of(existing(12L, "team01", "asha@uni.edu")));
             when(members.existsByGroupGroupIdAndUserUserId(GROUP_ID, 12L)).thenReturn(true);
-            when(domjudge.provision(any())).thenReturn(attached("Team 01"));
+            when(domjudge.provision(anyLong(), any())).thenReturn(attached("Team 01"));
 
             var result = run("djUsername,djPassword\nteam01,pw1\n", false, true);
 
             assertEquals(RosterImportService.RowStatus.ALREADY_MEMBER,
                 result.rows().get(0).status());
-            verify(domjudge).provision(argThat(r -> r.userId() == 12L));
+            verify(domjudge).provision(eq(CLASSROOM), argThat(r -> r.userId() == 12L));
             verify(users, never()).save(any());
         }
 
         @Test
         @DisplayName("a missing setting is reported per row without calling the judge")
         void unavailableJudge() {
-            when(domjudge.unavailableReason()).thenReturn("No DOMjudge instance is configured.");
+            when(domjudge.unavailableReason(CLASSROOM)).thenReturn("No DOMjudge instance is configured.");
 
             var result = run("email,djUsername,djPassword\nasha@uni.edu,team01,pw1\n",
                 true, true);
 
             assertEquals(RosterImportService.DomjudgeStatus.FAILED,
                 result.rows().get(0).domjudgeStatus());
-            verify(domjudge, never()).verify(anyString(), anyString());
+            verify(domjudge, never()).verify(anyLong(), anyString(), anyString());
         }
 
         @Test
         @DisplayName("once the judge stops answering, later rows do not wait on it again")
         void judgeDownStopsAsking() {
-            when(domjudge.verify(anyString(), anyString()))
+            when(domjudge.verify(anyLong(), anyString(), anyString()))
                 .thenThrow(new IllegalStateException("timeout"));
 
             var result = run("email,djUsername,djPassword\n"
                 + "a@uni.edu,team01,pw1\nb@uni.edu,team02,pw2\n", true, true);
 
             assertEquals(2, result.domjudgeFailed());
-            verify(domjudge, times(1)).verify(anyString(), anyString());
+            verify(domjudge, times(1)).verify(anyLong(), anyString(), anyString());
         }
 
         @Test
         @DisplayName("the password is never echoed back in any outcome")
         void passwordNotEchoed() {
-            when(domjudge.provision(any())).thenReturn(attached("Team 01"));
+            when(domjudge.provision(anyLong(), any())).thenReturn(attached("Team 01"));
 
             var result = run("email,djUsername,djPassword\nasha@uni.edu,team01,s3cret-pw\n",
                 false, true);

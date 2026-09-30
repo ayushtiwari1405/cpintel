@@ -51,7 +51,7 @@ class ProctoringGateTest {
 
     private GroupsDto.ContestSummary event(String kind, boolean lockdownRequired) {
         return new GroupsDto.ContestSummary(
-            CONTEST, kind, 1L, "Class", "DOMJUDGE", CID, "NWERC 2018", null,
+            CONTEST, kind, 1L, "Class", "DOMJUDGE", CID, CID, "NWERC 2018", null,
             Instant.now().minusSeconds(60), Instant.now().plusSeconds(3600),
             lockdownRequired, 10, "LIVE", "ACTIVE", null, null);
     }

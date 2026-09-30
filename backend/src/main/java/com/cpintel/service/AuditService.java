@@ -68,6 +68,15 @@ public class AuditService {
     /** A super admin created an account by hand — the only way in while sign-up is closed. */
     public static final String USER_CREATED       = "ADMIN_USER_CREATED";
 
+    // Admin actions on classrooms
+    public static final String CLASSROOM_CREATED        = "ADMIN_CLASSROOM_CREATED";
+    public static final String CLASSROOM_UPDATED        = "ADMIN_CLASSROOM_UPDATED";
+    public static final String CLASSROOM_ARCHIVED       = "ADMIN_CLASSROOM_ARCHIVED";
+    public static final String CLASSROOM_MEMBER_ADDED   = "ADMIN_CLASSROOM_MEMBER_ADDED";
+    public static final String CLASSROOM_MEMBER_REMOVED = "ADMIN_CLASSROOM_MEMBER_REMOVED";
+    public static final String CLASSROOM_STAFF_ADDED    = "ADMIN_CLASSROOM_STAFF_ADDED";
+    public static final String CLASSROOM_STAFF_REMOVED  = "ADMIN_CLASSROOM_STAFF_REMOVED";
+
     // Admin actions on groups and the contests laid over them
     public static final String GROUP_CREATED         = "ADMIN_GROUP_CREATED";
     public static final String GROUP_UPDATED         = "ADMIN_GROUP_UPDATED";

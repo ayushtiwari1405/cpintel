@@ -53,7 +53,9 @@ public class CompeteDto {
 
     public record LoadRequest(
         Platform platform,
-        @NotBlank @Size(max = 500) String url
+        @NotBlank @Size(max = 500) String url,
+        /** The classroom the contest was picked in, when the page knows. DOMjudge only. */
+        Long classroomId
     ) {}
 
     public record ContestProblem(

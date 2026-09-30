@@ -44,9 +44,10 @@ public class AdminGroupController {
     private final EventAnalyticsService analyticsService;
 
     @GetMapping
-    @Operation(summary = "Every group")
-    public ResponseEntity<ApiResponse<List<GroupsDto.GroupSummary>>> list() {
-        return ResponseEntity.ok(ApiResponse.ok(groups.list()));
+    @Operation(summary = "Every group in the classrooms you run")
+    public ResponseEntity<ApiResponse<List<GroupsDto.GroupSummary>>> list(
+        @AuthenticationPrincipal Long adminId) {
+        return ResponseEntity.ok(ApiResponse.ok(groups.list(adminId)));
     }
 
     @PostMapping

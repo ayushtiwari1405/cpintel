@@ -1,5 +1,7 @@
 package com.cpintel.integration.domjudge;
 
+import com.cpintel.classrooms.ClassroomService;
+import com.cpintel.entity.Classroom;
 import com.cpintel.exception.ApiException;
 import com.cpintel.repository.jpa.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -35,7 +37,8 @@ import java.util.List;
 @Slf4j
 public class DomjudgeAccountService {
 
-    private final DomjudgeClient domjudge;
+    private final DomjudgeJudges judges;
+    private final ClassroomService classrooms;
     private final DomjudgeCredentialStore credentials;
     private final UserRepository userRepository;
 
@@ -47,21 +50,22 @@ public class DomjudgeAccountService {
      * @return the resulting status, which names the team so the admin can check it is the
      *         right one before the round rather than after it
      */
-    public DomjudgeDto.AccountStatus provision(DomjudgeDto.ProvisionRequest req) {
-        String unavailable = unavailableReason();
+    public DomjudgeDto.AccountStatus provision(Long classroomId, DomjudgeDto.ProvisionRequest req) {
+        String unavailable = unavailableReason(classroomId);
         if (unavailable != null) throw ApiException.badRequest(unavailable);
         if (!userRepository.existsById(req.userId())) {
             throw ApiException.notFound("No CPIntel user with id " + req.userId() + ".");
         }
 
-        Verified verified = verify(req.username(), req.password());
+        Verified verified = verify(classroomId, req.username(), req.password());
         DomjudgeCredentialStore.Stored candidate = verified.candidate();
         DjModels.User account = verified.account();
         String judgeTeamId = verified.teamId();
         String judgeTeamName = verified.teamName();
 
         String assignedId = StringUtils.hasText(req.teamId()) ? req.teamId().trim() : null;
-        String assignedName = assignedId == null ? null : teamNameById(candidate, assignedId);
+        String assignedName = assignedId == null ? null
+            : teamNameById(judges.forClassroom(classroomId), candidate, assignedId);
 
         DomjudgeCredentialStore.Stored stored = new DomjudgeCredentialStore.Stored(
             req.username().trim(), req.password(),
@@ -70,7 +74,8 @@ public class DomjudgeAccountService {
             assignedId, assignedName,
             Instant.now());
 
-        credentials.save(req.userId(), stored);
+        credentials.save(classroomId, req.userId(), stored);
+        classrooms.recordLogin(classroomId, req.userId(), stored.username());
         if (stored.teamMismatch()) {
             // Logged rather than refused: an admin may genuinely want somebody grouped apart
             // from the team the judge has them on, and only they can tell.
@@ -81,7 +86,7 @@ public class DomjudgeAccountService {
                 stored.username(), stored.teamId(), req.userId());
         }
 
-        return status(req.userId());
+        return status(classroomId, req.userId());
     }
 
     /**
@@ -90,10 +95,10 @@ public class DomjudgeAccountService {
      * Asked once up front by a bulk import, so that a missing setting is one message on the
      * screen rather than the same failure repeated on every row.
      */
-    public String unavailableReason() {
-        if (!domjudge.isConfigured()) {
-            return "No DOMjudge instance is configured on this deployment, so there is nothing to "
-                + "attach an account to. Set cpintel.domjudge.base-url first.";
+    public String unavailableReason(Long classroomId) {
+        if (!judges.forClassroom(classroomId).isConfigured()) {
+            return "This classroom has no DOMjudge URL set, so there is nothing to attach an "
+                + "account to. Set it on the classroom's page first.";
         }
         if (!credentials.isConfigured()) {
             return "CPINTEL_DOMJUDGE_CREDENTIAL_KEY is not set, so DOMjudge credentials cannot be "
@@ -120,7 +125,8 @@ public class DomjudgeAccountService {
      *
      * @throws ApiException when the judge refuses the login or it has no team
      */
-    public Verified verify(String username, String password) {
+    public Verified verify(Long classroomId, String username, String password) {
+        DomjudgeClient domjudge = judges.forClassroom(classroomId);
         // The candidate is built only so the client has something to authenticate with; it is
         // not stored unless the caller goes on to provision.
         DomjudgeCredentialStore.Stored candidate = new DomjudgeCredentialStore.Stored(
@@ -142,7 +148,7 @@ public class DomjudgeAccountService {
             ? account.getTeam().trim() : null;
 
         if (judgeTeamId == null && judgeTeamName != null) {
-            judgeTeamId = teamIdByName(candidate, judgeTeamName);
+            judgeTeamId = teamIdByName(domjudge, candidate, judgeTeamName);
         }
 
         // Still required even when the admin names a team of their own. The admin's choice
@@ -166,7 +172,8 @@ public class DomjudgeAccountService {
      * anybody types a password. An empty list is a normal answer on a build that will not show
      * teams to this account, and the screen falls back to letting the judge decide.
      */
-    public List<DomjudgeDto.TeamOption> teams() {
+    public List<DomjudgeDto.TeamOption> teams(Long classroomId) {
+        DomjudgeClient domjudge = judges.forClassroom(classroomId);
         if (!domjudge.isConfigured()) return List.of();
 
         List<DjModels.Team> teams = domjudge.getAllTeams(null);
@@ -191,7 +198,8 @@ public class DomjudgeAccountService {
      * failure worth refusing over: the name alone still identifies them on a scoreboard, and
      * the id appears the moment an admin registers the team for the round.
      */
-    private String teamIdByName(DomjudgeCredentialStore.Stored as, String teamName) {
+    private String teamIdByName(DomjudgeClient domjudge, DomjudgeCredentialStore.Stored as,
+                                String teamName) {
         List<DjModels.Team> teams = domjudge.getAllTeams(
             domjudge.hasServiceAccount() ? null : as);
         if (teams == null) return null;
@@ -208,7 +216,8 @@ public class DomjudgeAccountService {
     }
 
     /** A chosen team's name, looked up with whatever credentials are to hand. */
-    private String teamNameById(DomjudgeCredentialStore.Stored as, String teamId) {
+    private String teamNameById(DomjudgeClient domjudge, DomjudgeCredentialStore.Stored as,
+                                String teamId) {
         List<DjModels.Team> teams = domjudge.getAllTeams(
             domjudge.hasServiceAccount() ? null : as);
         if (teams == null) return null;
@@ -253,18 +262,19 @@ public class DomjudgeAccountService {
      * new password is verified before it replaces the old one, so a typo leaves the working
      * credentials in place rather than breaking them. Saving also restarts the expiry clock.
      */
-    public DomjudgeDto.AccountStatus changePassword(Long userId, String newPassword) {
-        String unavailable = unavailableReason();
+    public DomjudgeDto.AccountStatus changePassword(Long classroomId, Long userId,
+                                                    String newPassword) {
+        String unavailable = unavailableReason(classroomId);
         if (unavailable != null) throw ApiException.badRequest(unavailable);
 
-        DomjudgeCredentialStore.Stored current = credentials.find(userId);
+        DomjudgeCredentialStore.Stored current = credentials.find(classroomId, userId);
         if (current == null) {
             throw ApiException.badRequest(
                 "No DOMjudge account is attached to this user, so there is no password to "
                     + "change. Attach one instead.");
         }
 
-        Verified verified = verify(current.username(), newPassword);
+        Verified verified = verify(classroomId, current.username(), newPassword);
         String teamName = verified.teamName() != null ? verified.teamName() : current.teamName();
 
         DomjudgeCredentialStore.Stored updated = new DomjudgeCredentialStore.Stored(
@@ -272,7 +282,7 @@ public class DomjudgeAccountService {
             verified.teamId(), teamName,
             current.assignedTeamId(), current.assignedTeamName(),
             Instant.now());
-        credentials.save(userId, updated);
+        credentials.save(classroomId, userId, updated);
 
         if (!java.util.Objects.equals(current.teamId(), updated.teamId())) {
             log.info("DOMjudge account {} moved from team {} to {} while changing its password",
@@ -280,19 +290,21 @@ public class DomjudgeAccountService {
         }
         log.info("Changed the DOMjudge password stored for CPIntel user {} (dj user={})",
             userId, current.username());
-        return status(userId);
+        return status(classroomId, userId);
     }
 
-    public void revoke(Long userId) {
-        credentials.delete(userId);
-        log.info("Removed the DOMjudge account attached to CPIntel user {}", userId);
+    public void revoke(Long classroomId, Long userId) {
+        credentials.delete(classroomId, userId);
+        classrooms.recordLogin(classroomId, userId, null);
+        log.info("Removed the DOMjudge account attached to CPIntel user {} in classroom {}",
+            userId, classroomId);
     }
 
-    public DomjudgeDto.AccountStatus status(Long userId) {
-        DomjudgeCredentialStore.Stored stored = credentials.find(userId);
+    public DomjudgeDto.AccountStatus status(Long classroomId, Long userId) {
+        DomjudgeCredentialStore.Stored stored = credentials.find(classroomId, userId);
         if (stored == null) return DomjudgeDto.AccountStatus.unlinked();
 
-        Duration ttl = credentials.timeToLive(userId);
+        Duration ttl = credentials.timeToLive(classroomId, userId);
         return new DomjudgeDto.AccountStatus(
             true, stored.username(), stored.name(),
             stored.teamId(), stored.teamName(),
@@ -311,14 +323,45 @@ public class DomjudgeAccountService {
      * wants to see where they came, and the arena renders a finished contest read-only.
      */
     public List<DomjudgeDto.ContestSummary> contests(Long userId) {
-        DomjudgeCredentialStore.Stored stored = credentials.require(userId);
-
-        List<DjModels.Contest> raw = domjudge.getContests(stored);
-        if (raw == null) return List.of();
-
         Instant now = Instant.now();
-        List<DomjudgeDto.ContestSummary> out = new ArrayList<>(raw.size());
+        List<DomjudgeDto.ContestSummary> out = new ArrayList<>();
+        boolean anyLogin = false;
 
+        // Every classroom the student has a login in, each asked as that login. One judge
+        // being down costs its own rows, not the whole picker.
+        for (Classroom classroom : classrooms.judgeClassroomsOf(userId)) {
+            Long classroomId = classroom.getClassroomId();
+            DomjudgeCredentialStore.Stored stored = credentials.find(classroomId, userId);
+            if (stored == null) continue;
+            anyLogin = true;
+
+            List<DjModels.Contest> raw;
+            try {
+                raw = judges.forClassroom(classroomId).getContests(stored);
+            } catch (Exception e) {
+                log.warn("Could not list contests on classroom {}'s judge for user {}: {}",
+                    classroomId, userId, e.getMessage());
+                continue;
+            }
+            if (raw != null) collect(out, raw, classroom, now);
+        }
+        if (!anyLogin) {
+            throw ApiException.forbidden("No DOMjudge account is attached to your CPIntel "
+                + "account in any classroom, so there is nothing to compete as. Ask the admin "
+                + "running your classroom to attach one.");
+        }
+
+        // Running first, then the soonest upcoming, then the most recently finished — the
+        // order someone opening the picker mid-event actually wants.
+        out.sort(Comparator
+            .comparing((DomjudgeDto.ContestSummary c) -> !c.running())
+            .thenComparing(c -> c.startsAt() == null ? Instant.EPOCH : c.startsAt(),
+                Comparator.reverseOrder()));
+        return out;
+    }
+
+    private void collect(List<DomjudgeDto.ContestSummary> out, List<DjModels.Contest> raw,
+                         Classroom classroom, Instant now) {
         for (DjModels.Contest contest : raw) {
             if (contest.getId() == null) continue;
 
@@ -338,7 +381,10 @@ public class DomjudgeAccountService {
             String phase = ended ? "FINISHED" : (started ? "CODING" : "BEFORE");
 
             out.add(new DomjudgeDto.ContestSummary(
+                JudgeContestRef.encode(classroom.getClassroomId(), contest.getId()),
                 contest.getId(),
+                classroom.getClassroomId(),
+                classroom.getName(),
                 StringUtils.hasText(contest.getFormal_name()) ? contest.getFormal_name()
                     : (StringUtils.hasText(contest.getName()) ? contest.getName()
                         : "Contest " + contest.getId()),
@@ -349,13 +395,5 @@ public class DomjudgeAccountService {
                 duration,
                 startsAt == null ? 0 : startsAt.getEpochSecond() - now.getEpochSecond()));
         }
-
-        // Running first, then the soonest upcoming, then the most recently finished — the
-        // order someone opening the picker mid-event actually wants.
-        out.sort(Comparator
-            .comparing((DomjudgeDto.ContestSummary c) -> !c.running())
-            .thenComparing(c -> c.startsAt() == null ? Instant.EPOCH : c.startsAt(),
-                Comparator.reverseOrder()));
-        return out;
     }
 }

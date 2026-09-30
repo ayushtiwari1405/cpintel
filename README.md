@@ -306,9 +306,9 @@ Everything below has a working default; only the secrets in `.env` genuinely nee
 | `CPINTEL_STANDINGS_REFRESH_MS` | `180000` | How often live group boards are rebuilt |
 | `CPINTEL_RATE_LIMIT_ENABLED` | `true` | Per-account and per-address throttling on sign-in, runs and syncs |
 | `CPINTEL_MIN_DESKTOP_VERSION` | `0.0.0` | Desktop builds below this are told to update |
-| `CPINTEL_DOMJUDGE_URL` | *(unset)* | Base URL of a DOMjudge instance; DOMjudge contests do nothing until this is set |
-| `CPINTEL_DOMJUDGE_USER` / `_PASSWORD` | *(unset)* | **Optional** service account. Not needed to run a contest — it buys the contest-wide reads that let one fetch serve the whole room. Without it, each contestant's page reads the judge under their own credentials |
-| `CPINTEL_DOMJUDGE_CREDENTIAL_KEY` | *(unset)* | **Required to attach contestants' accounts.** AES-256-GCM key for the per-contestant DOMjudge logins |
+| `CPINTEL_DOMJUDGE_URL` | *(unset)* | Read once at startup to give the first classroom its judge (see [Classrooms](#classrooms)). After that each classroom's own judge setting is what counts |
+| `CPINTEL_DOMJUDGE_USER` / `_PASSWORD` | *(unset)* | Read once, with the URL, as that classroom's **optional** service account. It buys the contest-wide reads that let one fetch serve the whole room. Set per classroom from then on |
+| `CPINTEL_DOMJUDGE_CREDENTIAL_KEY` | *(unset)* | **Required to attach contestants' accounts.** AES-256-GCM key for the per-contestant, per-classroom DOMjudge logins and for classroom service-account passwords |
 | `CPINTEL_DOMJUDGE_CREDENTIAL_TTL_DAYS` | `30` | Attached credentials expire on their own, so a round nobody cleaned up after does not leave passwords on file |
 | `CPINTEL_PROCTOR_HEARTBEAT_TTL` | `45` | How long one monitoring heartbeat vouches for. Submissions into a monitored examination are refused without a fresh one |
 | `CPINTEL_PROCTOR_HEARTBEAT_INTERVAL` | `15` | How often the page sends one |
@@ -486,6 +486,36 @@ keeps you signed in to Codeforces in its own window.
 The stored cookie is encrypted at rest with `CPINTEL_SESSION_KEY`, kept in Redis only, never
 returned by any endpoint, and dropped by *Disconnect* here or from Codeforces' own
 Settings -> Sessions.
+
+### Classrooms
+
+A classroom is one DOMjudge instance and everything run on it: the students enrolled on it,
+the teams (sections) inside it, and its contests and examinations. Each classroom has its own
+judge URL, and no two classrooms share one. A student taking two courses is in two classrooms,
+with a different DOMjudge account in each, and both logins are kept side by side.
+
+- **Admins create classrooms** from `/admin/classrooms`: a name, the judge's root URL and,
+  optionally, a service account. Saving checks the judge answers. A superadmin sees every
+  classroom; any other admin sees the ones they created or were added to as staff.
+- **Enrolment follows from everything else.** Adding someone to a team, importing a roster or
+  attaching a login enrols them in that team's classroom. To put a student already in one
+  classroom into another, import them into a team in the second classroom as before. The
+  username matches their existing account, and the second login is attached next to the first.
+- **Students only see their own classrooms.** A classroom's DOMjudge contests refuse anyone
+  not enrolled in it. In normal mode a student picks a classroom to see its past exams.
+- **One examination at a time**, across all classrooms. The lockout already enforces this.
+- **A classroom's judge is fixed once it is in use.** It can't be pointed at another instance
+  after students or events are in it, because every login was checked against the first one.
+  Archive it and create a new classroom instead.
+
+Inside CPIntel, a DOMjudge contest is named `<classroom>~<contest>` (e.g. `3~demo`), because
+contest ids are only unique per judge. You still type the judge's own id in forms; the
+qualified form shows up in arena URLs and in the API.
+
+Upgrading a deployment from before classrooms: migration V16 moves every existing team and
+event into a "Default classroom". At the next start, that classroom gets `CPINTEL_DOMJUDGE_URL`
+and its service account, and the logins, archived submissions and file rules stored before are
+moved into it.
 
 ### Running a team contest
 

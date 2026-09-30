@@ -22,4 +22,10 @@ public interface GroupMemberRepository extends JpaRepository<GroupMember, Long> 
     void deleteByGroupGroupIdAndUserUserId(Long groupId, Long userId);
 
     long countByGroupGroupId(Long groupId);
+
+    /** Takes someone out of every team in one classroom, when they leave it. */
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("DELETE FROM GroupMember m WHERE m.user.userId = :userId AND m.group.groupId IN "
+        + "(SELECT g.groupId FROM ContestGroup g WHERE g.classroomId = :classroomId)")
+    int deleteFromClassroom(@Param("classroomId") Long classroomId, @Param("userId") Long userId);
 }

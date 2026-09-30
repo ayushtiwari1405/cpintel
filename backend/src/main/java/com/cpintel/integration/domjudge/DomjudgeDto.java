@@ -104,7 +104,12 @@ public class DomjudgeDto {
      * round on the instance.
      */
     public record ContestSummary(
+        /** Classroom-qualified ({@link JudgeContestRef}), so it can be opened as it stands. */
         String id,
+        /** The judge's own id, for display. */
+        String judgeContestId,
+        Long classroomId,
+        String classroomName,
         String name,
         /** BEFORE, CODING or FINISHED — the same vocabulary the arena already renders. */
         String phase,

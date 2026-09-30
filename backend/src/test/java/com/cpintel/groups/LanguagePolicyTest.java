@@ -49,7 +49,7 @@ class LanguagePolicyTest {
 
     private GroupsDto.ContestSummary summary() {
         return new GroupsDto.ContestSummary(
-            CONTEST, "EXAM", 1L, "Class", "DOMJUDGE", CID, "Paper", null,
+            CONTEST, "EXAM", 1L, "Class", "DOMJUDGE", CID, CID, "Paper", null,
             Instant.now().minusSeconds(60), Instant.now().plusSeconds(3600),
             true, 10, "LIVE", "ACTIVE", null, null);
     }

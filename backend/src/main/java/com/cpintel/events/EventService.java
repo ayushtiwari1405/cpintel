@@ -9,6 +9,7 @@ import com.cpintel.entity.GroupContest;
 import com.cpintel.entity.GroupStanding;
 import com.cpintel.entity.User;
 import com.cpintel.exception.ApiException;
+import com.cpintel.integration.domjudge.JudgeContestRef;
 import com.cpintel.files.ContestFilePolicy;
 import com.cpintel.files.FilesDto;
 import com.cpintel.entity.mongo.CodeSubmission;
@@ -80,6 +81,7 @@ public class EventService {
     private final AuditService auditService;
     private final ContestFilePolicy filePolicy;
     private final ObjectMapper json;
+    private final com.cpintel.classrooms.ClassroomService classrooms;
 
     // ------------------------------------------------------------ admin reads
     //
@@ -202,14 +204,16 @@ public class EventService {
         String kind = normaliseKind(req.kind());
         String platform = normalisePlatform(req.platform(), kind);
         requireWindowOrder(req.startsAt(), req.endsAt());
+        Long classroomId = classrooms.requireManaged(adminId, req.classroomId()).getClassroomId();
 
-        ContestGroup owner = req.teamId() == null ? null : requireTeam(req.teamId());
+        ContestGroup owner = req.teamId() == null ? null : requireTeam(classroomId, req.teamId());
 
         GroupContest event = GroupContest.builder()
             .kind(kind)
+            .classroomId(classroomId)
             .group(owner)
             .platform(platform)
-            .externalId(req.externalId().trim())
+            .externalId(JudgeContestRef.qualify(platform, classroomId, req.externalId()))
             .name(req.name().trim())
             .description(trimToNull(req.description()))
             .rules(trimToNull(req.rules()))
@@ -249,6 +253,11 @@ public class EventService {
     public EventsDto.EventDetail update(Long adminId, Long eventId, EventsDto.EventRequest req,
                                         HttpServletRequest httpReq) {
         GroupContest event = require(eventId);
+        classrooms.requireManaged(adminId, event.getClassroomId());
+        if (req.classroomId() != null && !req.classroomId().equals(event.getClassroomId())) {
+            throw ApiException.badRequest("An event cannot move to another classroom. Create "
+                + "it again in the other one.");
+        }
         String kind = normaliseKind(req.kind());
         requireWindowOrder(req.startsAt(), req.endsAt());
 
@@ -271,7 +280,7 @@ public class EventService {
 
         event.setKind(kind);
         event.setPlatform(normalisePlatform(req.platform(), kind));
-        event.setExternalId(req.externalId().trim());
+        event.setExternalId(JudgeContestRef.qualify(event.getPlatform(), event.getClassroomId(), req.externalId()));
         event.setName(req.name().trim());
         event.setDescription(trimToNull(req.description()));
         event.setRules(trimToNull(req.rules()));
@@ -286,7 +295,7 @@ public class EventService {
             event.setDesktopPolicy(writePolicy(req.desktopPolicy(), kind));
         }
         if (req.teamId() != null) {
-            ContestGroup owner = requireTeam(req.teamId());
+            ContestGroup owner = requireTeam(event.getClassroomId(), req.teamId());
             event.setGroup(owner);
             assignTeam(event, owner, adminId);
         }
@@ -781,7 +790,9 @@ public class EventService {
         if (teamIds != null) {
             for (Long teamId : new HashSet<>(teamIds)) {
                 if (teamId == null) continue;
-                if (assignTeam(event, requireTeam(teamId), adminId)) added++;
+                if (assignTeam(event, requireTeam(event.getClassroomId(), teamId), adminId)) {
+                    added++;
+                }
             }
         }
         if (userIds != null) {
@@ -789,6 +800,9 @@ public class EventService {
                 if (userId == null) continue;
                 User user = userRepository.findById(userId)
                     .orElseThrow(() -> ApiException.notFound("No such user"));
+                // Named individually, so enrolled individually: the classroom is what decides
+                // who may open its contests at all.
+                classrooms.enroll(event.getClassroomId(), user);
                 if (assignmentRepository.existsByContestContestIdAndUserUserId(
                         event.getContestId(), userId)) {
                     continue;
@@ -825,7 +839,10 @@ public class EventService {
         if (!normalisePlatform(req.platform(), kind).equals(event.getPlatform())) {
             changed.add("judge");
         }
-        if (!req.externalId().trim().equals(event.getExternalId())) changed.add("judge contest");
+        if (!JudgeContestRef.qualify(normalisePlatform(req.platform(), kind), event.getClassroomId(),
+                req.externalId()).equals(event.getExternalId())) {
+            changed.add("judge contest");
+        }
         if (!Objects.equals(req.startsAt(), event.getStartsAt())) changed.add("start time");
         if (!Objects.equals(trimToNull(req.rules()), event.getRules())) changed.add("rules");
         if (!Objects.equals(trimToNull(req.url()), event.getUrl())) changed.add("link");
@@ -981,10 +998,16 @@ public class EventService {
         problemRepository.saveAll(rows);
     }
 
-    private ContestGroup requireTeam(Long teamId) {
-        return groupRepository.findById(teamId)
+    private ContestGroup requireTeam(Long classroomId, Long teamId) {
+        ContestGroup team = groupRepository.findById(teamId)
             .orElseThrow(() -> ApiException.notFound("No such team"));
+        if (!team.getClassroomId().equals(classroomId)) {
+            throw ApiException.badRequest("The team \"" + team.getName() + "\" is in another "
+                + "classroom. An event can only be sat by teams in its own classroom.");
+        }
+        return team;
     }
+
 
     private String normaliseKind(String raw) {
         String value = raw == null ? "" : raw.trim().toUpperCase(Locale.ROOT);

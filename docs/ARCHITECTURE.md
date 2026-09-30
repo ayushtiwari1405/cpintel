@@ -942,6 +942,34 @@ verdicts still being judged at the bell, and is then final. The admin can switch
 standings are released — the one result a candidate can see afterwards under Past examinations,
 and only when an admin chose to publish it.
 
+## Classrooms: one DOMjudge per class
+
+A deployment talks to as many DOMjudge instances as it has classrooms. A classroom owns one
+judge (its URL is unique), the students enrolled on it, the groups inside it, and the events run
+in it. The judge belongs to the classroom rather than the other way round, because later
+assessment kinds such as quizzes will need no judge but still belong to a class.
+
+Three things that assumed a single judge now carry the classroom:
+
+- **Clients.** `DomjudgeJudges` builds one `DomjudgeClient` per classroom, each with its own
+  web session and its own record of which statement and sample routes that build answers on.
+  A client is rebuilt when the classroom's judge settings change.
+- **Logins.** A contestant's login is keyed `dj:cred:<classroom>:<user>`, so a student in two
+  classrooms holds two logins side by side. `classroom_members` records the non-secret half
+  (who is enrolled, and which DOMjudge username), so listings need no decryption.
+- **Contest ids.** A DOMjudge contest id is only unique on its own instance, so CPIntel names
+  one `<classroom>~<contest>` (`JudgeContestRef`) everywhere it stores or routes it: events,
+  the Mongo archive, file rules, exam sessions and the arena's URLs. Because the id is
+  qualified once, every `(platform, contestId)` lookup stays correct without learning about
+  classrooms; only the code that actually calls DOMjudge splits it again. A check constraint
+  keeps an event's qualified id and its `classroom_id` in agreement.
+
+Access follows the classroom. The arena refuses a classroom's contests to anyone not enrolled
+in it (`ExamSessionGuard`); otherwise a service account would read any classroom's statements
+for anyone who typed the qualified id. Admins run the classrooms they own or were added to as
+staff, and superadmins run all of them. Enrolment happens automatically when someone is added
+to a group, imported in a roster, attached a login or assigned an event.
+
 ## Group contests: ranking a subset of someone else's scoreboard
 
 An admin can lay a *group* over a contest that is running on Codeforces or DOMjudge. CPIntel
@@ -969,9 +997,9 @@ round, which scores by decaying problem points, the group's internal order can d
 official one. This is a ranking of the group, not a copy of theirs.
 
 DOMjudge is the opposite shape — the entire scoreboard arrives in one request, so filtering is
-local and free, and the numbers are the judge's own. It is self-hosted, so nothing works until
-an operator sets `cpintel.domjudge.base-url`; the client checks that first and says so plainly
-rather than failing with a connection error to an empty host.
+local and free, and the numbers are the judge's own. It is self-hosted, and each classroom
+names its own instance (see below); a classroom with no URL set says so plainly rather than
+failing with a connection error to an empty host.
 
 Because a refresh costs one call per member on the busier of the two judges, standings are a
 **cached snapshot** rather than a live read. They are rebuilt on a schedule for live contests
@@ -989,7 +1017,8 @@ unmatched members so the mismatch is fixable.
 
 Finding people differs by judge. Codeforces members are matched through their linked platform
 account, with a per-membership override as a fallback. On DOMjudge an admin attaches each
-member's DOMjudge login (singly, or in bulk through the roster import); it is verified against
+member's DOMjudge login for the group's classroom (singly, or in bulk through the roster import);
+it is verified against
 the judge's `/user`, must resolve to a team, and is stored AES-256-GCM encrypted under
 `CPINTEL_DOMJUDGE_CREDENTIAL_KEY` with an expiry. The arena then competes as that login, so the
 judge attributes every submission to the member's own team, and the board matches on that exact

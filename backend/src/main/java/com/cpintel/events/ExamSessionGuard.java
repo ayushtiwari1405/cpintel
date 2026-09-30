@@ -2,6 +2,8 @@ package com.cpintel.events;
 
 import com.cpintel.entity.GroupContest;
 import com.cpintel.exception.ApiException;
+import com.cpintel.integration.domjudge.JudgeContestRef;
+import com.cpintel.repository.jpa.ClassroomMemberRepository;
 import com.cpintel.repository.jpa.GroupContestRepository;
 import com.cpintel.security.SessionMode;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +29,7 @@ public class ExamSessionGuard {
 
     private final GroupContestRepository events;
     private final ExamAccessService access;
+    private final ClassroomMemberRepository classroomMembers;
 
     /** Throws unless this session may reach this judge contest right now. */
     @Transactional(readOnly = true)
@@ -48,6 +51,7 @@ public class ExamSessionGuard {
         }
 
         if (isAdmin()) return;
+        requireClassroom(userId, platform, contestId);
         for (GroupContest event : events.findByPlatformAndExternalId(
                 platform.toUpperCase(java.util.Locale.ROOT), contestId)) {
             if (!event.isExam()) continue;
@@ -64,6 +68,20 @@ public class ExamSessionGuard {
      * Holds a run from an examination session to its paper: its contest, and so its languages.
      * A run naming no contest would be the unrestricted practice runner.
      */
+    /**
+     * A DOMjudge contest belongs to a classroom, and only its students may open it.
+     *
+     * <p>Without this a service account would read any classroom's contests on behalf of
+     * anyone who typed a qualified id — its statements and its board, before the paper.
+     */
+    private void requireClassroom(Long userId, String platform, String contestId) {
+        if (!"DOMJUDGE".equalsIgnoreCase(platform)) return;
+        JudgeContestRef ref = JudgeContestRef.parse(contestId);
+        if (!classroomMembers.existsByClassroomIdAndUserUserId(ref.classroomId(), userId)) {
+            throw ApiException.forbidden("This contest belongs to a classroom you are not in.");
+        }
+    }
+
     @Transactional(readOnly = true)
     public void requireRunScope(String platform, String contestId) {
         Long sessionExam = SessionMode.examId();

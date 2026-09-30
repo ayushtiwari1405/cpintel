@@ -1,7 +1,8 @@
 package com.cpintel.compete;
 
 import com.cpintel.integration.domjudge.DjModels;
-import com.cpintel.integration.domjudge.DomjudgeClient;
+import com.cpintel.integration.domjudge.DomjudgeJudges;
+import com.cpintel.integration.domjudge.JudgeContestRef;
 import com.cpintel.integration.domjudge.DomjudgeCredentialStore;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -42,6 +43,9 @@ import java.util.function.Supplier;
  * during a live round. Scoping costs the fan-out exactly when there is no service account to
  * provide it, which is the honest trade rather than a silent one.
  *
+ * <p>Contest ids here are classroom-qualified ({@link JudgeContestRef}), which is what picks
+ * the judge a load goes to and keeps two judges' {@code demo} contests in separate entries.
+ *
  * <p><b>Single-flight and stale-serving.</b> A plain "refresh when expired" cache turns 200
  * simultaneous readers into 200 simultaneous fetches the instant the entry expires — the
  * stampede it was supposed to prevent, moved to a different moment. So exactly one thread
@@ -60,7 +64,7 @@ public class DomjudgeContestCache {
     /** Problems, languages, teams, judgement types — fixed once the contest is built. */
     static final Duration STATIC_TTL = Duration.ofMinutes(5);
 
-    private final DomjudgeClient domjudge;
+    private final DomjudgeJudges judges;
     private final Duration liveTtl;
     private final Duration staticTtl;
 
@@ -73,8 +77,8 @@ public class DomjudgeContestCache {
      * the one the container wants.
      */
     @Autowired
-    public DomjudgeContestCache(DomjudgeClient domjudge) {
-        this(domjudge, LIVE_TTL, STATIC_TTL);
+    public DomjudgeContestCache(DomjudgeJudges judges) {
+        this(judges, LIVE_TTL, STATIC_TTL);
     }
 
     /**
@@ -84,8 +88,8 @@ public class DomjudgeContestCache {
      * TTL — the interesting cases are all about what happens at the moment an entry expires,
      * and waiting four seconds per assertion to reach that moment is not a test anyone runs.
      */
-    DomjudgeContestCache(DomjudgeClient domjudge, Duration liveTtl, Duration staticTtl) {
-        this.domjudge = domjudge;
+    DomjudgeContestCache(DomjudgeJudges judges, Duration liveTtl, Duration staticTtl) {
+        this.judges = judges;
         this.liveTtl = liveTtl;
         this.staticTtl = staticTtl;
     }
@@ -111,17 +115,17 @@ public class DomjudgeContestCache {
 
     public DjModels.Contest contest(DomjudgeCredentialStore.Stored as, String contestId) {
         return get(key("contest", as, contestId), staticTtl,
-            () -> domjudge.getContest(as, contestId));
+            () -> judges.forContest(contestId).getContest(as, raw(contestId)));
     }
 
     public DjModels.State state(DomjudgeCredentialStore.Stored as, String contestId) {
-        return get(key("state", as, contestId), liveTtl, () -> domjudge.getState(as, contestId));
+        return get(key("state", as, contestId), liveTtl, () -> judges.forContest(contestId).getState(as, raw(contestId)));
     }
 
     public List<DjModels.ContestProblem> problems(DomjudgeCredentialStore.Stored as,
                                                   String contestId) {
         List<DjModels.ContestProblem> problems = get(key("problems", as, contestId), staticTtl,
-            () -> domjudge.getProblems(as, contestId));
+            () -> judges.forContest(contestId).getProblems(as, raw(contestId)));
         if (problems == null) return List.of();
 
         List<DjModels.ContestProblem> ordered = new ArrayList<>(problems);
@@ -132,13 +136,13 @@ public class DomjudgeContestCache {
 
     public List<DjModels.Language> languages(DomjudgeCredentialStore.Stored as, String contestId) {
         List<DjModels.Language> languages = get(key("languages", as, contestId), staticTtl,
-            () -> domjudge.getLanguages(as, contestId));
+            () -> judges.forContest(contestId).getLanguages(as, raw(contestId)));
         return languages == null ? List.of() : languages;
     }
 
     public List<DjModels.Team> teams(DomjudgeCredentialStore.Stored as, String contestId) {
         List<DjModels.Team> teams = get(key("teams", as, contestId), staticTtl,
-            () -> domjudge.getTeams(as, contestId));
+            () -> judges.forContest(contestId).getTeams(as, raw(contestId)));
         return teams == null ? List.of() : teams;
     }
 
@@ -146,7 +150,7 @@ public class DomjudgeContestCache {
     public Map<String, DjModels.JudgementType> judgementTypes(DomjudgeCredentialStore.Stored as,
                                                               String contestId) {
         List<DjModels.JudgementType> types = get(key("jtypes", as, contestId), staticTtl,
-            () -> domjudge.getJudgementTypes(as, contestId));
+            () -> judges.forContest(contestId).getJudgementTypes(as, raw(contestId)));
 
         Map<String, DjModels.JudgementType> byId = new HashMap<>();
         if (types != null) {
@@ -168,13 +172,13 @@ public class DomjudgeContestCache {
      */
     public DjModels.Scoreboard scoreboard(DomjudgeCredentialStore.Stored as, String contestId) {
         return get(key("scoreboard", as, contestId), liveTtl,
-            () -> domjudge.getScoreboard(as, contestId));
+            () -> judges.forContest(contestId).getScoreboard(as, raw(contestId)));
     }
 
     public List<DjModels.Submission> submissions(DomjudgeCredentialStore.Stored as,
                                                  String contestId) {
         List<DjModels.Submission> subs = get(key("subs", as, contestId), liveTtl,
-            () -> domjudge.getSubmissions(as, contestId));
+            () -> judges.forContest(contestId).getSubmissions(as, raw(contestId)));
         return subs == null ? List.of() : subs;
     }
 
@@ -188,7 +192,7 @@ public class DomjudgeContestCache {
     public Map<String, DjModels.Judgement> judgementsBySubmission(
             DomjudgeCredentialStore.Stored as, String contestId) {
         List<DjModels.Judgement> judgements = get(key("judgements", as, contestId), liveTtl,
-            () -> domjudge.getJudgements(as, contestId));
+            () -> judges.forContest(contestId).getJudgements(as, raw(contestId)));
 
         Map<String, DjModels.Judgement> current = new HashMap<>();
         if (judgements != null) {
@@ -233,6 +237,11 @@ public class DomjudgeContestCache {
      */
     public void evict(String contestId) {
         slots.keySet().removeIf(key -> key.endsWith(":" + contestId));
+    }
+
+    /** The judge's own id; the qualified one keys the cache and picks the judge. */
+    private static String raw(String contestId) {
+        return JudgeContestRef.parse(contestId).contestId();
     }
 
     private String normalise(String value) {

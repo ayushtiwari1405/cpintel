@@ -82,7 +82,7 @@ public class CodeforcesCompeteProvider implements CompeteProvider {
     // ------------------------------------------------------------ contest load
 
     @Override
-    public String parseContestId(String raw) {
+    public String parseContestId(Long userId, Long classroomId, String raw) {
         if (raw == null || raw.isBlank()) {
             throw ApiException.badRequest("Paste a Codeforces contest link.");
         }

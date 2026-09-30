@@ -33,7 +33,12 @@ public interface CompeteProvider {
      * returning null — a mistyped contest link is the single most common thing to go wrong on
      * this page, and it happens while somebody is trying to start a round.
      */
-    String parseContestId(String raw);
+    /**
+     * @param userId      who is opening it, for a judge that has to work out which of their
+     *                    classrooms a bare id belongs to
+     * @param classroomId the classroom it was picked in, or null
+     */
+    String parseContestId(Long userId, Long classroomId, String raw);
 
     /** Phase, clock, problems, and whether this contestant may submit right now. */
     CompeteDto.ContestInfo contestInfo(Long userId, String contestId);

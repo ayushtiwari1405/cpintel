@@ -37,6 +37,8 @@ public final class EventMapper {
             event.getKind(),
             event.getPlatform(),
             event.getExternalId(),
+            com.cpintel.integration.domjudge.JudgeContestRef.judgeIdOf(event.getExternalId()),
+            event.getClassroomId(),
             event.getName(),
             event.getDescription(),
             event.getUrl(),

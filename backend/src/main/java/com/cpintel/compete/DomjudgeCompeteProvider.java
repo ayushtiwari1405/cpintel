@@ -7,7 +7,10 @@ import com.cpintel.integration.domjudge.DjModels;
 import com.cpintel.integration.domjudge.DjTime;
 import com.cpintel.integration.domjudge.DomjudgeClient;
 import com.cpintel.integration.domjudge.DomjudgeCredentialStore;
-import com.cpintel.integration.domjudge.DomjudgeSampleClient;
+import com.cpintel.integration.domjudge.DomjudgeJudges;
+import com.cpintel.integration.domjudge.JudgeContestRef;
+import com.cpintel.classrooms.ClassroomService;
+import com.cpintel.entity.Classroom;
 import com.cpintel.practice.PracticeDto;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -74,9 +77,9 @@ public class DomjudgeCompeteProvider implements CompeteProvider {
     private static final Pattern CONTEST_ID = Pattern.compile(
         "contests?/([A-Za-z0-9_.-]+)|^\\s*([A-Za-z0-9_.-]{1,64})\\s*$");
 
-    private final DomjudgeClient domjudge;
+    private final DomjudgeJudges judges;
     private final DomjudgeContestCache cache;
-    private final DomjudgeSampleClient samples;
+    private final ClassroomService classrooms;
     private final DomjudgeCredentialStore credentials;
     private final SubmissionArchive archive;
     private final ContestFilePolicy filePolicy;
@@ -86,22 +89,46 @@ public class DomjudgeCompeteProvider implements CompeteProvider {
         return CompeteDto.Platform.DOMJUDGE.name();
     }
 
+    /**
+     * Resolves what was pasted to a classroom-qualified id.
+     *
+     * <p>The judge comes from, in order: an id that is already qualified (the contest picker
+     * hands those out); the classroom the page was opened in; a link, by matching it against
+     * the classrooms' judge URLs; and finally the student's own classrooms, when exactly one
+     * of them has a judge — a bare {@code demo} is only meaningful then.
+     */
     @Override
-    public String parseContestId(String raw) {
-        if (!domjudge.isConfigured()) {
-            throw ApiException.badRequest(
-                "No DOMjudge instance is configured on this deployment.");
-        }
+    public String parseContestId(Long userId, Long classroomId, String raw) {
         if (raw == null || raw.isBlank()) {
             throw ApiException.badRequest("Paste a DOMjudge contest link, or its contest id.");
         }
+        JudgeContestRef qualified = JudgeContestRef.tryParse(raw.trim());
+        if (qualified != null) return qualified.encoded();
+
         Matcher m = CONTEST_ID.matcher(raw.trim());
         if (!m.find()) {
             throw ApiException.badRequest(
                 "That does not look like a DOMjudge contest. Expected an id such as "
                     + "'nwerc18', or a link like https://judge.example.edu/contests/3");
         }
-        return m.group(1) != null ? m.group(1) : m.group(2);
+        String contestId = m.group(1) != null ? m.group(1) : m.group(2);
+
+        if (classroomId != null) return JudgeContestRef.encode(classroomId, contestId);
+
+        java.util.Optional<Classroom> linked = classrooms.forJudgeLink(raw);
+        if (linked.isPresent()) {
+            return JudgeContestRef.encode(linked.get().getClassroomId(), contestId);
+        }
+
+        List<Classroom> mine = classrooms.judgeClassroomsOf(userId);
+        if (mine.size() == 1) return JudgeContestRef.encode(mine.get(0).getClassroomId(), contestId);
+        if (mine.isEmpty()) {
+            throw ApiException.forbidden("You are not in any classroom with a DOMjudge, so "
+                + "there is no judge to open '" + contestId + "' on.");
+        }
+        throw ApiException.badRequest("You are in more than one classroom, so '" + contestId
+            + "' could be on any of their judges. Pick the classroom first, or paste the full "
+            + "contest link.");
     }
 
     // ------------------------------------------------------------ identity
@@ -113,16 +140,32 @@ public class DomjudgeCompeteProvider implements CompeteProvider {
      * Returning the contestant's own credentials instead costs the fan-out but is the only
      * correct answer when there is no service account — see the class comment.
      */
-    private DomjudgeCredentialStore.Stored readAs(DomjudgeCredentialStore.Stored own) {
+    private static DomjudgeCredentialStore.Stored readAs(DomjudgeClient domjudge,
+                                                         DomjudgeCredentialStore.Stored own) {
         return domjudge.hasServiceAccount() ? null : own;
+    }
+
+    /** The judge a qualified contest id lives on. */
+    private DomjudgeClient judge(String contestId) {
+        return judges.forContest(contestId);
+    }
+
+    /** The login a contestant holds on the judge a qualified contest id lives on. */
+    private DomjudgeCredentialStore.Stored own(Long userId, String contestId) {
+        return credentials.find(JudgeContestRef.parse(contestId).classroomId(), userId);
+    }
+
+    private static String raw(String contestId) {
+        return JudgeContestRef.parse(contestId).contestId();
     }
 
     // ------------------------------------------------------------ contest load
 
     @Override
     public CompeteDto.ContestInfo contestInfo(Long userId, String contestId) {
-        DomjudgeCredentialStore.Stored own = credentials.find(userId);
-        DomjudgeCredentialStore.Stored as = readAs(own);
+        DomjudgeClient domjudge = judge(contestId);
+        DomjudgeCredentialStore.Stored own = own(userId, contestId);
+        DomjudgeCredentialStore.Stored as = readAs(domjudge, own);
 
         // Without an attached account there is nothing to read the contest as, and on a
         // deployment with no service account there is literally no way to answer. Saying so
@@ -136,7 +179,7 @@ public class DomjudgeCompeteProvider implements CompeteProvider {
         DjModels.Contest meta = cache.contest(as, contestId);
         if (meta == null) {
             throw ApiException.notFound(
-                "DOMjudge has no contest '" + contestId + "', or this account cannot see it.");
+                "DOMjudge has no contest '" + raw(contestId) + "', or this account cannot see it.");
         }
 
         DjModels.State state = cache.state(as, contestId);
@@ -186,7 +229,7 @@ public class DomjudgeCompeteProvider implements CompeteProvider {
 
         String name = StringUtils.hasText(meta.getFormal_name())
             ? meta.getFormal_name()
-            : (StringUtils.hasText(meta.getName()) ? meta.getName() : "Contest " + contestId);
+            : (StringUtils.hasText(meta.getName()) ? meta.getName() : "Contest " + raw(contestId));
 
         return new CompeteDto.ContestInfo(
             contestId, name, CompeteDto.Platform.DOMJUDGE.name(),
@@ -211,7 +254,8 @@ public class DomjudgeCompeteProvider implements CompeteProvider {
      */
     @Override
     public PracticeDto.ProblemDetail statement(Long userId, String contestId, String index) {
-        DomjudgeCredentialStore.Stored as = readAs(credentials.find(userId));
+        DomjudgeClient domjudge = judge(contestId);
+        DomjudgeCredentialStore.Stored as = readAs(domjudge, own(userId, contestId));
         DjModels.ContestProblem problem = requireProblem(as, contestId, index);
 
         String timeLimit = problem.getTime_limit() == null
@@ -229,7 +273,7 @@ public class DomjudgeCompeteProvider implements CompeteProvider {
             null,
             null, null,
             null, null, null, null,
-            samples.samples(as, contestId, problem.getId()),
+            domjudge.samples().samples(as, raw(contestId), problem.getId()),
             domjudge.root() + "/team/problems/" + problem.getId(),
             true,
             "/api/v1/compete/DOMJUDGE/" + contestId + "/problems/" + problem.getLabel()
@@ -240,15 +284,16 @@ public class DomjudgeCompeteProvider implements CompeteProvider {
     @Override
     public CompeteDto.StatementDocument statementDocument(Long userId, String contestId,
                                                           String index) {
-        DomjudgeCredentialStore.Stored own = credentials.find(userId);
-        DomjudgeCredentialStore.Stored as = readAs(own);
+        DomjudgeClient domjudge = judge(contestId);
+        DomjudgeCredentialStore.Stored own = own(userId, contestId);
+        DomjudgeCredentialStore.Stored as = readAs(domjudge, own);
         DjModels.ContestProblem problem = requireProblem(as, contestId, index);
 
         // Fetched as the contestant, not the service account. On DOMjudge 8.0 the only route
         // that serves a running contest's statement is the team page, which needs a signed-in
         // team session — and the service account has no team to sign in as.
         DomjudgeClient.Statement statement =
-            domjudge.getStatement(own != null ? own : as, contestId, problem.getId());
+            domjudge.getStatement(own != null ? own : as, raw(contestId), problem.getId());
         if (statement == null || statement.isEmpty()) {
             // Deliberately not "this problem has no statement", which is what this said while
             // the real cause was CPIntel calling a route this DOMjudge does not have. That
@@ -264,7 +309,7 @@ public class DomjudgeCompeteProvider implements CompeteProvider {
 
     @Override
     public List<PracticeDto.LanguageOption> languages(Long userId, String contestId) {
-        DomjudgeCredentialStore.Stored as = readAs(credentials.find(userId));
+        DomjudgeCredentialStore.Stored as = readAs(judge(contestId), own(userId, contestId));
 
         List<PracticeDto.LanguageOption> out = new ArrayList<>();
         for (DjModels.Language language : submittableLanguages(as, contestId)) {
@@ -305,8 +350,10 @@ public class DomjudgeCompeteProvider implements CompeteProvider {
         // The contestant's own credentials, not the read scope: a submission is the one
         // operation that must never be made as the service account, because the judge would
         // then attribute it to the service account's team rather than to theirs.
-        DomjudgeCredentialStore.Stored own = credentials.require(userId);
-        DomjudgeCredentialStore.Stored as = readAs(own);
+        DomjudgeClient domjudge = judge(contestId);
+        DomjudgeCredentialStore.Stored own =
+            credentials.require(JudgeContestRef.parse(contestId).classroomId(), userId);
+        DomjudgeCredentialStore.Stored as = readAs(domjudge, own);
 
         DjModels.ContestProblem problem = requireProblem(as, contestId, req.index());
         DjModels.Language language = submittableLanguages(as, contestId).stream()
@@ -324,7 +371,7 @@ public class DomjudgeCompeteProvider implements CompeteProvider {
 
         String submissionId;
         try {
-            submissionId = domjudge.submitAs(own, contestId, problem.getId(),
+            submissionId = domjudge.submitAs(own, raw(contestId), problem.getId(),
                 language.getId(), fileNameFor(problem, language), req.source());
         } catch (ApiException e) {
             archive.markRejected(archiveId, e.getMessage());
@@ -400,9 +447,10 @@ public class DomjudgeCompeteProvider implements CompeteProvider {
 
     @Override
     public List<CompeteDto.ContestSubmission> submissions(Long userId, String contestId) {
-        DomjudgeCredentialStore.Stored own = credentials.find(userId);
+        DomjudgeCredentialStore.Stored own = own(userId, contestId);
         if (own == null) return List.of();
-        DomjudgeCredentialStore.Stored as = readAs(own);
+        DomjudgeClient domjudge = judge(contestId);
+        DomjudgeCredentialStore.Stored as = readAs(domjudge, own);
 
         String myTeamId = judgeTeamId(own, as, contestId);
 
@@ -486,7 +534,8 @@ public class DomjudgeCompeteProvider implements CompeteProvider {
             // This poll is where the final verdict first becomes known; a row already carrying
             // it is skipped inside updateVerdict, so the steady state costs no writes.
             if (!"TESTING".equals(verdict)) {
-                archiveVerdict(userId, submission.getId(), verdict, runtimeMillis(judgement));
+                archiveVerdict(userId, contestId, submission.getId(), verdict,
+                    runtimeMillis(judgement));
             }
 
             out.add(new CompeteDto.ContestSubmission(
@@ -532,10 +581,13 @@ public class DomjudgeCompeteProvider implements CompeteProvider {
     }
 
     /** DOMjudge ids are numeric strings; the archive keys attempts by the number. */
-    private void archiveVerdict(Long userId, String submissionId, String verdict, Integer timeMs) {
+    private void archiveVerdict(Long userId, String contestId, String submissionId,
+                                String verdict, Integer timeMs) {
         if (submissionId == null) return;
         try {
-            archive.updateVerdict(userId, SubmissionArchive.DOMJUDGE,
+            // Scoped to the contest: submission ids are only unique on one judge, and the same
+            // student can hold a submission 17 on two of them.
+            archive.updateVerdict(userId, SubmissionArchive.DOMJUDGE, contestId,
                 Long.parseLong(submissionId.trim()), verdict, null, timeMs, null);
         } catch (NumberFormatException e) {
             // attachExternalId left such a row unlinked too, so there is nothing to update.
@@ -564,8 +616,9 @@ public class DomjudgeCompeteProvider implements CompeteProvider {
      */
     @Override
     public CompeteDto.Leaderboard leaderboard(Long userId, String contestId) {
-        DomjudgeCredentialStore.Stored own = credentials.find(userId);
-        DomjudgeCredentialStore.Stored as = readAs(own);
+        DomjudgeClient domjudge = judge(contestId);
+        DomjudgeCredentialStore.Stored own = own(userId, contestId);
+        DomjudgeCredentialStore.Stored as = readAs(domjudge, own);
 
         DjModels.State state = cache.state(as, contestId);
         boolean frozen = state != null && state.getFrozen() != null && state.getThawed() == null;
@@ -638,7 +691,7 @@ public class DomjudgeCompeteProvider implements CompeteProvider {
         // the page says which of the two it is looking at rather than leaving a contestant to
         // conclude the room has gone quiet.
         boolean live = domjudge.hasServiceAccount()
-            || domjudge.canReadJuryScoreboard(own, contestId);
+            || domjudge.canReadJuryScoreboard(own, raw(contestId));
 
         return new CompeteDto.Leaderboard(rows, myTeamId,
             own == null ? null : own.teamName(), mine, indexes,
@@ -656,8 +709,8 @@ public class DomjudgeCompeteProvider implements CompeteProvider {
      */
     @Override
     public CompeteDto.RankInfo rank(Long userId, String contestId) {
-        DomjudgeCredentialStore.Stored own = credentials.find(userId);
-        DomjudgeCredentialStore.Stored as = readAs(own);
+        DomjudgeCredentialStore.Stored own = own(userId, contestId);
+        DomjudgeCredentialStore.Stored as = readAs(judge(contestId), own);
 
         DjModels.State state = cache.state(as, contestId);
         boolean frozen = state != null && state.getFrozen() != null && state.getThawed() == null;
@@ -696,7 +749,7 @@ public class DomjudgeCompeteProvider implements CompeteProvider {
             .filter(p -> wanted.equalsIgnoreCase(p.getLabel()))
             .findFirst()
             .orElseThrow(() -> ApiException.notFound(
-                "Contest " + contestId + " has no problem " + index + "."));
+                "Contest " + raw(contestId) + " has no problem " + index + "."));
     }
 
     /** 2.0 reads better as "2"; 1.5 has to stay 1.5. */

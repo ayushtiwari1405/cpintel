@@ -94,7 +94,11 @@ public class EventsDto {
         /** CONTEST or EXAM. */
         String kind,
         String platform,
+        /** As the arena names it: classroom-qualified for DOMjudge ({@code JudgeContestRef}). */
         String externalId,
+        /** The judge's own contest id, for display and for the edit form. */
+        String judgeContestId,
+        Long classroomId,
         String name,
         String description,
         String url,
@@ -205,7 +209,12 @@ public class EventsDto {
          * rest of the event, and fixed with it once it starts. Null leaves the contest's rule
          * as it is (the deployment default, unless one was set).
          */
-        Boolean personalFilesAllowed
+        Boolean personalFilesAllowed,
+        /**
+         * The classroom the event runs in, which for DOMjudge is also the judge. Required on
+         * create; an event cannot move between classrooms afterwards.
+         */
+        Long classroomId
     ) {}
 
     public record AssignmentRequest(

@@ -27,6 +27,7 @@ import static org.mockito.Mockito.*;
 class DomjudgePasswordImportServiceTest {
 
     private static final Long GROUP_ID = 3L;
+    private static final Long CLASSROOM = 3L;
 
     private GroupMemberRepository members;
     private DomjudgeCredentialStore credentials;
@@ -43,18 +44,19 @@ class DomjudgePasswordImportServiceTest {
         ContestGroup group = new ContestGroup();
         group.setGroupId(GROUP_ID);
         group.setIsActive(true);
+        group.setClassroomId(CLASSROOM);
         when(groups.findById(GROUP_ID)).thenReturn(Optional.of(group));
 
         // asha (11) has login team01 attached; ben (12) has nothing attached.
         when(members.findByGroup(GROUP_ID)).thenReturn(List.of(member(11L, "asha"),
             member(12L, "team02")));
-        when(credentials.find(11L)).thenReturn(new DomjudgeCredentialStore.Stored(
+        when(credentials.find(CLASSROOM, 11L)).thenReturn(new DomjudgeCredentialStore.Stored(
             "team01", "old", null, "7", "Team 01", null, null, Instant.EPOCH));
 
-        when(accounts.verify(anyString(), anyString()))
+        when(accounts.verify(anyLong(), anyString(), anyString()))
             .thenReturn(new DomjudgeAccountService.Verified(null, null, "7", "Team 01"));
-        when(accounts.changePassword(anyLong(), anyString())).thenReturn(status("Team 01"));
-        when(accounts.provision(any())).thenReturn(status("Team 02"));
+        when(accounts.changePassword(anyLong(), anyLong(), anyString())).thenReturn(status("Team 01"));
+        when(accounts.provision(anyLong(), any())).thenReturn(status("Team 02"));
 
         service = new DomjudgePasswordImportService(groups, members, credentials, accounts);
     }
@@ -77,7 +79,7 @@ class DomjudgePasswordImportServiceTest {
         assertEquals(DomjudgePasswordImportService.RowStatus.CHANGED,
             result.rows().get(0).status());
         assertEquals("asha", result.rows().get(0).username());
-        verify(accounts).changePassword(11L, "new");
+        verify(accounts).changePassword(CLASSROOM, 11L, "new");
     }
 
     @Test
@@ -87,9 +89,9 @@ class DomjudgePasswordImportServiceTest {
 
         assertEquals(DomjudgePasswordImportService.RowStatus.WILL_CHANGE,
             result.rows().get(0).status());
-        verify(accounts).verify("team01", "new");
-        verify(accounts, never()).changePassword(anyLong(), anyString());
-        verify(accounts, never()).provision(any());
+        verify(accounts).verify(CLASSROOM, "team01", "new");
+        verify(accounts, never()).changePassword(anyLong(), anyLong(), anyString());
+        verify(accounts, never()).provision(anyLong(), any());
     }
 
     @Test
@@ -99,7 +101,7 @@ class DomjudgePasswordImportServiceTest {
 
         assertEquals(DomjudgePasswordImportService.RowStatus.ATTACHED,
             result.rows().get(0).status());
-        verify(accounts).provision(argThat(r -> r.userId() == 12L
+        verify(accounts).provision(eq(CLASSROOM), argThat(r -> r.userId() == 12L
             && "team02".equals(r.username()) && "pw2".equals(r.password())));
     }
 
@@ -109,14 +111,14 @@ class DomjudgePasswordImportServiceTest {
         var result = service.update(GROUP_ID, "djUsername,djPassword\nstranger,pw\n", false);
 
         assertEquals(1, result.notFound());
-        verify(accounts, never()).changePassword(anyLong(), anyString());
-        verify(accounts, never()).provision(any());
+        verify(accounts, never()).changePassword(anyLong(), anyLong(), anyString());
+        verify(accounts, never()).provision(anyLong(), any());
     }
 
     @Test
     @DisplayName("a rejected password is reported per row and the rest carry on")
     void rejectionIsPerRow() {
-        when(accounts.changePassword(11L, "typo"))
+        when(accounts.changePassword(CLASSROOM, 11L, "typo"))
             .thenThrow(ApiException.badRequest("DOMjudge rejected that username and password."));
 
         var result = service.update(GROUP_ID,

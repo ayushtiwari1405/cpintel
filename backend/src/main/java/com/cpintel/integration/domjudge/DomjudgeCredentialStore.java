@@ -138,32 +138,43 @@ public class DomjudgeCredentialStore {
         return credentialKey != null && !credentialKey.isBlank();
     }
 
-    public void save(Long userId, Stored credentials) {
+    /**
+     * One login per classroom, not per person.
+     *
+     * <p>A student in two classrooms sits on two judges with two team accounts, and both have
+     * to be usable — keying on the user alone meant attaching the second login silently
+     * replaced the first.
+     */
+    private static String key(Long classroomId, Long userId) {
+        return KEY_PREFIX + classroomId + ":" + userId;
+    }
+
+    public void save(Long classroomId, Long userId, Stored credentials) {
         requireKey();
         try {
             String json = objectMapper.writeValueAsString(credentials);
-            redis.opsForValue().set(KEY_PREFIX + userId, encrypt(json),
+            redis.opsForValue().set(key(classroomId, userId), encrypt(json),
                 Duration.ofDays(credentialTtlDays));
         } catch (Exception e) {
             // The message deliberately carries no detail from the cause: a serialisation error
             // on this object could otherwise echo the field it failed on.
             throw new IllegalStateException("Could not persist DOMjudge credentials");
         }
-        log.info("Stored DOMjudge credentials for user {} (dj user={}, team={})",
-            userId, credentials.username(), credentials.teamId());
+        log.info("Stored DOMjudge credentials for user {} in classroom {} (dj user={}, team={})",
+            userId, classroomId, credentials.username(), credentials.teamId());
     }
 
-    public Stored find(Long userId) {
-        if (!isConfigured()) return null;
-        String blob = redis.opsForValue().get(KEY_PREFIX + userId);
+    public Stored find(Long classroomId, Long userId) {
+        if (!isConfigured() || classroomId == null) return null;
+        String blob = redis.opsForValue().get(key(classroomId, userId));
         if (blob == null) return null;
         try {
             return objectMapper.readValue(decrypt(blob), Stored.class);
         } catch (Exception e) {
             // A key rotation invalidates every stored blob at once. That reads as "not linked",
             // which is recoverable by re-provisioning, rather than as a server error.
-            log.warn("Could not read DOMjudge credentials for user {}: {}",
-                userId, e.getClass().getSimpleName());
+            log.warn("Could not read DOMjudge credentials for user {} in classroom {}: {}",
+                userId, classroomId, e.getClass().getSimpleName());
             return null;
         }
     }
@@ -174,24 +185,92 @@ public class DomjudgeCredentialStore {
      * A contestant cannot provision their own — an admin attaches them — so the message says
      * who to ask rather than offering a settings page that does not exist for them.
      */
-    public Stored require(Long userId) {
-        Stored credentials = find(userId);
+    public Stored require(Long classroomId, Long userId) {
+        Stored credentials = find(classroomId, userId);
         if (credentials == null) {
             throw ApiException.forbidden(
-                "No DOMjudge account is attached to your CPIntel account, so there is nothing "
-                    + "to compete as. Ask the admin running this contest to attach one.");
+                "No DOMjudge account is attached to your CPIntel account for this classroom, so "
+                    + "there is nothing to compete as. Ask the admin running it to attach one.");
         }
         return credentials;
     }
 
-    public void delete(Long userId) {
-        redis.delete(KEY_PREFIX + userId);
+    /** Whether a login is attached, without decrypting it — for listings. */
+    public boolean exists(Long classroomId, Long userId) {
+        return Boolean.TRUE.equals(redis.hasKey(key(classroomId, userId)));
+    }
+
+    public void delete(Long classroomId, Long userId) {
+        redis.delete(key(classroomId, userId));
     }
 
     /** How long the stored credentials have left, for the admin screen. */
-    public Duration timeToLive(Long userId) {
-        Long seconds = redis.getExpire(KEY_PREFIX + userId);
+    public Duration timeToLive(Long classroomId, Long userId) {
+        Long seconds = redis.getExpire(key(classroomId, userId));
         return seconds == null || seconds < 0 ? null : Duration.ofSeconds(seconds);
+    }
+
+    /**
+     * Moves logins stored before classrooms existed ({@code dj:cred:<user>}) into one.
+     *
+     * <p>Run once at startup by {@code ClassroomBootstrap}; anything already moved no longer
+     * matches, so running it again does nothing. The TTL travels with the key.
+     *
+     * @return the users whose login was moved, so enrolment can be recorded for them
+     */
+    public java.util.List<Long> adoptLegacy(Long classroomId) {
+        java.util.List<Long> moved = new java.util.ArrayList<>();
+        var options = org.springframework.data.redis.core.ScanOptions.scanOptions()
+            .match(KEY_PREFIX + "*").count(500).build();
+        try (var cursor = redis.scan(options)) {
+            while (cursor.hasNext()) {
+                String legacy = cursor.next();
+                String rest = legacy.substring(KEY_PREFIX.length());
+                if (rest.indexOf(':') >= 0) continue;
+                try {
+                    Long userId = Long.parseLong(rest);
+                    if (Boolean.TRUE.equals(redis.renameIfAbsent(legacy, key(classroomId, userId)))) {
+                        moved.add(userId);
+                    }
+                } catch (NumberFormatException ignored) {
+                    // Not one of ours.
+                }
+            }
+        }
+        if (!moved.isEmpty()) {
+            log.info("Moved {} DOMjudge login(s) from before classrooms into classroom {}",
+                moved.size(), classroomId);
+        }
+        return moved;
+    }
+
+    // ------------------------------------------------------------- secrets
+
+    /**
+     * Encrypts a classroom's service-account password under the same key as the logins.
+     *
+     * <p>That one lives in Postgres rather than Redis, because it belongs to the classroom and
+     * must not expire under it; the key being in the environment is what keeps a database dump
+     * from yielding it.
+     */
+    public String seal(String plain) {
+        requireKey();
+        try {
+            return encrypt(plain);
+        } catch (Exception e) {
+            throw new IllegalStateException("Could not encrypt a DOMjudge secret");
+        }
+    }
+
+    /** The reverse of {@link #seal}, or null when the key cannot open it (e.g. after rotation). */
+    public String open(String sealed) {
+        if (sealed == null || !isConfigured()) return null;
+        try {
+            return decrypt(sealed);
+        } catch (Exception e) {
+            log.warn("Could not decrypt a DOMjudge secret: {}", e.getClass().getSimpleName());
+            return null;
+        }
     }
 
     // ---------------------------------------------------------------- crypto

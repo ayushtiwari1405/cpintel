@@ -11,6 +11,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -38,10 +39,11 @@ public class DomjudgeController {
     private final DomjudgeAccountService accounts;
 
     @GetMapping("/account")
-    @Operation(summary = "The DOMjudge account attached to you, and the team it competes for")
+    @Operation(summary = "The DOMjudge account attached to you in one classroom, and its team")
     public ResponseEntity<ApiResponse<DomjudgeDto.AccountStatus>> account(
-        @AuthenticationPrincipal Long userId) {
-        return ResponseEntity.ok(ApiResponse.ok(accounts.status(userId)));
+        @AuthenticationPrincipal Long userId,
+        @RequestParam Long classroomId) {
+        return ResponseEntity.ok(ApiResponse.ok(accounts.status(classroomId, userId)));
     }
 
     /**
@@ -52,7 +54,7 @@ public class DomjudgeController {
      * then keep in step.
      */
     @GetMapping("/contests")
-    @Operation(summary = "Contests visible to your DOMjudge account, running ones first")
+    @Operation(summary = "Contests visible to your DOMjudge accounts in every classroom, running ones first")
     public ResponseEntity<ApiResponse<List<DomjudgeDto.ContestSummary>>> contests(
         @AuthenticationPrincipal Long userId) {
         return ResponseEntity.ok(ApiResponse.ok(accounts.contests(userId)));

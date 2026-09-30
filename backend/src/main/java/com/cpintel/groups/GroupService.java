@@ -45,6 +45,7 @@ public class GroupService {
     private final StandingsService standingsService;
     private final ViolationService violationService;
     private final AuditService auditService;
+    private final com.cpintel.classrooms.ClassroomService classrooms;
 
     // ----------------------------------------------------------------- groups
     //
@@ -53,8 +54,10 @@ public class GroupService {
     // gets its own session and the proxy is detached by the time the mapper touches it.
 
     @Transactional(readOnly = true)
-    public List<GroupsDto.GroupSummary> list() {
+    public List<GroupsDto.GroupSummary> list(Long adminId) {
+        List<Long> managed = classrooms.managedIds(adminId);
         return groupRepository.findAllByOrderByCreatedAtDesc().stream()
+            .filter(group -> managed == null || managed.contains(group.getClassroomId()))
             .map(group -> GroupMapper.toGroupSummary(group,
                 (int) memberRepository.countByGroupGroupId(group.getGroupId()),
                 contestRepository.findByGroupGroupIdOrderByStartsAtDesc(group.getGroupId()).size()))
@@ -77,11 +80,14 @@ public class GroupService {
     public GroupsDto.GroupSummary create(Long adminId, GroupsDto.GroupRequest req,
                                          HttpServletRequest httpReq) {
         String name = req.name().trim();
-        if (groupRepository.existsByNameIgnoreCase(name)) {
-            throw ApiException.conflict("A group called \"" + name + "\" already exists.");
+        Long classroomId = classrooms.requireManaged(adminId, req.classroomId()).getClassroomId();
+        if (groupRepository.existsByClassroomIdAndNameIgnoreCase(classroomId, name)) {
+            throw ApiException.conflict("A group called \"" + name + "\" already exists in "
+                + "this classroom.");
         }
 
         ContestGroup group = groupRepository.save(ContestGroup.builder()
+            .classroomId(classroomId)
             .name(name)
             .description(trimToNull(req.description()))
             .ownerId(adminId)
@@ -136,6 +142,7 @@ public class GroupService {
         if (memberRepository.existsByGroupGroupIdAndUserUserId(groupId, req.userId())) {
             throw ApiException.conflict(user.getUsername() + " is already in this group.");
         }
+        classrooms.enroll(group.getClassroomId(), user);
 
         GroupMember member = memberRepository.save(GroupMember.builder()
             .group(group)
@@ -185,6 +192,10 @@ public class GroupService {
         GroupMember existing = memberRepository
             .findByGroupGroupIdAndUserUserId(fromGroupId, userId)
             .orElseThrow(() -> ApiException.notFound("That person is not in this group"));
+        if (!target.getClassroomId().equals(existing.getGroup().getClassroomId())) {
+            throw ApiException.badRequest(target.getName() + " is in another classroom. Enrol "
+                + "them there and add them to it instead.");
+        }
 
         if (memberRepository.existsByGroupGroupIdAndUserUserId(toGroupId, userId)) {
             throw ApiException.conflict(
@@ -235,13 +246,15 @@ public class GroupService {
                                                HttpServletRequest httpReq) {
         ContestGroup group = require(groupId);
         String platform = platformOf(req.platform());
-        String externalId = req.externalId().trim();
+        String externalId = com.cpintel.integration.domjudge.JudgeContestRef.qualify(
+            platform, group.getClassroomId(), req.externalId());
 
         if (req.startsAt() != null && req.endsAt() != null && !req.endsAt().isAfter(req.startsAt())) {
             throw ApiException.badRequest("The contest must end after it starts.");
         }
 
         GroupContest contest = contestRepository.save(GroupContest.builder()
+            .classroomId(group.getClassroomId())
             .group(group)
             .kind(GroupContest.Kind.CONTEST.name())
             .lifecycle(GroupContest.Lifecycle.SCHEDULED.name())

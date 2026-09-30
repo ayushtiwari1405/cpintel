@@ -37,6 +37,10 @@ class EventServiceRulesTest {
     private static final Long TEAM = 3L;
     private static final Long EVENT = 42L;
 
+    private static final Long CLASSROOM = 1L;
+    /** Stored classroom-qualified, as every DOMjudge event id is — see JudgeContestRef. */
+    private static final String MIDSEM = CLASSROOM + "~midsem";
+
     private GroupContestRepository events;
     private ContestGroupRepository teams;
     private ContestAssignmentRepository assignments;
@@ -67,10 +71,11 @@ class EventServiceRulesTest {
             mock(ExamPasswordService.class),
             mock(AuditService.class),
             filePolicy,
-            new ObjectMapper());
+            new ObjectMapper(),
+            classrooms());
 
         when(teams.findById(TEAM)).thenReturn(Optional.of(
-            ContestGroup.builder().groupId(TEAM).name("Second years").isActive(true).build()));
+            ContestGroup.builder().groupId(TEAM).classroomId(CLASSROOM).name("Second years").isActive(true).build()));
         // A save also makes the row readable, because create() finishes by reading back the
         // detail it just wrote — which is exactly what the controller returns.
         when(events.save(any())).thenAnswer(call -> {
@@ -86,12 +91,20 @@ class EventServiceRulesTest {
         when(assignments.participantsNamedDirectly(EVENT)).thenReturn(List.of());
     }
 
+    private static com.cpintel.classrooms.ClassroomService classrooms() {
+        com.cpintel.classrooms.ClassroomService classrooms =
+            mock(com.cpintel.classrooms.ClassroomService.class);
+        when(classrooms.requireManaged(any(), any())).thenReturn(
+            com.cpintel.entity.Classroom.builder().classroomId(CLASSROOM).name("Class").build());
+        return classrooms;
+    }
+
     private EventsDto.EventRequest request(String kind, String platform, String visibility) {
         return new EventsDto.EventRequest(
-            kind, platform, "midsem", "Mid-semester practical", null, null, null,
+            kind, platform, MIDSEM, "Mid-semester practical", null, null, null,
             Instant.now().plus(Duration.ofDays(1)),
             Instant.now().plus(Duration.ofDays(1)).plus(Duration.ofHours(2)),
-            visibility, null, null, null, null, TEAM, null, null, null, null);
+            visibility, null, null, null, null, TEAM, null, null, null, null, CLASSROOM);
     }
 
     private GroupContest created() {
@@ -107,6 +120,21 @@ class EventServiceRulesTest {
     @Nested
     @DisplayName("What makes an examination an examination")
     class ExamRules {
+
+        @Test
+        @DisplayName("a bare DOMjudge contest id is stored qualified with the event's classroom")
+        void bareIdQualified() {
+            EventsDto.EventRequest base = request("EXAM", "DOMJUDGE", null);
+            EventsDto.EventRequest bare = new EventsDto.EventRequest(
+                base.kind(), base.platform(), "midsem", base.name(), null, null, null,
+                base.startsAt(), base.endsAt(), null, null, null, null, null, TEAM, null, null,
+                null, null, CLASSROOM);
+
+            service.create(ADMIN, bare, null);
+
+            assertEquals(MIDSEM, created().getExternalId());
+            assertEquals(CLASSROOM, created().getClassroomId());
+        }
 
         @Test
         @DisplayName("an examination is never public, whatever was asked for")
@@ -170,8 +198,8 @@ class EventServiceRulesTest {
         @DisplayName("an away threshold outside its bounds is refused")
         void thresholdIsBounded() {
             EventsDto.EventRequest req = new EventsDto.EventRequest(
-                "EXAM", "DOMJUDGE", "midsem", "Paper", null, null, null,
-                null, null, null, null, 0, null, null, TEAM, null, null, null, null);
+                "EXAM", "DOMJUDGE", MIDSEM, "Paper", null, null, null,
+                null, null, null, null, 0, null, null, TEAM, null, null, null, null, CLASSROOM);
 
             assertThrows(ApiException.class, () -> service.create(ADMIN, req, null));
         }
@@ -181,9 +209,9 @@ class EventServiceRulesTest {
         void windowMustBeOrdered() {
             Instant start = Instant.now().plus(Duration.ofDays(1));
             EventsDto.EventRequest req = new EventsDto.EventRequest(
-                "EXAM", "DOMJUDGE", "midsem", "Paper", null, null, null,
+                "EXAM", "DOMJUDGE", MIDSEM, "Paper", null, null, null,
                 start, start.minus(Duration.ofHours(1)), null, null, null, null, null,
-                TEAM, null, null, null, null);
+                TEAM, null, null, null, null, CLASSROOM);
 
             assertThrows(ApiException.class, () -> service.create(ADMIN, req, null));
         }
@@ -200,25 +228,25 @@ class EventServiceRulesTest {
 
             service.create(ADMIN, request("EXAM", "DOMJUDGE", null), null);
 
-            verify(filePolicy).setRule(eq("DOMJUDGE"), eq("midsem"), eq(ADMIN),
+            verify(filePolicy).setRule(eq("DOMJUDGE"), eq(MIDSEM), eq(ADMIN),
                 argThat(r -> Boolean.FALSE.equals(r.enabled())));
         }
 
         @Test
         @DisplayName("a second event on the same judge contest cannot flip the shared setting")
         void sharedContestConflictRefused() {
-            GroupContest other = GroupContest.builder().contestId(99L).name("Morning section")
-                .platform("DOMJUDGE").externalId("midsem").build();
-            when(events.findByPlatformAndExternalId("DOMJUDGE", "midsem"))
+            GroupContest other = GroupContest.builder().classroomId(CLASSROOM).contestId(99L).name("Morning section")
+                .platform("DOMJUDGE").externalId(MIDSEM).build();
+            when(events.findByPlatformAndExternalId("DOMJUDGE", MIDSEM))
                 .thenReturn(List.of(other));
-            when(filePolicy.hasRule("DOMJUDGE", "midsem")).thenReturn(true);
-            when(filePolicy.enabledFor("DOMJUDGE", "midsem")).thenReturn(false);
+            when(filePolicy.hasRule("DOMJUDGE", MIDSEM)).thenReturn(true);
+            when(filePolicy.enabledFor("DOMJUDGE", MIDSEM)).thenReturn(false);
 
             EventsDto.EventRequest base = request("EXAM", "DOMJUDGE", null);
             EventsDto.EventRequest allowFiles = new EventsDto.EventRequest(
                 base.kind(), base.platform(), base.externalId(), base.name(), null, null, null,
                 base.startsAt(), base.endsAt(), null, null, null, null, null, TEAM, null, null,
-                null, true);
+                null, true, CLASSROOM);
 
             ApiException e = assertThrows(ApiException.class,
                 () -> service.create(ADMIN, allowFiles, null));
@@ -234,12 +262,12 @@ class EventServiceRulesTest {
         private final Instant end = Instant.now().plus(Duration.ofHours(2));
 
         private GroupContest running() {
-            GroupContest event = GroupContest.builder()
+            GroupContest event = GroupContest.builder().classroomId(CLASSROOM)
                 .contestId(EVENT)
                 .kind(GroupContest.Kind.EXAM.name())
                 .lifecycle("SCHEDULED")
                 .platform("DOMJUDGE")
-                .externalId("midsem")
+                .externalId(MIDSEM)
                 .name("Paper")
                 .visibility("TEAMS")
                 .lockdownRequired(true)
@@ -253,8 +281,8 @@ class EventServiceRulesTest {
 
         private EventsDto.EventRequest edit(Instant endsAt, List<String> languages) {
             return new EventsDto.EventRequest(
-                "EXAM", "DOMJUDGE", "midsem", "Paper", null, null, null, start, endsAt,
-                "TEAMS", true, 10, null, languages, null, null, null, null, null);
+                "EXAM", "DOMJUDGE", MIDSEM, "Paper", null, null, null, start, endsAt,
+                "TEAMS", true, 10, null, languages, null, null, null, null, null, CLASSROOM);
         }
 
         @Test
@@ -314,12 +342,12 @@ class EventServiceRulesTest {
     class Lifecycle {
 
         private GroupContest event(String lifecycle, Instant startsAt, Instant endsAt) {
-            GroupContest event = GroupContest.builder()
+            GroupContest event = GroupContest.builder().classroomId(CLASSROOM)
                 .contestId(EVENT)
                 .kind(GroupContest.Kind.EXAM.name())
                 .lifecycle(lifecycle)
                 .platform("DOMJUDGE")
-                .externalId("midsem")
+                .externalId(MIDSEM)
                 .name("Paper")
                 .startsAt(startsAt)
                 .endsAt(endsAt)
@@ -395,12 +423,12 @@ class EventServiceRulesTest {
         void refusesWhenSat() {
             // The log is the record of something that happened to people. Archiving is how a
             // finished examination goes away.
-            GroupContest exam = GroupContest.builder()
+            GroupContest exam = GroupContest.builder().classroomId(CLASSROOM)
                 .contestId(EVENT)
                 .kind(GroupContest.Kind.EXAM.name())
                 .lifecycle("SCHEDULED")
                 .platform("DOMJUDGE")
-                .externalId("midsem")
+                .externalId(MIDSEM)
                 .name("Paper")
                 .startsAt(Instant.now().minus(Duration.ofHours(3)))
                 .endsAt(Instant.now().minus(Duration.ofHours(1)))
@@ -415,12 +443,12 @@ class EventServiceRulesTest {
         @Test
         @DisplayName("a draft nobody has sat can be deleted")
         void allowsWhenUnused() {
-            GroupContest draft = GroupContest.builder()
+            GroupContest draft = GroupContest.builder().classroomId(CLASSROOM)
                 .contestId(EVENT)
                 .kind(GroupContest.Kind.EXAM.name())
                 .lifecycle("DRAFT")
                 .platform("DOMJUDGE")
-                .externalId("midsem")
+                .externalId(MIDSEM)
                 .name("Paper")
                 .build();
             stubDetailRead(draft);

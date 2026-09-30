@@ -25,6 +25,7 @@ import static org.mockito.Mockito.*;
 class DomjudgeAccountServiceTest {
 
     private static final Long USER = 42L;
+    private static final Long CLASSROOM = 3L;
 
     private DomjudgeClient domjudge;
     private DomjudgeCredentialStore credentials;
@@ -40,7 +41,11 @@ class DomjudgeAccountServiceTest {
         when(credentials.isConfigured()).thenReturn(true);
         when(users.existsById(USER)).thenReturn(true);
 
-        service = new DomjudgeAccountService(domjudge, credentials, users);
+        DomjudgeJudges judges = mock(DomjudgeJudges.class);
+        when(judges.forClassroom(CLASSROOM)).thenReturn(domjudge);
+
+        service = new DomjudgeAccountService(judges,
+            mock(com.cpintel.classrooms.ClassroomService.class), credentials, users);
     }
 
     private DjModels.User account(String username, String name, String teamId) {
@@ -79,7 +84,7 @@ class DomjudgeAccountServiceTest {
     private DomjudgeCredentialStore.Stored captureSaved() {
         ArgumentCaptor<DomjudgeCredentialStore.Stored> captor =
             ArgumentCaptor.forClass(DomjudgeCredentialStore.Stored.class);
-        verify(credentials).save(eq(USER), captor.capture());
+        verify(credentials).save(eq(CLASSROOM), eq(USER), captor.capture());
         return captor.getValue();
     }
 
@@ -94,11 +99,11 @@ class DomjudgeAccountServiceTest {
 
             // The admin's choice cannot rescue this. It governs grouping, not attribution —
             // the judge reads the team off the login, so submissions would land nowhere.
-            ApiException e = assertThrows(ApiException.class, () -> service.provision(
+            ApiException e = assertThrows(ApiException.class, () -> service.provision(CLASSROOM,
                 new DomjudgeDto.ProvisionRequest(USER, "jury1", "pw", "Jury", "t7")));
 
             assertTrue(e.getMessage().toLowerCase().contains("team"));
-            verify(credentials, never()).save(any(), any());
+            verify(credentials, never()).save(any(), any(), any());
         }
 
         @Test
@@ -107,10 +112,10 @@ class DomjudgeAccountServiceTest {
             when(domjudge.whoami(any()))
                 .thenThrow(ApiException.badRequest("DOMjudge rejected that username and password."));
 
-            assertThrows(ApiException.class, () -> service.provision(
+            assertThrows(ApiException.class, () -> service.provision(CLASSROOM,
                 new DomjudgeDto.ProvisionRequest(USER, "ada", "wrong", "Ada", null)));
 
-            verify(credentials, never()).save(any(), any());
+            verify(credentials, never()).save(any(), any(), any());
         }
     }
 
@@ -120,7 +125,7 @@ class DomjudgeAccountServiceTest {
 
         @BeforeEach
         void noExistingCredential() {
-            when(credentials.find(USER)).thenReturn(null);
+            when(credentials.find(CLASSROOM, USER)).thenReturn(null);
         }
 
         @Test
@@ -134,7 +139,7 @@ class DomjudgeAccountServiceTest {
             when(domjudge.getAllTeams(any())).thenReturn(List.of(
                 team("t3", "Someone else"), namedTeam("t7", "test_user1")));
 
-            service.provision(
+            service.provision(CLASSROOM,
                 new DomjudgeDto.ProvisionRequest(USER, "ada", "pw", "Ada Lovelace", null));
 
             DomjudgeCredentialStore.Stored saved = captureSaved();
@@ -152,7 +157,7 @@ class DomjudgeAccountServiceTest {
                 .thenReturn(accountNamedTeamOnly("ada", "Ada L", "test_user1"));
             when(domjudge.getAllTeams(any())).thenReturn(List.of());
 
-            service.provision(
+            service.provision(CLASSROOM,
                 new DomjudgeDto.ProvisionRequest(USER, "ada", "pw", "Ada Lovelace", null));
 
             DomjudgeCredentialStore.Stored saved = captureSaved();
@@ -165,9 +170,9 @@ class DomjudgeAccountServiceTest {
         void refusesWhenThereIsNoTeamAtAll() {
             when(domjudge.whoami(any())).thenReturn(account("jury1", "Jury", null));
 
-            assertThrows(ApiException.class, () -> service.provision(
+            assertThrows(ApiException.class, () -> service.provision(CLASSROOM,
                 new DomjudgeDto.ProvisionRequest(USER, "jury1", "pw", "Jury", null)));
-            verify(credentials, never()).save(any(), any());
+            verify(credentials, never()).save(any(), any(), any());
         }
     }
 
@@ -178,7 +183,7 @@ class DomjudgeAccountServiceTest {
         @BeforeEach
         void common() {
             when(domjudge.whoami(any())).thenReturn(account("ada", "Ada L", "t7"));
-            when(credentials.find(USER)).thenReturn(null);
+            when(credentials.find(CLASSROOM, USER)).thenReturn(null);
         }
 
         @Test
@@ -186,7 +191,7 @@ class DomjudgeAccountServiceTest {
         void defaultsToTheJudge() {
             when(domjudge.whoami(any())).thenReturn(account("ada", "Ada L", "t7"));
 
-            service.provision(
+            service.provision(CLASSROOM,
                 new DomjudgeDto.ProvisionRequest(USER, "ada", "pw", "Ada Lovelace", null));
 
             DomjudgeCredentialStore.Stored saved = captureSaved();
@@ -201,7 +206,7 @@ class DomjudgeAccountServiceTest {
         void assignedTeamIsKeptSeparate() {
             when(domjudge.getAllTeams(any())).thenReturn(List.of(team("t9", "Team Beta")));
 
-            service.provision(
+            service.provision(CLASSROOM,
                 new DomjudgeDto.ProvisionRequest(USER, "ada", "pw", "Ada Lovelace", "t9"));
 
             DomjudgeCredentialStore.Stored saved = captureSaved();
@@ -220,7 +225,7 @@ class DomjudgeAccountServiceTest {
         void agreeingAssignmentIsNotAMismatch() {
             when(domjudge.getAllTeams(any())).thenReturn(List.of(team("t7", "Team Alpha")));
 
-            service.provision(
+            service.provision(CLASSROOM,
                 new DomjudgeDto.ProvisionRequest(USER, "ada", "pw", "Ada Lovelace", "t7"));
 
             assertFalse(captureSaved().teamMismatch());
@@ -233,7 +238,7 @@ class DomjudgeAccountServiceTest {
             // would be the less useful answer — the admin may know something it cannot see.
             when(domjudge.getAllTeams(any())).thenReturn(List.of());
 
-            service.provision(
+            service.provision(CLASSROOM,
                 new DomjudgeDto.ProvisionRequest(USER, "ada", "pw", "Ada Lovelace", "t9"));
 
             DomjudgeCredentialStore.Stored saved = captureSaved();
@@ -254,7 +259,7 @@ class DomjudgeAccountServiceTest {
         @Test
         @DisplayName("the admin's name is kept when they gave one")
         void adminNameWins() {
-            service.provision(
+            service.provision(CLASSROOM,
                 new DomjudgeDto.ProvisionRequest(USER, "ada", "pw", "  Ada Lovelace  ", null));
 
             assertEquals("Ada Lovelace", captureSaved().name(), "and trimmed");
@@ -263,7 +268,7 @@ class DomjudgeAccountServiceTest {
         @Test
         @DisplayName("the judge's name is the fallback, so the field is never empty")
         void fallsBackToTheJudge() {
-            service.provision(
+            service.provision(CLASSROOM,
                 new DomjudgeDto.ProvisionRequest(USER, "ada", "pw", "   ", null));
 
             assertEquals("ada-on-judge", captureSaved().name());
@@ -282,10 +287,10 @@ class DomjudgeAccountServiceTest {
         @Test
         @DisplayName("keeps the login, name and assigned team, and replaces only the password")
         void replacesOnlyThePassword() {
-            when(credentials.find(USER)).thenReturn(current());
+            when(credentials.find(CLASSROOM, USER)).thenReturn(current());
             when(domjudge.whoami(any())).thenReturn(account("ada", "Ada L", "t7"));
 
-            service.changePassword(USER, "new-pw");
+            service.changePassword(CLASSROOM, USER, "new-pw");
 
             DomjudgeCredentialStore.Stored saved = captureSaved();
             assertEquals("ada", saved.username());
@@ -298,32 +303,32 @@ class DomjudgeAccountServiceTest {
         @Test
         @DisplayName("verifies the new password as the attached login before storing it")
         void verifiesAsTheAttachedLogin() {
-            when(credentials.find(USER)).thenReturn(current());
+            when(credentials.find(CLASSROOM, USER)).thenReturn(current());
             when(domjudge.whoami(argThat(c -> c != null && "ada".equals(c.username())
                 && "new-pw".equals(c.password())))).thenReturn(account("ada", "Ada L", "t7"));
 
-            service.changePassword(USER, "new-pw");
+            service.changePassword(CLASSROOM, USER, "new-pw");
 
-            verify(credentials).save(eq(USER), any());
+            verify(credentials).save(eq(CLASSROOM), eq(USER), any());
         }
 
         @Test
         @DisplayName("a rejected password leaves the working one in place")
         void rejectedKeepsOld() {
-            when(credentials.find(USER)).thenReturn(current());
+            when(credentials.find(CLASSROOM, USER)).thenReturn(current());
             when(domjudge.whoami(any()))
                 .thenThrow(ApiException.badRequest("DOMjudge rejected that username and password."));
 
-            assertThrows(ApiException.class, () -> service.changePassword(USER, "typo"));
-            verify(credentials, never()).save(any(), any());
+            assertThrows(ApiException.class, () -> service.changePassword(CLASSROOM, USER, "typo"));
+            verify(credentials, never()).save(any(), any(), any());
         }
 
         @Test
         @DisplayName("refuses when nothing is attached, rather than inventing a login")
         void nothingAttached() {
-            when(credentials.find(USER)).thenReturn(null);
+            when(credentials.find(CLASSROOM, USER)).thenReturn(null);
 
-            assertThrows(ApiException.class, () -> service.changePassword(USER, "pw"));
+            assertThrows(ApiException.class, () -> service.changePassword(CLASSROOM, USER, "pw"));
             verify(domjudge, never()).whoami(any());
         }
     }

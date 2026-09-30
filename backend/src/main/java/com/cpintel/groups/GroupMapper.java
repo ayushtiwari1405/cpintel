@@ -19,6 +19,7 @@ public final class GroupMapper {
     public static GroupsDto.GroupSummary toGroupSummary(ContestGroup group, int members, int contests) {
         return new GroupsDto.GroupSummary(
             group.getGroupId(),
+            group.getClassroomId(),
             group.getName(),
             group.getDescription(),
             Boolean.TRUE.equals(group.getIsActive()),
@@ -55,6 +56,7 @@ public final class GroupMapper {
             contest.getGroup() == null ? null : contest.getGroup().getName(),
             contest.getPlatform(),
             contest.getExternalId(),
+            com.cpintel.integration.domjudge.JudgeContestRef.judgeIdOf(contest.getExternalId()),
             contest.getName(),
             contest.getUrl(),
             contest.getStartsAt(),

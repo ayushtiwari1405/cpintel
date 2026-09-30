@@ -45,6 +45,13 @@ public class GroupContest extends BaseEntity {
     @JoinColumn(name = "group_id")
     private ContestGroup group;
 
+    /**
+     * The classroom this event belongs to. For a DOMjudge event this is also the judge it runs
+     * on, and {@link #externalId} carries it as its prefix — see {@code JudgeContestRef}.
+     */
+    @Column(name = "classroom_id", nullable = false)
+    private Long classroomId;
+
     @Column(name = "kind", nullable = false, length = 10)
     @Builder.Default
     private String kind = Kind.CONTEST.name();
@@ -52,7 +59,10 @@ public class GroupContest extends BaseEntity {
     @Column(name = "platform", nullable = false, length = 20)
     private String platform;
 
-    /** A Codeforces contest id, or a DOMjudge contest id. Opaque on purpose. */
+    /**
+     * A Codeforces contest id, or a classroom-qualified DOMjudge contest id
+     * ({@code "<classroom>~<contest>"}, see {@code JudgeContestRef}). Opaque on purpose.
+     */
     @Column(name = "external_id", nullable = false, length = 100)
     private String externalId;
 

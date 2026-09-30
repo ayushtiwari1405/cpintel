@@ -3,6 +3,7 @@ package com.cpintel.compete;
 import com.cpintel.integration.domjudge.DjModels;
 import com.cpintel.integration.domjudge.DomjudgeClient;
 import com.cpintel.integration.domjudge.DomjudgeCredentialStore;
+import com.cpintel.integration.domjudge.DomjudgeJudges;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -31,7 +32,15 @@ import static org.mockito.Mockito.*;
  */
 class DomjudgeContestCacheTest {
 
-    private static final String CID = "nwerc18";
+    /** What the judge calls the contest, and what CPIntel calls it — see JudgeContestRef. */
+    private static final String RAW = "nwerc18";
+    private static final String CID = "1~" + RAW;
+
+    private static DomjudgeJudges judgesFor(DomjudgeClient client) {
+        DomjudgeJudges judges = mock(DomjudgeJudges.class);
+        when(judges.forContest(anyString())).thenReturn(client);
+        return judges;
+    }
 
     private DjModels.Submission submission(String id) {
         DjModels.Submission s = new DjModels.Submission();
@@ -54,7 +63,7 @@ class DomjudgeContestCacheTest {
             return List.of(submission("1"));
         });
 
-        DomjudgeContestCache cache = new DomjudgeContestCache(client);
+        DomjudgeContestCache cache = new DomjudgeContestCache(judgesFor(client));
 
         int readers = 200;
         CountDownLatch ready = new CountDownLatch(readers);
@@ -91,27 +100,27 @@ class DomjudgeContestCacheTest {
     @DisplayName("a warm read does not touch the judge at all")
     void warmReadIsFree() {
         DomjudgeClient client = mock(DomjudgeClient.class);
-        when(client.getSubmissions(null, CID)).thenReturn(List.of(submission("1")));
+        when(client.getSubmissions(null, RAW)).thenReturn(List.of(submission("1")));
 
-        DomjudgeContestCache cache = new DomjudgeContestCache(client);
+        DomjudgeContestCache cache = new DomjudgeContestCache(judgesFor(client));
 
         for (int i = 0; i < 50; i++) cache.submissions(null, CID);
 
-        verify(client, times(1)).getSubmissions(null, CID);
+        verify(client, times(1)).getSubmissions(null, RAW);
     }
 
     @Test
     @DisplayName("a judge that blinks after a good read keeps serving the last good copy")
     void staleSurvivesFailure() {
         DomjudgeClient client = mock(DomjudgeClient.class);
-        when(client.getProblems(null, CID))
+        when(client.getProblems(null, RAW))
             .thenReturn(List.of(problem("A")))
             .thenThrow(new RuntimeException("judge unreachable"));
 
         // A zero-length TTL makes every read after the first one a refresh, which is the
         // moment this test is about.
         DomjudgeContestCache cache = new DomjudgeContestCache(
-            client, Duration.ZERO, Duration.ZERO);
+            judgesFor(client), Duration.ZERO, Duration.ZERO);
 
         assertEquals(1, cache.problems(null, CID).size());
 
@@ -124,9 +133,9 @@ class DomjudgeContestCacheTest {
     @DisplayName("a cold read against a dead judge surfaces the failure rather than lying")
     void coldFailurePropagates() {
         DomjudgeClient client = mock(DomjudgeClient.class);
-        when(client.getProblems(null, CID)).thenThrow(new RuntimeException("judge unreachable"));
+        when(client.getProblems(null, RAW)).thenThrow(new RuntimeException("judge unreachable"));
 
-        DomjudgeContestCache cache = new DomjudgeContestCache(client);
+        DomjudgeContestCache cache = new DomjudgeContestCache(judgesFor(client));
 
         assertThrows(RuntimeException.class, () -> cache.problems(null, CID),
             "with nothing cached there is nothing honest to return");
@@ -136,11 +145,11 @@ class DomjudgeContestCacheTest {
     @DisplayName("team names match case- and whitespace-insensitively, on either name field")
     void teamLookupIsForgiving() {
         DomjudgeClient client = mock(DomjudgeClient.class);
-        when(client.getTeams(null, CID)).thenReturn(List.of(
+        when(client.getTeams(null, RAW)).thenReturn(List.of(
             team("7", "Team  Alpha", null),
             team("8", null, "Beta Squad")));
 
-        DomjudgeContestCache cache = new DomjudgeContestCache(client);
+        DomjudgeContestCache cache = new DomjudgeContestCache(judgesFor(client));
 
         assertEquals("7", cache.teamIdByName(null, CID, "team alpha"));
         assertEquals("7", cache.teamIdByName(null, CID, "  Team   Alpha "));
@@ -161,10 +170,10 @@ class DomjudgeContestCacheTest {
 
         // DOMjudge filters a team account's view of the submissions list to its own team, so
         // these two genuinely get different answers to the same question.
-        when(client.getSubmissions(alice, CID)).thenReturn(List.of(submission("alice-1")));
-        when(client.getSubmissions(bob, CID)).thenReturn(List.of(submission("bob-1")));
+        when(client.getSubmissions(alice, RAW)).thenReturn(List.of(submission("alice-1")));
+        when(client.getSubmissions(bob, RAW)).thenReturn(List.of(submission("bob-1")));
 
-        DomjudgeContestCache cache = new DomjudgeContestCache(client);
+        DomjudgeContestCache cache = new DomjudgeContestCache(judgesFor(client));
 
         assertEquals("alice-1", cache.submissions(alice, CID).get(0).getId());
         assertEquals("bob-1", cache.submissions(bob, CID).get(0).getId(),
@@ -172,8 +181,8 @@ class DomjudgeContestCacheTest {
 
         // And each is still cached in its own right, rather than evicting the other.
         assertEquals("alice-1", cache.submissions(alice, CID).get(0).getId());
-        verify(client, times(1)).getSubmissions(alice, CID);
-        verify(client, times(1)).getSubmissions(bob, CID);
+        verify(client, times(1)).getSubmissions(alice, RAW);
+        verify(client, times(1)).getSubmissions(bob, RAW);
     }
 
     @Test
@@ -183,10 +192,10 @@ class DomjudgeContestCacheTest {
         DomjudgeCredentialStore.Stored alice = new DomjudgeCredentialStore.Stored(
             "alice", "pw", "Alice", "t1", "Team One", null, null, Instant.EPOCH);
 
-        when(client.getSubmissions(alice, CID)).thenReturn(List.of(submission("1")));
-        when(client.getSubmissions(null, CID)).thenReturn(List.of(submission("1")));
+        when(client.getSubmissions(alice, RAW)).thenReturn(List.of(submission("1")));
+        when(client.getSubmissions(null, RAW)).thenReturn(List.of(submission("1")));
 
-        DomjudgeContestCache cache = new DomjudgeContestCache(client);
+        DomjudgeContestCache cache = new DomjudgeContestCache(judgesFor(client));
         cache.submissions(alice, CID);
         cache.submissions(null, CID);
 
@@ -196,8 +205,8 @@ class DomjudgeContestCacheTest {
         // several seconds before anybody else.
         cache.submissions(alice, CID);
         cache.submissions(null, CID);
-        verify(client, times(2)).getSubmissions(alice, CID);
-        verify(client, times(2)).getSubmissions(null, CID);
+        verify(client, times(2)).getSubmissions(alice, RAW);
+        verify(client, times(2)).getSubmissions(null, RAW);
     }
 
     private DjModels.ContestProblem problem(String label) {

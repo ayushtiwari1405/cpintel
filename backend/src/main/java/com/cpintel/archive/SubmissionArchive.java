@@ -172,8 +172,29 @@ public class SubmissionArchive {
     public void updateVerdict(Long userId, String platform, Long externalId, String verdict,
                               Integer passedTestCount, Integer timeMs, Long memoryBytes) {
         if (externalId == null || verdict == null) return;
+        applyVerdict(() -> repo.findByUserIdAndPlatformAndExternalId(userId, platform, externalId),
+            externalId, verdict, passedTestCount, timeMs, memoryBytes);
+    }
+
+    /**
+     * The same, for a judge whose submission ids are only unique per instance. A student in
+     * two classrooms can hold submission 17 on both judges, so the contest has to pin which.
+     */
+    public void updateVerdict(Long userId, String platform, String contestId, Long externalId,
+                              String verdict, Integer passedTestCount, Integer timeMs,
+                              Long memoryBytes) {
+        if (externalId == null || verdict == null || contestId == null) return;
+        applyVerdict(() -> repo.findByUserIdAndPlatformAndContestIdAndExternalId(
+                userId, platform, contestId, externalId),
+            externalId, verdict, passedTestCount, timeMs, memoryBytes);
+    }
+
+    private void applyVerdict(java.util.function.Supplier<java.util.Optional<CodeSubmission>> find,
+                              Long externalId,
+                              String verdict, Integer passedTestCount, Integer timeMs,
+                              Long memoryBytes) {
         try {
-            repo.findByUserIdAndPlatformAndExternalId(userId, platform, externalId)
+            find.get()
                 .filter(row -> !verdict.equals(row.getVerdict()))
                 .ifPresent(row -> {
                     row.setVerdict(verdict);

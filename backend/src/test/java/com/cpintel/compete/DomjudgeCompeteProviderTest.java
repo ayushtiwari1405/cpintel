@@ -5,7 +5,10 @@ import com.cpintel.files.ContestFilePolicy;
 import com.cpintel.integration.domjudge.DjModels;
 import com.cpintel.integration.domjudge.DomjudgeClient;
 import com.cpintel.integration.domjudge.DomjudgeCredentialStore;
+import com.cpintel.integration.domjudge.DomjudgeJudges;
 import com.cpintel.integration.domjudge.DomjudgeSampleClient;
+import com.cpintel.classrooms.ClassroomService;
+import com.cpintel.entity.Classroom;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -34,7 +37,10 @@ import static org.mockito.Mockito.*;
  */
 class DomjudgeCompeteProviderTest {
 
-    private static final String CID = "nwerc18";
+    private static final long CLASSROOM = 1L;
+    /** The judge's own id, and the classroom-qualified one CPIntel routes by. */
+    private static final String RAW = "nwerc18";
+    private static final String CID = CLASSROOM + "~" + RAW;
     private static final Long USER = 42L;
     private static final String TEAM = "t7";
 
@@ -47,6 +53,7 @@ class DomjudgeCompeteProviderTest {
     private DomjudgeContestCache cache;
     private DomjudgeCredentialStore credentials;
     private SubmissionArchive archive;
+    private ClassroomService classrooms;
     private DomjudgeCompeteProvider provider;
 
     @BeforeEach
@@ -62,24 +69,28 @@ class DomjudgeCompeteProviderTest {
         when(domjudge.root()).thenReturn("https://judge.example.edu");
         when(filePolicy.enabledFor(anyString(), anyString())).thenReturn(true);
         when(samples.samples(any(), anyString(), anyString())).thenReturn(List.of());
+        when(domjudge.samples()).thenReturn(samples);
+        DomjudgeJudges judges = mock(DomjudgeJudges.class);
+        when(judges.forContest(anyString())).thenReturn(domjudge);
+        classrooms = mock(ClassroomService.class);
 
         // No service account, which is the deployment shape these tests describe: every read
         // is made as the contestant, so the cache is addressed with their credentials.
         when(domjudge.hasServiceAccount()).thenReturn(false);
 
-        provider = new DomjudgeCompeteProvider(domjudge, cache, samples,
+        provider = new DomjudgeCompeteProvider(judges, cache, classrooms,
             credentials, archive, filePolicy);
     }
 
     /** Gives this user an attached DOMjudge account competing as {@link #TEAM}. */
     private void attachAccount() {
-        when(credentials.find(USER)).thenReturn(CREDS);
-        when(credentials.require(USER)).thenReturn(CREDS);
+        when(credentials.find(CLASSROOM, USER)).thenReturn(CREDS);
+        when(credentials.require(CLASSROOM, USER)).thenReturn(CREDS);
     }
 
     private DjModels.Contest contestMeta() {
         DjModels.Contest meta = new DjModels.Contest();
-        meta.setId(CID);
+        meta.setId(RAW);
         meta.setName("NWERC 2018");
         meta.setStart_time("2026-09-03T09:00:00+00:00");
         meta.setEnd_time("2026-09-03T14:00:00+00:00");
@@ -192,7 +203,7 @@ class DomjudgeCompeteProviderTest {
         @Test
         @DisplayName("with no attached account and no service account, the contest cannot open")
         void noAccountAtAll() {
-            when(credentials.find(USER)).thenReturn(null);
+            when(credentials.find(CLASSROOM, USER)).thenReturn(null);
 
             // Nothing to read the contest as. Refusing here beats a 403 from the judge, which
             // the page would otherwise render as "this contest does not exist".
@@ -205,7 +216,7 @@ class DomjudgeCompeteProviderTest {
             // A service account can still read the contest, so the page loads — but there is
             // nothing to submit as, and the reason has to name the person who resolves that.
             when(domjudge.hasServiceAccount()).thenReturn(true);
-            when(credentials.find(USER)).thenReturn(null);
+            when(credentials.find(CLASSROOM, USER)).thenReturn(null);
             when(cache.contest(null, CID)).thenReturn(contestMeta());
             when(cache.problems(null, CID)).thenReturn(List.of(problem("p1", "A")));
             when(cache.languages(null, CID)).thenReturn(List.of(language("cpp", "C++")));
@@ -272,14 +283,14 @@ class DomjudgeCompeteProviderTest {
             when(cache.languages(null, CID)).thenReturn(List.of(language("cpp", "C++")));
             when(archive.recordAttempt(any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn("arch-1");
-            when(domjudge.submitAs(eq(CREDS), eq(CID), eq("p1"), eq("cpp"), anyString(),
+            when(domjudge.submitAs(eq(CREDS), eq(RAW), eq("p1"), eq("cpp"), anyString(),
                 anyString())).thenReturn("s99");
 
             CompeteDto.ContestSubmission row = provider.submit(USER, CID,
                 new CompeteDto.ContestSubmitRequest("A", "cpp", "int main(){}"));
 
             assertEquals("s99", row.id());
-            verify(domjudge).submitAs(eq(CREDS), eq(CID), eq("p1"), eq("cpp"), anyString(),
+            verify(domjudge).submitAs(eq(CREDS), eq(RAW), eq("p1"), eq("cpp"), anyString(),
                 anyString());
         }
 
@@ -407,7 +418,7 @@ class DomjudgeCompeteProviderTest {
         @Test
         @DisplayName("a contestant with no attached account sees an empty list, not an error")
         void noAccount() {
-            when(credentials.find(USER)).thenReturn(null);
+            when(credentials.find(CLASSROOM, USER)).thenReturn(null);
 
             assertTrue(provider.submissions(USER, CID).isEmpty());
         }
@@ -505,7 +516,7 @@ class DomjudgeCompeteProviderTest {
         void publicBoardIsNotLive() {
             when(cache.scoreboard(CREDS, CID)).thenReturn(board(row(1, TEAM, 1, 20, true, 20)));
             when(domjudge.hasServiceAccount()).thenReturn(false);
-            when(domjudge.canReadJuryScoreboard(CREDS, CID)).thenReturn(false);
+            when(domjudge.canReadJuryScoreboard(CREDS, RAW)).thenReturn(false);
 
             // A frozen board that claims to be live looks exactly like a room where nobody is
             // solving anything, so the page has to be able to say which it is looking at.
@@ -542,22 +553,54 @@ class DomjudgeCompeteProviderTest {
     @DisplayName("contest ids, which DOMjudge does not require to be numbers")
     class Parsing {
 
-        @Test
-        @DisplayName("a bare non-numeric id is valid")
-        void bareId() {
-            assertEquals("nwerc18", provider.parseContestId("nwerc18"));
+        private Classroom classroom(long id, String url) {
+            return Classroom.builder().classroomId(id).name("C" + id).domjudgeUrl(url).build();
         }
 
         @Test
-        @DisplayName("an id is lifted out of a link")
+        @DisplayName("a bare non-numeric id is valid, qualified with the page's classroom")
+        void bareId() {
+            assertEquals("5~nwerc18", provider.parseContestId(USER, 5L, "nwerc18"));
+        }
+
+        @Test
+        @DisplayName("an id is lifted out of a link, and the link picks the classroom")
         void fromUrl() {
-            assertEquals("3", provider.parseContestId("https://judge.example.edu/contests/3"));
+            when(classrooms.forJudgeLink("https://judge.example.edu/contests/3"))
+                .thenReturn(java.util.Optional.of(classroom(7, "https://judge.example.edu")));
+            assertEquals("7~3", provider.parseContestId(USER, null,
+                "https://judge.example.edu/contests/3"));
         }
 
         @Test
         @DisplayName("surrounding whitespace is forgiven")
         void trimmed() {
-            assertEquals("nwerc18", provider.parseContestId("  nwerc18 "));
+            assertEquals("5~nwerc18", provider.parseContestId(USER, 5L, "  nwerc18 "));
+        }
+
+        @Test
+        @DisplayName("an already-qualified id is kept as it is")
+        void qualified() {
+            assertEquals("3~demo", provider.parseContestId(USER, null, "3~demo"));
+        }
+
+        @Test
+        @DisplayName("a bare id resolves to the student's only judge classroom")
+        void onlyClassroom() {
+            when(classrooms.forJudgeLink(anyString())).thenReturn(java.util.Optional.empty());
+            when(classrooms.judgeClassroomsOf(USER))
+                .thenReturn(List.of(classroom(4, "https://a.example")));
+            assertEquals("4~demo", provider.parseContestId(USER, null, "demo"));
+        }
+
+        @Test
+        @DisplayName("a bare id is refused when two classrooms could own it")
+        void ambiguous() {
+            when(classrooms.forJudgeLink(anyString())).thenReturn(java.util.Optional.empty());
+            when(classrooms.judgeClassroomsOf(USER)).thenReturn(List.of(
+                classroom(4, "https://a.example"), classroom(9, "https://b.example")));
+            assertThrows(RuntimeException.class,
+                () -> provider.parseContestId(USER, null, "demo"));
         }
     }
 }

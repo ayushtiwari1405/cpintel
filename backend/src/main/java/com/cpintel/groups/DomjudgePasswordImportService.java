@@ -71,9 +71,10 @@ public class DomjudgePasswordImportService {
                          int failed) {}
 
     public Result update(Long groupId, String text, boolean dryRun) {
-        groupRepository.findById(groupId)
+        Long classroomId = groupRepository.findById(groupId)
             .filter(g -> Boolean.TRUE.equals(g.getIsActive()))
-            .orElseThrow(() -> ApiException.notFound("No such group"));
+            .orElseThrow(() -> ApiException.notFound("No such group"))
+            .getClassroomId();
 
         List<RosterParser.Row> parsed;
         try {
@@ -89,12 +90,12 @@ public class DomjudgePasswordImportService {
         Map<String, GroupMember> byUsername = new HashMap<>();
         for (GroupMember member : memberRepository.findByGroup(groupId)) {
             Long userId = member.getUser().getUserId();
-            DomjudgeCredentialStore.Stored stored = credentials.find(userId);
+            DomjudgeCredentialStore.Stored stored = credentials.find(classroomId, userId);
             if (stored != null) byAttachedLogin.put(key(stored.username()), member);
             byUsername.put(key(member.getUser().getUsername()), member);
         }
 
-        String unavailable = domjudgeAccounts.unavailableReason();
+        String unavailable = domjudgeAccounts.unavailableReason(classroomId);
         Set<String> seen = new HashSet<>();
         List<RowOutcome> out = new ArrayList<>(parsed.size());
 
@@ -138,13 +139,16 @@ public class DomjudgePasswordImportService {
                 String team;
                 RowStatus status;
                 if (dryRun) {
-                    team = domjudgeAccounts.verify(login, row.djPassword()).teamLabel();
+                    team = domjudgeAccounts.verify(classroomId, login, row.djPassword())
+                        .teamLabel();
                     status = attached != null ? RowStatus.WILL_CHANGE : RowStatus.WILL_ATTACH;
                 } else if (attached != null) {
-                    team = teamOf(domjudgeAccounts.changePassword(userId, row.djPassword()));
+                    team = teamOf(domjudgeAccounts.changePassword(classroomId, userId,
+                        row.djPassword()));
                     status = RowStatus.CHANGED;
                 } else {
-                    team = teamOf(domjudgeAccounts.provision(new DomjudgeDto.ProvisionRequest(
+                    team = teamOf(domjudgeAccounts.provision(classroomId,
+                        new DomjudgeDto.ProvisionRequest(
                         userId, login, row.djPassword(), null, null)));
                     status = RowStatus.ATTACHED;
                 }
