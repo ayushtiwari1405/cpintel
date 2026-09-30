@@ -126,7 +126,7 @@ public class ExamLeaderboardService {
         }
         eventRepository.save(event);
 
-        auditService.record(adminId, AuditService.EVENT_UPDATED, event.getKind(),
+        auditService.recordIn(event.getClassroomId(), adminId, AuditService.EVENT_UPDATED, event.getKind(),
             String.valueOf(eventId), httpReq);
         Instant now = Instant.now();
         return answer(event, candidateState(event, now), null, now);

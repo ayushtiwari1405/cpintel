@@ -497,6 +497,9 @@ with a different DOMjudge account in each, and both logins are kept side by side
   archives classrooms and decides which admins run each one, and a classroom can have any
   number of them. An admin sees, and can open by id, only the classrooms they were added to,
   along with those classrooms' teams, events and logins.
+- **The audit log follows the classroom.** An admin reads the entries of the classrooms they run
+  and their own actions; deployment-wide entries such as other people's sign-ins are for a
+  superadmin. The same rule applies to the overview's recent activity and a user's activity.
 - **Admins use the console only.** The student pages (dashboard, practice, compete and so on)
   are hidden for admins and superadmins.
 - **Enrolment follows from everything else.** Adding someone to a team, importing a roster or

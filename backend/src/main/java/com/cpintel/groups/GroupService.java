@@ -94,7 +94,7 @@ public class GroupService {
             .isActive(true)
             .build());
 
-        auditService.record(adminId, AuditService.GROUP_CREATED, "GROUP",
+        auditService.recordIn(group.getClassroomId(), adminId, AuditService.GROUP_CREATED, "GROUP",
             group.getGroupId() + ":" + name, httpReq);
         return GroupMapper.toGroupSummary(group, 0, 0);
     }
@@ -107,7 +107,7 @@ public class GroupService {
         group.setDescription(trimToNull(req.description()));
         groupRepository.save(group);
 
-        auditService.record(adminId, AuditService.GROUP_UPDATED, "GROUP",
+        auditService.recordIn(classroomOf(groupId), adminId, AuditService.GROUP_UPDATED, "GROUP",
             String.valueOf(groupId), httpReq);
         return GroupMapper.toGroupSummary(group,
             (int) memberRepository.countByGroupGroupId(groupId),
@@ -126,7 +126,7 @@ public class GroupService {
         ContestGroup group = require(groupId);
         group.setIsActive(false);
         groupRepository.save(group);
-        auditService.record(adminId, AuditService.GROUP_DEACTIVATED, "GROUP",
+        auditService.recordIn(classroomOf(groupId), adminId, AuditService.GROUP_DEACTIVATED, "GROUP",
             String.valueOf(groupId), httpReq);
     }
 
@@ -151,7 +151,7 @@ public class GroupService {
             .joinedAt(Instant.now())
             .build());
 
-        auditService.record(adminId, AuditService.GROUP_MEMBER_ADDED, "GROUP",
+        auditService.recordIn(classroomOf(groupId), adminId, AuditService.GROUP_MEMBER_ADDED, "GROUP",
             groupId + ":" + req.userId(), httpReq);
         return GroupMapper.toMember(member, codeforcesHandle(member));
     }
@@ -165,7 +165,7 @@ public class GroupService {
         member.setExternalHandle(trimToNull(req.externalHandle()));
         memberRepository.save(member);
 
-        auditService.record(adminId, AuditService.GROUP_MEMBER_UPDATED, "GROUP",
+        auditService.recordIn(classroomOf(groupId), adminId, AuditService.GROUP_MEMBER_UPDATED, "GROUP",
             groupId + ":" + userId, httpReq);
         return GroupMapper.toMember(member, codeforcesHandle(member));
     }
@@ -214,7 +214,7 @@ public class GroupService {
             .joinedAt(Instant.now())
             .build());
 
-        auditService.record(adminId, AuditService.GROUP_MEMBER_MOVED, "GROUP",
+        auditService.recordIn(target.getClassroomId(), adminId, AuditService.GROUP_MEMBER_MOVED, "GROUP",
             fromGroupId + "->" + toGroupId + ":" + userId, httpReq);
         return GroupMapper.toMember(moved, codeforcesHandle(moved));
     }
@@ -225,7 +225,7 @@ public class GroupService {
             throw ApiException.notFound("That person is not in this group");
         }
         memberRepository.deleteByGroupGroupIdAndUserUserId(groupId, userId);
-        auditService.record(adminId, AuditService.GROUP_MEMBER_REMOVED, "GROUP",
+        auditService.recordIn(classroomOf(groupId), adminId, AuditService.GROUP_MEMBER_REMOVED, "GROUP",
             groupId + ":" + userId, httpReq);
     }
 
@@ -283,7 +283,7 @@ public class GroupService {
             .assignedBy(adminId)
             .build());
 
-        auditService.record(adminId, AuditService.GROUP_CONTEST_ADDED, "CONTEST",
+        auditService.recordIn(group.getClassroomId(), adminId, AuditService.GROUP_CONTEST_ADDED, "CONTEST",
             groupId + ":" + platform + ":" + externalId, httpReq);
         return GroupMapper.toContestSummary(contest);
     }
@@ -291,7 +291,7 @@ public class GroupService {
     @Transactional
     public void removeContest(Long adminId, Long contestId, HttpServletRequest httpReq) {
         GroupContest contest = requireContest(contestId);
-        auditService.record(adminId, AuditService.GROUP_CONTEST_REMOVED, "CONTEST",
+        auditService.recordIn(contest.getClassroomId(), adminId, AuditService.GROUP_CONTEST_REMOVED, "CONTEST",
             contestId + ":" + contest.getPlatform() + ":" + contest.getExternalId(), httpReq);
         contestRepository.delete(contest);
     }
@@ -445,5 +445,10 @@ public class GroupService {
         counts.put("groups", groupRepository.count());
         counts.put("contests", contestRepository.count());
         return counts;
+    }
+
+    /** The classroom a team's audit entries belong to. */
+    private Long classroomOf(Long groupId) {
+        return groupRepository.findById(groupId).map(ContestGroup::getClassroomId).orElse(null);
     }
 }

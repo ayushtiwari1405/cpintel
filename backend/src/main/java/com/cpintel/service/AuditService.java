@@ -130,10 +130,32 @@ public class AuditService {
             request == null ? null : request.getHeader("User-Agent"));
     }
 
+    /**
+     * Records an action taken inside a classroom, so the classroom's admins can see it.
+     *
+     * <p>The audit log is filtered by classroom for everyone but a superadmin: an admin reads
+     * the entries of the classrooms they run, and their own. An entry written without one is
+     * deployment-wide — a sign-in, a role change — and only a superadmin sees it unless it is
+     * the reader's own.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void recordIn(Long classroomId, Long userId, String action, String entityType,
+                         String entityId, HttpServletRequest request) {
+        write(classroomId, userId, action, entityType, entityId,
+            request == null ? null : request.getRemoteAddr(),
+            request == null ? null : request.getHeader("User-Agent"));
+    }
+
     private void write(Long userId, String action, String entityType, String entityId,
                        String ip, String userAgent) {
+        write(null, userId, action, entityType, entityId, ip, userAgent);
+    }
+
+    private void write(Long classroomId, Long userId, String action, String entityType,
+                       String entityId, String ip, String userAgent) {
         try {
             auditLogRepository.save(AuditLog.builder()
+                .classroomId(classroomId)
                 .userId(userId)
                 .action(action)
                 .entityType(entityType)

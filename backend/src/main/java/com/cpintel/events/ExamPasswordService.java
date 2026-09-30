@@ -130,7 +130,7 @@ public class ExamPasswordService {
             ? 1 : exam.getExamPasswordGen() + 1);
         events.save(exam);
 
-        auditService.record(adminId, AuditService.EXAM_PASSWORD_SET, "EXAM",
+        auditService.recordIn(classroomOf(examId), adminId, AuditService.EXAM_PASSWORD_SET, "EXAM",
             examId + (rotating ? ":rotated" : ":set"), httpReq);
         log.info("Admin {} {} the examination password for exam {}",
             adminId, rotating ? "rotated" : "set", examId);
@@ -153,7 +153,7 @@ public class ExamPasswordService {
         exam.setExamPasswordSetBy(null);
         events.save(exam);
 
-        auditService.record(adminId, AuditService.EXAM_PASSWORD_CLEARED, "EXAM",
+        auditService.recordIn(classroomOf(examId), adminId, AuditService.EXAM_PASSWORD_CLEARED, "EXAM",
             String.valueOf(examId), httpReq);
         log.info("Admin {} cleared the examination password for exam {}", adminId, examId);
     }
@@ -231,7 +231,7 @@ public class ExamPasswordService {
         // A candidate who was un-assigned keeps a row that opens nothing, which is confusing
         // rather than dangerous — the access check reads the assignment as well. Left alone
         // deliberately: deleting it would lose the record that they were issued one.
-        auditService.record(adminId, AuditService.EXAM_PASSCODES_ISSUED, "EXAM",
+        auditService.recordIn(classroomOf(examId), adminId, AuditService.EXAM_PASSCODES_ISSUED, "EXAM",
             examId + ":created=" + created + ",rotated=" + rotated, httpReq);
         log.info("Admin {} issued exam passcodes for exam {}: {} created, {} rotated",
             adminId, examId, created, rotated);
@@ -259,7 +259,7 @@ public class ExamPasswordService {
         row.setFirstUsedAt(null);
         row.setUseCount(0);
 
-        auditService.record(adminId, AuditService.EXAM_PASSCODES_ISSUED, "EXAM",
+        auditService.recordIn(classroomOf(examId), adminId, AuditService.EXAM_PASSCODES_ISSUED, "EXAM",
             examId + ":reissued:" + userId, httpReq);
         log.info("Admin {} reissued the exam passcode for user {} on exam {}",
             adminId, userId, examId);
@@ -276,7 +276,7 @@ public class ExamPasswordService {
     @Transactional(readOnly = true)
     public List<Issued> revealPasscodes(Long adminId, Long examId, HttpServletRequest httpReq) {
         requireExam(examId);
-        auditService.record(adminId, AuditService.EXAM_PASSCODES_READ, "EXAM",
+        auditService.recordIn(classroomOf(examId), adminId, AuditService.EXAM_PASSCODES_READ, "EXAM",
             String.valueOf(examId), httpReq);
 
         return passcodes.findAllForContest(examId).stream()
@@ -288,7 +288,7 @@ public class ExamPasswordService {
     public void revokePasscodes(Long adminId, Long examId, HttpServletRequest httpReq) {
         requireExam(examId);
         int removed = passcodes.deleteAllForContest(examId);
-        auditService.record(adminId, AuditService.EXAM_PASSCODES_ISSUED, "EXAM",
+        auditService.recordIn(classroomOf(examId), adminId, AuditService.EXAM_PASSCODES_ISSUED, "EXAM",
             examId + ":revoked=" + removed, httpReq);
         log.info("Admin {} revoked {} exam passcodes on exam {}", adminId, removed, examId);
     }
@@ -507,5 +507,10 @@ public class ExamPasswordService {
                 e.getClass().getSimpleName());
             return "";
         }
+    }
+
+    /** The classroom an examination's audit entries belong to. */
+    private Long classroomOf(Long examId) {
+        return requireExam(examId).getClassroomId();
     }
 }

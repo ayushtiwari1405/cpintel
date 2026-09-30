@@ -22,6 +22,10 @@ public class AuditLog {
     @Column(name = "user_id")
     private Long userId;
 
+    /** The classroom the action happened in, or null for a deployment-wide one. */
+    @Column(name = "classroom_id")
+    private Long classroomId;
+
     @Column(name = "action", nullable = false, length = 100)
     private String action;
 

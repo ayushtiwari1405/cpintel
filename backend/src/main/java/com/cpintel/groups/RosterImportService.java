@@ -262,7 +262,7 @@ public class RosterImportService {
             committed.add(commit(group, outcomes.get(i), rows.get(i), judge, adminId, httpReq));
         }
 
-        auditService.record(adminId, AuditService.GROUP_MEMBER_ADDED, "GROUP",
+        auditService.recordIn(group.getClassroomId(), adminId, AuditService.GROUP_MEMBER_ADDED, "GROUP",
             groupId + ":bulk:" + committed.size(), httpReq);
         log.info("Admin {} bulk-imported {} rows into group {} ({} accounts created)",
             adminId, committed.size(), groupId, toCreate);
@@ -484,7 +484,7 @@ public class RosterImportService {
                 String password = generatePassword();
                 User user = createAccount(planned, password);
 
-                auditService.record(adminId, AuditService.USER_CREATED, "USER",
+                auditService.recordIn(group.getClassroomId(), adminId, AuditService.USER_CREATED, "USER",
                     user.getUserId() + ":" + Roles.USER + ":bulk", httpReq);
 
                 RowOutcome created = new RowOutcome(planned.line(), planned.email(),

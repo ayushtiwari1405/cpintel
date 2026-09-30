@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
@@ -34,19 +35,22 @@ public class AdminOverviewController {
 
     @GetMapping("/overview")
     @Operation(summary = "Account, sync, file and policy figures for the deployment")
-    public ResponseEntity<ApiResponse<AdminDto.Overview>> overview() {
-        return ResponseEntity.ok(ApiResponse.ok(overview.overview()));
+    public ResponseEntity<ApiResponse<AdminDto.Overview>> overview(
+        @AuthenticationPrincipal Long adminId) {
+        return ResponseEntity.ok(ApiResponse.ok(overview.overview(adminId)));
     }
 
     @GetMapping("/audit")
-    @Operation(summary = "The audit trail, newest first")
+    @Operation(summary = "The audit trail of the classrooms you run, newest first")
     public ResponseEntity<ApiResponse<AdminDto.AuditPage>> audit(
+        @AuthenticationPrincipal Long adminId,
         @RequestParam(required = false) String action,
         @RequestParam(required = false) Long userId,
         @RequestParam(required = false)
         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant since,
         @RequestParam(defaultValue = "0") int page,
         @RequestParam(defaultValue = "50") int size) {
-        return ResponseEntity.ok(ApiResponse.ok(audit.list(action, userId, since, page, size)));
+        return ResponseEntity.ok(ApiResponse.ok(
+            audit.list(adminId, action, userId, since, page, size)));
     }
 }

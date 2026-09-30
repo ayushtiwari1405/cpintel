@@ -86,6 +86,7 @@ public class AdminUserService {
     private final ExamEventRepository examEventRepository;
     private final MailService mail;
     private final com.cpintel.repository.mongo.CfSubmissionRepository cfSubmissionRepository;
+    private final AdminAuditService auditReader;
 
     // ------------------------------------------------------------------ reads
 
@@ -104,14 +105,20 @@ public class AdminUserService {
             rows, found.getNumber(), found.getSize(), found.getTotalElements(), found.getTotalPages());
     }
 
-    public AdminDto.UserDetail detail(Long userId) {
+    public AdminDto.UserDetail detail(Long readerId, Long userId) {
         User user = userRepository.findByIdWithPlatforms(userId)
             .orElseThrow(() -> ApiException.notFound("No such user"));
 
         Map<Long, Instant> lastLogin = lastLogins(List.of(user));
 
+        // The same classroom rule as the audit screen: a person's activity in a classroom the
+        // reader does not run is not the reader's to see.
+        org.springframework.data.jpa.domain.Specification<com.cpintel.entity.AuditLog> byUser =
+            (root, criteria, cb) -> cb.equal(root.get("userId"), userId);
         List<AdminDto.AuditEntry> activity = auditLogRepository
-            .findByUserIdOrderByCreatedAtDesc(userId, PageRequest.of(0, ACTIVITY_ROWS))
+            .findAll(auditReader.visibleTo(readerId).and(byUser),
+                PageRequest.of(0, ACTIVITY_ROWS, Sort.by(Sort.Direction.DESC, "createdAt")))
+            .getContent()
             .stream()
             .map(entry -> toEntry(entry, user.getUsername()))
             .toList();

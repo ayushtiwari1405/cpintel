@@ -99,7 +99,8 @@ public class AdminContestFileController {
         String normalised = platform.toUpperCase(Locale.ROOT);
         requireNotStarted(normalised, contestId);
         var rule = policy.setRule(normalised, contestId, adminId, req);
-        auditService.record(adminId, AuditService.FILE_POLICY_RULE, "CONTEST",
+        auditService.recordIn(classroomOf(normalised, contestId), adminId,
+            AuditService.FILE_POLICY_RULE, "CONTEST",
             normalised + ":" + contestId + "=" + req.enabled(), httpReq);
         return ResponseEntity.ok(ApiResponse.ok(rule));
     }
@@ -114,8 +115,16 @@ public class AdminContestFileController {
         String normalised = platform.toUpperCase(Locale.ROOT);
         requireNotStarted(normalised, contestId);
         policy.clearRule(normalised, contestId);
-        auditService.record(adminId, AuditService.FILE_POLICY_CLEARED, "CONTEST",
+        auditService.recordIn(classroomOf(normalised, contestId), adminId,
+            AuditService.FILE_POLICY_CLEARED, "CONTEST",
             normalised + ":" + contestId, httpReq);
         return ResponseEntity.ok(ApiResponse.message("Rule cleared — this contest follows the default"));
+    }
+
+    /** A DOMjudge rule belongs to the classroom its id names; a Codeforces one to none. */
+    private static Long classroomOf(String platform, String contestId) {
+        if (!"DOMJUDGE".equals(platform)) return null;
+        var ref = com.cpintel.integration.domjudge.JudgeContestRef.tryParse(contestId);
+        return ref == null ? null : ref.classroomId();
     }
 }

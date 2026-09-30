@@ -50,8 +50,9 @@ public class AdminUserController {
 
     @GetMapping("/{userId}")
     @Operation(summary = "One account, with its linked platforms and recent activity")
-    public ResponseEntity<ApiResponse<AdminDto.UserDetail>> detail(@PathVariable Long userId) {
-        return ResponseEntity.ok(ApiResponse.ok(users.detail(userId)));
+    public ResponseEntity<ApiResponse<AdminDto.UserDetail>> detail(
+        @AuthenticationPrincipal Long adminId, @PathVariable Long userId) {
+        return ResponseEntity.ok(ApiResponse.ok(users.detail(adminId, userId)));
     }
 
     /**

@@ -149,7 +149,7 @@ public class ExamAccessService {
         }
 
         if (!passwords.matchesExamPassword(exam, examPassword)) {
-            auditService.record(userId, AuditService.EXAM_UNLOCK_REFUSED, "EXAM",
+            auditService.recordIn(exam.getClassroomId(), userId, AuditService.EXAM_UNLOCK_REFUSED, "EXAM",
                 String.valueOf(exam.getContestId()), httpReq);
             examEvents.recordServerSide(exam, userId, ExamEvent.Type.SUSPICIOUS_ACTIVITY, null,
                 "Wrong examination password");
@@ -162,7 +162,7 @@ public class ExamAccessService {
         }
 
         grant(exam, userId);
-        auditService.record(userId, AuditService.EXAM_UNLOCKED, "EXAM",
+        auditService.recordIn(exam.getClassroomId(), userId, AuditService.EXAM_UNLOCKED, "EXAM",
             String.valueOf(exam.getContestId()), httpReq);
         examEvents.recordServerSide(exam, userId, ExamEvent.Type.EXAM_STARTED, null,
             "Unlocked the examination with the password issued in the room");

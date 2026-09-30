@@ -164,7 +164,7 @@ public class ClassroomService {
             .ownerId(adminId)
             .build());
 
-        auditService.record(adminId, AuditService.CLASSROOM_CREATED, "CLASSROOM",
+        auditService.recordIn(classroom.getClassroomId(), adminId, AuditService.CLASSROOM_CREATED, "CLASSROOM",
             classroom.getClassroomId() + ":" + classroom.getName(), httpReq);
         return summarise(classroom);
     }
@@ -212,7 +212,7 @@ public class ClassroomService {
         classrooms.save(classroom);
         judges.evict(classroomId);
 
-        auditService.record(adminId, AuditService.CLASSROOM_UPDATED, "CLASSROOM",
+        auditService.recordIn(classroomId, adminId, AuditService.CLASSROOM_UPDATED, "CLASSROOM",
             classroomId + ":" + classroom.getName(), httpReq);
         return summarise(classroom);
     }
@@ -223,7 +223,7 @@ public class ClassroomService {
         Classroom classroom = requireManaged(adminId, classroomId);
         classroom.setIsActive(active);
         classrooms.save(classroom);
-        auditService.record(adminId, AuditService.CLASSROOM_ARCHIVED, "CLASSROOM",
+        auditService.recordIn(classroomId, adminId, AuditService.CLASSROOM_ARCHIVED, "CLASSROOM",
             classroomId + ":" + (active ? "restored" : "archived"), httpReq);
     }
 
@@ -246,7 +246,7 @@ public class ClassroomService {
         User user = users.findById(userId)
             .orElseThrow(() -> ApiException.notFound("No CPIntel user with id " + userId + "."));
         ClassroomMember member = enroll(classroomId, user);
-        auditService.record(adminId, AuditService.CLASSROOM_MEMBER_ADDED, "CLASSROOM",
+        auditService.recordIn(classroomId, adminId, AuditService.CLASSROOM_MEMBER_ADDED, "CLASSROOM",
             classroomId + ":" + userId, httpReq);
         return new ClassroomsDto.Member(user.getUserId(), user.getUsername(), user.getFullName(),
             user.getEmail(), member.getDomjudgeUsername(),
@@ -266,7 +266,7 @@ public class ClassroomService {
         groupMembers.deleteFromClassroom(classroomId, userId);
         members.deleteByClassroomIdAndUserUserId(classroomId, userId);
         credentials.delete(classroomId, userId);
-        auditService.record(adminId, AuditService.CLASSROOM_MEMBER_REMOVED, "CLASSROOM",
+        auditService.recordIn(classroomId, adminId, AuditService.CLASSROOM_MEMBER_REMOVED, "CLASSROOM",
             classroomId + ":" + userId, httpReq);
     }
 
@@ -280,7 +280,7 @@ public class ClassroomService {
                 + "can run a classroom.");
         }
         classrooms.addStaff(classroomId, userId);
-        auditService.record(adminId, AuditService.CLASSROOM_STAFF_ADDED, "CLASSROOM",
+        auditService.recordIn(classroomId, adminId, AuditService.CLASSROOM_STAFF_ADDED, "CLASSROOM",
             classroomId + ":" + userId, httpReq);
     }
 
@@ -289,7 +289,7 @@ public class ClassroomService {
                             HttpServletRequest httpReq) {
         requireManaged(adminId, classroomId);
         classrooms.removeStaff(classroomId, userId);
-        auditService.record(adminId, AuditService.CLASSROOM_STAFF_REMOVED, "CLASSROOM",
+        auditService.recordIn(classroomId, adminId, AuditService.CLASSROOM_STAFF_REMOVED, "CLASSROOM",
             classroomId + ":" + userId, httpReq);
     }
 

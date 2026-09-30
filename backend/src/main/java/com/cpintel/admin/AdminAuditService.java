@@ -35,11 +35,29 @@ public class AdminAuditService {
 
     private final AuditLogRepository auditLogRepository;
     private final UserRepository userRepository;
+    private final com.cpintel.classrooms.ClassroomService classrooms;
 
-    public AdminDto.AuditPage list(String action, Long userId, Instant since, int page, int size) {
+    /**
+     * What one reader may see of the log.
+     *
+     * <p>A superadmin sees all of it. Any other admin sees the entries of the classrooms they
+     * run, and the entries of their own actions — nothing from a classroom they are not in, and
+     * nothing deployment-wide (other people's sign-ins, role changes) that is not theirs.
+     */
+    public Specification<AuditLog> visibleTo(Long readerId) {
+        List<Long> managed = classrooms.managedIds(readerId);
+        if (managed == null) return (root, criteria, cb) -> cb.conjunction();
+        return (root, criteria, cb) -> {
+            var own = cb.equal(root.get("userId"), readerId);
+            return managed.isEmpty() ? own : cb.or(own, root.get("classroomId").in(managed));
+        };
+    }
+
+    public AdminDto.AuditPage list(Long readerId, String action, Long userId, Instant since,
+                                   int page, int size) {
         int capped = Math.clamp(size, 1, MAX_PAGE_SIZE);
         Page<AuditLog> found = auditLogRepository.findAll(
-            filter(action, userId, since),
+            visibleTo(readerId).and(filter(action, userId, since)),
             PageRequest.of(Math.max(page, 0), capped, Sort.by(Sort.Direction.DESC, "createdAt")));
 
         Map<Long, String> names = usernames(found.getContent());
@@ -58,9 +76,10 @@ public class AdminAuditService {
     }
 
     /** The newest entries, for the overview screen. */
-    public List<AdminDto.AuditEntry> recent(int limit) {
-        List<AuditLog> rows = auditLogRepository.findAllByOrderByCreatedAtDesc(
-            PageRequest.of(0, Math.clamp(limit, 1, 50)));
+    public List<AdminDto.AuditEntry> recent(Long readerId, int limit) {
+        List<AuditLog> rows = auditLogRepository.findAll(visibleTo(readerId),
+            PageRequest.of(0, Math.clamp(limit, 1, 50), Sort.by(Sort.Direction.DESC, "createdAt")))
+            .getContent();
         Map<Long, String> names = usernames(rows);
         return rows.stream()
             .map(entry -> AdminUserService.toEntry(entry,

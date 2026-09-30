@@ -212,6 +212,21 @@ function toLocalInput(iso: string | null): string {
     + `T${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
 
+/** Monitoring that is planned but not built yet. Listed so admins can see what is coming. */
+const PLANNED_MONITORING: { label: string; hint: string }[] = [
+  { label: 'Video monitoring',
+    hint: 'Watch the candidate through their webcam and flag when nobody, or more than one '
+      + 'person, is in view.' },
+  { label: 'Audio monitoring',
+    hint: 'Listen through the microphone and flag sustained speech or other voices in the room.' },
+  { label: 'Screen recording',
+    hint: 'Keep a recording of the candidate\'s screen for the length of the paper.' },
+  { label: 'Identity check',
+    hint: 'Match a photo taken at the start against the one on record before the paper opens.' },
+  { label: 'Second-device detection',
+    hint: 'Flag a phone or another screen in the webcam\'s view.' },
+]
+
 const POLICY_LABELS: { key: keyof DesktopPolicy; label: string; hint: string }[] = [
   { key: 'restrictWindowSwitching', label: 'Keep the examination in front',
     hint: 'Holds the window above everything else on the desktop build.' },
@@ -465,6 +480,26 @@ function SettingsTab({ detail }: { detail: EventDetail }) {
               weaker kind rather than showing a clean sheet. Full screen is the exception: both
               enforce it.
             </p>
+          </div>
+
+          {/* Placeholders for monitoring that is planned but not built. Shown disabled so the
+              shape of the settings is visible; nothing here is stored or sent to the client. */}
+          <div className="space-y-2 border-t border-gray-800 pt-3">
+            <p className="text-xs font-medium text-gray-400">Planned monitoring</p>
+            {PLANNED_MONITORING.map(({ label, hint }) => (
+              <label key={label} className="flex cursor-not-allowed items-start gap-2 opacity-60">
+                <input type="checkbox" disabled checked={false} className="mt-0.5"
+                  onChange={() => {}} />
+                <span className="text-sm text-gray-400">
+                  {label}
+                  <span className="ml-2 rounded-full bg-gray-800 px-2 py-0.5 text-[10px]
+                                   font-medium uppercase tracking-wide text-gray-500">
+                    Not yet implemented
+                  </span>
+                  <span className="block text-xs text-gray-600">{hint}</span>
+                </span>
+              </label>
+            ))}
           </div>
         </div>
       </Panel>

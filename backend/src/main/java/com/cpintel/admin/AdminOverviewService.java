@@ -37,7 +37,7 @@ public class AdminOverviewService {
     private final AdminAuditService auditService;
     private final MongoTemplate mongoTemplate;
 
-    public AdminDto.Overview overview() {
+    public AdminDto.Overview overview(Long readerId) {
         Instant weekAgo = Instant.now().minus(Duration.ofDays(7));
         Instant dayAgo = Instant.now().minus(Duration.ofDays(1));
 
@@ -63,7 +63,7 @@ public class AdminOverviewService {
             sync,
             fileStats(),
             policyStats(),
-            auditService.recent(RECENT_ACTIVITY_ROWS));
+            auditService.recent(readerId, RECENT_ACTIVITY_ROWS));
     }
 
     /**

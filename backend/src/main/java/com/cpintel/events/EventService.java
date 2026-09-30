@@ -246,7 +246,7 @@ public class EventService {
         applyFileRule(event, req.personalFilesAllowed() != null ? req.personalFilesAllowed()
             : event.isExam() ? Boolean.FALSE : filePolicy.defaultEnabled(), adminId);
 
-        auditService.record(adminId, AuditService.EVENT_CREATED, kind,
+        auditService.recordIn(event.getClassroomId(), adminId, AuditService.EVENT_CREATED, kind,
             event.getContestId() + ":" + event.getName(), httpReq);
         return detail(event.getContestId());
     }
@@ -275,7 +275,7 @@ public class EventService {
             eventRepository.save(event);
             // Adding a candidate who was left off the roster stays possible mid-paper.
             applyAssignments(event, req.teamIds(), req.userIds(), adminId);
-            auditService.record(adminId, AuditService.EVENT_UPDATED, kind,
+            auditService.recordIn(event.getClassroomId(), adminId, AuditService.EVENT_UPDATED, kind,
                 eventId + ":end", httpReq);
             return detail(eventId);
         }
@@ -308,7 +308,7 @@ public class EventService {
         applyAssignments(event, req.teamIds(), req.userIds(), adminId);
         applyFileRule(event, req.personalFilesAllowed(), adminId);
 
-        auditService.record(adminId, AuditService.EVENT_UPDATED, kind,
+        auditService.recordIn(event.getClassroomId(), adminId, AuditService.EVENT_UPDATED, kind,
             String.valueOf(eventId), httpReq);
         return detail(eventId);
     }
@@ -380,7 +380,7 @@ public class EventService {
         }
 
         eventRepository.save(event);
-        auditService.record(adminId, AuditService.EVENT_LIFECYCLE, event.getKind(),
+        auditService.recordIn(event.getClassroomId(), adminId, AuditService.EVENT_LIFECYCLE, event.getKind(),
             eventId + ":" + target.name(), httpReq);
         return detail(eventId);
     }
@@ -407,7 +407,7 @@ public class EventService {
                     + "it. Archive it instead.");
         }
 
-        auditService.record(adminId, AuditService.EVENT_DELETED, event.getKind(),
+        auditService.recordIn(event.getClassroomId(), adminId, AuditService.EVENT_DELETED, event.getKind(),
             eventId + ":" + event.getName(), httpReq);
         eventRepository.delete(event);
     }
@@ -422,7 +422,7 @@ public class EventService {
         int added = applyAssignments(event, req.teamIds(), req.userIds(), adminId);
 
         if (added > 0) {
-            auditService.record(adminId, AuditService.EVENT_ASSIGNED, event.getKind(),
+            auditService.recordIn(event.getClassroomId(), adminId, AuditService.EVENT_ASSIGNED, event.getKind(),
                 eventId + ":+" + added, httpReq);
         }
         return detail(eventId);
@@ -443,7 +443,7 @@ public class EventService {
             event.setGroup(null);
             eventRepository.save(event);
         }
-        auditService.record(adminId, AuditService.EVENT_UNASSIGNED, event.getKind(),
+        auditService.recordIn(event.getClassroomId(), adminId, AuditService.EVENT_UNASSIGNED, event.getKind(),
             eventId + ":team:" + teamId, httpReq);
         return detail(eventId);
     }
@@ -457,7 +457,7 @@ public class EventService {
                 + "that would erase them from a paper they may already have sat.");
         }
         assignmentRepository.deleteByContestContestIdAndUserUserId(eventId, userId);
-        auditService.record(adminId, AuditService.EVENT_UNASSIGNED, event.getKind(),
+        auditService.recordIn(event.getClassroomId(), adminId, AuditService.EVENT_UNASSIGNED, event.getKind(),
             eventId + ":user:" + userId, httpReq);
         return detail(eventId);
     }
@@ -474,7 +474,7 @@ public class EventService {
                 "It has started, so its problems are fixed.");
         }
         replaceProblems(event, req.problems());
-        auditService.record(adminId, AuditService.EVENT_PROBLEMS, event.getKind(),
+        auditService.recordIn(event.getClassroomId(), adminId, AuditService.EVENT_PROBLEMS, event.getKind(),
             eventId + ":" + (req.problems() == null ? 0 : req.problems().size()), httpReq);
         return problems(eventId);
     }
