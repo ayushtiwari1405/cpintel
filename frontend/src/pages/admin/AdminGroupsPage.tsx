@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowRight, Loader2, Plus, Users } from 'lucide-react'
 import { useAdminGroups, useCreateGroup } from '@/hooks/useGroups'
+import { useAdminClassrooms } from '@/hooks/useClassrooms'
+import { ClassroomSelect } from '@/components/admin/ClassroomSelect'
 import { Ago, EmptyRow, Panel, Pill } from '@/components/admin/AdminUi'
 
 /**
@@ -11,28 +13,42 @@ import { Ago, EmptyRow, Panel, Pill } from '@/components/admin/AdminUi'
  * changes rarely — which is why creating one lives inline here rather than behind its own page.
  */
 export default function AdminGroupsPage() {
-  const { data: groups, isLoading } = useAdminGroups()
+  const { data: allGroups, isLoading } = useAdminGroups()
+  const { data: classrooms } = useAdminClassrooms()
   const create = useCreateGroup()
+
+  const [filter, setFilter] = useState<number | null>(null)
+  const [classroomId, setClassroomId] = useState<number | null>(null)
+  const groups = allGroups?.filter(g => filter == null || g.classroomId === filter)
+  const classroomName = (id: number) =>
+    classrooms?.find(c => c.classroomId === id)?.name ?? `Classroom ${id}`
 
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
 
   const submit = () => {
-    if (!name.trim()) return
+    if (!name.trim() || classroomId == null) return
     create.mutate(
-      { name: name.trim(), description: description.trim() || undefined },
+      { name: name.trim(), description: description.trim() || undefined, classroomId },
       { onSuccess: () => { setName(''); setDescription('') } }
     )
   }
 
   return (
     <div className="space-y-4">
-      <Panel title="Teams" description="A named set of people, measured against each other">
+      <Panel
+        title="Teams"
+        description="A named set of people, measured against each other"
+        actions={<ClassroomSelect value={filter} onChange={setFilter} allowAll
+          className="rounded-md border border-gray-800 bg-gray-900 px-2 py-1 text-xs
+                     text-gray-300 outline-none" />}
+      >
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-800 text-left text-xs text-gray-500">
                 <th className="px-4 py-2 font-medium">Team</th>
+                <th className="px-4 py-2 font-medium">Classroom</th>
                 <th className="px-4 py-2 font-medium">Members</th>
                 <th className="px-4 py-2 font-medium">Contests</th>
                 <th className="px-4 py-2 font-medium">Created</th>
@@ -40,9 +56,9 @@ export default function AdminGroupsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-800">
-              {isLoading && <EmptyRow colSpan={5}>Loading groups…</EmptyRow>}
+              {isLoading && <EmptyRow colSpan={6}>Loading groups…</EmptyRow>}
               {!isLoading && groups?.length === 0 && (
-                <EmptyRow colSpan={5}>
+                <EmptyRow colSpan={6}>
                   No groups yet. Create one below, add the people in it, then point it at a
                   contest on Codeforces or DOMjudge.
                 </EmptyRow>
@@ -60,6 +76,9 @@ export default function AdminGroupsPage() {
                     {group.description && (
                       <p className="text-xs text-gray-600">{group.description}</p>
                     )}
+                  </td>
+                  <td className="px-4 py-2.5 text-xs text-gray-400">
+                    {classroomName(group.classroomId)}
                   </td>
                   <td className="px-4 py-2.5 tabular-nums text-gray-400">{group.memberCount}</td>
                   <td className="px-4 py-2.5 tabular-nums text-gray-400">{group.contestCount}</td>
@@ -84,6 +103,10 @@ export default function AdminGroupsPage() {
 
       <Panel title="New team" description="Name it after the people in it — a class, a squad, a cohort">
         <div className="flex flex-wrap items-end gap-2 p-4">
+          <label className="flex min-w-[12rem] flex-col gap-1">
+            <span className="text-xs text-gray-500">Classroom</span>
+            <ClassroomSelect value={classroomId} onChange={setClassroomId} />
+          </label>
           <label className="flex min-w-[14rem] flex-1 flex-col gap-1">
             <span className="text-xs text-gray-500">Name</span>
             <input
@@ -110,7 +133,7 @@ export default function AdminGroupsPage() {
           </label>
           <button
             onClick={submit}
-            disabled={!name.trim() || create.isPending}
+            disabled={!name.trim() || classroomId == null || create.isPending}
             className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-sm
                        font-medium text-white transition-colors hover:bg-indigo-500
                        disabled:cursor-not-allowed disabled:opacity-40"

@@ -343,7 +343,12 @@ export interface DomjudgeTeamOption {
 
 /** One contest the attached DOMjudge account may enter. */
 export interface DomjudgeContestSummary {
+  /** Classroom-qualified, `<classroom>~<contest>` — open it exactly as given. */
   id: string
+  /** The judge's own contest id, for display. */
+  judgeContestId: string
+  classroomId: number
+  classroomName: string
   name: string
   phase: 'BEFORE' | 'CODING' | 'FINISHED'
   running: boolean
@@ -693,6 +698,7 @@ export type GroupContestStatus = 'SCHEDULED' | 'LIVE' | 'FINISHED'
 
 export interface GroupSummary {
   groupId: number
+  classroomId: number
   name: string
   description: string | null
   active: boolean
@@ -722,7 +728,10 @@ export interface GroupContestSummary {
   groupId: number | null
   groupName: string | null
   platform: GroupPlatform
+  /** As the arena names it: `<classroom>~<contest>` for DOMjudge. */
   externalId: string
+  /** The judge's own contest id, for display. */
+  judgeContestId: string
   name: string
   url: string | null
   startsAt: string | null
@@ -865,7 +874,11 @@ export interface EventSummary {
   eventId: number
   kind: EventKind
   platform: GroupPlatform
+  /** As the arena names it: `<classroom>~<contest>` for DOMjudge. */
   externalId: string
+  /** The judge's own contest id — what the edit form shows and sends. */
+  judgeContestId: string
+  classroomId: number
   name: string
   description: string | null
   url: string | null
@@ -1165,4 +1178,63 @@ export interface TeamAnalytics {
   averageScore: number
   totalSolved: number
   recent: TeamEventRow[]
+}
+
+// ------------------------------------------------------------------ classrooms
+
+/** One DOMjudge instance and everything run on it, as an admin sees it. */
+export interface ClassroomSummary {
+  classroomId: number
+  name: string
+  description: string | null
+  domjudgeUrl: string | null
+  serviceUsername: string | null
+  hasServiceAccount: boolean
+  active: boolean
+  ownerId: number | null
+  memberCount: number
+  groupCount: number
+  eventCount: number
+  createdAt: string
+}
+
+export interface ClassroomRequest {
+  name: string
+  description?: string | null
+  domjudgeUrl: string
+  serviceUsername?: string | null
+  /** Write-only. Omit to keep the stored one; an empty string clears the service account. */
+  servicePassword?: string | null
+}
+
+/** A classroom as the student enrolled in it sees it. */
+export interface MyClassroom {
+  classroomId: number
+  name: string
+  description: string | null
+  judgeLoginAttached: boolean
+  domjudgeUsername: string | null
+}
+
+export interface ClassroomMember {
+  userId: number
+  username: string
+  fullName: string | null
+  email: string
+  domjudgeUsername: string | null
+  judgeLoginAttached: boolean
+  joinedAt: string
+}
+
+export interface ClassroomStaffMember {
+  userId: number
+  username: string
+  fullName: string | null
+  owner: boolean
+}
+
+export interface JudgeCheck {
+  reachable: boolean
+  version: string | null
+  message: string | null
 }

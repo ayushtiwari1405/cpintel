@@ -23,6 +23,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/admin/users':         'Admin · Users',
   '/admin/audit':         'Admin · Audit trail',
   '/admin/contest-files': 'Admin · Contest files',
+  '/admin/classrooms':    'Admin · Classrooms',
   '/admin/teams':         'Admin · Teams',
   '/admin/exams':         'Admin · Examinations',
 }
@@ -30,6 +31,7 @@ const PAGE_TITLES: Record<string, string> = {
 /** Detail pages, titled after the list they belong to. Longest prefix first. */
 const PREFIX_TITLES: [string, string][] = [
   ['/admin/groups/contests/', 'Admin · Team contest'],
+  ['/admin/classrooms/',      'Admin · Classroom'],
   ['/admin/teams/',           'Admin · Team'],
   ['/admin/groups/',          'Admin · Team'],
   ['/admin/exams/',           'Admin · Examination'],

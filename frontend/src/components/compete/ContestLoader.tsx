@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { clsx } from 'clsx'
 import { Globe, Loader2, School, Swords } from 'lucide-react'
 import { DomjudgeContestPicker } from './DomjudgeContestPicker'
+import { ClassroomSwitcher } from '@/components/common/ClassroomSwitcher'
+import { useSelectedClassroom } from '@/hooks/useClassrooms'
 import type { CompetePlatform } from '@/types'
 
 /** The two judges, as tiles rather than a dropdown: the choice is the first thing on the page. */
@@ -28,6 +30,7 @@ interface Props {
 export function ContestLoader({ onLoad, loading }: Props) {
   const [platform, setPlatform] = useState<CompetePlatform>('CODEFORCES')
   const [url, setUrl] = useState('')
+  const [classroomId, setClassroomId] = useSelectedClassroom()
 
   const submit = () => {
     if (url.trim()) onLoad(platform, url.trim())
@@ -86,7 +89,11 @@ export function ContestLoader({ onLoad, loading }: Props) {
 
 
       {platform === 'DOMJUDGE' ? (
-        <DomjudgeContestPicker onPick={id => onLoad('DOMJUDGE', id)} loading={loading} />
+        <div className="flex flex-col gap-3">
+          <ClassroomSwitcher value={classroomId} onChange={setClassroomId} />
+          <DomjudgeContestPicker onPick={id => onLoad('DOMJUDGE', id)} loading={loading}
+            classroomId={classroomId} />
+        </div>
       ) : (
       <>
       <div className="flex gap-2">

@@ -266,12 +266,12 @@ export function useLeaderboard(ref?: ContestRef, enabled = false) {
   })
 }
 
-/** The DOMjudge account an admin attached to this user, if any. */
-export function useDomjudgeAccount(enabled = true) {
+/** The DOMjudge account an admin attached to this user in one classroom, if any. */
+export function useDomjudgeAccount(classroomId: number | null, enabled = true) {
   return useQuery({
-    queryKey: ['domjudge', 'account'],
-    queryFn: () => domjudgeApi.account().then(r => r.data),
-    enabled,
+    queryKey: ['domjudge', 'account', classroomId],
+    queryFn: () => domjudgeApi.account(classroomId!).then(r => r.data),
+    enabled: enabled && classroomId != null,
     staleTime: 1000 * 60 * 5,
   })
 }

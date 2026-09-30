@@ -7,6 +7,8 @@ import type { DomjudgeAccount } from '@/types'
 import { useToast } from '@/components/common/Toaster'
 
 interface Props {
+  /** The classroom whose judge this login is for — a student holds one per classroom. */
+  classroomId: number
   userId: number
   username: string
 }
@@ -24,13 +26,13 @@ interface Props {
  * The control was rendering and the endpoint was answering; it simply could not be seen. A cell
  * this narrow cannot hold a form with a password field and a dropdown, so it holds a button.
  */
-export function DomjudgeAccountCell({ userId, username }: Props) {
+export function DomjudgeAccountCell({ classroomId, userId, username }: Props) {
   const [open, setOpen] = useState(false)
 
-  const key = ['admin', 'domjudge', userId]
+  const key = ['admin', 'domjudge', classroomId, userId]
   const { data: account, isLoading } = useQuery({
     queryKey: key,
-    queryFn: () => adminDomjudgeApi.status(userId).then(r => r.data),
+    queryFn: () => adminDomjudgeApi.status(classroomId, userId).then(r => r.data),
   })
 
   if (isLoading) {
@@ -84,6 +86,7 @@ export function DomjudgeAccountCell({ userId, username }: Props) {
 
       {open && (
         <AttachDialog
+          classroomId={classroomId}
           userId={userId}
           username={username}
           account={account?.linked ? account : undefined}
@@ -108,8 +111,11 @@ export function DomjudgeAccountCell({ userId, username }: Props) {
  * team as they were; the new one is checked against the judge before it replaces the old.
  */
 function AttachDialog(
-  { userId, username, account, onClose }:
-  { userId: number; username: string; account?: DomjudgeAccount; onClose: () => void }
+  { classroomId, userId, username, account, onClose }:
+  {
+    classroomId: number; userId: number; username: string; account?: DomjudgeAccount
+    onClose: () => void
+  }
 ) {
   const qc = useQueryClient()
   const toast = useToast()
@@ -128,15 +134,15 @@ function AttachDialog(
   }, [onClose])
 
   const { data: teams, isLoading: teamsLoading } = useQuery({
-    queryKey: ['admin', 'domjudge', 'teams'],
-    queryFn: () => adminDomjudgeApi.teams().then(r => r.data),
+    queryKey: ['admin', 'domjudge', classroomId, 'teams'],
+    queryFn: () => adminDomjudgeApi.teams(classroomId).then(r => r.data),
     staleTime: 1000 * 60 * 10,
   })
 
-  const key = ['admin', 'domjudge', userId]
+  const key = ['admin', 'domjudge', classroomId, userId]
 
   const attach = useMutation({
-    mutationFn: () => adminDomjudgeApi.attach({
+    mutationFn: () => adminDomjudgeApi.attach(classroomId, {
       userId,
       username: djUser.trim(),
       password: djPass,
@@ -158,7 +164,7 @@ function AttachDialog(
   })
 
   const changePassword = useMutation({
-    mutationFn: () => adminDomjudgeApi.changePassword(userId, djPass),
+    mutationFn: () => adminDomjudgeApi.changePassword(classroomId, userId, djPass),
     onSuccess: (res) => {
       setDjPass('')
       qc.setQueryData(key, res.data)
@@ -171,7 +177,7 @@ function AttachDialog(
   })
 
   const detach = useMutation({
-    mutationFn: () => adminDomjudgeApi.detach(userId),
+    mutationFn: () => adminDomjudgeApi.detach(classroomId, userId),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: key })
       toast.push('info', `Detached ${username}'s DOMjudge account`)

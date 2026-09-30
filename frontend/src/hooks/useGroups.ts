@@ -100,7 +100,8 @@ function useGroupMutation<TArgs, TResult>(
 
 export function useCreateGroup() {
   return useGroupMutation(
-    (body: { name: string; description?: string }) => adminApi.createGroup(body),
+    (body: { name: string; description?: string; classroomId: number }) =>
+      adminApi.createGroup(body),
     ({ name }) => `Created ${name}`,
   )
 }

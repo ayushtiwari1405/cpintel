@@ -31,6 +31,9 @@ import {
 } from '@/hooks/useCompete'
 import { useCfSession } from '@/hooks/usePractice'
 import { useEnterExam, useMyExam, useMyExamLeaderboard, useMyExams } from '@/hooks/useExams'
+import { useSelectedClassroom } from '@/hooks/useClassrooms'
+import { ClassroomSwitcher } from '@/components/common/ClassroomSwitcher'
+import { judgeIdOf } from '@/utils/contestRef'
 import { useExamSession } from '@/hooks/useExamSession'
 import { useLockdown } from '@/hooks/useLockdown'
 import { useLogout } from '@/hooks/useAuth'
@@ -157,6 +160,8 @@ export default function CompetePage({ examOnly, section }: {
    * contest behind it.
    */
   const { data: myExams, isLoading: examsLoading } = useMyExams()
+  // In normal mode a student in several classrooms looks at one at a time, or all of them.
+  const [examClassroom, setExamClassroom] = useSelectedClassroom()
   const { data: exam, dataUpdatedAt: examUpdatedAt } =
     useMyExam(mode === 'exams' ? examId : null)
   const enterExam = useEnterExam()
@@ -628,8 +633,12 @@ export default function CompetePage({ examOnly, section }: {
         <div className="mx-auto flex max-w-3xl flex-col gap-4 p-6">
           {modeStrip}
 
+          {examOnly == null && (
+            <ClassroomSwitcher value={examClassroom} onChange={setExamClassroom} />
+          )}
+
           {examOnly == null && <ExamList
-            exams={myExams}
+            exams={myExams?.filter(e => examClassroom == null || e.classroomId === examClassroom)}
             isLoading={examsLoading}
             entering={enterExam.isPending ? enterExam.variables ?? null : null}
             onEnter={(id: number) => {
@@ -686,7 +695,7 @@ export default function CompetePage({ examOnly, section }: {
           <ContestLoader onLoad={handleLoad} loading={load.isPending} />
           {contestRef && !contest && (
             <div className="flex items-center justify-center gap-2 text-sm text-gray-500">
-              <Loader2 size={14} className="animate-spin" /> Loading contest {contestRef.id}…
+              <Loader2 size={14} className="animate-spin" /> Loading contest {judgeIdOf(contestRef.id)}…
             </div>
           )}
 

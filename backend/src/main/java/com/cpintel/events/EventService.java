@@ -92,9 +92,11 @@ public class EventService {
 
     /** Every event of one kind, newest window first. */
     @Transactional(readOnly = true)
-    public List<EventsDto.EventSummary> list(String kind) {
+    public List<EventsDto.EventSummary> list(Long adminId, String kind) {
         Instant now = Instant.now();
+        List<Long> managed = classrooms.managedIds(adminId);
         return eventRepository.findByKindOrderByStartsAtDesc(normaliseKind(kind)).stream()
+            .filter(event -> managed == null || managed.contains(event.getClassroomId()))
             .map(event -> summarise(event, now))
             .toList();
     }

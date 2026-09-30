@@ -84,9 +84,12 @@ export const competeApi = {
  * before a contest has been picked, which is exactly when there is no contest id for the path.
  */
 export const domjudgeApi = {
-  account: () =>
-    apiClient.get<ApiResponse<DomjudgeAccount>>('/domjudge/account').then(r => r.data),
+  /** The login attached in one classroom — a student holds one per classroom. */
+  account: (classroomId: number) =>
+    apiClient.get<ApiResponse<DomjudgeAccount>>('/domjudge/account', { params: { classroomId } })
+      .then(r => r.data),
 
+  /** Every classroom's contests at once, each read as that classroom's login. */
   contests: () =>
     apiClient.get<ApiResponse<DomjudgeContestSummary[]>>('/domjudge/contests')
       .then(r => r.data),

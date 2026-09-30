@@ -4,6 +4,8 @@ import { ArrowRight, Eye, Loader2, Plus, ShieldCheck } from 'lucide-react'
 
 import { Ago, EmptyRow, Panel, Pill } from '@/components/admin/AdminUi'
 import { useAdminEvents, useCreateEvent } from '@/hooks/useExams'
+import { useAdminClassrooms } from '@/hooks/useClassrooms'
+import { ClassroomSelect } from '@/components/admin/ClassroomSelect'
 import { useAdminGroups } from '@/hooks/useGroups'
 import type { EventKind, EventLifecycle, EventSummary } from '@/types'
 
@@ -21,9 +23,18 @@ import type { EventKind, EventLifecycle, EventSummary } from '@/types'
  */
 export default function AdminExamsPage() {
   const [kind, setKind] = useState<EventKind>('EXAM')
-  const { data: events, isLoading } = useAdminEvents(kind)
-  const { data: teams } = useAdminGroups()
+  const { data: allEvents, isLoading } = useAdminEvents(kind)
+  const { data: allTeams } = useAdminGroups()
+  const { data: classrooms } = useAdminClassrooms()
   const create = useCreateEvent()
+
+  const [filter, setFilter] = useState<number | null>(null)
+  const [classroomId, setClassroomId] = useState<number | null>(null)
+  const events = allEvents?.filter(e => filter == null || e.classroomId === filter)
+  // An event is sat by teams in its own classroom, on that classroom's judge.
+  const teams = allTeams?.filter(t => t.classroomId === classroomId)
+  const classroomName = (id: number) =>
+    classrooms?.find(c => c.classroomId === id)?.name ?? `Classroom ${id}`
 
   const [name, setName] = useState('')
   const [externalId, setExternalId] = useState('')
@@ -38,8 +49,9 @@ export default function AdminExamsPage() {
   const filesAllowed = files === '' ? !exam : files === 'allow'
 
   const submit = () => {
-    if (!name.trim() || !externalId.trim()) return
+    if (!name.trim() || !externalId.trim() || classroomId == null) return
     create.mutate({
+      classroomId,
       kind,
       // An examination runs on the judge this deployment controls; the server refuses anything
       // else, and offering the choice here would only produce a rejected form.
@@ -82,6 +94,9 @@ export default function AdminExamsPage() {
         description={exam
           ? 'Assigned, monitored, and logged — every session is recorded'
           : 'Rounds laid over a judge, for teams or for everybody'}
+        actions={<ClassroomSelect value={filter} onChange={setFilter} allowAll
+          className="rounded-md border border-gray-800 bg-gray-900 px-2 py-1 text-xs
+                     text-gray-300 outline-none" />}
       >
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -115,7 +130,7 @@ export default function AdminExamsPage() {
                       {event.name}
                     </Link>
                     <p className="text-xs text-gray-600">
-                      {event.platform} · {event.externalId}
+                      {classroomName(event.classroomId)} · {event.platform} · {event.judgeContestId}
                       {event.teamName && <> · {event.teamName}</>}
                     </p>
                   </td>
@@ -160,6 +175,9 @@ export default function AdminExamsPage() {
         description="Created as a draft — nobody sees it until you publish it"
       >
         <div className="flex flex-wrap items-end gap-2 p-4">
+          <Field label="Classroom" className="min-w-[12rem]">
+            <ClassroomSelect value={classroomId} onChange={id => { setClassroomId(id); setTeamId('') }} />
+          </Field>
           <Field label="Name" className="min-w-[14rem] flex-1">
             <input
               value={name}
@@ -210,7 +228,8 @@ export default function AdminExamsPage() {
           </Field>
           <button
             onClick={submit}
-            disabled={!name.trim() || !externalId.trim() || create.isPending}
+            disabled={!name.trim() || !externalId.trim() || classroomId == null
+              || create.isPending}
             className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-sm
                        font-medium text-white transition-colors hover:bg-indigo-500
                        disabled:cursor-not-allowed disabled:opacity-40"

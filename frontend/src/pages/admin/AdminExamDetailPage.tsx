@@ -81,7 +81,7 @@ export default function AdminExamDetailPage() {
             )}
           </div>
           <p className="mt-0.5 text-xs text-gray-500">
-            {exam ? 'Examination' : 'Contest'} · {event.platform} {event.externalId}
+            {exam ? 'Examination' : 'Contest'} · {event.platform} {event.judgeContestId}
             {event.teamName && <> · {event.teamName}</>}
             {event.startsAt && <> · starts <Ago at={event.startsAt} /></>}
           </p>
@@ -241,7 +241,7 @@ function SettingsTab({ detail }: { detail: EventDetail }) {
     name: event.name,
     description: event.description ?? '',
     rules: detail.rules ?? '',
-    externalId: event.externalId,
+    externalId: event.judgeContestId,
     startsAt: toLocalInput(event.startsAt),
     endsAt: toLocalInput(event.endsAt),
     lockdownRequired: event.lockdownRequired,

@@ -1,11 +1,14 @@
 import { clsx } from 'clsx'
 import { AlertCircle, CalendarClock, CheckCircle2, Loader2, Radio } from 'lucide-react'
-import { useDomjudgeAccount, useDomjudgeContests } from '@/hooks/useCompete'
+import { useDomjudgeContests } from '@/hooks/useCompete'
+import { useMyClassrooms } from '@/hooks/useClassrooms'
 import type { DomjudgeContestSummary } from '@/types'
 
 interface Props {
   onPick: (contestId: string) => void
   loading: boolean
+  /** Only this classroom's contests; null shows every classroom the student is in. */
+  classroomId?: number | null
 }
 
 function startsIn(seconds: number): string {
@@ -41,12 +44,19 @@ function whenOf(contest: DomjudgeContestSummary): string {
  *
  * <p>Finished contests are kept. Somebody opening the page after a round wants to see where
  * they came, and the arena renders a finished contest read-only anyway.
+ *
+ * <p>A student in several classrooms sees every classroom's judge at once, each read under that
+ * classroom's own login and labelled with it, since two judges can both have a "demo".
  */
-export function DomjudgeContestPicker({ onPick, loading }: Props) {
-  const { data: account, isLoading: accountLoading } = useDomjudgeAccount()
-  const linked = !!account?.linked
+export function DomjudgeContestPicker({ onPick, loading, classroomId = null }: Props) {
+  const { data: classrooms, isLoading: accountLoading } = useMyClassrooms()
+  const withLogin = classrooms?.filter(c => c.judgeLoginAttached) ?? []
+  const linked = withLogin.length > 0
+  const several = (classrooms?.length ?? 0) > 1
 
-  const { data: contests, isLoading, error } = useDomjudgeContests(linked)
+  const { data: allContests, isLoading, error } = useDomjudgeContests(linked)
+  const contests = allContests?.filter(c => classroomId == null || c.classroomId === classroomId)
+  const loginIn = (id: number) => classrooms?.find(c => c.classroomId === id)
 
   if (accountLoading) {
     return (
@@ -96,8 +106,9 @@ export function DomjudgeContestPicker({ onPick, loading }: Props) {
     return (
       <p className="rounded-lg border border-gray-800 px-3 py-3 text-xs leading-relaxed
         text-gray-500">
-        Your DOMjudge account <span className="text-gray-300">{account?.username}</span> is not
-        registered for any contests yet.
+        {classroomId != null && !loginIn(classroomId)?.judgeLoginAttached
+          ? 'No DOMjudge login is attached for you in this classroom yet.'
+          : 'Your DOMjudge account is not registered for any contests yet.'}
       </p>
     )
   }
@@ -105,8 +116,11 @@ export function DomjudgeContestPicker({ onPick, loading }: Props) {
   return (
     <div className="flex flex-col gap-2">
       <p className="text-[11px] text-gray-600">
-        Competing as <span className="text-gray-400">{account?.teamName ?? account?.username}</span>
-        {' '}— submissions land on this team's board.
+        Each contest is entered as your login in its classroom
+        {withLogin.length === 1 && withLogin[0].domjudgeUsername && (
+          <> (<span className="text-gray-400">{withLogin[0].domjudgeUsername}</span>)</>
+        )}
+        {' '}— submissions land on that team's board.
       </p>
 
       <div className="flex flex-col gap-1.5">
@@ -140,7 +154,12 @@ export function DomjudgeContestPicker({ onPick, loading }: Props) {
                 )}>
                   {contest.name}
                 </span>
-                <span className="block text-[11px] text-gray-600">{whenOf(contest)}</span>
+                <span className="block text-[11px] text-gray-600">
+                  {several && classroomId == null && (
+                    <span className="text-gray-500">{contest.classroomName} · </span>
+                  )}
+                  {whenOf(contest)}
+                </span>
               </span>
             </button>
           )

@@ -36,6 +36,8 @@ export interface EventBody {
   problems?: Omit<EventProblem, 'problemId'>[]
   /** Decided with the event and fixed once it starts. */
   personalFilesAllowed?: boolean
+  /** Required on create — the classroom, and so the judge, it runs on. */
+  classroomId?: number
 }
 
 export interface LogQuery {

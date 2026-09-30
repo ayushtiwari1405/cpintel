@@ -231,7 +231,7 @@ export const adminApi = {
   group: (groupId: number) =>
     apiClient.get<ApiResponse<GroupDetail>>(`/admin/groups/${groupId}`).then(r => r.data),
 
-  createGroup: (body: { name: string; description?: string }) =>
+  createGroup: (body: { name: string; description?: string; classroomId: number }) =>
     apiClient.post<ApiResponse<GroupSummary>>('/admin/groups', body).then(r => r.data),
 
   updateGroup: (groupId: number, body: { name: string; description?: string }) =>
@@ -309,25 +309,26 @@ export const adminApi = {
  * changed password is corrected.
  */
 export const adminDomjudgeApi = {
-  status: (userId: number) =>
-    apiClient.get<ApiResponse<DomjudgeAccount>>(`/admin/domjudge/credentials/${userId}`)
-      .then(r => r.data),
+  status: (classroomId: number, userId: number) =>
+    apiClient.get<ApiResponse<DomjudgeAccount>>(
+      `/admin/classrooms/${classroomId}/domjudge/credentials/${userId}`).then(r => r.data),
 
-  teams: () =>
-    apiClient.get<ApiResponse<DomjudgeTeamOption[]>>('/admin/domjudge/teams')
-      .then(r => r.data),
+  teams: (classroomId: number) =>
+    apiClient.get<ApiResponse<DomjudgeTeamOption[]>>(
+      `/admin/classrooms/${classroomId}/domjudge/teams`).then(r => r.data),
 
-  attach: (body: {
+  attach: (classroomId: number, body: {
     userId: number; username: string; password: string; name?: string; teamId?: string
   }) =>
-    apiClient.post<ApiResponse<DomjudgeAccount>>('/admin/domjudge/credentials', body)
-      .then(r => r.data),
+    apiClient.post<ApiResponse<DomjudgeAccount>>(
+      `/admin/classrooms/${classroomId}/domjudge/credentials`, body).then(r => r.data),
 
-  changePassword: (userId: number, password: string) =>
+  changePassword: (classroomId: number, userId: number, password: string) =>
     apiClient.put<ApiResponse<DomjudgeAccount>>(
-      `/admin/domjudge/credentials/${userId}/password`, { password }).then(r => r.data),
-
-  detach: (userId: number) =>
-    apiClient.delete<ApiResponse<void>>(`/admin/domjudge/credentials/${userId}`)
+      `/admin/classrooms/${classroomId}/domjudge/credentials/${userId}/password`, { password })
       .then(r => r.data),
+
+  detach: (classroomId: number, userId: number) =>
+    apiClient.delete<ApiResponse<void>>(
+      `/admin/classrooms/${classroomId}/domjudge/credentials/${userId}`).then(r => r.data),
 }

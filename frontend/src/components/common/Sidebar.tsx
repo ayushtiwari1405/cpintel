@@ -2,7 +2,7 @@ import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard, BarChart2, Map, Link2, User, Zap, ChevronLeft,
   ChevronRight, LogOut, Code2, Swords, Shield, Users, ScrollText, FolderCog,
-  UsersRound, FileText } from 'lucide-react'
+  UsersRound, FileText, School } from 'lucide-react'
 import { useLogout } from '@/hooks/useAuth'
 import { ThemeToggle } from './ThemeToggle'
 import { useAuth } from '@/contexts/AuthContext'
@@ -29,6 +29,7 @@ const navItems = [
 const adminItems = [
   { to: '/admin',               icon: Shield,     label: 'Overview' },
   { to: '/admin/users',         icon: Users,      label: 'Users' },
+  { to: '/admin/classrooms',    icon: School,     label: 'Classrooms' },
   { to: '/admin/teams',         icon: UsersRound, label: 'Teams' },
   { to: '/admin/exams',         icon: FileText,   label: 'Examinations' },
   { to: '/admin/audit',         icon: ScrollText, label: 'Audit trail' },

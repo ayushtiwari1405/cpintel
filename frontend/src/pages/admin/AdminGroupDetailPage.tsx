@@ -14,6 +14,7 @@ import { Ago, EmptyRow, Panel, Pill, StatCard } from '@/components/admin/AdminUi
 import { RosterImportPanel } from '@/components/admin/RosterImportPanel'
 import { DomjudgePasswordPanel } from '@/components/admin/DomjudgePasswordPanel'
 import type { GroupContestStatus } from '@/types'
+import { judgeIdOf } from '@/utils/contestRef'
 
 /**
  * How this team has done, across everything it was given.
@@ -199,6 +200,7 @@ export default function AdminGroupDetailPage() {
                   </td>
                   <td className="px-4 py-2.5">
                     <DomjudgeAccountCell
+                      classroomId={data.group.classroomId}
                       userId={member.userId}
                       username={member.username}
                     />
@@ -223,7 +225,8 @@ export default function AdminGroupDetailPage() {
                                  text-xs text-gray-400 outline-none focus:border-indigo-600"
                     >
                       <option value="">Move…</option>
-                      {allTeams?.filter(team => team.groupId !== id).map(team => (
+                      {allTeams?.filter(team => team.groupId !== id
+                        && team.classroomId === data.group.classroomId).map(team => (
                         <option key={team.groupId} value={team.groupId}>{team.name}</option>
                       ))}
                     </select>
@@ -319,7 +322,7 @@ export default function AdminGroupDetailPage() {
                     )}
                   </td>
                   <td className="px-4 py-2.5 text-xs text-gray-500">
-                    {c.platform} · <span className="font-mono">{c.externalId}</span>
+                    {c.platform} · <span className="font-mono">{judgeIdOf(c.externalId)}</span>
                   </td>
                   <td className="px-4 py-2.5 text-xs text-gray-500">
                     {c.startsAt ? <Ago at={c.startsAt} /> : '—'}

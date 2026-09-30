@@ -3,6 +3,7 @@ import { Clock, ExternalLink, Loader2, Lock, Trophy, Users } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useMyGroupContests, useMyGroups } from '@/hooks/useGroups'
 import { formatDistanceToNow } from 'date-fns'
+import { judgeIdOf } from '@/utils/contestRef'
 
 /**
  * A participant's own view of the teams they are on.
@@ -114,7 +115,7 @@ function ContestSection({ title, contests }: {
                   ? formatDistanceToNow(new Date(contest.startsAt), { addSuffix: true })
                   : 'no start time set'}
               </span>
-              <span>{contest.platform} · {contest.externalId}</span>
+              <span>{contest.platform} · {judgeIdOf(contest.externalId)}</span>
               {contest.url && (
                 <a
                   href={contest.url}

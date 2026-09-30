@@ -22,6 +22,8 @@ const AdminOverview     = lazy(() => import('@/pages/admin/AdminOverviewPage'))
 const AdminUsers        = lazy(() => import('@/pages/admin/AdminUsersPage'))
 const AdminAudit        = lazy(() => import('@/pages/admin/AdminAuditPage'))
 const AdminFiles        = lazy(() => import('@/pages/admin/AdminContestFilesPage'))
+const AdminClassrooms   = lazy(() => import('@/pages/admin/AdminClassroomsPage'))
+const AdminClassroom    = lazy(() => import('@/pages/admin/AdminClassroomDetailPage'))
 const AdminGroups       = lazy(() => import('@/pages/admin/AdminGroupsPage'))
 const AdminGroupDetail  = lazy(() => import('@/pages/admin/AdminGroupDetailPage'))
 const AdminGroupContest = lazy(() => import('@/pages/admin/AdminGroupContestPage'))
@@ -133,6 +135,9 @@ export function AppRoutes() {
           <Route path="/admin/users"         element={<AdminRoute><AdminUsers /></AdminRoute>} />
           <Route path="/admin/audit"         element={<AdminRoute><AdminAudit /></AdminRoute>} />
           <Route path="/admin/contest-files" element={<AdminRoute><AdminFiles /></AdminRoute>} />
+          <Route path="/admin/classrooms"    element={<AdminRoute><AdminClassrooms /></AdminRoute>} />
+          <Route path="/admin/classrooms/:classroomId"
+                 element={<AdminRoute><AdminClassroom /></AdminRoute>} />
           <Route path="/admin/teams"         element={<AdminRoute><AdminGroups /></AdminRoute>} />
           <Route path="/admin/teams/:groupId"
             element={<AdminRoute><AdminGroupDetail /></AdminRoute>} />

@@ -56,10 +56,11 @@ public class AdminEventController {
     // ------------------------------------------------------------------ reads
 
     @GetMapping
-    @Operation(summary = "Every contest, or every examination")
+    @Operation(summary = "Every contest, or every examination, in the classrooms you run")
     public ResponseEntity<ApiResponse<List<EventsDto.EventSummary>>> list(
+        @AuthenticationPrincipal Long adminId,
         @RequestParam(defaultValue = "EXAM") String kind) {
-        return ResponseEntity.ok(ApiResponse.ok(events.list(kind)));
+        return ResponseEntity.ok(ApiResponse.ok(events.list(adminId, kind)));
     }
 
     @GetMapping("/{eventId}")

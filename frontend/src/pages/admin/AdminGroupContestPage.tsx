@@ -7,6 +7,7 @@ import { clsx } from 'clsx'
 import { useGroupStandings, useGroupViolations, useRefreshStandings } from '@/hooks/useGroups'
 import { Ago, EmptyRow, Panel, Pill, actionLabel } from '@/components/admin/AdminUi'
 import type { StandingRow, ViolationSummary } from '@/types'
+import { judgeIdOf } from '@/utils/contestRef'
 
 function duration(ms: number): string {
   const total = Math.round(ms / 1000)
@@ -73,7 +74,7 @@ export default function AdminGroupContestPage() {
           {contest.status.toLowerCase()}
         </Pill>
         <span className="text-xs text-gray-600">
-          {contest.platform} · <span className="font-mono">{contest.externalId}</span>
+          {contest.platform} · <span className="font-mono">{judgeIdOf(contest.externalId)}</span>
         </span>
         {contest.url && (
           <a
