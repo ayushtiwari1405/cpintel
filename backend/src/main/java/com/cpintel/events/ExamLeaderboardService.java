@@ -464,7 +464,7 @@ public class ExamLeaderboardService {
             (int) (penaltySeconds / 60), pendingTotal, now);
     }
 
-    private static boolean isPending(String verdict) {
+    static boolean isPending(String verdict) {
         return verdict == null || PENDING.contains(verdict);
     }
 

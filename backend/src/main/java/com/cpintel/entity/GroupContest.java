@@ -217,6 +217,23 @@ public class GroupContest extends BaseEntity {
     @Column(name = "export_note", length = 500)
     private String exportNote;
 
+    // -------------------------------------------------------------- rejudge
+
+    /** The latest rejudge of one of its problems: RUNNING, DONE or FAILED. Null if never. */
+    @Column(name = "rejudge_status", length = 10)
+    private String rejudgeStatus;
+
+    /** The problem that rejudge was of. */
+    @Column(name = "rejudge_label", length = 8)
+    private String rejudgeLabel;
+
+    @Column(name = "rejudge_started_at")
+    private Instant rejudgeStartedAt;
+
+    /** How it went: how many were sent, how many verdicts changed, or why it failed. */
+    @Column(name = "rejudge_note", length = 500)
+    private String rejudgeNote;
+
     @Column(name = "standings_refreshed_at")
     private Instant standingsRefreshedAt;
 
@@ -295,6 +312,18 @@ public class GroupContest extends BaseEntity {
             return "FAILED";
         }
         return exportStatus;
+    }
+
+    /** Sending a room's submissions again and waiting on the judge may take this long. */
+    public static final java.time.Duration REJUDGE_LIMIT = java.time.Duration.ofMinutes(90);
+
+    /** The rejudge's state as of now; like the export's, one nobody finished has failed. */
+    public String rejudgeState(Instant now) {
+        if ("RUNNING".equals(rejudgeStatus) && rejudgeStartedAt != null
+                && rejudgeStartedAt.plus(REJUDGE_LIMIT).isBefore(now)) {
+            return "FAILED";
+        }
+        return rejudgeStatus;
     }
 
     /**

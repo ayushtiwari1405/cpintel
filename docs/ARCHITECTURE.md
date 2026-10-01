@@ -263,6 +263,8 @@ erDiagram
         varchar export_status
         varchar export_file_id
         bigint export_bytes
+        varchar rejudge_status
+        varchar rejudge_label
     }
     EXAM_PASSCODES {
         bigint passcode_id PK
@@ -1004,7 +1006,34 @@ Downloading the zip (`GET …/export.zip`) is written to the audit log.
 The spreadsheet is written by `common/Xlsx` — an .xlsx is a zip of a few XML files, and a table
 of names and numbers needs nothing a spreadsheet library is for; the frontend's
 `utils/spreadsheet.ts` does the same. The same writer serves `GET …/leaderboard.xlsx`, the
-board as the admin sees it at that moment, available from the start of the event.
+board as the admin sees it at that moment, available from the start of the event. Times in
+the workbook are written in IST and labelled so; the zone is a constant in `EventExport` for
+now.
+
+### Rejudging a problem
+
+When a problem's tests or limits were wrong and have been corrected on the judge, an admin
+rejudges it (`POST /admin/events/{id}/rejudge`, `EventRejudgeService`). CPIntel competes as
+each contestant's own team account, which cannot ask DOMjudge for a rejudging — so it does what
+it can do: it sends the archived source of every attempt at that problem to the judge again, as
+the contestant who wrote it (`CompeteProvider.resubmit`), oldest first across the whole room.
+
+No row is added to the archive. Each attempt's row is pointed at the judge's new submission
+(`SubmissionArchive.markResent`: `externalId` moves, the old id and verdict are kept in
+`externalIdBeforeRejudge` and `verdictBeforeRejudge`, the verdict becomes TESTING), and from
+there the ordinary verdict sync — which matches on the judge's submission id — writes the new
+verdict onto the original attempt. The row keeps its `submittedAt`, so the leaderboard still
+times a solve from when the contestant sent it, and the judge's old submission no longer matches
+any row and cannot write its verdict back.
+
+It runs in the background: after sending, it reads the affected people's submissions every ten
+seconds until every verdict is in or thirty minutes have passed, recomputes and stores the
+board, and leaves a note on the event (`rejudge_status`, `rejudge_note`) saying how many were
+sent, how many could not be and why, how many verdicts changed, and how many were still being
+judged. A submission the judge refuses — no attached login, a closed contest — keeps its old
+verdict. An event marked done must be reopened first, and one being rejudged cannot be marked
+done. On the judge these are new submissions: its own scoreboard counts them as further
+attempts, and a contestant sees them in the judge's list.
 
 ## Classrooms: one DOMjudge per class
 

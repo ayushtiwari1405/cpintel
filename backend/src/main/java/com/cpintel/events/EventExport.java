@@ -13,7 +13,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.attribute.FileTime;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.ZoneOffset;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -47,8 +47,12 @@ final class EventExport {
 
     private EventExport() {}
 
-    private static final DateTimeFormatter UTC =
-        DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss 'UTC'").withZone(ZoneOffset.UTC);
+    /**
+     * Every time in the workbook is Indian Standard Time, and says so. Fixed for now: the
+     * people reading these are in one place, and a file has no viewer whose zone it could ask.
+     */
+    private static final DateTimeFormatter IST =
+        DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss 'IST'").withZone(ZoneId.of("Asia/Kolkata"));
 
     /** What a source file is saved as, by which of our languages it is in. */
     private static final Map<String, String> EXTENSIONS = Map.ofEntries(
@@ -123,25 +127,25 @@ final class EventExport {
         rows.add(pair("Judge", event.getPlatform()));
         rows.add(pair("Judge contest",
             com.cpintel.integration.domjudge.JudgeContestRef.judgeIdOf(event.getExternalId())));
-        rows.add(pair("Started", event.getStartsAt() == null ? null : UTC.format(event.getStartsAt())));
-        rows.add(pair("Ended", event.getEndsAt() == null ? null : UTC.format(event.getEndsAt())));
+        rows.add(pair("Started", event.getStartsAt() == null ? null : IST.format(event.getStartsAt())));
+        rows.add(pair("Ended", event.getEndsAt() == null ? null : IST.format(event.getEndsAt())));
         if (standings != null) {
             rows.add(pair("Ranked by", (standings.marked() ? "marks" : "problems solved")
                 + ", then less total time; a solve is timed from when it was sent"));
             rows.add(pair("Penalty per wrong attempt", standings.penaltyMinutes() > 0
                 ? standings.penaltyMinutes() + " minutes" : "none"));
             rows.add(pair("People on the board", standings.rows().size()));
-            rows.add(pair("Board computed", UTC.format(standings.generatedAt())));
+            rows.add(pair("Board computed", IST.format(standings.generatedAt())));
             if (standings.pendingSubmissions() > 0) {
                 rows.add(pair("Still being judged", standings.pendingSubmissions()));
             }
         }
         if (submissionCount != null) rows.add(pair("Submissions", submissionCount));
         if (event.getCompletedAt() != null) {
-            rows.add(pair("Marked done", UTC.format(event.getCompletedAt())));
+            rows.add(pair("Marked done", IST.format(event.getCompletedAt())));
         }
         if (note != null && !note.isBlank()) rows.add(pair("Note", note));
-        rows.add(pair("File written", UTC.format(now)));
+        rows.add(pair("File written", IST.format(now)));
         return rows;
     }
 
@@ -185,8 +189,13 @@ final class EventExport {
         }
 
         List<List<Object>> listing = new ArrayList<>();
-        listing.add(List.of("Username", "Name", "Problem", "Attempt", "Verdict", "Language",
-            "Submitted", "From start", "Judge submission", "File"));
+        // Only a rejudged event has anything to say in the last column.
+        boolean rejudged = ordered.stream().anyMatch(row -> row.getRejudgedAt() != null);
+        List<Object> listingHeader = new ArrayList<>(List.of("Username", "Name", "Problem",
+            "Attempt", "Verdict", "Language", "Submitted", "From start", "Judge submission",
+            "File"));
+        if (rejudged) listingHeader.add("Verdict before rejudge");
+        listing.add(listingHeader);
         for (CodeSubmission row : ordered) {
             User user = users.get(row.getUserId());
             List<Object> line = new ArrayList<>();
@@ -196,12 +205,13 @@ final class EventExport {
             line.add(attempt.get(row));
             line.add(row.getVerdict() == null ? "PENDING" : row.getVerdict());
             line.add(row.getLanguageLabel() != null ? row.getLanguageLabel() : row.getLanguageId());
-            line.add(row.getSubmittedAt() == null ? null : UTC.format(row.getSubmittedAt()));
+            line.add(row.getSubmittedAt() == null ? null : IST.format(row.getSubmittedAt()));
             line.add(row.getSubmittedAt() == null || event.getStartsAt() == null ? null
                 : clock(Math.max(0,
                     Duration.between(event.getStartsAt(), row.getSubmittedAt()).toSeconds())));
             line.add(row.getExternalId());
             line.add(paths.get(row));
+            if (rejudged) line.add(row.getRejudgedAt() == null ? null : row.getVerdictBeforeRejudge());
             listing.add(line);
         }
 

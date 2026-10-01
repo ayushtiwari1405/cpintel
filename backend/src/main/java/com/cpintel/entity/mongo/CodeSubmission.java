@@ -135,6 +135,23 @@ public class CodeSubmission {
     @Field("compilationError")
     private String compilationError;
 
+    /**
+     * Set when an admin's rejudge sent this attempt to the judge again.
+     *
+     * <p>The row stays the attempt it always was — same code, same {@code submittedAt}, so it
+     * is ranked by when the contestant sent it — but {@code externalId} now names the judge's
+     * new submission, and the verdict is whatever that one gets. These keep what was replaced.
+     */
+    @Field("rejudgedAt")
+    private Instant rejudgedAt;
+
+    /** The judge's submission this attempt was before the rejudge. */
+    @Field("externalIdBeforeRejudge")
+    private Long externalIdBeforeRejudge;
+
+    @Field("verdictBeforeRejudge")
+    private String verdictBeforeRejudge;
+
     @Indexed
     @Field("submittedAt")
     private Instant submittedAt;

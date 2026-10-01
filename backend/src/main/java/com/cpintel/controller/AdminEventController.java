@@ -53,6 +53,7 @@ public class AdminEventController {
     private final ExamPasswordService passwords;
     private final JudgeProblemService judgeProblems;
     private final com.cpintel.events.EventCompletionService completion;
+    private final com.cpintel.events.EventRejudgeService rejudge;
 
     // ------------------------------------------------------------------ reads
 
@@ -195,6 +196,24 @@ public class AdminEventController {
             + "each entry is something worth a look, not a finding.")
     public ResponseEntity<ApiResponse<EventsDto.FlagReport>> flags(@PathVariable Long eventId) {
         return ResponseEntity.ok(ApiResponse.ok(flags.flags(eventId)));
+    }
+
+    // --------------------------------------------------------------- rejudge
+
+    @PostMapping("/{eventId}/rejudge")
+    @Operation(summary = "Rejudge one problem",
+        description = "Sends every submission made to that problem during the event to the "
+            + "judge again, as the contestant who made it and in the order they were first "
+            + "sent, then re-ranks the leaderboard on the verdicts that come back. Each attempt "
+            + "keeps its original time. Runs in the background; the event's rejudgeStatus and "
+            + "rejudgeNote say how it went.")
+    public ResponseEntity<ApiResponse<EventsDto.EventDetail>> rejudge(
+        @AuthenticationPrincipal Long adminId,
+        @PathVariable Long eventId,
+        @Valid @RequestBody EventsDto.RejudgeRequest req,
+        HttpServletRequest httpReq) {
+        return ResponseEntity.ok(ApiResponse.ok(
+            rejudge.start(adminId, eventId, req.label(), httpReq)));
     }
 
     // ------------------------------------------------------------------ done

@@ -53,6 +53,19 @@ public interface CompeteProvider {
     CompeteDto.ContestSubmission submit(Long userId, String contestId,
                                         CompeteDto.ContestSubmitRequest req);
 
+    /**
+     * Sends code this contestant already submitted to the judge again, for an admin's rejudge.
+     *
+     * <p>Unlike {@link #submit} this archives nothing: the attempt is already in the archive,
+     * and the caller points that row at the submission this returns.
+     *
+     * @return the judge's id for the new submission
+     */
+    default String resubmit(Long userId, String contestId, String index, String languageId,
+                            String source) {
+        throw ApiException.badRequest(platform() + " submissions cannot be sent again.");
+    }
+
     /** This contestant's own submissions in the contest, newest first. */
     List<CompeteDto.ContestSubmission> submissions(Long userId, String contestId);
 

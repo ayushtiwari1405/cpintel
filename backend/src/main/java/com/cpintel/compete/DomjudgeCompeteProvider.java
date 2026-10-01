@@ -391,6 +391,31 @@ public class DomjudgeCompeteProvider implements CompeteProvider {
     }
 
     /**
+     * As the contestant, like any submission: the judge files it under their team, which is
+     * what lets the ordinary verdict sync find it afterwards.
+     */
+    @Override
+    public String resubmit(Long userId, String contestId, String index, String languageId,
+                           String source) {
+        DomjudgeClient domjudge = judge(contestId);
+        DomjudgeCredentialStore.Stored own =
+            credentials.require(JudgeContestRef.parse(contestId).classroomId(), userId);
+        DomjudgeCredentialStore.Stored as = readAs(domjudge, own);
+
+        DjModels.ContestProblem problem = requireProblem(as, contestId, index);
+        DjModels.Language language = submittableLanguages(as, contestId).stream()
+            .filter(l -> l.getId().equals(languageId))
+            .findFirst()
+            .orElseThrow(() -> ApiException.badRequest(
+                "This contest does not accept " + languageId + "."));
+
+        String submissionId = domjudge.submitAs(own, raw(contestId), problem.getId(),
+            language.getId(), fileNameFor(problem, language), source);
+        cache.evict(contestId);
+        return submissionId;
+    }
+
+    /**
      * A plausible file name for the submitted source.
      *
      * DOMjudge records the name and shows it to the jury, and some configurations lean on the

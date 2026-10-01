@@ -130,9 +130,12 @@ export function useAdminEvent(eventId: number | null) {
     queryKey: ['admin', 'event', eventId],
     queryFn: () => adminEventsApi.detail(eventId!).then(r => r.data),
     enabled: isAdmin && eventId != null,
-    // The export is built in the background; follow it until it is ready or has failed.
-    refetchInterval: query =>
-      query.state.data?.event.exportStatus === 'BUILDING' ? 3000 : false,
+    // An export and a rejudge both run in the background; follow either until it finishes.
+    refetchInterval: query => {
+      const event = query.state.data?.event
+      return event?.exportStatus === 'BUILDING' || event?.rejudgeStatus === 'RUNNING'
+        ? 3000 : false
+    },
   })
 }
 
@@ -370,6 +373,14 @@ export function useRebuildExport() {
   return useEventMutation(
     ({ eventId }: { eventId: number }) => adminEventsApi.rebuildExport(eventId),
     () => 'Building the export again',
+  )
+}
+
+export function useRejudgeProblem() {
+  return useEventMutation(
+    ({ eventId, label }: { eventId: number; label: string }) =>
+      adminEventsApi.rejudge(eventId, label),
+    ({ label }) => `Rejudging problem ${label} — its submissions are being sent again`,
   )
 }
 

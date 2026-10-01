@@ -93,6 +93,10 @@ public class EventCompletionService {
         if (event.isCompleted()) {
             throw ApiException.badRequest("This is already marked done.");
         }
+        if ("RUNNING".equals(event.rejudgeState(now))) {
+            throw ApiException.badRequest("Problem " + event.getRejudgeLabel() + " is being "
+                + "rejudged. Mark it done once that has finished.");
+        }
 
         start(eventId, now, adminId, now);
         auditService.recordIn(event.getClassroomId(), adminId, AuditService.EVENT_COMPLETED,

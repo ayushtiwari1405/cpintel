@@ -150,6 +150,40 @@ public class SubmissionArchive {
     }
 
     /**
+     * Points an archived attempt at the submission an admin's rejudge made of it.
+     *
+     * <p>The row is not copied. From here the ordinary verdict sync, which matches on the
+     * judge's submission id, carries the new submission's verdict onto the original attempt —
+     * and the judge's old submission no longer matches anything, so it cannot write it back.
+     *
+     * @return false when the row could not be repointed, and so still carries its old verdict
+     */
+    public boolean markResent(String archiveId, String newExternalId) {
+        if (archiveId == null || newExternalId == null) return false;
+        try {
+            long id = Long.parseLong(newExternalId.trim());
+            return repo.findById(archiveId).map(row -> {
+                Instant now = Instant.now();
+                row.setExternalIdBeforeRejudge(row.getExternalId());
+                row.setVerdictBeforeRejudge(row.getVerdict());
+                row.setRejudgedAt(now);
+                row.setExternalId(id);
+                row.setVerdict("TESTING");
+                row.setPassedTestCount(null);
+                row.setTimeConsumedMs(null);
+                row.setMemoryConsumedBytes(null);
+                row.setUpdatedAt(now);
+                repo.save(row);
+                return true;
+            }).orElse(false);
+        } catch (Exception e) {
+            log.warn("Could not point archive row {} at rejudged submission {}: {}",
+                archiveId, newExternalId, e.getMessage());
+            return false;
+        }
+    }
+
+    /**
      * Marks an attempt as having been refused, so it is not left looking like it is still in
      * flight. The source stays — that is the copy the user needs to get their work back.
      */

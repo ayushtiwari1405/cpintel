@@ -128,8 +128,16 @@ public class EventsDto {
         String exportStatus,
         Long exportBytes,
         /** Why the export failed, or what it could not include. */
-        String exportNote
+        String exportNote,
+        /** The latest rejudge of one of its problems: RUNNING, DONE or FAILED; null if never. */
+        String rejudgeStatus,
+        String rejudgeLabel,
+        Instant rejudgeStartedAt,
+        /** How that rejudge went, in words. */
+        String rejudgeNote
     ) {}
+
+    public record RejudgeRequest(@NotBlank @Size(max = 8) String label) {}
 
     public record ProblemRow(
         Long problemId,

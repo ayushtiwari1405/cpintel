@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useParams } from 'react-router-dom'
 import {
   AlertTriangle, ArrowLeft, CheckCircle2, Code2, Download, Eye, Flag, KeyRound, Loader2, Lock,
@@ -14,7 +15,7 @@ import {
   useAdminEvent, useAssignToEvent, useCompleteEvent, useDeleteEvent, useDownloadEventFile,
   useEventLanguageCatalog, useExamFlags, useExamLeaderboard, useExamLeaderboardSettings,
   useExamLogs, useExamMonitor, useJudgeProblems, useRebuildExport, useRefreshExamLeaderboard,
-  useReopenEvent, useSetLifecycle, useSetProblems, useUnassignTeam, useUnassignUser,
+  useRejudgeProblem, useReopenEvent, useSetLifecycle, useSetProblems, useUnassignTeam, useUnassignUser,
   useUpdateEvent,
 } from '@/hooks/useExams'
 import { useAdminGroups } from '@/hooks/useGroups'
@@ -121,7 +122,7 @@ export default function AdminExamDetailPage() {
       {tab === 'logs'     && <LogsTab eventId={id} live={event.lifecycle === 'ACTIVE'} />}
       {tab === 'leaderboard' && (
         <LeaderboardTab eventId={id} live={event.lifecycle === 'ACTIVE'} exam={exam}
-          name={event.name} done={!!event.completedAt} />
+          name={event.name} done={!!event.completedAt} event={event} />
       )}
     </div>
   )
@@ -1531,6 +1532,98 @@ function CandidateLog({ eventId, userId, username, flags, onBack }: {
   )
 }
 
+// ------------------------------------------------------------------ rejudge
+
+/**
+ * Rejudging one problem: every submission to it goes to the judge again, in the order it was
+ * first sent, and the board is re-ranked on the verdicts that come back.
+ *
+ * <p>For after a problem's tests or limits were corrected on the judge. It runs in the
+ * background, so this shows how the latest one is going and, when it has finished, what it did.
+ */
+function RejudgePanel({ event, problems }: {
+  event: EventDetail['event']
+  problems: string[]
+}) {
+  const qc = useQueryClient()
+  const rejudge = useRejudgeProblem()
+  const [label, setLabel] = useState('')
+  const chosen = label || problems[0] || ''
+  const running = event.rejudgeStatus === 'RUNNING'
+  const done = !!event.completedAt
+  const notStarted = event.lifecycle === 'DRAFT' || event.lifecycle === 'SCHEDULED'
+
+  // The board on this tab is re-ranked by the rejudge, so re-read it when one finishes.
+  useEffect(() => {
+    if (event.rejudgeStatus && event.rejudgeStatus !== 'RUNNING') {
+      qc.invalidateQueries({ queryKey: ['admin', 'exam-leaderboard', event.eventId] })
+    }
+  }, [qc, event.eventId, event.rejudgeStatus])
+
+  return (
+    <Panel title="Rejudge a problem"
+      description="After its tests or limits were corrected on the judge">
+      <div className="space-y-3 p-4">
+        <p className="max-w-2xl text-xs leading-relaxed text-gray-500">
+          Sends every submission made to the problem during this {event.kind === 'EXAM'
+            ? 'examination' : 'contest'} to the judge again, as the person who wrote it and in
+          the order they were first sent, then re-ranks the leaderboard on the new verdicts.
+          Each attempt keeps its original time. On DOMjudge these appear as new submissions.
+        </p>
+        <div className="flex flex-wrap items-end gap-2">
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-gray-500">Problem</span>
+            <select value={chosen} onChange={e => setLabel(e.target.value)}
+              disabled={running || problems.length === 0}
+              className="rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 text-sm
+                text-gray-200 outline-none focus:border-indigo-600 disabled:opacity-40">
+              {problems.length === 0 && <option value="">—</option>}
+              {problems.map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
+          </label>
+          <button
+            onClick={() => {
+              if (confirm(`Rejudge problem ${chosen}? Every submission to it is sent to the `
+                + 'judge again and the leaderboard is re-ranked on the new verdicts.')) {
+                rejudge.mutate({ eventId: event.eventId, label: chosen })
+              }
+            }}
+            disabled={!chosen || running || done || notStarted || rejudge.isPending}
+            title={done ? 'Marked done — reopen it to rejudge'
+              : notStarted ? 'It has not started' : undefined}
+            className="flex items-center gap-1.5 rounded-lg border border-gray-800 px-3 py-2
+              text-sm text-gray-300 hover:bg-gray-800 disabled:opacity-40"
+          >
+            <RefreshCw size={13} className={clsx(running && 'animate-spin')} />
+            Rejudge
+          </button>
+        </div>
+
+        {running && (
+          <p className="flex items-center gap-1.5 text-xs text-gray-500">
+            <Loader2 size={12} className="animate-spin" />
+            Rejudging problem {event.rejudgeLabel}: sending its submissions and waiting for the
+            judge. This can take several minutes.
+          </p>
+        )}
+        {!running && event.rejudgeStatus && (
+          <p className={clsx('flex items-start gap-1.5 text-xs',
+            event.rejudgeStatus === 'FAILED' ? 'text-red-400' : 'text-gray-400')}>
+            {event.rejudgeStatus === 'FAILED'
+              ? <AlertTriangle size={12} className="mt-0.5 flex-shrink-0" />
+              : <CheckCircle2 size={12} className="mt-0.5 flex-shrink-0 text-green-400" />}
+            <span>
+              {event.rejudgeNote
+                ?? `The rejudge of problem ${event.rejudgeLabel} did not finish. Start it again.`}
+              {event.rejudgeStartedAt && <> · started <Ago at={event.rejudgeStartedAt} /></>}
+            </span>
+          </p>
+        )}
+      </div>
+    </Panel>
+  )
+}
+
 // --------------------------------------------------------------- leaderboard
 
 /**
@@ -1541,13 +1634,14 @@ function CandidateLog({ eventId, userId, username, flags, onBack }: {
  * <p>These settings are not part of the locked configuration above. Turning the board off, or
  * slowing it down, is something an invigilator may reasonably decide halfway through.
  */
-function LeaderboardTab({ eventId, live, exam, name, done }: {
+function LeaderboardTab({ eventId, live, exam, name, done, event }: {
   eventId: number
   live: boolean
   exam: boolean
   name: string
   /** Marked done: the board is fixed, so there is nothing to recompute. */
   done: boolean
+  event: EventDetail['event']
 }) {
   const download = useDownloadEventFile()
   const noun = exam ? 'examination' : 'contest'
@@ -1641,6 +1735,10 @@ function LeaderboardTab({ eventId, live, exam, name, done }: {
           </div>
         )}
       </Panel>
+
+      {event.platform === 'DOMJUDGE' && (
+        <RejudgePanel event={event} problems={board?.standings?.problems ?? []} />
+      )}
 
       <Panel
         title="Standings"

@@ -163,5 +163,28 @@ public interface GroupContestRepository extends JpaRepository<GroupContest, Long
         """)
     int clearCompletion(@Param("contestId") Long contestId);
 
+    @Modifying
+    @Transactional
+    @Query("""
+        UPDATE GroupContest c
+        SET c.rejudgeStatus = 'RUNNING', c.rejudgeLabel = :label,
+            c.rejudgeStartedAt = :startedAt, c.rejudgeNote = NULL
+        WHERE c.contestId = :contestId
+        """)
+    int startRejudge(@Param("contestId") Long contestId,
+                     @Param("label") String label,
+                     @Param("startedAt") Instant startedAt);
+
+    @Modifying
+    @Transactional
+    @Query("""
+        UPDATE GroupContest c
+        SET c.rejudgeStatus = :status, c.rejudgeNote = :note
+        WHERE c.contestId = :contestId
+        """)
+    int finishRejudge(@Param("contestId") Long contestId,
+                      @Param("status") String status,
+                      @Param("note") String note);
+
     long countByClassroomId(Long classroomId);
 }

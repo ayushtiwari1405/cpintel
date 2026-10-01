@@ -38,7 +38,7 @@ the reasoning behind the harder decisions, and [`docs/SRS.md`](docs/SRS.md) for 
 | Document DB | MongoDB — raw submission history, personal files, contest snapshots |
 | Cache | Redis — sessions, JWT blacklist, per-user token revocation, analytics cache |
 | Integrations | Codeforces REST + scraping, DOMjudge REST v4 |
-| Migrations | Flyway — 19 versioned migrations (schema, indexes, materialized views, audit indexes, groups, super admin role, scheduler locks, node-level mastery, examinations, examination access, placement results, Codeforces-only cleanup, examination-mode sessions, several events per judge contest, examination leaderboards, classrooms, audit log by classroom, DOMjudge logins in PostgreSQL, marking an event done) |
+| Migrations | Flyway — 20 versioned migrations (schema, indexes, materialized views, audit indexes, groups, super admin role, scheduler locks, node-level mastery, examinations, examination access, placement results, Codeforces-only cleanup, examination-mode sessions, several events per judge contest, examination leaderboards, classrooms, audit log by classroom, DOMjudge logins in PostgreSQL, marking an event done, rejudging a problem) |
 | Containerization | Docker Compose — 11 services: 3 behind the `monitoring` profile and certbot behind `letsencrypt`. `docker-compose.prod.yml` swaps the builds for CI images |
 | Editor | Monaco, bundled locally (no CDN) — shared by the Practice, Compete and examination workspaces |
 | Code runner | g++ and CPython under bubblewrap + rlimits, in its own locked-down container on a server; judged against the statement's sample tests |
@@ -674,12 +674,19 @@ DOMjudge-related is read from `.env`.
    sign-in password stops working when the paper ends.
 12. **Download Excel** on the Leaderboard tab saves the board as you see it, as an .xlsx, at
    any time once the event has started.
+   **Rejudge a problem**, on the same tab, is for after a problem's tests or limits were
+   corrected on DOMjudge: pick the problem and CPIntel sends every submission made to it during
+   the event to the judge again — as the person who wrote it, in the order they were first sent
+   — then re-ranks the leaderboard on the new verdicts. Each attempt keeps its original time.
+   It runs in the background and says when it has finished how many were sent and how many
+   verdicts changed. It needs each person's DOMjudge login to still be attached, and the judge
+   contest to still accept submissions; on DOMjudge's own pages these show as new submissions.
 13. When it is over and any re-evaluation on the judge has finished, press **Mark as done**
    (contests have it too). CPIntel reads everybody's verdicts from the judge one last time,
    fixes the leaderboard as it then stands, and builds an export in the background: a zip with
    a `submissions/<username>/` folder per person — each attempt named for its problem, attempt
    number and verdict — and `leaderboard.xlsx` holding the board, a list of every submission
-   and the event's details. **Download export** appears when it is ready. **Build again**
+   and the event's details (times in it are IST). **Download export** appears when it is ready. **Build again**
    repeats it after a later re-evaluation; **Reopen** takes the mark back and lets the board
    move again. Anything the judge would not hand over is said on the page and in the workbook.
 14. **Archive** puts a finished event out of everybody's way and **Unarchive** brings it back.

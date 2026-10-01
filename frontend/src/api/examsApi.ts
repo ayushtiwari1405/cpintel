@@ -152,6 +152,15 @@ export const adminEventsApi = {
     apiClient.post<ApiResponse<EventDetail>>(`/admin/events/${eventId}/reopen`, {})
       .then(r => r.data),
 
+  /**
+   * Sends every submission to one problem to the judge again, in the order they were first
+   * sent, and re-ranks on the new verdicts. Runs in the background: `rejudgeStatus` on the
+   * event says when it has finished, and `rejudgeNote` how it went.
+   */
+  rejudge: (eventId: number, label: string) =>
+    apiClient.post<ApiResponse<EventDetail>>(`/admin/events/${eventId}/rejudge`, { label })
+      .then(r => r.data),
+
   /** Every submission, filed by username, with the leaderboard as a spreadsheet. */
   exportZip: (eventId: number) =>
     apiClient.get<Blob>(`/admin/events/${eventId}/export.zip`,

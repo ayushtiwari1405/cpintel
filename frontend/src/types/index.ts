@@ -864,6 +864,12 @@ export interface EventSummary {
   exportBytes: number | null
   /** Why the export failed, or what it could not include. */
   exportNote: string | null
+  /** The latest rejudge of one of its problems; null if there has never been one. */
+  rejudgeStatus: 'RUNNING' | 'DONE' | 'FAILED' | null
+  rejudgeLabel: string | null
+  rejudgeStartedAt: string | null
+  /** How that rejudge went: how many were sent, how many verdicts changed. */
+  rejudgeNote: string | null
 }
 
 export interface EventDetail {

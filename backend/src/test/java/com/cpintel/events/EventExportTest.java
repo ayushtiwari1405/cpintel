@@ -107,7 +107,7 @@ class EventExportTest {
 
         String listing = new String(parts.get("xl/worksheets/sheet2.xml"), StandardCharsets.UTF_8);
         assertTrue(listing.contains(">submissions/asha/A_01_OK.cpp<"));
-        assertTrue(listing.contains(">2026-09-25 09:15:00 UTC<"));
+        assertTrue(listing.contains(">2026-09-25 14:45:00 IST<"));
 
         String about = new String(parts.get("xl/worksheets/sheet3.xml"), StandardCharsets.UTF_8);
         assertTrue(about.contains(">2 submissions had no verdict yet.<"));

@@ -60,7 +60,11 @@ public final class EventMapper {
             event.getCompletedAt(),
             event.exportState(now),
             event.getExportBytes(),
-            event.getExportNote());
+            event.getExportNote(),
+            event.rejudgeState(now),
+            event.getRejudgeLabel(),
+            event.getRejudgeStartedAt(),
+            event.getRejudgeNote());
     }
 
     public static EventsDto.ProblemRow toProblem(ContestProblem problem) {
