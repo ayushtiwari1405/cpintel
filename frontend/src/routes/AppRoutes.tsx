@@ -30,6 +30,7 @@ const AdminGroupContest = lazy(() => import('@/pages/admin/AdminGroupContestPage
 const AdminExams        = lazy(() => import('@/pages/admin/AdminExamsPage'))
 const AdminExamDetail   = lazy(() => import('@/pages/admin/AdminExamDetailPage'))
 const GroupsPage        = lazy(() => import('@/pages/GroupsPage'))
+const ExtensionPage     = lazy(() => import('@/pages/ExtensionPage'))
 
 /**
  * Signed in — and in the right mode for where they are going.
@@ -141,6 +142,8 @@ export function AppRoutes() {
           <Route path="/exam"            element={
             <ErrorBoundary scope="the examination"><ExamModePage /></ErrorBoundary>} />
           <Route path="/platforms"       element={<PlatformsPage />} />
+          {/* Where connecting Codeforces sends somebody whose browser has no extension. */}
+          <Route path="/extension"       element={<ExtensionPage />} />
           {/* A team is stored as a contest group; the name people use for it is "team",
               which is what the navigation and every screen say. The old path still works so
               a bookmark from before the rename does not dead-end. */}

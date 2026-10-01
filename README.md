@@ -267,9 +267,13 @@ there. On the server, with `.env` filled in from `.env.example`:
   `CPINTEL_SERVER_URL`. It is a window onto that server and talks to nothing else.
 - **Codeforces on the website:** a hosted server cannot fetch Codeforces' pages (its browser
   check refuses servers), so website users need the CPIntel extension, which fetches them from
-  their own browser: `CPINTEL_SERVER_URL=https://<server> node extension/build.mjs`, then publish
-  `extension/cpintel-codeforces.zip` and set `VITE_CF_EXTENSION_URL` to where users get it. See
-  `extension/README.md`. The desktop app needs no extension.
+  their own browser. Nothing has to be set up for that: somebody who tries to connect Codeforces
+  without it is sent to the site's **/extension** page, which builds the download for that site
+  in their browser and walks them through installing it. Optionally, publish it to the Chrome
+  Web Store for a one-click install (`CPINTEL_SERVER_URL=https://<server> node
+  extension/build.mjs` makes `extension/cpintel-codeforces.zip`) and set `VITE_CF_EXTENSION_URL`
+  to the listing; the page then offers the store first. See `extension/README.md`. The desktop
+  app needs no extension.
 
 See `docs/requirements.md` for the full checklist.
 
@@ -918,7 +922,7 @@ endpoint is a plain authenticated POST.
 backend/    Spring Boot API, Flyway migrations, analytics engine, integrations
 frontend/   React SPA — pages, the shared workspace components, hooks
 electron/   Desktop wrapper, examination monitoring and the Codeforces window
-extension/  Browser extension that fetches Codeforces pages for the website
+extension/  Browser extension that fetches Codeforces pages for the website (build script; its source is frontend/extension-src)
 deploy/     The runner container's seccomp profile
 nginx/      Reverse proxy config
 monitoring/ Prometheus/Grafana/Loki config

@@ -49,9 +49,9 @@ function MissingStatement({ issue }: { issue?: string | null }) {
         if (!cfRelay()) {
           return (
             <p>
-              Codeforces only shows its pages to a real browser. Install the CPIntel extension
-              from{' '}
-              <Link to="/platforms" className="underline hover:text-amber-200">Platforms</Link>
+              Codeforces only shows its pages to a real browser.{' '}
+              <Link to="/extension" target="_blank" rel="noreferrer"
+                className="underline hover:text-amber-200">Install the CPIntel extension</Link>
               {' '}to read problems here — or open this one on Codeforces meanwhile. (Running
               CPIntel on this computer? Reconnecting your Codeforces session there works too.)
             </p>

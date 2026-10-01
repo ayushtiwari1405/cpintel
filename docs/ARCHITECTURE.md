@@ -410,6 +410,16 @@ the submission form and archives the code. CPIntel keeps the user's handle, whic
 needs for verdicts and standings, and no cookies. A statement fetched this way is shown to that
 user only and never cached for others, since the page came from the client.
 
+The extension runs on one CPIntel site only — the one named in its manifest — which is what stops
+any other site asking it to fetch Codeforces as the user. So it cannot be a single fixed
+download, and the site hands it out itself: somebody who tries to connect Codeforces without it
+is sent to `/extension` (`ExtensionPage`), where `utils/cfExtension.ts` zips the three source
+files in the browser with `window.location.origin` written into the manifest. A deployment
+therefore has nothing to build or host. The source is `frontend/extension-src`, bundled into the
+site as raw text and read by `extension/build.mjs` for a store package, so there is one copy.
+The page then gives the browser's steps for an extension that did not come from its store, and
+notices once the extension is running (`data-cpintel-cf` on the document).
+
 ## The problem-solving workspace
 
 Practice, Compete and examinations are the same shape, and share their components: a draggable divider with

@@ -9,7 +9,21 @@ rest. The desktop app does the same through its own Codeforces window and needs 
 It can only fetch `https://codeforces.com`, only runs on the CPIntel site it was built for, and
 keeps nothing. CPIntel never receives the Codeforces cookies.
 
+## How users get it
+
+They do not need anything from this folder. Somebody who tries to connect Codeforces on the
+website without the extension is sent to the site's own **/extension** page, which packages the
+extension for that site in the browser — stamped with the address it was opened on — offers it
+as a download, and walks them through loading it (unzip, the browser's extensions page,
+Developer mode, Load unpacked). The page notices once it is installed. Where the deployment has
+a Chrome Web Store listing (`VITE_CF_EXTENSION_URL`), the page offers that first.
+
+The source is in `frontend/extension-src`, so the website and this build script package the
+same files.
+
 ## Build
+
+Only needed for a store listing, or to load the extension while developing:
 
 ```bash
 CPINTEL_SERVER_URL=https://cpintel.example.edu node build.mjs   # a deployment
@@ -22,7 +36,7 @@ Edge and Brave.
 
 ## Using it
 
-Install it, sign in at codeforces.com in the same browser, then press **Connect with this
-browser** on CPIntel's Platforms page. If Codeforces shows its "checking your browser" page to
+Install it (see above), sign in at codeforces.com in the same browser, then press **Connect
+with this browser** on CPIntel's Platforms page. If Codeforces shows its "checking your browser" page to
 the extension, CPIntel offers to open codeforces.com in a tab; pass the check there once and
 retry.

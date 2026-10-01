@@ -171,9 +171,12 @@ records time spent away. Practice works in any browser.
   builds are produced by GitHub on each release (a `v*` tag).
 - [ ] **Permission to install it on every lab PC** — *Required.*
 - [ ] **The CPIntel browser extension** — *Optional.* Only needed for Codeforces practice in a
-  web browser. One of:
-  - a Chrome Web Store developer account (one-off fee) to publish it, or
-  - permission to install it unpacked on the lab PCs.
+  web browser. The website hands it out itself: its `/extension` page gives each user the
+  download and the steps to load it. That route needs the browser to allow extensions loaded in
+  Developer mode, so one of:
+  - nothing, where users may do that on their own machines;
+  - permission for it on the lab PCs, if the lab's browser policy blocks unpacked extensions; or
+  - a Chrome Web Store developer account (one-off fee) to publish it for a one-click install.
 
 ### 1.9 People and exam-day process
 

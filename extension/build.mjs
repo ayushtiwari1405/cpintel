@@ -5,8 +5,11 @@
 //
 // The CPIntel address is stamped into manifest.json as the only site the extension runs on, so
 // no other site can ask it to fetch Codeforces with the user's sign-in. Output: dist/ (load it
-// unpacked from chrome://extensions) and cpintel-codeforces.zip (for the Chrome Web Store, or to
-// hand out).
+// unpacked from chrome://extensions) and cpintel-codeforces.zip (for the Chrome Web Store).
+//
+// The source lives in frontend/extension-src, because the website packages the same files for
+// whoever opens its /extension page — one copy, so the two cannot drift. Nobody has to run this
+// to hand the extension out; it is for a store listing and for loading it while developing.
 import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { dirname, join } from 'node:path'
@@ -34,7 +37,7 @@ if (origins.length === 0) {
 const dist = join(here, 'dist')
 rmSync(dist, { recursive: true, force: true })
 mkdirSync(dist, { recursive: true })
-cpSync(join(here, 'src'), dist, { recursive: true })
+cpSync(join(here, '..', 'frontend', 'extension-src'), dist, { recursive: true })
 
 const manifest = JSON.parse(readFileSync(join(dist, 'manifest.json'), 'utf8'))
 manifest.content_scripts[0].matches = origins

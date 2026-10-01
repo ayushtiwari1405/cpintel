@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import {
   Link2, Loader2, ShieldCheck, ShieldAlert, LogOut, ExternalLink, ChevronDown, ChevronUp,
   Terminal,
@@ -12,9 +13,6 @@ import { cfHelper, HELPER_COMMAND, apiBase } from '@/api/cfHelper'
 import { useAuthStore } from '@/store/authStore'
 import { desktopCf, isDesktop, openExternal } from '@/utils/desktopBridge'
 import { browserConnect, cfRelay, openCodeforces } from '@/api/cfBrowser'
-
-/** Where users get the CPIntel extension — a Chrome Web Store link, set per deployment. */
-const EXTENSION_URL = import.meta.env.VITE_CF_EXTENSION_URL as string | undefined
 
 /**
  * @param variant `card` stands on its own; `inline` drops the panel of its own and sits inside
@@ -258,18 +256,18 @@ function NoExtensionForm() {
   return (
     <div className="space-y-3">
       <p className="text-xs text-gray-400">
-        Install the <span className="text-gray-200">CPIntel Codeforces Connector</span> extension
-        (Chrome, Edge or Brave), then reload this page. It lets CPIntel open problems and submit
+        This browser needs the <span className="text-gray-200">CPIntel Codeforces Connector</span>{' '}
+        extension (Chrome, Edge or Brave) first. It lets CPIntel open problems and submit
         through this browser, where your Codeforces sign-in lives.
       </p>
-      {EXTENSION_URL ? (
-        <a href={EXTENSION_URL} target="_blank" rel="noreferrer"
-          className="btn-primary py-1.5 text-xs w-full flex items-center justify-center gap-1.5">
-          <ExternalLink size={12} /> Get the extension
-        </a>
-      ) : (
-        <p className="text-[11px] text-gray-500">Ask your administrator for the extension.</p>
-      )}
+      {/* A new tab, so whatever was open here — a problem, half-written code — stays open. */}
+      <Link to="/extension" target="_blank" rel="noreferrer"
+        className="btn-primary py-1.5 text-xs w-full flex items-center justify-center gap-1.5">
+        <ExternalLink size={12} /> Get the extension
+      </Link>
+      <p className="text-[11px] text-gray-500">
+        Installed it? Reload this page, then connect.
+      </p>
       <button onClick={() => setLocal(v => !v)}
         className="text-[11px] text-gray-500 hover:text-gray-300">
         {local ? 'Hide' : 'Running CPIntel on this computer? Other ways to connect'}
