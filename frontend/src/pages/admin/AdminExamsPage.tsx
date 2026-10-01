@@ -136,6 +136,7 @@ export default function AdminExamsPage() {
                   </td>
                   <td className="px-4 py-2.5">
                     <LifecyclePill lifecycle={event.lifecycle} />
+                    {event.completedAt && <span className="ml-2"><Pill tone="green">done</Pill></span>}
                     {event.lockdownRequired && (
                       <span className="ml-2 inline-flex items-center gap-1 text-[11px]
                         text-indigo-300">

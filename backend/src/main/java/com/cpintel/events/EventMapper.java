@@ -56,7 +56,11 @@ public final class EventMapper {
             participants,
             problemCount,
             event.getStandingsRefreshedAt(),
-            event.getStandingsError());
+            event.getStandingsError(),
+            event.getCompletedAt(),
+            event.exportState(now),
+            event.getExportBytes(),
+            event.getExportNote());
     }
 
     public static EventsDto.ProblemRow toProblem(ContestProblem problem) {

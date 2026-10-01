@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import {
-  AlertTriangle, ArrowLeft, Code2, Eye, Flag, KeyRound, Loader2, Lock, Monitor, Plus, Save,
-  RefreshCw, ScrollText, Settings2, Trash2, Trophy, Users,
+  AlertTriangle, ArrowLeft, CheckCircle2, Code2, Download, Eye, Flag, KeyRound, Loader2, Lock,
+  Monitor, Plus, Save, RefreshCw, ScrollText, Settings2, Trash2, Trophy, Users,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 
@@ -11,10 +11,11 @@ import { ExamPasswordsTab } from '@/components/admin/ExamPasswordsTab'
 import { ExamLeaderboardView } from '@/components/exam/ExamLeaderboardView'
 import { LifecyclePill } from '@/pages/admin/AdminExamsPage'
 import {
-  useAdminEvent, useAssignToEvent, useDeleteEvent, useEventLanguageCatalog, useExamFlags,
-  useExamLeaderboard, useExamLeaderboardSettings, useExamLogs, useExamMonitor,
-  useJudgeProblems, useRefreshExamLeaderboard, useSetLifecycle, useSetProblems, useUnassignTeam,
-  useUnassignUser, useUpdateEvent,
+  useAdminEvent, useAssignToEvent, useCompleteEvent, useDeleteEvent, useDownloadEventFile,
+  useEventLanguageCatalog, useExamFlags, useExamLeaderboard, useExamLeaderboardSettings,
+  useExamLogs, useExamMonitor, useJudgeProblems, useRebuildExport, useRefreshExamLeaderboard,
+  useReopenEvent, useSetLifecycle, useSetProblems, useUnassignTeam, useUnassignUser,
+  useUpdateEvent,
 } from '@/hooks/useExams'
 import { useAdminGroups } from '@/hooks/useGroups'
 import { useAdminUsers } from '@/hooks/useAdmin'
@@ -75,6 +76,7 @@ export default function AdminExamDetailPage() {
           <div className="flex items-center gap-2">
             <h1 className="text-lg font-semibold text-gray-100">{event.name}</h1>
             <LifecyclePill lifecycle={event.lifecycle} />
+            {event.completedAt && <Pill tone="green">done</Pill>}
             {event.lockdownRequired && (
               <span className="inline-flex items-center gap-1 text-[11px] text-indigo-300">
                 <Eye size={11} /> monitored
@@ -89,6 +91,8 @@ export default function AdminExamDetailPage() {
         </div>
         <LifecycleControls detail={detail} />
       </header>
+
+      {event.completedAt && <DonePanel detail={detail} />}
 
       <div className="flex flex-wrap items-center gap-1 rounded-lg border border-gray-800
         bg-gray-900 p-1 w-fit">
@@ -116,7 +120,8 @@ export default function AdminExamDetailPage() {
       {tab === 'monitor'  && <MonitorTab eventId={id} live={event.lifecycle === 'ACTIVE'} />}
       {tab === 'logs'     && <LogsTab eventId={id} live={event.lifecycle === 'ACTIVE'} />}
       {tab === 'leaderboard' && (
-        <LeaderboardTab eventId={id} live={event.lifecycle === 'ACTIVE'} exam={exam} />
+        <LeaderboardTab eventId={id} live={event.lifecycle === 'ACTIVE'} exam={exam}
+          name={event.name} done={!!event.completedAt} />
       )}
     </div>
   )
@@ -135,11 +140,32 @@ export default function AdminExamDetailPage() {
 function LifecycleControls({ detail }: { detail: EventDetail }) {
   const setLifecycle = useSetLifecycle()
   const remove = useDeleteEvent()
+  const complete = useCompleteEvent()
   const { event } = detail
   const id = event.eventId
+  const over = event.lifecycle === 'ENDED' || event.lifecycle === 'ARCHIVED'
 
   return (
     <div className="flex flex-wrap items-center gap-2">
+      {over && !event.completedAt && (
+        <button
+          onClick={() => {
+            if (confirm(`Mark ${event.name} as done?\n\nDo this once it is over and any `
+              + 're-evaluation on the judge has finished. The final verdicts are read from the '
+              + 'judge, the leaderboard is fixed as it then stands, and every submission is '
+              + 'packed with it into a zip you can download.')) {
+              complete.mutate({ eventId: id })
+            }
+          }}
+          disabled={complete.isPending}
+          title="Once it is over and all re-evaluation is finished"
+          className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs
+                     font-medium text-white transition-colors hover:bg-indigo-500
+                     disabled:opacity-40"
+        >
+          <CheckCircle2 size={12} /> Mark as done
+        </button>
+      )}
       {event.lifecycle === 'DRAFT' && (
         <button
           onClick={() => setLifecycle.mutate({ eventId: id, lifecycle: 'SCHEDULED' })}
@@ -193,6 +219,106 @@ function LifecycleControls({ detail }: { detail: EventDetail }) {
           <Trash2 size={12} /> Delete
         </button>
       )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------- done
+
+function fileSize(bytes: number | null): string {
+  if (bytes == null) return ''
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+/**
+ * An event that has been marked done: where its export is, and the two ways back.
+ *
+ * <p>The export is built in the background — reading everybody's final verdicts from the judge
+ * outlasts a request — so this follows it: building, then ready to download, or failed with the
+ * reason and a way to try again. "Build again" is also what takes in a re-evaluation made after
+ * it was marked done; "Reopen" takes the mark back altogether.
+ */
+function DonePanel({ detail }: { detail: EventDetail }) {
+  const { event } = detail
+  const id = event.eventId
+  const rebuild = useRebuildExport()
+  const reopen = useReopenEvent()
+  const download = useDownloadEventFile()
+  const building = event.exportStatus === 'BUILDING'
+  const subtle = 'rounded-lg border border-gray-800 px-3 py-1.5 text-xs text-gray-300 '
+    + 'transition-colors hover:bg-gray-800 disabled:opacity-40'
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border
+      border-gray-800 bg-gray-900 px-4 py-3">
+      <div className="min-w-0 space-y-1">
+        <p className="flex items-center gap-1.5 text-sm text-gray-200">
+          <CheckCircle2 size={14} className="text-green-400" />
+          Marked done <Ago at={event.completedAt!} /> — the leaderboard is fixed.
+        </p>
+        {building && (
+          <p className="flex items-center gap-1.5 text-xs text-gray-500">
+            <Loader2 size={12} className="animate-spin" />
+            Building the export: reading the final verdicts from the judge, then packing every
+            submission. This can take a few minutes.
+          </p>
+        )}
+        {event.exportStatus === 'READY' && (
+          <p className="text-xs text-gray-500">
+            The export holds every submission, in a folder per username, and the leaderboard as
+            an Excel file.
+          </p>
+        )}
+        {event.exportNote && (
+          <p className={clsx('flex items-start gap-1.5 text-xs',
+            event.exportStatus === 'FAILED' ? 'text-red-400' : 'text-amber-400')}>
+            <AlertTriangle size={12} className="mt-0.5 flex-shrink-0" /> {event.exportNote}
+          </p>
+        )}
+        {event.exportStatus === 'FAILED' && !event.exportNote && (
+          <p className="flex items-start gap-1.5 text-xs text-red-400">
+            <AlertTriangle size={12} className="mt-0.5 flex-shrink-0" />
+            The export was not finished. Build it again.
+          </p>
+        )}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        {event.exportStatus === 'READY' && (
+          <button
+            onClick={() => download.mutate({ eventId: id, name: event.name, file: 'export' })}
+            disabled={download.isPending}
+            className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs
+                       font-medium text-white transition-colors hover:bg-indigo-500
+                       disabled:opacity-40"
+          >
+            {download.isPending
+              ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
+            Download export (.zip{event.exportBytes != null && `, ${fileSize(event.exportBytes)}`})
+          </button>
+        )}
+        <button
+          onClick={() => rebuild.mutate({ eventId: id })}
+          disabled={building || rebuild.isPending}
+          title="Reads the verdicts from the judge again — use it after a later re-evaluation"
+          className={subtle}
+        >
+          Build again
+        </button>
+        <button
+          onClick={() => {
+            if (confirm(`Reopen ${event.name}? Its export is discarded and its leaderboard `
+              + 'can change again.')) {
+              reopen.mutate({ eventId: id })
+            }
+          }}
+          disabled={building || reopen.isPending}
+          className={subtle}
+        >
+          Reopen
+        </button>
+      </div>
     </div>
   )
 }
@@ -1415,11 +1541,15 @@ function CandidateLog({ eventId, userId, username, flags, onBack }: {
  * <p>These settings are not part of the locked configuration above. Turning the board off, or
  * slowing it down, is something an invigilator may reasonably decide halfway through.
  */
-function LeaderboardTab({ eventId, live, exam }: {
+function LeaderboardTab({ eventId, live, exam, name, done }: {
   eventId: number
   live: boolean
   exam: boolean
+  name: string
+  /** Marked done: the board is fixed, so there is nothing to recompute. */
+  done: boolean
 }) {
+  const download = useDownloadEventFile()
   const noun = exam ? 'examination' : 'contest'
   const People = exam ? 'Candidates' : 'Contestants'
   const people = People.toLowerCase()
@@ -1516,15 +1646,28 @@ function LeaderboardTab({ eventId, live, exam }: {
         title="Standings"
         description={candidatesSee ?? 'Ranked by problems solved, then total time'}
         actions={
-          <button
-            onClick={() => refresh.mutate(eventId)}
-            disabled={refresh.isPending || board?.state === 'NOT_STARTED'}
-            className="flex items-center gap-1.5 rounded-lg border border-gray-800 px-3 py-1.5
-              text-xs text-gray-300 hover:bg-gray-800 disabled:opacity-40"
-          >
-            <RefreshCw size={12} className={clsx(refresh.isPending && 'animate-spin')} />
-            Recompute now
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => download.mutate({ eventId, name, file: 'leaderboard' })}
+              disabled={download.isPending || !board?.standings}
+              className="flex items-center gap-1.5 rounded-lg border border-gray-800 px-3 py-1.5
+                text-xs text-gray-300 hover:bg-gray-800 disabled:opacity-40"
+            >
+              {download.isPending
+                ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
+              Download Excel
+            </button>
+            <button
+              onClick={() => refresh.mutate(eventId)}
+              disabled={refresh.isPending || done || board?.state === 'NOT_STARTED'}
+              title={done ? 'Marked done, so the leaderboard is fixed' : undefined}
+              className="flex items-center gap-1.5 rounded-lg border border-gray-800 px-3 py-1.5
+                text-xs text-gray-300 hover:bg-gray-800 disabled:opacity-40"
+            >
+              <RefreshCw size={12} className={clsx(refresh.isPending && 'animate-spin')} />
+              Recompute now
+            </button>
+          </div>
         }
       >
         <ExamLeaderboardView board={board} isLoading={isLoading} admin contest={!exam} />

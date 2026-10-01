@@ -63,6 +63,7 @@ class AdminConsoleAuthorizationTest extends AuthorizationTestBase {
     @MockBean private ExamMonitorService examMonitor;
     @MockBean private ExamFlagService examFlags;
     @MockBean private ExamLeaderboardService examLeaderboard;
+    @MockBean private com.cpintel.events.EventCompletionService eventCompletion;
     @MockBean private ExamPasswordService examPasswords;
     @MockBean private JudgeProblemService judgeProblems;
     @MockBean private GroupMemberRepository members;

@@ -121,7 +121,14 @@ public class EventsDto {
         int participantCount,
         int problemCount,
         Instant standingsRefreshedAt,
-        String standingsError
+        String standingsError,
+        /** When an admin marked it done — its results settled, its export built. Else null. */
+        Instant completedAt,
+        /** BUILDING, READY or FAILED once it is marked done; null before. */
+        String exportStatus,
+        Long exportBytes,
+        /** Why the export failed, or what it could not include. */
+        String exportNote
     ) {}
 
     public record ProblemRow(

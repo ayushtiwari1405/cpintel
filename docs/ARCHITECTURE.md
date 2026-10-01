@@ -17,6 +17,7 @@
 - [An examination's own window](#an-examinations-own-window)
 - [Examination monitoring, and why it stopped trying to lock anything](#examination-monitoring-and-why-it-stopped-trying-to-lock-anything)
 - [The examination leaderboard](#the-examination-leaderboard)
+- [Marking an event done, and its export](#marking-an-event-done-and-its-export)
 - [Group contests: ranking a subset of someone else's scoreboard](#group-contests-ranking-a-subset-of-someone-elses-scoreboard)
 
 ## System overview
@@ -257,6 +258,11 @@ erDiagram
         boolean leaderboard_final_public
         text leaderboard_snapshot
         timestamptz leaderboard_generated_at
+        timestamptz completed_at
+        bigint completed_by FK
+        varchar export_status
+        varchar export_file_id
+        bigint export_bytes
     }
     EXAM_PASSCODES {
         bigint passcode_id PK
@@ -961,6 +967,44 @@ The rank in the arena's header (`GET /compete/{platform}/{contestId}/rank`) is, 
 viewer's row on that same board, for papers and contests alike — so it agrees with the tab and
 moves when the board is recomputed. Where the board is not shown to them (switched off, or not
 released), no rank is shown either. Codeforces ranks still come from Codeforces.
+
+## Marking an event done, and its export
+
+An event ends by its clock, but its results are not settled then: verdicts are still landing,
+and a problem may be re-evaluated on the judge days later. "Done" is therefore something an
+admin says (`POST /admin/events/{id}/complete`), not something the clock implies, and it is a
+mark on the event (`completed_at`) rather than a lifecycle state — the lifecycle still reads
+ENDED or ARCHIVED, and every rule written against those keeps working.
+
+`EventCompletionService` then does three things in the background, because the first of them
+outlasts a request:
+
+1. Reads every participant's submissions from the judge once more. The archive learns a verdict
+   when somebody's screen polls for it, and nobody is polling a contest that ended last week, so
+   this is what brings a re-evaluation into CPIntel. It goes through the same provider call a
+   contestant's own page uses; people whose list the judge would not give (an expired login, no
+   service account) are counted and named in the export's note rather than failing the build.
+2. Computes the leaderboard and stores it. From here `ExamLeaderboardService` serves that
+   snapshot and nothing else: a forced recompute and a change of penalty are refused until the
+   event is reopened.
+3. Packs the export (`EventExport`): one folder named for the event, holding
+   `submissions/<username>/<problem>_<attempt>_<verdict>.<ext>` for every attempt the board was
+   ranked from, and `leaderboard.xlsx` with three sheets — the board, every submission with the
+   path of its file, and the event's details. The zip is stored in MongoDB GridFS
+   (`EventExportStore`), beside the submissions it was built from, so the existing backup
+   covers it and any instance can serve it.
+
+The event row carries the build's state — `export_status` is BUILDING, READY or FAILED — and the
+admin page polls it. A build still marked BUILDING after twenty minutes is reported as FAILED,
+so a backend restarted mid-build leaves a button to press rather than a spinner. **Build again**
+(`POST …/export/rebuild`) repeats all three steps and replaces the zip; **Reopen**
+(`POST …/reopen`) clears the mark and discards it. A done event cannot be edited or deleted.
+Downloading the zip (`GET …/export.zip`) is written to the audit log.
+
+The spreadsheet is written by `common/Xlsx` — an .xlsx is a zip of a few XML files, and a table
+of names and numbers needs nothing a spreadsheet library is for; the frontend's
+`utils/spreadsheet.ts` does the same. The same writer serves `GET …/leaderboard.xlsx`, the
+board as the admin sees it at that moment, available from the start of the event.
 
 ## Classrooms: one DOMjudge per class
 

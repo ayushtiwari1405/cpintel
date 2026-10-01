@@ -267,6 +267,9 @@ public class EventService {
         // thing still movable is the end — extending a paper after a power cut is ordinary;
         // changing its languages, problems or monitoring under a room of candidates is not.
         Instant now = Instant.now();
+        if (event.isCompleted()) {
+            throw ApiException.badRequest("This is marked done. Reopen it before changing it.");
+        }
         if (event.hasStarted(now)) {
             requireOnlyEndMoved(event, req, kind, now);
             event.setName(req.name().trim());
@@ -400,6 +403,10 @@ public class EventService {
 
         if (event.effectiveLifecycle(now) == GroupContest.Lifecycle.ACTIVE) {
             throw ApiException.badRequest("This is running. End it before deleting it.");
+        }
+        if (event.isCompleted()) {
+            throw ApiException.badRequest("This has been marked done, and its record is kept. "
+                + "Archive it instead.");
         }
         if (examEventRepository.countByContestContestId(eventId) > 0) {
             throw ApiException.badRequest(

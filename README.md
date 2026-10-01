@@ -38,7 +38,7 @@ the reasoning behind the harder decisions, and [`docs/SRS.md`](docs/SRS.md) for 
 | Document DB | MongoDB — raw submission history, personal files, contest snapshots |
 | Cache | Redis — sessions, JWT blacklist, per-user token revocation, analytics cache |
 | Integrations | Codeforces REST + scraping, DOMjudge REST v4 |
-| Migrations | Flyway — 15 versioned migrations (schema, indexes, materialized views, audit indexes, groups, super admin role, scheduler locks, node-level mastery, examinations, examination access, placement results, Codeforces-only cleanup, examination-mode sessions, several events per judge contest, examination leaderboards) |
+| Migrations | Flyway — 19 versioned migrations (schema, indexes, materialized views, audit indexes, groups, super admin role, scheduler locks, node-level mastery, examinations, examination access, placement results, Codeforces-only cleanup, examination-mode sessions, several events per judge contest, examination leaderboards, classrooms, audit log by classroom, DOMjudge logins in PostgreSQL, marking an event done) |
 | Containerization | Docker Compose — 11 services: 3 behind the `monitoring` profile and certbot behind `letsencrypt`. `docker-compose.prod.yml` swaps the builds for CI images |
 | Editor | Monaco, bundled locally (no CDN) — shared by the Practice, Compete and examination workspaces |
 | Code runner | g++ and CPython under bubblewrap + rlimits, in its own locked-down container on a server; judged against the statement's sample tests |
@@ -672,6 +672,19 @@ DOMjudge-related is read from `.env`.
    examinations**, which opens onto the code they submitted and, if you released them, the final
    standings. Marks are not published by this; that stays yours to decide. The examination
    sign-in password stops working when the paper ends.
+12. **Download Excel** on the Leaderboard tab saves the board as you see it, as an .xlsx, at
+   any time once the event has started.
+13. When it is over and any re-evaluation on the judge has finished, press **Mark as done**
+   (contests have it too). CPIntel reads everybody's verdicts from the judge one last time,
+   fixes the leaderboard as it then stands, and builds an export in the background: a zip with
+   a `submissions/<username>/` folder per person — each attempt named for its problem, attempt
+   number and verdict — and `leaderboard.xlsx` holding the board, a list of every submission
+   and the event's details. **Download export** appears when it is ready. **Build again**
+   repeats it after a later re-evaluation; **Reopen** takes the mark back and lets the board
+   move again. Anything the judge would not hand over is said on the page and in the workbook.
+14. **Archive** puts a finished event out of everybody's way and **Unarchive** brings it back.
+   Its record stays: the session log, the leaderboard and the export all remain downloadable,
+   and a done event cannot be deleted.
 
 #### Rehearsing with 200 simulated contestants
 

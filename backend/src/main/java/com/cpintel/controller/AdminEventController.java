@@ -52,6 +52,7 @@ public class AdminEventController {
     private final ExamLeaderboardService leaderboard;
     private final ExamPasswordService passwords;
     private final JudgeProblemService judgeProblems;
+    private final com.cpintel.events.EventCompletionService completion;
 
     // ------------------------------------------------------------------ reads
 
@@ -194,6 +195,72 @@ public class AdminEventController {
             + "each entry is something worth a look, not a finding.")
     public ResponseEntity<ApiResponse<EventsDto.FlagReport>> flags(@PathVariable Long eventId) {
         return ResponseEntity.ok(ApiResponse.ok(flags.flags(eventId)));
+    }
+
+    // ------------------------------------------------------------------ done
+
+    @PostMapping("/{eventId}/complete")
+    @Operation(summary = "Mark a finished event done, and build its export",
+        description = "For once it is over and any re-evaluation on the judge has finished. "
+            + "Reads everybody's verdicts from the judge one last time, fixes the leaderboard "
+            + "as it then stands, and packs every submission (filed by username) with the "
+            + "leaderboard as a spreadsheet into a zip. The build runs in the background; the "
+            + "event's exportStatus says when it is READY.")
+    public ResponseEntity<ApiResponse<EventsDto.EventDetail>> complete(
+        @AuthenticationPrincipal Long adminId,
+        @PathVariable Long eventId,
+        HttpServletRequest httpReq) {
+        return ResponseEntity.ok(ApiResponse.ok(completion.complete(adminId, eventId, httpReq)));
+    }
+
+    @PostMapping("/{eventId}/export/rebuild")
+    @Operation(summary = "Build a done event's export again",
+        description = "After a later re-evaluation, or after a build that failed.")
+    public ResponseEntity<ApiResponse<EventsDto.EventDetail>> rebuildExport(
+        @AuthenticationPrincipal Long adminId,
+        @PathVariable Long eventId,
+        HttpServletRequest httpReq) {
+        return ResponseEntity.ok(ApiResponse.ok(completion.rebuild(adminId, eventId, httpReq)));
+    }
+
+    @PostMapping("/{eventId}/reopen")
+    @Operation(summary = "Take back the done mark: the leaderboard may move again, and the "
+        + "export is discarded")
+    public ResponseEntity<ApiResponse<EventsDto.EventDetail>> reopen(
+        @AuthenticationPrincipal Long adminId,
+        @PathVariable Long eventId,
+        HttpServletRequest httpReq) {
+        return ResponseEntity.ok(ApiResponse.ok(completion.reopen(adminId, eventId, httpReq)));
+    }
+
+    @GetMapping("/{eventId}/export.zip")
+    @Operation(summary = "A done event's record: every submission by username, and the "
+        + "leaderboard as a spreadsheet")
+    public ResponseEntity<org.springframework.core.io.Resource> export(
+        @AuthenticationPrincipal Long adminId,
+        @PathVariable Long eventId,
+        HttpServletRequest httpReq) {
+        return asDownload(completion.export(adminId, eventId, httpReq), "application/zip");
+    }
+
+    @GetMapping("/{eventId}/leaderboard.xlsx")
+    @Operation(summary = "The leaderboard as an admin sees it now, as a spreadsheet")
+    public ResponseEntity<org.springframework.core.io.Resource> leaderboardWorkbook(
+        @PathVariable Long eventId) {
+        return asDownload(completion.leaderboardWorkbook(eventId),
+            com.cpintel.common.Xlsx.CONTENT_TYPE);
+    }
+
+    private static ResponseEntity<org.springframework.core.io.Resource> asDownload(
+        com.cpintel.events.EventCompletionService.Download download, String contentType) {
+        var response = ResponseEntity.ok()
+            .contentType(org.springframework.http.MediaType.parseMediaType(contentType))
+            .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
+                org.springframework.http.ContentDisposition.attachment()
+                    .filename(download.fileName()).build().toString())
+            .header(org.springframework.http.HttpHeaders.CACHE_CONTROL, "no-store");
+        if (download.bytes() != null) response.contentLength(download.bytes());
+        return response.body(download.content());
     }
 
     // ----------------------------------------------------------- leaderboard

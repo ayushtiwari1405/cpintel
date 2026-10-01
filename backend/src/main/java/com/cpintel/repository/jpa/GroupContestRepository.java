@@ -112,5 +112,56 @@ public interface GroupContestRepository extends JpaRepository<GroupContest, Long
                          @Param("snapshot") String snapshot,
                          @Param("generatedAt") Instant generatedAt);
 
+    /** Marks the event done, or starts its export again, without touching the rest of the row. */
+    @Modifying
+    @Transactional
+    @Query("""
+        UPDATE GroupContest c
+        SET c.completedAt = :completedAt, c.completedBy = :completedBy,
+            c.exportStatus = 'BUILDING', c.exportStartedAt = :startedAt, c.exportNote = NULL
+        WHERE c.contestId = :contestId
+        """)
+    int startExport(@Param("contestId") Long contestId,
+                    @Param("completedAt") Instant completedAt,
+                    @Param("completedBy") Long completedBy,
+                    @Param("startedAt") Instant startedAt);
+
+    /**
+     * Records a finished build. Only while the event is still marked done: one reopened while
+     * its export was being built must not have it land afterwards.
+     */
+    @Modifying
+    @Transactional
+    @Query("""
+        UPDATE GroupContest c
+        SET c.exportStatus = 'READY', c.exportFileId = :fileId, c.exportBytes = :bytes,
+            c.exportNote = :note
+        WHERE c.contestId = :contestId AND c.completedAt IS NOT NULL
+        """)
+    int storeExport(@Param("contestId") Long contestId,
+                    @Param("fileId") String fileId,
+                    @Param("bytes") Long bytes,
+                    @Param("note") String note);
+
+    @Modifying
+    @Transactional
+    @Query("""
+        UPDATE GroupContest c
+        SET c.exportStatus = 'FAILED', c.exportNote = :note
+        WHERE c.contestId = :contestId AND c.completedAt IS NOT NULL
+        """)
+    int failExport(@Param("contestId") Long contestId, @Param("note") String note);
+
+    @Modifying
+    @Transactional
+    @Query("""
+        UPDATE GroupContest c
+        SET c.completedAt = NULL, c.completedBy = NULL, c.exportStatus = NULL,
+            c.exportStartedAt = NULL, c.exportFileId = NULL, c.exportBytes = NULL,
+            c.exportNote = NULL
+        WHERE c.contestId = :contestId
+        """)
+    int clearCompletion(@Param("contestId") Long contestId);
+
     long countByClassroomId(Long classroomId);
 }

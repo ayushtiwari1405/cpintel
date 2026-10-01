@@ -184,6 +184,39 @@ public class GroupContest extends BaseEntity {
     @Column(name = "leaderboard_generated_at")
     private Instant leaderboardGeneratedAt;
 
+    // ---------------------------------------------------------------- done
+
+    /**
+     * When an admin marked the event done: over, re-evaluated, and not going to change.
+     *
+     * <p>Not a lifecycle state. The lifecycle says where the event is against its clock, and
+     * that still reads ENDED or ARCHIVED; this says its results are settled — which is when the
+     * leaderboard stops being recomputed and the export is built.
+     */
+    @Column(name = "completed_at")
+    private Instant completedAt;
+
+    @Column(name = "completed_by")
+    private Long completedBy;
+
+    /** BUILDING, READY or FAILED — see {@link #exportState}. Null until it is marked done. */
+    @Column(name = "export_status", length = 10)
+    private String exportStatus;
+
+    @Column(name = "export_started_at")
+    private Instant exportStartedAt;
+
+    /** The export zip's id in GridFS. */
+    @Column(name = "export_file_id", length = 64)
+    private String exportFileId;
+
+    @Column(name = "export_bytes")
+    private Long exportBytes;
+
+    /** Why the build failed, or what it could not include. Shown to the admin as it is. */
+    @Column(name = "export_note", length = 500)
+    private String exportNote;
+
     @Column(name = "standings_refreshed_at")
     private Instant standingsRefreshedAt;
 
@@ -242,6 +275,26 @@ public class GroupContest extends BaseEntity {
 
     public boolean isExam() {
         return Kind.EXAM.name().equals(kind);
+    }
+
+    public boolean isCompleted() {
+        return completedAt != null;
+    }
+
+    /** A build that has run this long was cut off — by a restart, most likely. */
+    public static final java.time.Duration EXPORT_BUILD_LIMIT = java.time.Duration.ofMinutes(20);
+
+    /**
+     * The export's state as of now: what is stored, except that a build nobody finished is a
+     * failed one. Without that, a backend restarted mid-build would leave the event saying
+     * "building" for ever, with no way offered to try again.
+     */
+    public String exportState(Instant now) {
+        if ("BUILDING".equals(exportStatus) && exportStartedAt != null
+                && exportStartedAt.plus(EXPORT_BUILD_LIMIT).isBefore(now)) {
+            return "FAILED";
+        }
+        return exportStatus;
     }
 
     /**

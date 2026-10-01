@@ -130,6 +130,9 @@ export function useAdminEvent(eventId: number | null) {
     queryKey: ['admin', 'event', eventId],
     queryFn: () => adminEventsApi.detail(eventId!).then(r => r.data),
     enabled: isAdmin && eventId != null,
+    // The export is built in the background; follow it until it is ready or has failed.
+    refetchInterval: query =>
+      query.state.data?.event.exportStatus === 'BUILDING' ? 3000 : false,
   })
 }
 
@@ -354,6 +357,60 @@ export function useSetLifecycle() {
       ARCHIVED:  'Archived — kept for the record, out of everybody’s way',
     })[lifecycle],
   )
+}
+
+export function useCompleteEvent() {
+  return useEventMutation(
+    ({ eventId }: { eventId: number }) => adminEventsApi.complete(eventId),
+    () => 'Marked done — its export is being built',
+  )
+}
+
+export function useRebuildExport() {
+  return useEventMutation(
+    ({ eventId }: { eventId: number }) => adminEventsApi.rebuildExport(eventId),
+    () => 'Building the export again',
+  )
+}
+
+export function useReopenEvent() {
+  return useEventMutation(
+    ({ eventId }: { eventId: number }) => adminEventsApi.reopen(eventId),
+    () => 'Reopened — its leaderboard can move again',
+  )
+}
+
+/**
+ * Saves one of an event's files to disk: its export zip, or its leaderboard as a spreadsheet.
+ *
+ * Through the API rather than a plain link, because the download needs the bearer token.
+ */
+export function useDownloadEventFile() {
+  const toast = useToast()
+  return useMutation({
+    mutationFn: async ({ eventId, name, file }: {
+      eventId: number
+      name: string
+      file: 'export' | 'leaderboard'
+    }) => {
+      const blob = file === 'export'
+        ? await adminEventsApi.exportZip(eventId)
+        : await adminEventsApi.leaderboardXlsx(eventId)
+      // What a file name may hold on any system, as the server names the zip's own folder.
+      const base = name.trim().replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^[._]+|[._]+$/g, '')
+        || 'event'
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = file === 'export'
+        ? `${base}-${eventId}.zip` : `${base}-${eventId}-leaderboard.xlsx`
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      URL.revokeObjectURL(url)
+    },
+    onError: () => toast.push('error', 'That download did not go through'),
+  })
 }
 
 export function useDeleteEvent() {

@@ -97,6 +97,9 @@ public class AuditService {
     public static final String EVENT_ASSIGNED    = "ADMIN_EVENT_ASSIGNED";
     public static final String EVENT_UNASSIGNED  = "ADMIN_EVENT_UNASSIGNED";
     public static final String EVENT_PROBLEMS    = "ADMIN_EVENT_PROBLEMS";
+    public static final String EVENT_COMPLETED   = "ADMIN_EVENT_COMPLETED";
+    public static final String EVENT_REOPENED    = "ADMIN_EVENT_REOPENED";
+    public static final String EVENT_EXPORTED    = "ADMIN_EVENT_EXPORTED";
 
     // Admin actions on the contest file policy
     public static final String FILE_POLICY_DEFAULT = "ADMIN_FILE_POLICY_DEFAULT";

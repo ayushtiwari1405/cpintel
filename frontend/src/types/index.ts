@@ -857,6 +857,13 @@ export interface EventSummary {
   problemCount: number
   standingsRefreshedAt: string | null
   standingsError: string | null
+  /** When an admin marked it done: results settled, leaderboard fixed, export built. */
+  completedAt: string | null
+  /** The export zip's state once it is marked done; null before. */
+  exportStatus: 'BUILDING' | 'READY' | 'FAILED' | null
+  exportBytes: number | null
+  /** Why the export failed, or what it could not include. */
+  exportNote: string | null
 }
 
 export interface EventDetail {

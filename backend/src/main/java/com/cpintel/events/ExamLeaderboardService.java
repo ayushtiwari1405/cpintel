@@ -92,6 +92,10 @@ public class ExamLeaderboardService {
     /** The board as an admin sees it: always computed once started, whatever candidates see. */
     public EventsDto.Leaderboard forAdmin(Long eventId, boolean refresh) {
         GroupContest event = events.require(eventId);
+        if (refresh && event.isCompleted()) {
+            throw ApiException.badRequest("This is marked done, so its leaderboard is fixed. "
+                + "Build its export again to take in a re-evaluation, or reopen it.");
+        }
         Instant now = Instant.now();
         EventsDto.LeaderboardStandings standings = event.hasStarted(now)
             ? current(event, now, refresh) : null;
@@ -122,6 +126,10 @@ public class ExamLeaderboardService {
                                                 HttpServletRequest httpReq) {
         GroupContest event = events.require(eventId);
         boolean penaltyChanged = !req.penaltyMinutes().equals(event.getWrongPenaltyMinutes());
+        if (penaltyChanged && event.isCompleted()) {
+            throw ApiException.badRequest("This is marked done, and a new penalty would "
+                + "re-rank a leaderboard that has been fixed and exported. Reopen it first.");
+        }
 
         event.setLeaderboardEnabled(req.enabled());
         event.setLeaderboardRefreshMinutes(req.refreshMinutes());
@@ -179,6 +187,8 @@ public class ExamLeaderboardService {
                                                    boolean force) {
         EventsDto.LeaderboardStandings stored = parse(event.getLeaderboardSnapshot());
         Instant at = stored == null ? null : stored.generatedAt();
+        // Marked done: the board is the one that was exported, and stays it.
+        if (stored != null && event.isCompleted()) return stored;
         if (!force && at != null && !due(event, at, now)) return stored;
 
         EventsDto.LeaderboardStandings fresh = compute(event, now);
@@ -216,13 +226,40 @@ public class ExamLeaderboardService {
         }
     }
 
+    /**
+     * The board as it stands now, computed whatever its schedule says and stored as the one
+     * every later read is given. What marking an event done calls.
+     */
+    EventsDto.LeaderboardStandings finalise(GroupContest event) {
+        EventsDto.LeaderboardStandings fresh = compute(event, Instant.now());
+        try {
+            eventRepository.storeLeaderboard(event.getContestId(),
+                json.writeValueAsString(fresh), fresh.generatedAt());
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            throw new IllegalStateException("The leaderboard could not be stored", e);
+        }
+        return fresh;
+    }
+
+    /** Every submission that belongs to this event — the ones its board is ranked from. */
+    List<CodeSubmission> attemptsOf(GroupContest event) {
+        return attempts(event,
+            open(event) ? null : events.participantIds(event.getContestId()));
+    }
+
+    /**
+     * A public contest is assigned to nobody in particular, so whoever submitted during it took
+     * part. Anything else — every examination included — keeps to its roster.
+     */
+    private static boolean open(GroupContest event) {
+        return !event.isExam()
+            && GroupContest.Visibility.PUBLIC.name().equals(event.getVisibility());
+    }
+
     EventsDto.LeaderboardStandings compute(GroupContest event, Instant now) {
         Set<Long> participants = new LinkedHashSet<>(events.participantIds(event.getContestId()));
 
-        // A public contest is assigned to nobody in particular, so whoever submitted during it
-        // took part. Anything else — every examination included — keeps to its roster.
-        boolean open = !event.isExam()
-            && GroupContest.Visibility.PUBLIC.name().equals(event.getVisibility());
+        boolean open = open(event);
         List<CodeSubmission> rows = attempts(event, open ? null : participants);
         rows = refreshPending(event, rows, open ? null : participants);
         if (open) for (CodeSubmission row : rows) participants.add(row.getUserId());

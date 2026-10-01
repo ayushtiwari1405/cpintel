@@ -136,6 +136,31 @@ export const adminEventsApi = {
   remove: (eventId: number) =>
     apiClient.delete<ApiResponse<void>>(`/admin/events/${eventId}`).then(r => r.data),
 
+  /**
+   * Marks a finished event done. The server reads the final verdicts, fixes the leaderboard
+   * and builds the export in the background; `exportStatus` on the event says how far it is.
+   */
+  complete: (eventId: number) =>
+    apiClient.post<ApiResponse<EventDetail>>(`/admin/events/${eventId}/complete`, {})
+      .then(r => r.data),
+
+  rebuildExport: (eventId: number) =>
+    apiClient.post<ApiResponse<EventDetail>>(`/admin/events/${eventId}/export/rebuild`, {})
+      .then(r => r.data),
+
+  reopen: (eventId: number) =>
+    apiClient.post<ApiResponse<EventDetail>>(`/admin/events/${eventId}/reopen`, {})
+      .then(r => r.data),
+
+  /** Every submission, filed by username, with the leaderboard as a spreadsheet. */
+  exportZip: (eventId: number) =>
+    apiClient.get<Blob>(`/admin/events/${eventId}/export.zip`,
+      { responseType: 'blob', timeout: 300_000 }).then(r => r.data),
+
+  leaderboardXlsx: (eventId: number) =>
+    apiClient.get<Blob>(`/admin/events/${eventId}/leaderboard.xlsx`,
+      { responseType: 'blob', timeout: 120_000 }).then(r => r.data),
+
   assign: (eventId: number, body: { teamIds?: number[]; userIds?: number[] }) =>
     apiClient.post<ApiResponse<EventDetail>>(`/admin/events/${eventId}/assignments`, body)
       .then(r => r.data),
