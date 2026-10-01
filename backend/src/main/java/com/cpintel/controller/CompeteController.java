@@ -35,6 +35,7 @@ import java.util.List;
 public class CompeteController {
 
     private final CompeteService competeService;
+    private final com.cpintel.events.ContestLeaderboardService leaderboard;
 
     @PostMapping("/contest")
     @Operation(summary = "Resolve a pasted contest link into contest metadata and phase")
@@ -197,19 +198,18 @@ public class CompeteController {
     /**
      * The whole board, for the leaderboard panel in the arena's sidebar.
      *
-     * Separate from {@code /rank} rather than folded into it. The rank is polled continuously
-     * by the header for every contestant in the room; the board is read only while somebody
-     * has the panel open. Serving both from one endpoint would have made the expensive one as
-     * frequent as the cheap one.
+     * <p>Ranked by CPIntel from its own submission archive, exactly as an examination's is,
+     * rather than read from the judge's scoreboard — which shows a contestant only the teams
+     * the judge has made public.
      */
     @GetMapping("/{platform}/{contestId}/leaderboard")
-    @Operation(summary = "The contest's full board, with this contestant's team marked")
-    public ResponseEntity<ApiResponse<CompeteDto.Leaderboard>> leaderboard(
+    @Operation(summary = "The contest's leaderboard, ranked from CPIntel's submission archive")
+    public ResponseEntity<ApiResponse<com.cpintel.events.EventsDto.Leaderboard>> leaderboard(
         @AuthenticationPrincipal Long userId,
         @PathVariable String platform,
         @PathVariable String contestId) {
         return ResponseEntity.ok(ApiResponse.ok(
-            competeService.leaderboard(userId, platform, contestId)));
+            leaderboard.forContest(userId, platform, contestId)));
     }
 
     @GetMapping("/{platform}/{contestId}/rank")
@@ -219,6 +219,6 @@ public class CompeteController {
         @PathVariable String platform,
         @PathVariable String contestId) {
         return ResponseEntity.ok(ApiResponse.ok(
-            competeService.rank(userId, platform, contestId)));
+            leaderboard.rank(userId, platform, contestId)));
     }
 }

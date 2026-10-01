@@ -216,11 +216,6 @@ public class CompeteService {
         return provider(platform).rank(userId, contestId);
     }
 
-    public CompeteDto.Leaderboard leaderboard(Long userId, String platform, String contestId) {
-        examGuard.requireContestAccess(userId, platform, contestId);
-        return provider(platform).leaderboard(userId, contestId);
-    }
-
     // ---------------------------------------------------------- personal files
 
     /**

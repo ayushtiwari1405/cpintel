@@ -115,56 +115,6 @@ public class CompeteDto {
     ) {}
 
     /**
-     * One problem's state for one team, as the judge's scoreboard reports it.
-     *
-     * {@code minute} is minutes from the contest start at which the problem was solved, and is
-     * null when it has not been. Attempts are counted whether or not they succeeded, because
-     * that is what the penalty is computed from and what a contestant is comparing against.
-     */
-    public record LeaderboardCell(
-        String index,
-        boolean solved,
-        int attempts,
-        Integer minute
-    ) {}
-
-    /** One team's row on the board. */
-    public record LeaderboardRow(
-        Integer rank,
-        String teamId,
-        String teamName,
-        int solved,
-        Integer penalty,
-        /** True for the viewer's own team, so the page can pin and highlight it. */
-        boolean mine,
-        List<LeaderboardCell> problems
-    ) {}
-
-    /**
-     * The contest's full board, plus the viewer's own team pulled out of it.
-     *
-     * <p>{@code frozen} and {@code live} are two different things and the page must say both.
-     * {@code frozen} means the contest has entered its freeze, so the board is deliberately
-     * not showing the last hour — normal, and every contestant expects it. {@code live} is
-     * false when CPIntel could not read the judge's own view at all and fell back to the
-     * public one, which is a property of the credentials rather than of the contest. Showing a
-     * frozen board as though it were current is the specific failure worth avoiding: it looks
-     * exactly like a room where nobody is solving anything.
-     */
-    public record Leaderboard(
-        List<LeaderboardRow> rows,
-        String myTeamId,
-        String myTeamName,
-        /** The viewer's own row, repeated here so the page need not search for it. */
-        LeaderboardRow myTeam,
-        /** The problem labels, in board order, for the column headers. */
-        List<String> problemIndexes,
-        boolean frozen,
-        boolean live,
-        Instant fetchedAt
-    ) {}
-
-    /**
      * Live standing for the signed-in handle. Refreshed when a verdict lands or on a slow
      * timer — not continuously, because standings is an expensive call and Codeforces
      * rate-limits it.

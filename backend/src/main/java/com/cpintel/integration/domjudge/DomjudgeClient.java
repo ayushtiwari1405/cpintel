@@ -575,23 +575,6 @@ public class DomjudgeClient {
             .block(Duration.ofSeconds(25));
     }
 
-    /**
-     * Whether this account can read the unfrozen board.
-     *
-     * Asked once and cached by the caller, so the arena can label a frozen leaderboard
-     * honestly instead of discovering the limitation separately on every poll.
-     */
-    public boolean canReadJuryScoreboard(DomjudgeCredentialStore.Stored as, String contestId) {
-        try {
-            scoreboard(as, contestId, false);
-            return true;
-        } catch (WebClientResponseException e) {
-            return e.getStatusCode().value() != 401 && e.getStatusCode().value() != 403;
-        } catch (Exception e) {
-            return false;
-        }
-    }
-
     // --------------------------------------------------------- submissions
 
     /** Every submission in the contest. Fanned out to contestants by the cache, never per-user. */

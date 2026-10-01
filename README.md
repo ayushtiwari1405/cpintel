@@ -87,10 +87,12 @@ examinations assigned to you.
   team. They pick their round from a list of the contests DOMjudge says they are registered
   for, rather than hunting for a contest id. Statements are the problem package's PDF,
   embedded, with its sample data seeded into the console
-- **A leaderboard in the sidebar**, on DOMjudge contests: the whole contest board as the judge
-  ranks it, with your own team pinned above it and broken out per problem. Every number is the
-  judge's own, so it agrees with the board on the wall. (Examinations have their own board
-  instead — see below)
+- **A leaderboard in the sidebar**, on DOMjudge contests: the same board an examination has
+  (see below), ranked from CPIntel's own submission archive rather than read from the judge's
+  scoreboard, so it shows everyone whatever the judge makes public. A contest set up as a
+  CPIntel event uses that event's window, marks and leaderboard settings; one opened straight
+  from the judge ranks whoever submitted through CPIntel inside the judge's own window, one
+  mark per problem, no penalty, recomputed at most once a minute
 - Submitting to Codeforces uses a session you create yourself in your own browser — the desktop
   app signs you in inside a window it owns, the web build uses a local helper. Nothing anywhere
   asks for your Codeforces password; see [Connecting Codeforces](#connecting-codeforces)

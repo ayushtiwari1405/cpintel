@@ -274,45 +274,6 @@ export interface ContestSubmission {
   url: string
 }
 
-/** One problem's state for one team, as the judge's scoreboard reports it. */
-export interface LeaderboardCell {
-  index: string
-  solved: boolean
-  attempts: number
-  /** Minutes from the contest start; null unless the problem is actually solved. */
-  minute: number | null
-}
-
-export interface LeaderboardRow {
-  rank: number | null
-  teamId: string
-  teamName: string
-  solved: number
-  penalty: number | null
-  /** True for the viewer's own team, so the board can pin and highlight it. */
-  mine: boolean
-  problems: LeaderboardCell[]
-}
-
-/**
- * The contest's full board, plus the viewer's own team pulled out of it.
- *
- * `frozen` and `live` say different things and the page shows both. `frozen` means the contest
- * has entered its freeze, which every contestant expects. `live` is false when CPIntel could
- * only read the public board — a property of the credentials, not the contest. A frozen board
- * presented as current looks exactly like a room where nobody is solving anything.
- */
-export interface Leaderboard {
-  rows: LeaderboardRow[]
-  myTeamId: string | null
-  myTeamName: string | null
-  myTeam: LeaderboardRow | null
-  problemIndexes: string[]
-  frozen: boolean
-  live: boolean
-  fetchedAt: string
-}
-
 /**
  * The DOMjudge account an admin attached.
  *
@@ -1126,7 +1087,8 @@ export interface ExamLeaderboardStandings {
 }
 
 export interface ExamLeaderboard {
-  eventId: number
+  /** Null for a contest opened straight from the judge, which has no event behind it. */
+  eventId: number | null
   eventName: string
   state: 'DISABLED' | 'NOT_STARTED' | 'LIVE' | 'FINAL' | 'UNPUBLISHED'
   settings: ExamLeaderboardSettings

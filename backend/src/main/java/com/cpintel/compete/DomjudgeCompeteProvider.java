@@ -599,105 +599,6 @@ public class DomjudgeCompeteProvider implements CompeteProvider {
         return (int) Math.round(judgement.getMax_run_time() * 1000);
     }
 
-    // ------------------------------------------------------------ leaderboard
-
-    /**
-     * The contest's whole board, as the judge ranks it.
-     *
-     * Read rather than recomputed. Every number here — rank, solved count, penalty, the minute
-     * a problem went green — is DOMjudge's own, so the board CPIntel shows and the board on the
-     * judge's wall projector agree. Recomputing from the submissions list would have produced a
-     * second opinion that diverges the first time a rejudge lands.
-     *
-     * <p>Team names come from the teams endpoint rather than the scoreboard, which carries only
-     * ids. Where that read is refused the row still renders, under the team id — a board with
-     * one unnamed row beats no board at all, and the viewer's own row is identified by id
-     * anyway.
-     */
-    @Override
-    public CompeteDto.Leaderboard leaderboard(Long userId, String contestId) {
-        DomjudgeClient domjudge = judge(contestId);
-        DomjudgeCredentialStore.Stored own = own(userId, contestId);
-        DomjudgeCredentialStore.Stored as = readAs(domjudge, own);
-
-        DjModels.State state = cache.state(as, contestId);
-        boolean frozen = state != null && state.getFrozen() != null && state.getThawed() == null;
-
-        DjModels.Scoreboard board = cache.scoreboard(as, contestId);
-        String myTeamId = judgeTeamId(own, as, contestId);
-
-        if (board == null || board.getRows() == null) {
-            return new CompeteDto.Leaderboard(List.of(), myTeamId,
-                own == null ? null : own.teamName(), null, List.of(),
-                frozen, true, Instant.now());
-        }
-
-        Map<String, String> teamNames = new java.util.HashMap<>();
-        try {
-            for (DjModels.Team team : cache.teams(as, contestId)) {
-                if (team.getId() == null) continue;
-                teamNames.put(team.getId(), StringUtils.hasText(team.getDisplay_name())
-                    ? team.getDisplay_name() : team.getName());
-            }
-        } catch (Exception e) {
-            // Refused to a team account on some installations. The board is still worth
-            // showing, so this degrades to ids rather than failing the whole panel.
-            log.debug("Could not read team names for contest {}: {}", contestId, e.getMessage());
-        }
-
-        // Column headers in the judge's own problem order, so the board reads left to right
-        // the same way the problem navigator does.
-        List<String> indexes = new ArrayList<>();
-        for (DjModels.ContestProblem problem : cache.problems(as, contestId)) {
-            if (problem.getLabel() != null) indexes.add(problem.getLabel());
-        }
-
-        List<CompeteDto.LeaderboardRow> rows = new ArrayList<>();
-        CompeteDto.LeaderboardRow mine = null;
-
-        for (DjModels.Row row : board.getRows()) {
-            boolean isMine = myTeamId != null && myTeamId.equals(row.getTeam_id());
-
-            int solved = row.getScore() == null || row.getScore().getNum_solved() == null
-                ? 0 : row.getScore().getNum_solved();
-            Integer penalty = row.getScore() == null ? null : row.getScore().getTotal_time();
-
-            List<CompeteDto.LeaderboardCell> cells = new ArrayList<>();
-            if (row.getProblems() != null) {
-                for (DjModels.Problem problem : row.getProblems()) {
-                    String label = StringUtils.hasText(problem.getLabel())
-                        ? problem.getLabel() : problem.getProblem_id();
-                    cells.add(new CompeteDto.LeaderboardCell(
-                        label,
-                        Boolean.TRUE.equals(problem.getSolved()),
-                        problem.getNum_judged() == null ? 0 : problem.getNum_judged(),
-                        // A minute is only meaningful once the problem is green; DOMjudge
-                        // reports 0 for unsolved ones, which would render as "solved at 0".
-                        Boolean.TRUE.equals(problem.getSolved()) ? problem.getTime() : null));
-                }
-            }
-
-            CompeteDto.LeaderboardRow built = new CompeteDto.LeaderboardRow(
-                row.getRank(), row.getTeam_id(),
-                teamNames.getOrDefault(row.getTeam_id(), row.getTeam_id()),
-                solved, penalty, isMine, cells);
-
-            rows.add(built);
-            if (isMine) mine = built;
-        }
-
-        // `live` reports whether the judge's own view was readable. A team account is usually
-        // refused it and silently served the public board, which stops moving at the freeze —
-        // the page says which of the two it is looking at rather than leaving a contestant to
-        // conclude the room has gone quiet.
-        boolean live = domjudge.hasServiceAccount()
-            || domjudge.canReadJuryScoreboard(own, raw(contestId));
-
-        return new CompeteDto.Leaderboard(rows, myTeamId,
-            own == null ? null : own.teamName(), mine, indexes,
-            frozen, live, Instant.now());
-    }
-
     // ------------------------------------------------------------------- rank
 
     /**
@@ -706,6 +607,9 @@ public class DomjudgeCompeteProvider implements CompeteProvider {
      * Read rather than recomputed, so it agrees with what DOMjudge shows — the Codeforces path
      * has to derive a position from submissions and carries a caveat saying so. During the
      * freeze the row is the judge's frozen view, and the page says so.
+     *
+     * <p>The arena's header does not show this: it takes the place from CPIntel's own board,
+     * see {@link com.cpintel.events.ContestLeaderboardService#rank}, so the two agree.
      */
     @Override
     public CompeteDto.RankInfo rank(Long userId, String contestId) {

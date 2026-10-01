@@ -12,6 +12,8 @@ interface Props {
   meId?: number
   /** An admin sees the board whatever candidates are shown, with a note saying which. */
   admin?: boolean
+  /** A contest's board rather than an examination's: the same board, worded for a contest. */
+  contest?: boolean
 }
 
 /** h:mm:ss, or m:ss under an hour. */
@@ -78,7 +80,7 @@ function Notice({ icon: Icon, title, children }: {
 }
 
 /**
- * An examination's leaderboard.
+ * An examination's leaderboard — and a contest's, which is ranked the same way.
  *
  * <p>Ranked by the server: total marks, then total time — each solve timed from when the
  * accepted code was sent, not from when its verdict came back, plus any penalty per earlier
@@ -86,7 +88,8 @@ function Notice({ icon: Icon, title, children }: {
  * the Marks column is left out as a duplicate of Solved. The board is a snapshot recomputed on the admin's schedule, which is said on
  * it so nobody reads a fifteen-minute-old board as live.
  */
-export function ExamLeaderboardView({ board, isLoading, meId, admin }: Props) {
+export function ExamLeaderboardView({ board, isLoading, meId, admin, contest }: Props) {
+  const noun = contest ? 'contest' : 'examination'
   if (isLoading && !board) {
     return (
       <div className="flex items-center justify-center gap-2 py-12 text-sm text-gray-500">
@@ -99,17 +102,17 @@ export function ExamLeaderboardView({ board, isLoading, meId, admin }: Props) {
   if (!admin) {
     if (board.state === 'DISABLED') {
       return <Notice icon={EyeOff} title="Leaderboard disabled">
-        There is no leaderboard for this examination.
+        There is no leaderboard for this {noun}.
       </Notice>
     }
     if (board.state === 'UNPUBLISHED') {
       return <Notice icon={Lock} title="Final standings not published">
-        The examination is over, but its final leaderboard has not been released.
+        The {noun} is over, but its final leaderboard has not been released.
       </Notice>
     }
   }
   if (board.state === 'NOT_STARTED' || !board.standings) {
-    return <Notice icon={Trophy} title="The leaderboard opens when the examination starts" />
+    return <Notice icon={Trophy} title={`The leaderboard opens when the ${noun} starts`} />
   }
 
   const { standings } = board
@@ -146,7 +149,9 @@ export function ExamLeaderboardView({ board, isLoading, meId, admin }: Props) {
           <thead className="sticky top-0 bg-gray-950">
             <tr className="border-b border-gray-800 text-xs text-gray-500">
               <th className="px-3 py-2 text-left font-medium">#</th>
-              <th className="px-3 py-2 text-left font-medium">Candidate</th>
+              <th className="px-3 py-2 text-left font-medium">
+                {contest ? 'Contestant' : 'Candidate'}
+              </th>
               {marked && <th className="px-3 py-2 text-right font-medium">Marks</th>}
               <th className="px-3 py-2 text-right font-medium">Solved</th>
               <th className="px-3 py-2 text-right font-medium">Time</th>
@@ -167,7 +172,9 @@ export function ExamLeaderboardView({ board, isLoading, meId, admin }: Props) {
               <tr>
                 <td colSpan={columns}
                   className="px-4 py-10 text-center text-sm text-gray-600">
-                  Nobody is assigned to this examination.
+                  {board.eventId == null
+                    ? 'Nobody has submitted yet.'
+                    : `Nobody is assigned to this ${noun}.`}
                 </td>
               </tr>
             )}

@@ -63,8 +63,9 @@ export default function AdminExamDetailPage() {
       { id: 'passwords' as Tab, label: 'Passwords', icon: KeyRound },
       { id: 'monitor' as Tab, label: 'Monitor', icon: Monitor },
       { id: 'logs' as Tab,    label: 'Session log', icon: ScrollText },
-      { id: 'leaderboard' as Tab, label: 'Leaderboard', icon: Trophy },
     ] : []),
+    // A contest is ranked the same way an examination is, under the same settings.
+    { id: 'leaderboard', label: 'Leaderboard', icon: Trophy },
   ]
 
   return (
@@ -115,7 +116,7 @@ export default function AdminExamDetailPage() {
       {tab === 'monitor'  && <MonitorTab eventId={id} live={event.lifecycle === 'ACTIVE'} />}
       {tab === 'logs'     && <LogsTab eventId={id} live={event.lifecycle === 'ACTIVE'} />}
       {tab === 'leaderboard' && (
-        <LeaderboardTab eventId={id} live={event.lifecycle === 'ACTIVE'} />
+        <LeaderboardTab eventId={id} live={event.lifecycle === 'ACTIVE'} exam={exam} />
       )}
     </div>
   )
@@ -1407,13 +1408,21 @@ function CandidateLog({ eventId, userId, username, flags, onBack }: {
 // --------------------------------------------------------------- leaderboard
 
 /**
- * The exam's own leaderboard: whether candidates see one, how often it moves, what a wrong
- * attempt costs — and the board itself, which an admin always sees.
+ * The event's own leaderboard: whether the people sitting it see one, how often it moves, what
+ * a wrong attempt costs — and the board itself, which an admin always sees. A contest's is the
+ * same board as an examination's; only the words differ.
  *
  * <p>These settings are not part of the locked configuration above. Turning the board off, or
  * slowing it down, is something an invigilator may reasonably decide halfway through.
  */
-function LeaderboardTab({ eventId, live }: { eventId: number; live: boolean }) {
+function LeaderboardTab({ eventId, live, exam }: {
+  eventId: number
+  live: boolean
+  exam: boolean
+}) {
+  const noun = exam ? 'examination' : 'contest'
+  const People = exam ? 'Candidates' : 'Contestants'
+  const people = People.toLowerCase()
   const { data: board, isLoading } = useExamLeaderboard(eventId, live)
   const save = useExamLeaderboardSettings()
   const refresh = useRefreshExamLeaderboard()
@@ -1424,17 +1433,19 @@ function LeaderboardTab({ eventId, live }: { eventId: number; live: boolean }) {
     && JSON.stringify(draft) !== JSON.stringify(board.settings)
 
   const candidatesSee = board && ({
-    DISABLED: 'Candidates see "Leaderboard disabled".',
-    NOT_STARTED: 'Candidates see it once the examination starts.',
-    LIVE: `Candidates see this board, updated every ${board.settings.refreshMinutes} minutes.`,
-    FINAL: 'Candidates see these final standings in normal mode.',
-    UNPUBLISHED: 'The examination is over; candidates are told the final standings are not published.',
+    DISABLED: `${People} see "Leaderboard disabled".`,
+    NOT_STARTED: `${People} see it once the ${noun} starts.`,
+    LIVE: `${People} see this board, updated every ${board.settings.refreshMinutes} minutes.`,
+    FINAL: exam
+      ? 'Candidates see these final standings in normal mode.'
+      : 'Contestants see these final standings.',
+    UNPUBLISHED: `The ${noun} is over; ${people} are told the final standings are not published.`,
   } as const)[board.state]
 
   return (
     <div className="space-y-4">
       <Panel title="Leaderboard settings"
-        description="Can be changed at any time, including while the examination runs">
+        description={`Can be changed at any time, including while the ${noun} runs`}>
         {!settings ? (
           <div className="flex items-center gap-2 p-4 text-sm text-gray-500">
             <Loader2 size={14} className="animate-spin" /> Loading…
@@ -1445,9 +1456,9 @@ function LeaderboardTab({ eventId, live }: { eventId: number; live: boolean }) {
               <input type="checkbox" checked={settings.enabled} className="mt-0.5"
                 onChange={e => setDraft({ ...settings, enabled: e.target.checked })} />
               <span className="text-sm text-gray-300">
-                Show candidates a leaderboard
+                Show {people} a leaderboard
                 <span className="block text-xs text-gray-500">
-                  Off: candidates are told the leaderboard is disabled. You still see it here.
+                  Off: {people} are told the leaderboard is disabled. You still see it here.
                 </span>
               </span>
             </label>
@@ -1478,9 +1489,11 @@ function LeaderboardTab({ eventId, live }: { eventId: number; live: boolean }) {
                 disabled={!settings.enabled}
                 onChange={e => setDraft({ ...settings, finalPublic: e.target.checked })} />
               <span className="text-sm text-gray-300">
-                Publish the final standings when the examination ends
+                Publish the final standings when the {noun} ends
                 <span className="block text-xs text-gray-500">
-                  Candidates can then see them in normal mode, under Past examinations.
+                  {exam
+                    ? 'Candidates can then see them in normal mode, under Past examinations.'
+                    : 'Contestants can then still open them from the contest\'s Leaderboard tab.'}
                 </span>
               </span>
             </label>
@@ -1514,7 +1527,7 @@ function LeaderboardTab({ eventId, live }: { eventId: number; live: boolean }) {
           </button>
         }
       >
-        <ExamLeaderboardView board={board} isLoading={isLoading} admin />
+        <ExamLeaderboardView board={board} isLoading={isLoading} admin contest={!exam} />
       </Panel>
     </div>
   )

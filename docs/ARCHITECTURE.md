@@ -903,8 +903,11 @@ cheating or illness is for the person reading it.
 
 ## The examination leaderboard
 
-The contest arena's sidebar board is DOMjudge's own scoreboard. An examination's is not: it is
-ranked by `ExamLeaderboardService` from CPIntel's own submission archive. The archive row is
+Neither an examination's board nor the contest arena's sidebar board is DOMjudge's scoreboard:
+both are ranked by `ExamLeaderboardService` from CPIntel's own submission archive. (The arena
+used to read the judge's board, which shows a team account only the categories the judge makes
+public — a room whose teams sat in a hidden one saw an empty board.) What follows describes
+a paper; a contest is the same, as the last paragraph of this section says. The archive row is
 written the moment CPIntel sends the code, before the judge has seen it, so a solve is timed from
 when the candidate submitted. Two candidates a second apart are ordered by that second even if a
 busy judge answered the later one first — which, in a room of two hundred submitting at the
@@ -941,6 +944,23 @@ verdicts still being judged at the bell, and is then final. The admin can switch
 (candidates see "Leaderboard disabled"), recompute on demand, and decide whether the final
 standings are released — the one result a candidate can see afterwards under Past examinations,
 and only when an admin chose to publish it.
+
+A contest gets the same board through `ContestLeaderboardService`
+(`GET /compete/{platform}/{contestId}/leaderboard`). When the viewer holds a CPIntel event on
+that judge contest, it is that event's board: its window, its marks, its settings and its stored
+snapshot, with the Leaderboard tab on the admin page for contests as well as papers. A public
+contest, which is assigned to nobody, ranks whoever submitted during it. A contest opened
+straight from the judge has no event, so the judge's contest stands in for one: its start and
+duration are the window, its problems are worth one each, there is no penalty, and the roster is
+whoever submitted through CPIntel. That board has no row to be stored on, so it is held in
+memory per instance and recomputed at most once a minute. It does not observe the judge's
+scoreboard freeze, and a submission made on the judge's own site, outside CPIntel, is not on
+it.
+
+The rank in the arena's header (`GET /compete/{platform}/{contestId}/rank`) is, on DOMjudge, the
+viewer's row on that same board, for papers and contests alike — so it agrees with the tab and
+moves when the board is recomputed. Where the board is not shown to them (switched off, or not
+released), no rank is shown either. Codeforces ranks still come from Codeforces.
 
 ## Classrooms: one DOMjudge per class
 

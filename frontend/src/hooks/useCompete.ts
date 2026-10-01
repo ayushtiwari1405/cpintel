@@ -22,11 +22,10 @@ const RANK_INTERVAL_MS = 15 * 60 * 1000
 /**
  * How often a DOMjudge rank is re-read.
  *
- * Far more often than the Codeforces one, and affordably so: DOMjudge answers the whole
- * scoreboard in one request that the backend caches for every contestant at once, whereas the
- * Codeforces path has to scrape a standings page per person. The number below is what the
- * contestant sees; what the judge sees is one fetch every few seconds however many people are
- * watching.
+ * Far more often than the Codeforces one, and affordably so: a DOMjudge contest's rank is
+ * read off CPIntel's own leaderboard, a stored snapshot shared by every contestant, whereas
+ * the Codeforces path has to scrape a standings page per person. The rank moves when that
+ * board is recomputed, so polling it costs the judge nothing.
  */
 const DJ_RANK_INTERVAL_MS = 30 * 1000
 
@@ -246,10 +245,10 @@ export function useContestSubmit(ref?: ContestRef) {
  * How often the open leaderboard re-reads the board.
  *
  * Only while the panel is actually on screen — the hook is disabled otherwise, so a contestant
- * who never opens it costs nothing. On DOMjudge the backend answers from its contest cache, so
- * the whole room watching the board still costs the judge one fetch every few seconds.
+ * who never opens it costs nothing. The server recomputes the board at most once a minute, so
+ * polling faster would only fetch the same snapshot again.
  */
-const LEADERBOARD_INTERVAL_MS = 30 * 1000
+const LEADERBOARD_INTERVAL_MS = 60 * 1000
 
 /**
  * The contest's full board.

@@ -12,7 +12,6 @@ import { ContestHeader } from '@/components/compete/ContestHeader'
 import { ContestLoader } from '@/components/compete/ContestLoader'
 import { ProblemNav } from '@/components/compete/ProblemNav'
 import { FilesPanel } from '@/components/compete/FilesPanel'
-import { LeaderboardPanel } from '@/components/compete/LeaderboardPanel'
 import { SubmissionsList } from '@/components/compete/SubmissionsList'
 import { ExamLeaderboardView } from '@/components/exam/ExamLeaderboardView'
 import { ExamList } from '@/components/exam/ExamList'
@@ -232,10 +231,10 @@ export default function CompetePage({ examOnly, section }: {
    * The full board, fetched only while its tab is open.
    *
    * Gating on the tab rather than on the contest keeps a panel nobody is looking at from
-   * polling the judge for the whole round — the header's own rank already covers the number
-   * most contestants actually want.
+   * polling for the whole round — the header's own rank already covers the number most
+   * contestants actually want.
    */
-  const { data: leaderboard, isFetching: leaderboardFetching } = useLeaderboard(
+  const { data: leaderboard, isLoading: leaderboardLoading } = useLeaderboard(
     contestRef ?? undefined,
     tab === 'leaderboard' && credentialsReady && !(mode === 'exams' && !!exam))
 
@@ -753,9 +752,10 @@ export default function CompetePage({ examOnly, section }: {
             id: 'leaderboard',
             label: 'Leaderboard',
             icon: Trophy,
-            badge: leaderboard?.myTeam?.rank != null
-              ? <span className="text-[10px] text-gray-600">#{leaderboard.myTeam.rank}</span>
-              : null,
+            badge: (() => {
+              const mine = leaderboard?.standings?.rows.find(r => r.userId === meId)
+              return mine ? <span className="text-[10px] text-gray-600">#{mine.rank}</span> : null
+            })(),
           }] : []),
           {
             id: 'submissions',
@@ -805,7 +805,8 @@ export default function CompetePage({ examOnly, section }: {
           <div className="h-full min-h-0">
             {inExam
               ? <ExamLeaderboardView board={examBoard} isLoading={examBoardLoading} meId={meId} />
-              : <LeaderboardPanel board={leaderboard} isLoading={leaderboardFetching} />}
+              : <ExamLeaderboardView board={leaderboard} isLoading={leaderboardLoading}
+                  meId={meId} contest />}
           </div>
         )}
 

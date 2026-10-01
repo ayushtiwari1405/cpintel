@@ -199,7 +199,7 @@ public class AdminEventController {
     // ----------------------------------------------------------- leaderboard
 
     @GetMapping("/{eventId}/leaderboard")
-    @Operation(summary = "This examination's leaderboard, whatever candidates are shown",
+    @Operation(summary = "This event's leaderboard, whatever the people sitting it are shown",
         description = "Ranked by marks (each problem's, from the Problems tab), then total "
             + "time: each solve timed from when "
             + "the accepted code was sent, plus the configured penalty per earlier wrong "
@@ -218,7 +218,7 @@ public class AdminEventController {
 
     @PutMapping("/{eventId}/leaderboard/settings")
     @Operation(summary = "Turn the leaderboard on or off, and set its refresh and penalty",
-        description = "Can be changed at any time, including while the examination runs.")
+        description = "Can be changed at any time, including while the event runs.")
     public ResponseEntity<ApiResponse<EventsDto.Leaderboard>> leaderboardSettings(
         @AuthenticationPrincipal Long adminId,
         @PathVariable Long eventId,

@@ -1,7 +1,7 @@
 import { apiClient } from './client'
 import type {
   ApiResponse, CompetePlatform, ContestInfo, ContestRef, ContestSubmission,
-  DomjudgeAccount, DomjudgeContestSummary, LanguageOption, Leaderboard, ProblemDetail,
+  DomjudgeAccount, DomjudgeContestSummary, ExamLeaderboard, LanguageOption, ProblemDetail,
   RankInfo,
 } from '@/types'
 
@@ -45,11 +45,11 @@ export const competeApi = {
   /**
    * The whole board, read only while the leaderboard panel is open.
    *
-   * Separate from `rank`, which the header polls for every contestant in the room. Folding the
-   * two together would have made the expensive call as frequent as the cheap one.
+   * The same board an examination has: ranked by CPIntel from its own submission archive, not
+   * read from the judge's scoreboard.
    */
   leaderboard: (ref: ContestRef) =>
-    apiClient.get<ApiResponse<Leaderboard>>(`${base(ref)}/leaderboard`).then(r => r.data),
+    apiClient.get<ApiResponse<ExamLeaderboard>>(`${base(ref)}/leaderboard`).then(r => r.data),
 
   /**
    * The statement PDF, as bytes.

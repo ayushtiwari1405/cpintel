@@ -60,21 +60,6 @@ public interface CompeteProvider {
     CompeteDto.RankInfo rank(Long userId, String contestId);
 
     /**
-     * The contest's whole board, for judges that will publish one.
-     *
-     * Default-throws rather than returning an empty board, because the two mean different
-     * things to the page: an empty board is a contest nobody has scored on yet, and this is a
-     * judge that will not show one at all. Codeforces locks its standings endpoint down for
-     * exactly the contests the arena runs, so {@link #rank} there is derived per contestant and
-     * a full board is not available at any price — a caller must be able to tell that apart
-     * from a quiet contest and hide the panel instead of rendering an empty table.
-     */
-    default CompeteDto.Leaderboard leaderboard(Long userId, String contestId) {
-        throw ApiException.badRequest(
-            platform() + " does not publish a full contest board to contestants.");
-    }
-
-    /**
      * One problem's statement as a document, for judges that publish a file instead of a page.
      *
      * <p>Only DOMjudge implements this. Codeforces renders statements as HTML and the arena

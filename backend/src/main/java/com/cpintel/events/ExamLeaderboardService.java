@@ -53,6 +53,10 @@ import java.util.TreeSet;
  * {@code leaderboardRefreshMinutes} while the paper runs and stored on the event so every
  * instance serves the same board. Once the paper is over the board keeps settling for a few
  * minutes, to pick up verdicts that were still being judged at the bell, and is then final.
+ *
+ * <p>A contest is ranked the same way. One with a CPIntel event behind it uses that event's
+ * window, marks and settings exactly as a paper does; one opened straight from the judge has
+ * none of those, and {@link ContestLeaderboardService} supplies them from the judge's contest.
  */
 @Service
 @RequiredArgsConstructor
@@ -87,7 +91,7 @@ public class ExamLeaderboardService {
 
     /** The board as an admin sees it: always computed once started, whatever candidates see. */
     public EventsDto.Leaderboard forAdmin(Long eventId, boolean refresh) {
-        GroupContest event = requireExam(eventId);
+        GroupContest event = events.require(eventId);
         Instant now = Instant.now();
         EventsDto.LeaderboardStandings standings = event.hasStarted(now)
             ? current(event, now, refresh) : null;
@@ -98,6 +102,11 @@ public class ExamLeaderboardService {
     public EventsDto.Leaderboard forCandidate(Long userId, Long eventId) {
         GroupContest event = events.requireAssigned(userId, eventId);
         if (!event.isExam()) throw ApiException.notFound("No such examination");
+        return forParticipant(event);
+    }
+
+    /** An event's board as somebody taking part in it may see it — a paper or a contest. */
+    EventsDto.Leaderboard forParticipant(GroupContest event) {
         Instant now = Instant.now();
         String state = candidateState(event, now);
         EventsDto.LeaderboardStandings standings =
@@ -111,7 +120,7 @@ public class ExamLeaderboardService {
     public EventsDto.Leaderboard updateSettings(Long adminId, Long eventId,
                                                 EventsDto.LeaderboardSettings req,
                                                 HttpServletRequest httpReq) {
-        GroupContest event = requireExam(eventId);
+        GroupContest event = events.require(eventId);
         boolean penaltyChanged = !req.penaltyMinutes().equals(event.getWrongPenaltyMinutes());
 
         event.setLeaderboardEnabled(req.enabled());
@@ -134,15 +143,15 @@ public class ExamLeaderboardService {
 
     // --------------------------------------------------------------- the board
 
-    private String candidateState(GroupContest event, Instant now) {
+    String candidateState(GroupContest event, Instant now) {
         if (!Boolean.TRUE.equals(event.getLeaderboardEnabled())) return "DISABLED";
         if (!event.hasStarted(now)) return "NOT_STARTED";
         if (event.getEndsAt() == null || now.isBefore(event.getEndsAt())) return "LIVE";
         return Boolean.TRUE.equals(event.getLeaderboardFinalPublic()) ? "FINAL" : "UNPUBLISHED";
     }
 
-    private EventsDto.Leaderboard answer(GroupContest event, String state,
-                                         EventsDto.LeaderboardStandings standings, Instant now) {
+    EventsDto.Leaderboard answer(GroupContest event, String state,
+                                 EventsDto.LeaderboardStandings standings, Instant now) {
         Instant next = null;
         if (standings != null && event.getEndsAt() != null && now.isBefore(event.getEndsAt())) {
             next = standings.generatedAt().plus(refreshInterval(event));
@@ -184,7 +193,7 @@ public class ExamLeaderboardService {
         return fresh;
     }
 
-    private boolean due(GroupContest event, Instant generatedAt, Instant now) {
+    boolean due(GroupContest event, Instant generatedAt, Instant now) {
         if (event.getStartsAt() != null && generatedAt.isBefore(event.getStartsAt())) return true;
         Instant end = event.getEndsAt();
         if (end == null || now.isBefore(end)) {
@@ -208,10 +217,15 @@ public class ExamLeaderboardService {
     }
 
     EventsDto.LeaderboardStandings compute(GroupContest event, Instant now) {
-        Set<Long> participants = events.participantIds(event.getContestId());
+        Set<Long> participants = new LinkedHashSet<>(events.participantIds(event.getContestId()));
 
-        List<CodeSubmission> rows = attempts(event, participants);
-        rows = refreshPending(event, rows, participants);
+        // A public contest is assigned to nobody in particular, so whoever submitted during it
+        // took part. Anything else — every examination included — keeps to its roster.
+        boolean open = !event.isExam()
+            && GroupContest.Visibility.PUBLIC.name().equals(event.getVisibility());
+        List<CodeSubmission> rows = attempts(event, open ? null : participants);
+        rows = refreshPending(event, rows, open ? null : participants);
+        if (open) for (CodeSubmission row : rows) participants.add(row.getUserId());
 
         List<ContestProblem> listed = problemRepository
             .findByContestContestIdOrderByOrderingAscLabelAsc(event.getContestId());
@@ -234,11 +248,15 @@ public class ExamLeaderboardService {
         return marks;
     }
 
-    /** This paper's attempts: its judge contest, its candidates, inside its window. */
-    private List<CodeSubmission> attempts(GroupContest event, Set<Long> participants) {
+    /**
+     * This event's attempts: its judge contest, its participants, inside its window. A null
+     * roster means whoever submitted.
+     */
+    List<CodeSubmission> attempts(GroupContest event, Set<Long> participants) {
         return submissions.findByPlatformAndContestId(event.getPlatform(), event.getExternalId())
             .stream()
-            .filter(row -> row.getUserId() != null && participants.contains(row.getUserId()))
+            .filter(row -> row.getUserId() != null
+                && (participants == null || participants.contains(row.getUserId())))
             .filter(row -> LiveExamGuard.madeDuring(event, row.getSubmittedAt()))
             .toList();
     }
@@ -251,8 +269,8 @@ public class ExamLeaderboardService {
      * "judging" on the board for ever. Reading their submissions list as them moves the archive
      * on, through the same path their own screen uses.
      */
-    private List<CodeSubmission> refreshPending(GroupContest event, List<CodeSubmission> rows,
-                                                Set<Long> participants) {
+    List<CodeSubmission> refreshPending(GroupContest event, List<CodeSubmission> rows,
+                                        Set<Long> participants) {
         Set<Long> waiting = new LinkedHashSet<>();
         for (CodeSubmission row : rows) {
             if (row.getExternalId() != null && isPending(row.getVerdict())) {
@@ -267,8 +285,8 @@ public class ExamLeaderboardService {
             try {
                 compete.provider(event.getPlatform()).submissions(userId, event.getExternalId());
             } catch (Exception e) {
-                log.debug("Could not refresh verdicts for user {} on exam {}: {}",
-                    userId, event.getContestId(), e.getMessage());
+                log.debug("Could not refresh verdicts for user {} on contest {}: {}",
+                    userId, event.getExternalId(), e.getMessage());
             }
         }
         return attempts(event, participants);
@@ -411,14 +429,6 @@ public class ExamLeaderboardService {
 
     private static boolean isPending(String verdict) {
         return verdict == null || PENDING.contains(verdict);
-    }
-
-    private GroupContest requireExam(Long eventId) {
-        GroupContest event = events.require(eventId);
-        if (!event.isExam()) {
-            throw ApiException.badRequest("Only an examination has its own leaderboard.");
-        }
-        return event;
     }
 
     private record Scored(User user, int solved, double score, boolean attempted, long total,
