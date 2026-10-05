@@ -85,6 +85,14 @@ final class EventExport {
         for (String label : standings.problems()) {
             header.add(marked ? label + " (" + number(worth.getOrDefault(label, 0.0)) + ")" : label);
         }
+        // Marks per problem, once there is more to them than solved or not: set by the admin,
+        // or by a marker during evaluation. A hand-set mark is starred.
+        boolean evaluated = standings.rows().stream()
+            .anyMatch(r -> r.cells().stream().anyMatch(EventsDto.LeaderboardCell::evaluated));
+        boolean perProblem = marked || evaluated;
+        if (perProblem) {
+            for (String label : standings.problems()) header.add(label + " marks");
+        }
 
         List<List<Object>> rows = new ArrayList<>();
         rows.add(header);
@@ -100,6 +108,14 @@ final class EventExport {
             Map<String, EventsDto.LeaderboardCell> cells = new HashMap<>();
             for (EventsDto.LeaderboardCell cell : row.cells()) cells.put(cell.label(), cell);
             for (String label : standings.problems()) line.add(cellText(cells.get(label)));
+            if (perProblem) {
+                for (String label : standings.problems()) {
+                    EventsDto.LeaderboardCell cell = cells.get(label);
+                    if (cell == null) line.add(null);
+                    else if (cell.evaluated()) line.add(number(cell.marks()) + "*");
+                    else line.add(cell.marks());
+                }
+            }
             rows.add(line);
         }
         return rows;
@@ -132,6 +148,11 @@ final class EventExport {
         if (standings != null) {
             rows.add(pair("Ranked by", (standings.marked() ? "marks" : "problems solved")
                 + ", then less total time; a solve is timed from when it was sent"));
+            if (standings.rows().stream().anyMatch(
+                    r -> r.cells().stream().anyMatch(EventsDto.LeaderboardCell::evaluated))) {
+                rows.add(pair("Marks marked *", "set by hand during evaluation, in place of "
+                    + "the judge's all-or-nothing mark"));
+            }
             rows.add(pair("Penalty per wrong attempt", standings.penaltyMinutes() > 0
                 ? standings.penaltyMinutes() + " minutes" : "none"));
             rows.add(pair("People on the board", standings.rows().size()));

@@ -2,12 +2,13 @@ import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard, BarChart2, Map, Link2, User, Zap, ChevronLeft,
   ChevronRight, LogOut, Code2, Swords, Shield, Users, ScrollText, FolderCog,
-  UsersRound, FileText, School } from 'lucide-react'
+  UsersRound, FileText, School, ClipboardCheck } from 'lucide-react'
 import { useLogout } from '@/hooks/useAuth'
 import { ThemeToggle } from './ThemeToggle'
 import { useAuth } from '@/contexts/AuthContext'
 import { isAdmin, isSuperAdmin, roleLabel } from '@/utils/roles'
 import { clsx } from 'clsx'
+import { useMyEvaluationExams } from '@/hooks/useEvaluation'
 
 const navItems = [
   { to: '/dashboard',       icon: LayoutDashboard, label: 'Dashboard' },
@@ -52,6 +53,13 @@ export function Sidebar({ open, onToggle, locked, examMode }: Props) {
   const logout = useLogout()
   const { user } = useAuth()
   const showAdmin = isAdmin(user)
+  // Teaching assistants get a marking page; everyone else never sees the link.
+  const { data: marking } = useMyEvaluationExams()
+  const items = marking && marking.length > 0
+    ? [...navItems.slice(0, -1),
+       { to: '/evaluate', icon: ClipboardCheck, label: 'Evaluate' },
+       navItems[navItems.length - 1]]
+    : navItems
 
   const linkClass = ({ isActive }: { isActive: boolean }) => clsx(
     'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors',
@@ -92,7 +100,7 @@ export function Sidebar({ open, onToggle, locked, examMode }: Props) {
       >
         {/* Admins run the console and are not students here, so the student pages are not
             offered to them — only their profile, for their own password. */}
-        {navItems.filter(item => !showAdmin || item.to === '/profile')
+        {items.filter(item => !showAdmin || item.to === '/profile')
           .map(({ to, icon: Icon, label }) => (
           <NavLink key={to} to={to} className={linkClass}>
             <Icon size={18} className="flex-shrink-0" />

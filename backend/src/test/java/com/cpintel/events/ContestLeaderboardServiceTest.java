@@ -52,7 +52,8 @@ class ContestLeaderboardServiceTest {
     void setUp() {
         ExamLeaderboardService boards = new ExamLeaderboardService(events, eventRepository,
             mock(ContestProblemRepository.class), submissions, userRepository, compete,
-            mock(AuditService.class), new ObjectMapper().findAndRegisterModules());
+            mock(AuditService.class), new ObjectMapper().findAndRegisterModules(),
+            mock(com.cpintel.repository.jpa.ExamMarkRepository.class));
         service = new ContestLeaderboardService(boards, mock(ExamSessionGuard.class),
             eventWindow, compete, userRepository);
 

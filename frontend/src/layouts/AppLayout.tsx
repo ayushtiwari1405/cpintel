@@ -19,6 +19,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/platforms':       'Platforms',
   '/profile':         'Profile',
   '/teams':           'Teams',
+  '/evaluate':        'Evaluate',
   '/admin':               'Admin',
   '/admin/users':         'Admin · Users',
   '/admin/audit':         'Admin · Audit trail',

@@ -86,6 +86,7 @@ public class ExamLeaderboardService {
     private final CompeteService compete;
     private final AuditService auditService;
     private final ObjectMapper json;
+    private final com.cpintel.repository.jpa.ExamMarkRepository markRepository;
 
     // --------------------------------------------------------------- readers
 
@@ -242,7 +243,7 @@ public class ExamLeaderboardService {
     }
 
     /** Every submission that belongs to this event — the ones its board is ranked from. */
-    List<CodeSubmission> attemptsOf(GroupContest event) {
+    public List<CodeSubmission> attemptsOf(GroupContest event) {
         return attempts(event,
             open(event) ? null : events.participantIds(event.getContestId()));
     }
@@ -270,7 +271,18 @@ public class ExamLeaderboardService {
         Map<Long, User> users = new HashMap<>();
         for (User user : userRepository.findAllById(participants)) users.put(user.getUserId(), user);
 
-        return rank(event, labels, marks(listed), users, rows, now);
+        return rank(event, labels, marks(listed), users, rows, now, handMarks(event));
+    }
+
+    /** Marks set by hand during evaluation: user, then label, then marks. */
+    private Map<Long, Map<String, Double>> handMarks(GroupContest event) {
+        if (!event.isExam()) return Map.of();
+        Map<Long, Map<String, Double>> out = new HashMap<>();
+        for (var mark : markRepository.findByContestId(event.getContestId())) {
+            out.computeIfAbsent(mark.getUserId(), k -> new HashMap<>())
+                .put(mark.getProblemLabel().toUpperCase(Locale.ROOT), mark.getMarks().doubleValue());
+        }
+        return out;
     }
 
     /** Marks by label, for the problems the admin gave any. */
@@ -346,11 +358,23 @@ public class ExamLeaderboardService {
         return List.copyOf(seen);
     }
 
-    /** The ranking itself. Package-visible for the tests. */
+    /** The ranking itself, on the judge's marks alone. Package-visible for the tests. */
     EventsDto.LeaderboardStandings rank(GroupContest event, List<String> labels,
                                         Map<String, Double> setMarks,
                                         Map<Long, User> users, List<CodeSubmission> rows,
                                         Instant now) {
+        return rank(event, labels, setMarks, users, rows, now, Map.of());
+    }
+
+    /**
+     * The ranking, where a mark set by hand ({@code handMarks}, user then label) replaces what
+     * the verdict alone earns on that problem. It may give part marks for an unsolved problem,
+     * or take them away from a solved one; the solve count and the time stay the judge's.
+     */
+    EventsDto.LeaderboardStandings rank(GroupContest event, List<String> labels,
+                                        Map<String, Double> setMarks,
+                                        Map<Long, User> users, List<CodeSubmission> rows,
+                                        Instant now, Map<Long, Map<String, Double>> handMarks) {
         boolean marked = !setMarks.isEmpty();
         Map<String, Double> worth = new LinkedHashMap<>();
         for (String label : labels) {
@@ -376,6 +400,7 @@ public class ExamLeaderboardService {
         List<Scored> scored = new ArrayList<>();
         for (User user : users.values()) {
             Map<String, List<CodeSubmission>> mine = byUser.getOrDefault(user.getUserId(), Map.of());
+            Map<String, Double> handSet = handMarks.getOrDefault(user.getUserId(), Map.of());
             // Any submission on one of the paper's problems, whatever became of it.
             boolean attempted = !mine.isEmpty();
             List<EventsDto.LeaderboardCell> cells = new ArrayList<>(labels.size());
@@ -402,11 +427,11 @@ public class ExamLeaderboardService {
                     else if (!NOT_COUNTED.contains(verdict)) wrong++;
                 }
 
-                double earned = 0;
+                Double hand = handSet.get(label);
+                double earned = hand != null ? hand : solvedAt != null ? worth.get(label) : 0;
+                score += earned;
                 if (solvedAt != null) {
                     solved++;
-                    earned = worth.get(label);
-                    score += earned;
                     // Time is the tie-break between equal marks, so only a solve that earned
                     // marks spends it: a problem worth nothing must not rank somebody below a
                     // candidate who solved nothing at all.
@@ -416,7 +441,8 @@ public class ExamLeaderboardService {
                     }
                 }
                 cells.add(new EventsDto.LeaderboardCell(
-                    label, solvedAt != null, wrong, solvedAt, pending, false, earned));
+                    label, solvedAt != null, wrong, solvedAt, pending, false, earned,
+                    hand != null));
             }
             scored.add(new Scored(user, solved, score, attempted, total, lastSolve, cells));
         }
@@ -452,7 +478,7 @@ public class ExamLeaderboardService {
             List<EventsDto.LeaderboardCell> cells = s.cells().stream()
                 .map(c -> c.solved() && c.solvedAtSeconds().equals(firstSolve.get(c.label()))
                     ? new EventsDto.LeaderboardCell(c.label(), true, c.wrongAttempts(),
-                        c.solvedAtSeconds(), c.pending(), true, c.marks())
+                        c.solvedAtSeconds(), c.pending(), true, c.marks(), c.evaluated())
                     : c)
                 .toList();
             out.add(new EventsDto.LeaderboardRow(rank, s.user().getUserId(),

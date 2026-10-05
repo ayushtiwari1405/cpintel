@@ -76,6 +76,8 @@ public class AuditService {
     public static final String CLASSROOM_MEMBER_REMOVED = "ADMIN_CLASSROOM_MEMBER_REMOVED";
     public static final String CLASSROOM_STAFF_ADDED    = "ADMIN_CLASSROOM_STAFF_ADDED";
     public static final String CLASSROOM_STAFF_REMOVED  = "ADMIN_CLASSROOM_STAFF_REMOVED";
+    public static final String CLASSROOM_TA_ADDED       = "ADMIN_CLASSROOM_TA_ADDED";
+    public static final String CLASSROOM_TA_REMOVED     = "ADMIN_CLASSROOM_TA_REMOVED";
 
     // Admin actions on groups and the contests laid over them
     public static final String GROUP_CREATED         = "ADMIN_GROUP_CREATED";
@@ -101,6 +103,12 @@ public class AuditService {
     public static final String EVENT_REOPENED    = "ADMIN_EVENT_REOPENED";
     public static final String EVENT_EXPORTED    = "ADMIN_EVENT_EXPORTED";
     public static final String EVENT_REJUDGED    = "ADMIN_EVENT_REJUDGED";
+    public static final String EXAM_TA_ASSIGNED   = "ADMIN_EXAM_TA_ASSIGNED";
+    public static final String EXAM_TA_UNASSIGNED = "ADMIN_EXAM_TA_UNASSIGNED";
+
+    // Evaluation, by a TA or an admin
+    public static final String EXAM_MARK_SET     = "EXAM_MARK_SET";
+    public static final String EXAM_MARK_CLEARED = "EXAM_MARK_CLEARED";
 
     // Admin actions on the contest file policy
     public static final String FILE_POLICY_DEFAULT = "ADMIN_FILE_POLICY_DEFAULT";

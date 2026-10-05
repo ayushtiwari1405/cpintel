@@ -89,15 +89,16 @@ public class ClassroomService {
     }
 
     /**
-     * Whether an admin may see a person's account at all: someone enrolled in a classroom they
-     * run, or themselves. A superadmin sees everyone.
+     * Whether an admin may see a person's account at all: someone enrolled in, or a TA in, a
+     * classroom they run, or themselves. A superadmin sees everyone.
      */
     public boolean canSeeUser(Long adminId, Long userId) {
         if (isSuperAdmin()) return true;
         if (adminId != null && adminId.equals(userId)) return true;
         List<Long> managed = classrooms.findManagedBy(adminId).stream()
             .map(Classroom::getClassroomId).toList();
-        return !managed.isEmpty() && members.existsByUserUserIdAndClassroomIdIn(userId, managed);
+        return !managed.isEmpty() && (members.existsByUserUserIdAndClassroomIdIn(userId, managed)
+            || classrooms.isTaInAny(userId, managed));
     }
 
     /** As {@link #canSeeUser}, answering "no such user" so an id does not confirm an account. */

@@ -28,6 +28,7 @@ import java.util.List;
 public class AdminClassroomController {
 
     private final ClassroomService classrooms;
+    private final com.cpintel.evaluation.ClassroomTaService tas;
 
     @GetMapping
     @Operation(summary = "The classrooms you run (every one, for a superadmin)")
@@ -140,6 +141,35 @@ public class AdminClassroomController {
         @AuthenticationPrincipal Long adminId, @PathVariable Long classroomId,
         @PathVariable Long userId, HttpServletRequest httpReq) {
         classrooms.removeStaff(adminId, classroomId, userId, httpReq);
+        return ResponseEntity.ok(ApiResponse.ok(null));
+    }
+
+    // ------------------------------------------------------------ teaching assistants
+
+    @GetMapping("/{classroomId}/tas")
+    @Operation(summary = "Teaching assistants in the classroom")
+    public ResponseEntity<ApiResponse<List<com.cpintel.evaluation.EvaluationDto.Ta>>> tas(
+        @AuthenticationPrincipal Long adminId, @PathVariable Long classroomId) {
+        return ResponseEntity.ok(ApiResponse.ok(tas.list(adminId, classroomId)));
+    }
+
+    @PostMapping("/{classroomId}/tas")
+    @Operation(summary = "Make someone a TA, creating their account if it does not exist",
+        description = "An existing account is found by email, then by username, and linked. "
+            + "Otherwise a new one is created with a generated password, returned once.")
+    public ResponseEntity<ApiResponse<com.cpintel.evaluation.EvaluationDto.TaAdded>> addTa(
+        @AuthenticationPrincipal Long adminId, @PathVariable Long classroomId,
+        @Valid @RequestBody com.cpintel.evaluation.EvaluationDto.TaRequest req,
+        HttpServletRequest httpReq) {
+        return ResponseEntity.ok(ApiResponse.ok(tas.add(adminId, classroomId, req, httpReq)));
+    }
+
+    @DeleteMapping("/{classroomId}/tas/{userId}")
+    @Operation(summary = "Stop someone being a TA here; their marking assignments go too")
+    public ResponseEntity<ApiResponse<Void>> removeTa(
+        @AuthenticationPrincipal Long adminId, @PathVariable Long classroomId,
+        @PathVariable Long userId, HttpServletRequest httpReq) {
+        tas.remove(adminId, classroomId, userId, httpReq);
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
 }

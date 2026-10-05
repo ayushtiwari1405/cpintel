@@ -1071,8 +1071,10 @@ export interface ExamLeaderboardCell {
   solvedAtSeconds: number | null
   pending: boolean
   firstSolve: boolean
-  /** Marks earned on it: the problem's marks once solved, otherwise zero. */
+  /** Marks earned on it: the problem's marks once solved, otherwise zero, unless marked by hand. */
   marks: number
+  /** Whether a TA or admin set `marks` by hand during evaluation. Absent on older boards. */
+  evaluated?: boolean
 }
 
 export interface ExamLeaderboardRow {
@@ -1211,4 +1213,121 @@ export interface JudgeCheck {
   reachable: boolean
   version: string | null
   message: string | null
+}
+
+// ------------------------------------------------------------------ evaluation
+
+/** A teaching assistant in a classroom: an ordinary account linked to it. */
+export interface ClassroomTa {
+  userId: number
+  username: string
+  fullName: string | null
+  email: string
+}
+
+export interface TaRequest {
+  email?: string
+  username?: string
+  fullName?: string
+}
+
+export interface TaAdded {
+  ta: ClassroomTa
+  created: boolean
+  /** Only when a new account was created. Shown once. */
+  password: string | null
+  message: string
+}
+
+export interface TaAssignment {
+  assignmentId: number
+  taUserId: number
+  taUsername: string | null
+  taFullName: string | null
+  /** Null for every question. */
+  problemLabel: string | null
+  rangeFrom: string | null
+  rangeTo: string | null
+  studentCount: number
+  createdAt: string
+}
+
+export interface TaAssignmentRequest {
+  taUserId: number
+  problemLabel?: string | null
+  rangeFrom?: string | null
+  rangeTo?: string | null
+}
+
+export type EvaluationState = 'NOT_ENDED' | 'OPEN' | 'DONE'
+
+export interface AssignmentBoard {
+  state: EvaluationState
+  stateMessage: string | null
+  assignments: TaAssignment[]
+  tas: ClassroomTa[]
+  problems: string[]
+  /** The roster's usernames in natural order. */
+  students: string[]
+}
+
+export interface TaExam {
+  eventId: number
+  name: string
+  classroomName: string | null
+  startsAt: string | null
+  endsAt: string | null
+  state: EvaluationState
+  cells: number
+  marked: number
+}
+
+export interface EvaluationProblem {
+  label: string
+  title: string | null
+  maxMarks: number
+}
+
+export interface EvaluationSubmission {
+  id: string
+  verdict: string | null
+  accepted: boolean
+  submittedAt: string
+  languageLabel: string | null
+  sourceBytes: number | null
+  source: string | null
+}
+
+export interface EvaluationCell {
+  userId: number
+  username: string
+  fullName: string | null
+  label: string
+  maxMarks: number
+  /** What the verdict alone earns. */
+  autoMarks: number
+  /** Set by hand, or null when the judge's mark stands. */
+  marks: number | null
+  remark: string | null
+  markedBy: string | null
+  markedAt: string | null
+  submission: EvaluationSubmission | null
+  attempts: number
+}
+
+export interface EvaluationSheet {
+  eventId: number
+  name: string
+  state: EvaluationState
+  stateMessage: string | null
+  problems: EvaluationProblem[]
+  cells: EvaluationCell[]
+}
+
+export interface MarkRequest {
+  userId: number
+  label: string
+  /** Null clears the hand-set mark. */
+  marks: number | null
+  remark?: string | null
 }

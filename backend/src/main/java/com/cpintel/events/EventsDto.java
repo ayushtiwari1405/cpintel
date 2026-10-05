@@ -491,8 +491,13 @@ public class EventsDto {
         boolean pending,
         /** First to solve this problem. */
         boolean firstSolve,
-        /** Marks earned on it: the problem's marks once solved, otherwise zero. */
-        double marks
+        /**
+         * Marks earned on it: the problem's marks once solved, otherwise zero — unless a marker
+         * set them by hand, in which case it is theirs.
+         */
+        double marks,
+        /** Whether {@code marks} was set by hand during evaluation. */
+        boolean evaluated
     ) {}
 
     public record LeaderboardRow(

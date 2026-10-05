@@ -18,6 +18,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class ClassroomAuthorizationTest extends AuthorizationTestBase {
 
     @MockBean private ClassroomService classrooms;
+    @MockBean private com.cpintel.evaluation.ClassroomTaService tas;
 
     private static final String BODY =
         "{\"name\":\"DSA\",\"domjudgeUrl\":\"https://judge.example.edu\"}";

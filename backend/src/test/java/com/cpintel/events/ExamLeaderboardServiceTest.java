@@ -43,7 +43,8 @@ class ExamLeaderboardServiceTest {
         service = new ExamLeaderboardService(mock(EventService.class),
             mock(GroupContestRepository.class), mock(ContestProblemRepository.class),
             mock(CodeSubmissionRepository.class), mock(UserRepository.class),
-            mock(CompeteService.class), mock(AuditService.class), new ObjectMapper());
+            mock(CompeteService.class), mock(AuditService.class), new ObjectMapper(),
+            mock(com.cpintel.repository.jpa.ExamMarkRepository.class));
         exam = GroupContest.builder().contestId(1L).kind("EXAM").platform("DOMJUDGE")
             .externalId("paper").name("Paper").startsAt(START)
             .endsAt(START.plusSeconds(3 * 3600)).wrongPenaltyMinutes(0).build();
@@ -211,5 +212,33 @@ class ExamLeaderboardServiceTest {
         sent(2, "A", 100, "COMPILATION_ERROR");
 
         assertEquals("user2", order().get(0));
+    }
+
+    @Test
+    @DisplayName("A hand-set mark replaces the verdict's, for part marks or for none")
+    void handMarks() {
+        marks.put("A", 10.0);
+        marks.put("B", 10.0);
+        sent(1, "A", 100, "OK");             // judge: 10, marker: 4
+        sent(2, "A", 200, "WRONG_ANSWER");   // judge: 0, marker: 7
+        sent(3, "B", 300, "OK");             // judge: 10, untouched
+
+        Map<Long, Map<String, Double>> hand = Map.of(
+            1L, Map.of("A", 4.0),
+            2L, Map.of("A", 7.0));
+        EventsDto.LeaderboardStandings board =
+            service.rank(exam, List.of("A", "B"), marks, users, rows, START.plusSeconds(9000), hand);
+
+        assertEquals(List.of("user3", "user2", "user1"),
+            board.rows().stream().map(EventsDto.LeaderboardRow::username).toList());
+        EventsDto.LeaderboardRow user2 = board.rows().get(1);
+        assertEquals(7.0, user2.score());
+        assertEquals(0, user2.solved());
+        assertTrue(user2.cells().get(0).evaluated());
+        assertEquals(7.0, user2.cells().get(0).marks());
+        EventsDto.LeaderboardRow user1 = board.rows().get(2);
+        assertEquals(4.0, user1.score());
+        assertEquals(1, user1.solved());
+        assertFalse(board.rows().get(0).cells().get(1).evaluated());
     }
 }

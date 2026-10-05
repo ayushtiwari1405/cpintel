@@ -31,6 +31,24 @@ function marks(value: number): string {
 }
 
 function Cell({ cell }: { cell: ExamLeaderboardCell | undefined }) {
+  // Marked by hand during evaluation: the mark is what counts, so it is what is shown.
+  if (cell?.evaluated) {
+    return (
+      <td className="px-2 py-2 text-center">
+        <span
+          className="inline-flex flex-col items-center rounded bg-indigo-500/15 px-1.5 py-0.5
+                     text-[11px] tabular-nums text-indigo-300"
+          title={`Marked by hand: ${marks(cell.marks)}`
+            + (cell.solved ? ' (accepted by the judge)' : ' (not accepted by the judge)')}
+        >
+          {marks(cell.marks)}
+          <span className="text-[10px] text-indigo-500">
+            {cell.solved ? clock(cell.solvedAtSeconds ?? 0) : 'marked'}
+          </span>
+        </span>
+      </td>
+    )
+  }
   if (!cell || (!cell.solved && cell.wrongAttempts === 0 && !cell.pending)) {
     return <td className="px-2 py-2 text-center text-gray-800">·</td>
   }

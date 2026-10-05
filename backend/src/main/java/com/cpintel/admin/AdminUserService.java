@@ -504,7 +504,7 @@ public class AdminUserService {
      * {@code 1} in it, because this is read aloud or copied off a printout by somebody who is
      * about to type it into a machine that will not tell them which character they got wrong.
      */
-    private String generatePassword() {
+    public static String generatePassword() {
         final char[] alphabet = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789"
             .toCharArray();
         SecureRandom random = new SecureRandom();

@@ -2,13 +2,14 @@ import { useEffect, useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useParams } from 'react-router-dom'
 import {
-  AlertTriangle, ArrowLeft, CheckCircle2, Code2, Download, Eye, Flag, KeyRound, Loader2, Lock,
+  AlertTriangle, ArrowLeft, CheckCircle2, ClipboardCheck, Code2, Download, Eye, Flag, KeyRound, Loader2, Lock,
   Monitor, Plus, Save, RefreshCw, ScrollText, Settings2, Trash2, Trophy, Users,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 
 import { Ago, EmptyRow, Pager, Panel, Pill, StatCard } from '@/components/admin/AdminUi'
 import { ExamPasswordsTab } from '@/components/admin/ExamPasswordsTab'
+import { EvaluationTab } from '@/components/evaluation/EvaluationTab'
 import { ExamLeaderboardView } from '@/components/exam/ExamLeaderboardView'
 import { LifecyclePill } from '@/pages/admin/AdminExamsPage'
 import {
@@ -26,6 +27,7 @@ import type {
 } from '@/types'
 
 type Tab = 'settings' | 'people' | 'problems' | 'passwords' | 'monitor' | 'logs' | 'leaderboard'
+  | 'evaluation'
 
 /**
  * One examination, from the side that runs it.
@@ -68,6 +70,8 @@ export default function AdminExamDetailPage() {
     ] : []),
     // A contest is ranked the same way an examination is, under the same settings.
     { id: 'leaderboard', label: 'Leaderboard', icon: Trophy },
+    // Marking by hand, by TAs and admins, between the end and being marked done.
+    ...(exam ? [{ id: 'evaluation' as Tab, label: 'Evaluation', icon: ClipboardCheck }] : []),
   ]
 
   return (
@@ -120,6 +124,7 @@ export default function AdminExamDetailPage() {
       {tab === 'passwords' && <ExamPasswordsTab eventId={id} />}
       {tab === 'monitor'  && <MonitorTab eventId={id} live={event.lifecycle === 'ACTIVE'} />}
       {tab === 'logs'     && <LogsTab eventId={id} live={event.lifecycle === 'ACTIVE'} />}
+      {tab === 'evaluation' && <EvaluationTab eventId={id} done={!!event.completedAt} />}
       {tab === 'leaderboard' && (
         <LeaderboardTab eventId={id} live={event.lifecycle === 'ACTIVE'} exam={exam}
           name={event.name} done={!!event.completedAt} event={event} />

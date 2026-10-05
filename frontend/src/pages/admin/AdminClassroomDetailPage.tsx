@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import {
-  AlertCircle, ArrowLeft, CheckCircle2, Loader2, RefreshCw, Save, UserMinus, UserPlus,
+  AlertCircle, ArrowLeft, CheckCircle2, Copy, Loader2, RefreshCw, Save, UserMinus, UserPlus,
 } from 'lucide-react'
 import {
   useAdminClassroom, useArchiveClassroom, useCheckJudge, useClassroomMemberActions,
@@ -9,8 +9,9 @@ import {
 } from '@/hooks/useClassrooms'
 import { useAdminUsers, useIsSuperAdmin } from '@/hooks/useAdmin'
 import { useAdminGroups } from '@/hooks/useGroups'
+import { useClassroomTaActions, useClassroomTas } from '@/hooks/useEvaluation'
 import { Ago, EmptyRow, Panel, Pill } from '@/components/admin/AdminUi'
-import type { ClassroomSummary } from '@/types'
+import type { ClassroomSummary, TaAdded } from '@/types'
 
 const field = `rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 text-sm text-gray-200
                placeholder-gray-600 outline-none focus:border-indigo-600`
@@ -46,6 +47,7 @@ export default function AdminClassroomDetailPage() {
       <Teams classroomId={id} />
       <Members classroomId={id} />
       <Staff classroomId={id} />
+      <TeachingAssistants classroomId={id} />
     </div>
   )
 }
@@ -328,6 +330,109 @@ function Staff({ classroomId }: { classroomId: number }) {
           </div>
         )}
       </div>}
+    </Panel>
+  )
+}
+
+/**
+ * The classroom's teaching assistants, who mark examinations by hand.
+ *
+ * Adding one follows the roster's rules: an existing account is found by email, then username,
+ * and linked; otherwise a new one is created and its password shown here, once. What each TA
+ * marks is set per examination, on its Evaluation tab.
+ */
+function TeachingAssistants({ classroomId }: { classroomId: number }) {
+  const { data: tas, isLoading } = useClassroomTas(classroomId)
+  const { add, remove } = useClassroomTaActions(classroomId)
+  const [email, setEmail] = useState('')
+  const [username, setUsername] = useState('')
+  const [fullName, setFullName] = useState('')
+  const [added, setAdded] = useState<TaAdded | null>(null)
+
+  const submit = () => {
+    add.mutate({
+      email: email.trim() || undefined,
+      username: username.trim() || undefined,
+      fullName: fullName.trim() || undefined,
+    }, {
+      onSuccess: result => {
+        setAdded(result)
+        setEmail('')
+        setUsername('')
+        setFullName('')
+      },
+    })
+  }
+
+  return (
+    <Panel title="Teaching assistants"
+      description="They mark examinations by hand. Give each one questions or a range of students on the examination's Evaluation tab">
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <tbody className="divide-y divide-gray-800">
+            {isLoading && <EmptyRow colSpan={3}>Loading…</EmptyRow>}
+            {!isLoading && tas?.length === 0 && <EmptyRow colSpan={3}>No TAs yet.</EmptyRow>}
+            {tas?.map(ta => (
+              <tr key={ta.userId}>
+                <td className="px-4 py-2.5">
+                  <span className="text-gray-200">{ta.username}</span>
+                  {ta.fullName && <span className="block text-xs text-gray-600">{ta.fullName}</span>}
+                </td>
+                <td className="px-4 py-2.5 text-xs text-gray-500">{ta.email}</td>
+                <td className="px-4 py-2.5 text-right">
+                  <button
+                    onClick={() => {
+                      if (confirm(`Stop ${ta.username} being a TA here? What they were given to `
+                        + 'mark goes with it; marks they already gave stay.')) {
+                        remove.mutate(ta.userId)
+                      }
+                    }}
+                    className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-red-400"
+                  >
+                    <UserMinus size={12} /> Remove
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="space-y-2 border-t border-gray-800 p-4">
+        <span className="text-xs text-gray-500">
+          Add a TA. An existing account is matched by email, then username; otherwise a new one
+          is created, which needs an email.
+        </span>
+        <div className="flex flex-wrap gap-2">
+          <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Email"
+            type="email" autoComplete="off" className={`${field} w-64`} />
+          <input value={username} onChange={e => setUsername(e.target.value)}
+            placeholder="Username (optional)" autoComplete="off" className={`${field} w-48`} />
+          <input value={fullName} onChange={e => setFullName(e.target.value)}
+            placeholder="Full name (optional)" className={`${field} w-48`} />
+          <button onClick={submit} disabled={add.isPending || (!email.trim() && !username.trim())}
+            className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-sm
+                       font-medium text-white hover:bg-indigo-500 disabled:opacity-40">
+            {add.isPending ? <Loader2 size={14} className="animate-spin" /> : <UserPlus size={14} />}
+            Add TA
+          </button>
+        </div>
+        {added && (
+          <div className="rounded-lg border border-gray-800 bg-gray-950 px-3 py-2.5 text-xs">
+            <p className="text-gray-300">{added.message}</p>
+            {added.password && (
+              <p className="mt-1.5 flex flex-wrap items-center gap-2 text-gray-400">
+                Password for {added.ta.username}:
+                <code className="rounded bg-gray-900 px-1.5 py-0.5 text-gray-100">{added.password}</code>
+                <button onClick={() => navigator.clipboard?.writeText(added.password!)}
+                  className="inline-flex items-center gap-1 text-gray-500 hover:text-gray-300">
+                  <Copy size={11} /> Copy
+                </button>
+                <span className="text-amber-400/80">Shown only now. Hand it over before leaving the page.</span>
+              </p>
+            )}
+          </div>
+        )}
+      </div>
     </Panel>
   )
 }

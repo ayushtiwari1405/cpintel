@@ -49,4 +49,42 @@ public interface ClassroomRepository extends JpaRepository<Classroom, Long> {
     @Query(value = "DELETE FROM classroom_staff WHERE classroom_id = :classroomId AND user_id = :userId",
         nativeQuery = true)
     void removeStaff(@Param("classroomId") Long classroomId, @Param("userId") Long userId);
+
+    // ------------------------------------------------------------ teaching assistants
+
+    @Query(value = """
+        SELECT EXISTS (SELECT 1 FROM classroom_tas
+                        WHERE classroom_id = :classroomId AND user_id = :userId)
+        """, nativeQuery = true)
+    boolean isTa(@Param("classroomId") Long classroomId, @Param("userId") Long userId);
+
+    /** Whether this person is a TA in any of these classrooms. */
+    @Query(value = """
+        SELECT EXISTS (SELECT 1 FROM classroom_tas
+                        WHERE user_id = :userId AND classroom_id IN (:classroomIds))
+        """, nativeQuery = true)
+    boolean isTaInAny(@Param("userId") Long userId,
+                      @Param("classroomIds") List<Long> classroomIds);
+
+    @Query(value = "SELECT user_id FROM classroom_tas WHERE classroom_id = :classroomId",
+        nativeQuery = true)
+    List<Long> taIds(@Param("classroomId") Long classroomId);
+
+    @Query(value = "SELECT classroom_id FROM classroom_tas WHERE user_id = :userId",
+        nativeQuery = true)
+    List<Long> taClassroomIds(@Param("userId") Long userId);
+
+    @Modifying
+    @Query(value = """
+        INSERT INTO classroom_tas (classroom_id, user_id, added_by)
+        VALUES (:classroomId, :userId, :addedBy)
+        ON CONFLICT DO NOTHING
+        """, nativeQuery = true)
+    int addTa(@Param("classroomId") Long classroomId, @Param("userId") Long userId,
+              @Param("addedBy") Long addedBy);
+
+    @Modifying
+    @Query(value = "DELETE FROM classroom_tas WHERE classroom_id = :classroomId AND user_id = :userId",
+        nativeQuery = true)
+    int removeTa(@Param("classroomId") Long classroomId, @Param("userId") Long userId);
 }

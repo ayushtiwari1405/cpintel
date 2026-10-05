@@ -59,8 +59,8 @@ class EventExportTest {
             true,
             List.of(
                 new EventsDto.LeaderboardRow(1, 1L, "asha", "Asha Rao", 1, 30.0, 900, List.of(
-                    new EventsDto.LeaderboardCell("A", true, 1, 900L, false, true, 30.0),
-                    new EventsDto.LeaderboardCell("B", false, 2, null, false, false, 0))),
+                    new EventsDto.LeaderboardCell("A", true, 1, 900L, false, true, 30.0, false),
+                    new EventsDto.LeaderboardCell("B", false, 2, null, false, false, 0, false))),
                 new EventsDto.LeaderboardRow(2, 2L, "ben k", null, 0, 0, 0, List.of())),
             0, 0, START.plusSeconds(8000));
     }

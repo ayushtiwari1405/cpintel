@@ -18,6 +18,7 @@
 - [Examination monitoring, and why it stopped trying to lock anything](#examination-monitoring-and-why-it-stopped-trying-to-lock-anything)
 - [The examination leaderboard](#the-examination-leaderboard)
 - [Marking an event done, and its export](#marking-an-event-done-and-its-export)
+- [Teaching assistants and marking by hand](#teaching-assistants-and-marking-by-hand)
 - [Group contests: ranking a subset of someone else's scoreboard](#group-contests-ranking-a-subset-of-someone-elses-scoreboard)
 
 ## System overview
@@ -1044,6 +1045,36 @@ judged. A submission the judge refuses â€” no attached login, a closed contest â
 verdict. An event marked done must be reopened first, and one being rejudged cannot be marked
 done. On the judge these are new submissions: its own scoreboard counts them as further
 attempts, and a contestant sees them in the judge's list.
+
+## Teaching assistants and marking by hand
+
+The judge gives each problem all its marks once accepted and none otherwise. Teaching assistants
+read what each student sent and set the mark themselves (`com.cpintel.evaluation`, migration V21).
+
+- **A TA is a link, not a role.** `classroom_tas` links an ordinary USER account to a classroom,
+  so the same person can be a student in one classroom and a TA in another. Admins add TAs on
+  the classroom's page (`/admin/classrooms/{id}/tas`). The roster's account rules apply: an
+  existing account is found by email, then username, and linked; otherwise a new one is created
+  with a generated password, which is shown once. Admins cannot be made TAs.
+- **Who marks what.** `exam_ta_assignments` rows give a TA, on one examination, a question, a
+  range of usernames, or both (that question for that range). A null field means all, and a
+  TA's rows add up. Ranges are inclusive and compared in natural order (`UsernameOrder`:
+  `cs2 < cs10`). Admins of the classroom mark everything. Nobody marks their own paper.
+  Removing a TA from the classroom deletes their assignments there; marks they gave stay.
+- **What a marker reads.** For each student and question there is one submission: the latest
+  accepted one in the archive, else the latest of all.
+- **When.** From the examination's end until it is marked done. Before the end the sheet is
+  empty; once it is done, marks are read-only until an admin reopens it.
+- **Effect.** `exam_marks` holds one hand-set mark per student and question (0 up to the
+  problem's marks, with an optional remark). `ExamLeaderboardService.rank` uses it in place
+  of the verdict's mark. The solve count and the time stay the judge's. The cell is flagged
+  `evaluated`. Saving a mark drops the stored board, so the next read re-ranks. The
+  spreadsheet adds a marks column per problem and stars hand-set ones.
+
+A TA uses `/evaluate` (`/api/v1/evaluation/**`), which shows only the examinations and the
+answers they were given; anything else answers "no such examination". Admins use the
+examination's Evaluation tab (`/api/v1/admin/events/{id}/evaluation/**`). Every mark set or
+cleared is audited (`EXAM_MARK_SET`, `EXAM_MARK_CLEARED`).
 
 ## Classrooms: one DOMjudge per class
 
