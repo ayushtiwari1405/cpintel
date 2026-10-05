@@ -109,6 +109,10 @@ public class AuditService {
     // Evaluation, by a TA or an admin
     public static final String EXAM_MARK_SET     = "EXAM_MARK_SET";
     public static final String EXAM_MARK_CLEARED = "EXAM_MARK_CLEARED";
+    public static final String EXAM_MARKING_FROZEN   = "EXAM_MARKING_FROZEN";
+    public static final String EXAM_MARKING_UNFROZEN = "ADMIN_EXAM_MARKING_UNFROZEN";
+    public static final String EXAM_MARK_REOPENED    = "ADMIN_EXAM_MARK_REOPENED";
+    public static final String EXAM_MARK_REOPEN_CLOSED = "ADMIN_EXAM_MARK_REOPEN_CLOSED";
 
     // Admin actions on the contest file policy
     public static final String FILE_POLICY_DEFAULT = "ADMIN_FILE_POLICY_DEFAULT";

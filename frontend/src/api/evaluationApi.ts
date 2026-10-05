@@ -1,7 +1,7 @@
 import { apiClient } from './client'
 import type {
   ApiResponse, AssignmentBoard, ClassroomTa, EvaluationCell, EvaluationSheet,
-  EvaluationSubmission, MarkRequest, TaAdded, TaAssignmentRequest, TaExam, TaRequest,
+  EvaluationSubmission, MarkRequest, ReopenRequest, TaAdded, TaAssignmentRequest, TaExam, TaRequest,
 } from '@/types'
 
 /**
@@ -15,6 +15,10 @@ export interface EvaluationSource {
   sheet: () => Promise<EvaluationSheet>
   submission: (userId: number, label: string) => Promise<EvaluationSubmission>
   mark: (body: MarkRequest) => Promise<EvaluationCell>
+  /** TA only: freeze their marking. */
+  freeze?: () => Promise<EvaluationSheet>
+  /** Admin only: send an answer back to the TA who froze it, or take it back. */
+  reopen?: (body: ReopenRequest) => Promise<EvaluationCell>
 }
 
 export const adminEvaluationApi = {
@@ -38,6 +42,10 @@ export const adminEvaluationApi = {
     apiClient.post<ApiResponse<AssignmentBoard>>(
       `/admin/events/${eventId}/evaluation/assignments`, body).then(r => r.data),
 
+  unfreeze: (eventId: number, taUserId: number) =>
+    apiClient.delete<ApiResponse<AssignmentBoard>>(
+      `/admin/events/${eventId}/evaluation/freezes/${taUserId}`).then(r => r.data),
+
   unassign: (eventId: number, assignmentId: number) =>
     apiClient.delete<ApiResponse<AssignmentBoard>>(
       `/admin/events/${eventId}/evaluation/assignments/${assignmentId}`).then(r => r.data),
@@ -51,6 +59,8 @@ export const adminEvaluationApi = {
       .then(r => r.data.data),
     mark: body => apiClient.put<ApiResponse<EvaluationCell>>(
       `/admin/events/${eventId}/evaluation/marks`, body).then(r => r.data.data),
+    reopen: body => apiClient.put<ApiResponse<EvaluationCell>>(
+      `/admin/events/${eventId}/evaluation/reopen`, body).then(r => r.data.data),
   }),
 }
 
@@ -67,5 +77,7 @@ export const evaluationApi = {
       .then(r => r.data.data),
     mark: body => apiClient.put<ApiResponse<EvaluationCell>>(
       `/evaluation/exams/${eventId}/marks`, body).then(r => r.data.data),
+    freeze: () => apiClient.post<ApiResponse<EvaluationSheet>>(
+      `/evaluation/exams/${eventId}/freeze`).then(r => r.data.data),
   }),
 }

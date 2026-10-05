@@ -1071,6 +1071,17 @@ read what each student sent and set the mark themselves (`com.cpintel.evaluation
   `evaluated`. Saving a mark drops the stored board, so the next read re-ranks. The
   spreadsheet adds a marks column per problem and stars hand-set ones.
 
+- **Freezing.** When a TA has finished, they freeze their marking on the examination
+  (`exam_ta_freezes`, migration V22), and their marks are fixed. An admin can still change any
+  mark, or send single answers back to the TA (`exam_mark_reopens`). A frozen TA can change only
+  answers that were sent back, and freezing again closes them. An admin can also unfreeze a TA
+  completely.
+- **The TA dashboard.** The Evaluation tab lists every TA in the classroom: answers marked out of
+  those assigned, whether they have frozen, answers sent back and still waiting, and the
+  changes required. That is the number of distinct answers that needed a change after the TA
+  froze, split into sent back and changed by an admin (`exam_eval_changes`, a history that
+  survives refreezing). It updates on a Refresh button, not automatically.
+
 A TA uses `/evaluate` (`/api/v1/evaluation/**`), which shows only the examinations and the
 answers they were given; anything else answers "no such examination". Admins use the
 examination's Evaluation tab (`/api/v1/admin/events/{id}/evaluation/**`). Every mark set or

@@ -1,10 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { formatDistanceToNow } from 'date-fns'
-import { CheckCircle2, Code2, Loader2, Lock, RotateCcw, Save, Search } from 'lucide-react'
+import {
+  CheckCircle2, Code2, Loader2, Lock, RotateCcw, Save, Search, Snowflake, Undo2,
+} from 'lucide-react'
 import { clsx } from 'clsx'
 
 import type { EvaluationSource } from '@/api/evaluationApi'
-import { useEvaluationSheet, useEvaluationSubmission, useSetMark } from '@/hooks/useEvaluation'
+import {
+  useEvaluationSheet, useEvaluationSubmission, useFreeze, useReopen, useSetMark,
+} from '@/hooks/useEvaluation'
 import type { EvaluationCell } from '@/types'
 
 const field = `rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 text-sm text-gray-200
@@ -33,6 +37,8 @@ export function EvaluationSheet({ source }: { source: EvaluationSource }) {
   const [problem, setProblem] = useState<string>('')
   const [search, setSearch] = useState('')
   const [unmarkedOnly, setUnmarkedOnly] = useState(false)
+  const [sentBackOnly, setSentBackOnly] = useState(false)
+  const freeze = useFreeze(source)
   const [selected, setSelected] = useState<string | null>(null)
 
   const cells = useMemo(() => sheet?.cells ?? [], [sheet])
@@ -41,9 +47,10 @@ export function EvaluationSheet({ source }: { source: EvaluationSource }) {
     return cells.filter(c =>
       (!problem || c.label === problem)
       && (!unmarkedOnly || c.marks == null)
+      && (!sentBackOnly || c.reopened)
       && (!q || c.username.toLowerCase().includes(q)
         || (c.fullName ?? '').toLowerCase().includes(q)))
-  }, [cells, problem, search, unmarkedOnly])
+  }, [cells, problem, search, unmarkedOnly, sentBackOnly])
 
   const current = cells.find(c => keyOf(c) === selected) ?? null
   const markedCount = cells.filter(c => c.marks != null).length
@@ -70,6 +77,20 @@ export function EvaluationSheet({ source }: { source: EvaluationSource }) {
   }
 
   const editable = sheet.state === 'OPEN'
+  // Only a TA's sheet can be frozen; the admin's has no freeze of its own.
+  const isTa = !!source.freeze
+  const frozen = sheet.frozenAt != null
+  const sentBack = cells.filter(c => c.reopened).length
+  const unmarked = cells.length - markedCount
+
+  const doFreeze = () => {
+    const ask = frozen
+      ? 'Freeze again? The answers sent back to you close, and your marks are fixed once more.'
+      : `Freeze your marking?${unmarked > 0 ? ` ${unmarked} answer${unmarked === 1 ? ' still has' : 's still have'} `
+        + "the judge's mark, which will stand." : ''} After this you can change only answers an `
+        + 'admin sends back to you.'
+    if (confirm(ask)) freeze.mutate()
+  }
 
   const nextUnmarked = (after: EvaluationCell) => {
     const at = shown.findIndex(c => keyOf(c) === keyOf(after))
@@ -83,6 +104,28 @@ export function EvaluationSheet({ source }: { source: EvaluationSource }) {
         <div className="flex items-center gap-2 rounded-lg border border-gray-800 bg-gray-900
                         px-4 py-2.5 text-xs text-gray-400">
           <Lock size={13} className="flex-shrink-0 text-gray-500" /> {sheet.stateMessage}
+        </div>
+      )}
+
+      {isTa && editable && (
+        <div className={clsx('flex flex-wrap items-center justify-between gap-3 rounded-lg border px-4 py-2.5 text-xs',
+          frozen ? 'border-sky-900 bg-sky-950/30 text-sky-200' : 'border-gray-800 bg-gray-900 text-gray-400')}>
+          <span className="flex items-center gap-2">
+            <Snowflake size={13} className="flex-shrink-0" />
+            {frozen
+              ? sentBack > 0
+                ? `Frozen. An admin sent ${sentBack} answer${sentBack === 1 ? '' : 's'} back to you; change ${sentBack === 1 ? 'it' : 'them'}, then freeze again.`
+                : `Frozen ${formatDistanceToNow(new Date(sheet.frozenAt!), { addSuffix: true })}. Only answers an admin sends back can be changed.`
+              : 'When you have finished, freeze your marking. Your marks are then fixed.'}
+          </span>
+          {(!frozen || sentBack > 0) && (
+            <button onClick={doFreeze} disabled={freeze.isPending}
+              className="flex items-center gap-1.5 rounded-lg bg-sky-700 px-3 py-1.5 text-xs
+                         font-medium text-white hover:bg-sky-600 disabled:opacity-40">
+              {freeze.isPending ? <Loader2 size={12} className="animate-spin" /> : <Snowflake size={12} />}
+              {frozen ? 'Freeze again' : 'Freeze my marking'}
+            </button>
+          )}
         </div>
       )}
 
@@ -106,6 +149,13 @@ export function EvaluationSheet({ source }: { source: EvaluationSource }) {
               onChange={e => setUnmarkedOnly(e.target.checked)} />
             Unmarked only
           </label>
+          {cells.some(c => c.reopened) && (
+            <label className="flex items-center gap-1.5 text-xs text-gray-400">
+              <input type="checkbox" checked={sentBackOnly}
+                onChange={e => setSentBackOnly(e.target.checked)} />
+              Sent back only
+            </label>
+          )}
           <span className="ml-auto text-xs tabular-nums text-gray-500">
             {markedCount} of {cells.length} marked by hand
           </span>
@@ -146,7 +196,12 @@ export function EvaluationSheet({ source }: { source: EvaluationSource }) {
                         <span className="block truncate text-[11px] text-gray-600">{c.fullName}</span>
                       )}
                     </td>
-                    <td className="px-2 py-2 font-mono text-xs text-gray-400">{c.label}</td>
+                    <td className="px-2 py-2 font-mono text-xs text-gray-400">
+                      {c.label}
+                      {c.reopened && <Undo2 size={11} className="ml-1 inline text-amber-400"
+                        aria-label="sent back" />}
+                      {!c.reopened && c.locked && <Lock size={10} className="ml-1 inline text-gray-600" />}
+                    </td>
                     <td className="px-2 py-2"><Verdict cell={c} /></td>
                     <td className="px-3 py-2 text-right tabular-nums">
                       {c.marks != null
@@ -161,7 +216,8 @@ export function EvaluationSheet({ source }: { source: EvaluationSource }) {
           </div>
 
           {current ? (
-            <Reader key={keyOf(current)} source={source} cell={current} editable={editable}
+            <Reader key={keyOf(current)} source={source} cell={current}
+              editable={editable && !current.locked} open={editable}
               onSaved={saved => {
                 const next = nextUnmarked(saved)
                 if (next) setSelected(keyOf(next))
@@ -192,12 +248,16 @@ function Verdict({ cell }: { cell: EvaluationCell }) {
 }
 
 /** One answer: its code, and the mark. */
-function Reader({ source, cell, editable, onSaved }: {
+function Reader({ source, cell, editable, open, onSaved }: {
   source: EvaluationSource
   cell: EvaluationCell
+  /** This marker can change this mark now. */
   editable: boolean
+  /** Marking is open on the examination at all. */
+  open: boolean
   onSaved: (cell: EvaluationCell) => void
 }) {
+  const reopen = useReopen(source)
   const { data: submission, isFetching } = useEvaluationSubmission(source,
     cell.submission ? cell.userId : null, cell.submission ? cell.label : null)
   const save = useSetMark(source)
@@ -274,6 +334,27 @@ function Reader({ source, cell, editable, onSaved }: {
           className={clsx(field, 'w-full resize-y disabled:opacity-50')} />
         {invalid && (
           <p className="text-xs text-red-400">Between 0 and {marks(cell.maxMarks)}.</p>
+        )}
+        {open && !editable && (
+          <p className="flex items-center gap-1.5 text-xs text-gray-500">
+            <Lock size={11} /> You froze your marking. An admin can send this answer back to you.
+          </p>
+        )}
+        {cell.reopened && (
+          <p className="flex items-center gap-1.5 text-xs text-amber-400/90">
+            <Undo2 size={11} /> Sent back by an admin for another look.
+          </p>
+        )}
+        {open && source.reopen && cell.frozen && (
+          <button
+            onClick={() => reopen.mutate({ userId: cell.userId, label: cell.label, reopen: !cell.reopened })}
+            disabled={reopen.isPending}
+            className="flex items-center gap-1.5 rounded-lg border border-amber-900/60 px-3 py-1.5
+                       text-xs text-amber-300 hover:border-amber-700 disabled:opacity-40"
+            title="The TA who marked this has frozen their marking"
+          >
+            <Undo2 size={12} /> {cell.reopened ? 'Take it back from the TA' : 'Send back to the TA'}
+          </button>
         )}
         {editable && (
           <div className="flex flex-wrap items-center gap-2">

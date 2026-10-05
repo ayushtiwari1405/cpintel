@@ -85,6 +85,11 @@ function ExamRow({ exam, onOpen }: { exam: TaExam; onOpen: () => void }) {
           <span className={clsx('rounded-full px-2 py-0.5 text-[11px] font-medium', state.tone)}>
             {state.label}
           </span>
+          {exam.frozenAt && exam.state === 'OPEN' && (
+            <span className="rounded-full bg-sky-900/40 px-2 py-0.5 text-[11px] font-medium text-sky-300">
+              frozen
+            </span>
+          )}
         </div>
         <p className="mt-0.5 text-xs text-gray-500">
           {exam.classroomName}

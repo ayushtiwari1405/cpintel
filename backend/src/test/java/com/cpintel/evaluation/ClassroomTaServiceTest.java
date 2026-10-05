@@ -35,7 +35,8 @@ class ClassroomTaServiceTest {
         PasswordEncoder encoder = mock(PasswordEncoder.class);
         when(encoder.encode(anyString())).thenReturn("hash");
         service = new ClassroomTaService(mock(ClassroomService.class), classrooms, assignments,
-            users, mock(UnifiedScoreRepository.class), encoder, mock(AuditService.class));
+            users, mock(UnifiedScoreRepository.class), encoder, mock(AuditService.class),
+            mock(EvaluationLocks.class));
         when(users.findByEmail(anyString())).thenReturn(Optional.empty());
         when(users.findByUsername(anyString())).thenReturn(Optional.empty());
         when(users.save(any())).thenAnswer(inv -> {

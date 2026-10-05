@@ -52,6 +52,7 @@ public class ClassroomTaService {
     private final UnifiedScoreRepository unifiedScores;
     private final PasswordEncoder passwordEncoder;
     private final AuditService auditService;
+    private final EvaluationLocks locks;
 
     @Transactional(readOnly = true)
     public List<EvaluationDto.Ta> list(Long adminId, Long classroomId) {
@@ -155,6 +156,7 @@ public class ClassroomTaService {
     public void remove(Long adminId, Long classroomId, Long userId, HttpServletRequest httpReq) {
         classrooms.requireManaged(adminId, classroomId);
         assignments.deleteInClassroom(classroomId, userId);
+        locks.unfreezeInClassroom(classroomId, userId);
         if (classroomRepository.removeTa(classroomId, userId) > 0) {
             auditService.recordIn(classroomId, adminId, AuditService.CLASSROOM_TA_REMOVED,
                 "CLASSROOM", classroomId + ":" + userId, httpReq);

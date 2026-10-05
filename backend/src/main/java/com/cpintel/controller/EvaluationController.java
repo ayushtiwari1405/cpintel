@@ -55,6 +55,16 @@ public class EvaluationController {
             evaluation.taSubmission(userId, eventId, studentId, label)));
     }
 
+    @PostMapping("/exams/{eventId}/freeze")
+    @Operation(summary = "Freeze your marking on this examination",
+        description = "Your marks are then fixed. An admin can still change them, or reopen "
+            + "single answers for you; freezing again closes those.")
+    public ResponseEntity<ApiResponse<EvaluationDto.Sheet>> freeze(
+        @AuthenticationPrincipal Long userId, @PathVariable Long eventId,
+        HttpServletRequest httpReq) {
+        return ResponseEntity.ok(ApiResponse.ok(evaluation.freeze(userId, eventId, httpReq)));
+    }
+
     @PutMapping("/exams/{eventId}/marks")
     @Operation(summary = "Set or clear one mark",
         description = "Only between the end of the examination and its being marked done.")

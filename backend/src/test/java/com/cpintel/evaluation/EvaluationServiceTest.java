@@ -51,7 +51,31 @@ class EvaluationServiceTest {
     private final ClassroomRepository classrooms = mock(ClassroomRepository.class);
     private final UserRepository users = mock(UserRepository.class);
 
+    private final FakeLocks locks = new FakeLocks();
     private EvaluationService service;
+
+    /** The lock store in memory. */
+    static class FakeLocks extends EvaluationLocks {
+        final java.util.Map<Long, Instant> frozen = new java.util.HashMap<>();
+        final java.util.Set<String> open = new java.util.HashSet<>();
+        final List<String> changes = new ArrayList<>();
+
+        FakeLocks() { super(null); }
+
+        @Override public java.util.Map<Long, Instant> freezes(Long e) { return new java.util.HashMap<>(frozen); }
+        @Override public void freeze(Long e, Long ta) { frozen.put(ta, Instant.now()); }
+        @Override public boolean unfreeze(Long e, Long ta) { return frozen.remove(ta) != null; }
+        @Override public java.util.Set<String> reopened(Long e) { return new java.util.HashSet<>(open); }
+        @Override public void reopen(Long e, Long u, String l, Long by) { open.add(key(u, l)); }
+        @Override public boolean close(Long e, Long u, String l) { return open.remove(key(u, l)); }
+        @Override public void recordChange(Long e, Long ta, Long u, String l, String kind, Long by) {
+            changes.add(ta + ":" + u + ":" + l + ":" + kind);
+        }
+        @Override public java.util.Map<Long, java.util.Map<String, Integer>> changeCounts(Long e) {
+            return java.util.Map.of();
+        }
+        @Override public java.util.Map<Long, Integer> totalChanges(Long e) { return java.util.Map.of(); }
+    }
     private GroupContest exam;
     private final List<CodeSubmission> rows = new ArrayList<>();
     private final List<ExamTaAssignment> taRows = new ArrayList<>();
@@ -59,7 +83,8 @@ class EvaluationServiceTest {
     @BeforeEach
     void setUp() {
         service = new EvaluationService(events, boards, eventRepository, problems, assignments,
-            marks, classrooms, mock(ClassroomTaService.class), users, mock(AuditService.class));
+            marks, classrooms, mock(ClassroomTaService.class), users, mock(AuditService.class),
+            locks);
 
         exam = GroupContest.builder().contestId(EXAM).classroomId(CLASSROOM).kind("EXAM")
             .platform("DOMJUDGE").externalId("5~paper").name("Paper").lifecycle("SCHEDULED")
@@ -73,6 +98,7 @@ class EvaluationServiceTest {
         when(boards.attemptsOf(exam)).thenReturn(rows);
         when(classrooms.isTa(CLASSROOM, TA)).thenReturn(true);
         when(assignments.findByContestIdAndTaUserId(EXAM, TA)).thenReturn(taRows);
+        when(assignments.findByContestIdOrderByAssignmentIdAsc(EXAM)).thenReturn(taRows);
         when(marks.findByContestId(EXAM)).thenReturn(List.of());
         when(marks.findByContestIdAndUserIdAndProblemLabel(anyLong(), anyLong(), anyString()))
             .thenReturn(Optional.empty());
@@ -220,5 +246,44 @@ class EvaluationServiceTest {
         assign(null, null, null);
         when(classrooms.isTa(CLASSROOM, TA)).thenReturn(false);
         assertThrows(ApiException.class, () -> service.taSheet(TA, EXAM));
+    }
+
+    @Test
+    @DisplayName("A TA who froze can change only what an admin sent back, until they freeze again")
+    void freezeAndReopen() {
+        assign("A", null, null);
+        sent("a1", 1, "A", 100, "WRONG_ANSWER");
+
+        EvaluationDto.Sheet frozen = service.freeze(TA, EXAM, null);
+        assertNotNull(frozen.frozenAt());
+        assertTrue(frozen.cells().stream().allMatch(EvaluationDto.Cell::locked));
+        assertThrows(ApiException.class, () -> service.taMark(TA, EXAM, mark(1, "A", 5.0), null));
+
+        EvaluationDto.Cell sentBack = service.reopen(99L, EXAM,
+            new EvaluationDto.ReopenRequest(1L, "A", true), null);
+        assertTrue(sentBack.reopened());
+        assertTrue(sentBack.frozen());
+        assertEquals(List.of(TA + ":1:A:REOPENED"), locks.changes);
+
+        assertEquals(5.0, service.taMark(TA, EXAM, mark(1, "A", 5.0), null).marks());
+        assertThrows(ApiException.class, () -> service.taMark(TA, EXAM, mark(2, "A", 5.0), null));
+
+        service.freeze(TA, EXAM, null);
+        assertTrue(locks.open.isEmpty());
+        assertThrows(ApiException.class, () -> service.taMark(TA, EXAM, mark(1, "A", 6.0), null));
+    }
+
+    @Test
+    @DisplayName("An admin can always change a mark; over a frozen TA's it counts as a change")
+    void adminChangesFrozen() {
+        assign("A", "cs1", "cs1");
+        service.freeze(TA, EXAM, null);
+
+        service.adminMark(99L, EXAM, mark(1, "A", 3.0), null);
+        service.adminMark(99L, EXAM, mark(2, "A", 3.0), null);   // not the TA's answer
+
+        assertEquals(List.of(TA + ":1:A:ADMIN_CHANGED"), locks.changes);
+        assertThrows(ApiException.class, () -> service.reopen(99L, EXAM,
+            new EvaluationDto.ReopenRequest(2L, "A", true), null));   // no frozen TA covers it
     }
 }

@@ -74,6 +74,7 @@ public class EvaluationService {
     private final ClassroomTaService tas;
     private final UserRepository userRepository;
     private final AuditService auditService;
+    private final EvaluationLocks locks;
 
     // ================================================================= TA side
 
@@ -93,8 +94,9 @@ public class EvaluationService {
             if (event == null || !event.isExam() || !taIn.contains(event.getClassroomId())) {
                 continue;
             }
-            Scope scope = new Scope(taId, false, entry.getValue());
             Paper paper = load(event, false);
+            Scope scope = new Scope(taId, false, entry.getValue(),
+                paper.freezes().get(taId));
             int cells = 0, marked = 0;
             for (User student : paper.students()) {
                 for (EvaluationDto.Problem problem : paper.problems()) {
@@ -106,7 +108,8 @@ public class EvaluationService {
             String classroom = classroomRepository.findById(event.getClassroomId())
                 .map(c -> c.getName()).orElse(null);
             out.add(new EvaluationDto.TaExam(event.getContestId(), event.getName(), classroom,
-                event.getStartsAt(), event.getEndsAt(), state(event, now), cells, marked));
+                event.getStartsAt(), event.getEndsAt(), state(event, now), cells, marked,
+                scope.frozenAt()));
         }
         out.sort(Comparator.comparing(EvaluationDto.TaExam::endsAt,
             Comparator.nullsLast(Comparator.reverseOrder())));
@@ -133,7 +136,82 @@ public class EvaluationService {
         return mark(taScope(taId, event), event, req, httpReq);
     }
 
+    /**
+     * The TA has finished: their marks on this examination are fixed. Answers an admin had
+     * reopened for them close again. From here an admin changes marks, or reopens answers.
+     */
+    @Transactional
+    public EvaluationDto.Sheet freeze(Long taId, Long eventId, HttpServletRequest httpReq) {
+        GroupContest event = events.require(eventId);
+        Scope scope = taScope(taId, event);
+        String state = state(event, Instant.now());
+        if (!OPEN.equals(state)) throw ApiException.badRequest(stateMessage(state));
+
+        Paper paper = load(event, false);
+        List<String> mine = new ArrayList<>();
+        for (String key : paper.reopened()) {
+            int at = key.indexOf(':');
+            User student = paper.student(Long.parseLong(key.substring(0, at)));
+            if (student != null && scope.covers(student, key.substring(at + 1))) mine.add(key);
+        }
+        locks.closeAll(eventId, mine);
+        locks.freeze(eventId, taId);
+        auditService.recordIn(event.getClassroomId(), taId, AuditService.EXAM_MARKING_FROZEN,
+            "EXAM", eventId + ":" + taId, httpReq);
+        return sheet(taScope(taId, event), event);
+    }
+
     // ============================================================== admin side
+
+    /** Lets a TA who froze change all their marks again. */
+    @Transactional
+    public EvaluationDto.AssignmentBoard unfreeze(Long adminId, Long eventId, Long taId,
+                                                  HttpServletRequest httpReq) {
+        GroupContest event = requireExam(eventId);
+        if (locks.unfreeze(eventId, taId)) {
+            auditService.recordIn(event.getClassroomId(), adminId,
+                AuditService.EXAM_MARKING_UNFROZEN, "EXAM", eventId + ":" + taId, httpReq);
+        }
+        return board(eventId);
+    }
+
+    /**
+     * Sends one answer back to the TA who froze it, or takes it back. A reopened answer is the
+     * only kind a frozen TA can change; it closes when they freeze again.
+     */
+    @Transactional
+    public EvaluationDto.Cell reopen(Long adminId, Long eventId, EvaluationDto.ReopenRequest req,
+                                     HttpServletRequest httpReq) {
+        GroupContest event = requireExam(eventId);
+        String state = state(event, Instant.now());
+        if (!OPEN.equals(state)) throw ApiException.badRequest(stateMessage(state));
+        Scope scope = Scope.everything(adminId);
+        Paper paper = load(event, true);
+        Target target = target(scope, paper, req.userId(), req.label());
+        String label = target.problem().label();
+        String key = EvaluationLocks.key(req.userId(), label);
+        if (Boolean.TRUE.equals(req.reopen())) {
+            if (paper.frozenCovering(target.student(), label).isEmpty()) {
+                throw ApiException.badRequest("No TA who froze their marking covers this answer, "
+                    + "so there is nothing to reopen. Change the mark yourself, or ask the TA.");
+            }
+            locks.reopen(eventId, req.userId(), label, adminId);
+            if (paper.reopened().add(key)) {
+                for (Long ta : paper.frozenCovering(target.student(), label)) {
+                    locks.recordChange(eventId, ta, req.userId(), label,
+                        EvaluationLocks.REOPENED, adminId);
+                }
+            }
+        } else {
+            locks.close(eventId, req.userId(), label);
+            paper.reopened().remove(key);
+        }
+        auditService.recordIn(event.getClassroomId(), adminId,
+            Boolean.TRUE.equals(req.reopen()) ? AuditService.EXAM_MARK_REOPENED
+                : AuditService.EXAM_MARK_REOPEN_CLOSED,
+            "EXAM", eventId + ":" + req.userId() + ":" + label, httpReq);
+        return cell(scope, paper, target.student(), target.problem(), markerNames(paper));
+    }
 
     @Transactional(readOnly = true)
     public EvaluationDto.Sheet adminSheet(Long adminId, Long eventId) {
@@ -175,10 +253,39 @@ public class EvaluationService {
                 row.getProblemLabel(), row.getRangeFrom(), row.getRangeTo(), count,
                 row.getCreatedAt()));
         }
+        Map<Long, List<ExamTaAssignment>> byTa = new HashMap<>();
+        for (ExamTaAssignment row : paper.assignments()) {
+            byTa.computeIfAbsent(row.getTaUserId(), k -> new ArrayList<>()).add(row);
+        }
+        Map<Long, Map<String, Integer>> changes = locks.changeCounts(eventId);
+        Map<Long, Integer> totals = locks.totalChanges(eventId);
+        List<EvaluationDto.TaProgress> progress = new ArrayList<>();
+        for (EvaluationDto.Ta ta : classroomTas) {
+            Scope scope = new Scope(ta.userId(), false,
+                byTa.getOrDefault(ta.userId(), List.of()), paper.freezes().get(ta.userId()));
+            int cells = 0, marked = 0, reopened = 0;
+            for (User student : paper.students()) {
+                for (EvaluationDto.Problem problem : paper.problems()) {
+                    if (!scope.covers(student, problem.label())) continue;
+                    cells++;
+                    if (paper.mark(student.getUserId(), problem.label()) != null) marked++;
+                    if (scope.frozenAt() != null
+                            && paper.isReopened(student.getUserId(), problem.label())) {
+                        reopened++;
+                    }
+                }
+            }
+            Map<String, Integer> mine = changes.getOrDefault(ta.userId(), Map.of());
+            progress.add(new EvaluationDto.TaProgress(ta.userId(), ta.username(), ta.fullName(),
+                cells, marked, reopened, totals.getOrDefault(ta.userId(), 0),
+                mine.getOrDefault(EvaluationLocks.REOPENED, 0),
+                mine.getOrDefault(EvaluationLocks.ADMIN_CHANGED, 0), scope.frozenAt()));
+        }
+
         String state = state(event, Instant.now());
         return new EvaluationDto.AssignmentBoard(state, stateMessage(state), rows, classroomTas,
             paper.problems().stream().map(EvaluationDto.Problem::label).toList(),
-            paper.students().stream().map(User::getUsername).toList());
+            paper.students().stream().map(User::getUsername).toList(), progress);
     }
 
     @Transactional
@@ -256,7 +363,7 @@ public class EvaluationService {
             for (User student : paper.students()) {
                 for (EvaluationDto.Problem problem : paper.problems()) {
                     if (scope.covers(student, problem.label())) {
-                        cells.add(cell(paper, student, problem, markers));
+                        cells.add(cell(scope, paper, student, problem, markers));
                     }
                 }
             }
@@ -265,7 +372,7 @@ public class EvaluationService {
             .filter(p -> scope.coversLabel(p.label()))
             .toList();
         return new EvaluationDto.Sheet(event.getContestId(), event.getName(), state,
-            stateMessage(state), problems, cells);
+            stateMessage(state), problems, cells, scope.all() ? null : scope.frozenAt());
     }
 
     private EvaluationDto.Submission submission(Scope scope, GroupContest event, Long userId,
@@ -292,9 +399,26 @@ public class EvaluationService {
         Target target = target(scope, paper, req.userId(), req.label());
         EvaluationDto.Problem problem = target.problem();
         Long eventId = event.getContestId();
+        if (locked(scope, paper, req.userId(), problem.label())) {
+            throw ApiException.badRequest("You froze your marking on this examination. Only "
+                + "answers an admin reopens for you can be changed.");
+        }
 
         ExamMark existing = markRepository.findByContestIdAndUserIdAndProblemLabel(
             eventId, req.userId(), problem.label()).orElse(null);
+
+        // An admin changing a mark a TA froze is a change that TA's marking needed.
+        BigDecimal before = existing == null ? null : existing.getMarks();
+        BigDecimal after = req.marks() == null ? null
+            : BigDecimal.valueOf(req.marks()).setScale(2, RoundingMode.HALF_UP);
+        boolean differs = before == null ? after != null
+            : after == null || before.compareTo(after) != 0;
+        if (scope.all() && differs) {
+            for (Long ta : paper.frozenCovering(target.student(), problem.label())) {
+                locks.recordChange(eventId, ta, req.userId(), problem.label(),
+                    EvaluationLocks.ADMIN_CHANGED, scope.viewerId());
+            }
+        }
 
         if (req.marks() == null) {
             if (existing != null) {
@@ -330,7 +454,7 @@ public class EvaluationService {
 
         // The stored board was ranked on the old mark; drop it so the next read re-ranks.
         eventRepository.storeLeaderboard(eventId, null, null);
-        return cell(paper, target.student(), problem, markerNames(paper));
+        return cell(scope, paper, target.student(), problem, markerNames(paper));
     }
 
     private Target target(Scope scope, Paper paper, Long userId, String rawLabel) {
@@ -344,8 +468,13 @@ public class EvaluationService {
         return new Target(student, problem);
     }
 
-    private EvaluationDto.Cell cell(Paper paper, User student, EvaluationDto.Problem problem,
-                                    Map<Long, String> markers) {
+    /** A frozen TA can change only what an admin reopened; an admin is never locked out. */
+    private static boolean locked(Scope scope, Paper paper, Long userId, String label) {
+        return !scope.all() && scope.frozenAt() != null && !paper.isReopened(userId, label);
+    }
+
+    private EvaluationDto.Cell cell(Scope scope, Paper paper, User student,
+                                    EvaluationDto.Problem problem, Map<Long, String> markers) {
         List<CodeSubmission> attempts = paper.attempts(student.getUserId(), problem.label());
         CodeSubmission chosen = chosen(attempts);
         boolean solved = attempts.stream().anyMatch(a -> "OK".equals(a.getVerdict()));
@@ -358,7 +487,11 @@ public class EvaluationService {
             mark == null ? null : markers.get(mark.getMarkedBy()),
             mark == null ? null : mark.getMarkedAt(),
             chosen == null ? null : toSubmission(chosen, false),
-            attempts.size());
+            attempts.size(),
+            paper.isReopened(student.getUserId(), problem.label()),
+            scope.all() ? !paper.frozenCovering(student, problem.label()).isEmpty()
+                : scope.frozenAt() != null,
+            locked(scope, paper, student.getUserId(), problem.label()));
     }
 
     /** The latest accepted attempt, or the latest of all when none was accepted. */
@@ -395,14 +528,14 @@ public class EvaluationService {
         List<ExamTaAssignment> rows =
             assignmentRepository.findByContestIdAndTaUserId(event.getContestId(), taId);
         if (rows.isEmpty()) throw ApiException.notFound("No such examination");
-        return new Scope(taId, false, rows);
+        return new Scope(taId, false, rows, locks.freezes(event.getContestId()).get(taId));
     }
 
     /** What one marker may mark: everything, or what their assignments cover. */
-    record Scope(Long viewerId, boolean all, List<ExamTaAssignment> rows) {
+    record Scope(Long viewerId, boolean all, List<ExamTaAssignment> rows, Instant frozenAt) {
 
         static Scope everything(Long adminId) {
-            return new Scope(adminId, true, List.of());
+            return new Scope(adminId, true, List.of(), null);
         }
 
         boolean covers(User student, String label) {
@@ -503,12 +636,36 @@ public class EvaluationService {
             marks.computeIfAbsent(mark.getUserId(), k -> new HashMap<>())
                 .put(mark.getProblemLabel(), mark);
         }
-        return new Paper(problems, students, attempts, marks);
+        return new Paper(problems, students, attempts, marks,
+            assignmentRepository.findByContestIdOrderByAssignmentIdAsc(eventId),
+            locks.freezes(eventId), new HashSet<>(locks.reopened(eventId)));
     }
 
     private record Paper(List<EvaluationDto.Problem> problems, List<User> students,
                          Map<Long, Map<String, List<CodeSubmission>>> attemptsByUser,
-                         Map<Long, Map<String, ExamMark>> marks) {
+                         Map<Long, Map<String, ExamMark>> marks,
+                         List<ExamTaAssignment> assignments,
+                         Map<Long, Instant> freezes,
+                         Set<String> reopened) {
+
+        boolean isReopened(Long userId, String label) {
+            return reopened.contains(EvaluationLocks.key(userId, label));
+        }
+
+        /** The TAs who froze their marking and whose assignments cover this answer. */
+        List<Long> frozenCovering(User student, String label) {
+            Map<Long, List<ExamTaAssignment>> byTa = new HashMap<>();
+            for (ExamTaAssignment row : assignments) {
+                if (freezes.containsKey(row.getTaUserId())) {
+                    byTa.computeIfAbsent(row.getTaUserId(), k -> new ArrayList<>()).add(row);
+                }
+            }
+            List<Long> out = new ArrayList<>();
+            byTa.forEach((ta, rows) -> {
+                if (new Scope(ta, false, rows, freezes.get(ta)).covers(student, label)) out.add(ta);
+            });
+            return out;
+        }
 
         EvaluationDto.Problem problem(String label) {
             return problems.stream().filter(p -> p.label().equals(label)).findFirst().orElse(null);

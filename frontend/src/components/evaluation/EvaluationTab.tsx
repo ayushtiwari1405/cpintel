@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react'
-import { Loader2, Plus, Split, Trash2 } from 'lucide-react'
+import { formatDistanceToNow } from 'date-fns'
+import { Loader2, Plus, RefreshCw, Snowflake, Split, Trash2 } from 'lucide-react'
 
 import { adminEvaluationApi } from '@/api/evaluationApi'
-import { EmptyRow, Panel } from '@/components/admin/AdminUi'
+import { EmptyRow, Panel, Pill } from '@/components/admin/AdminUi'
 import { EvaluationSheet } from '@/components/evaluation/EvaluationSheet'
 import { useAssignmentActions, useAssignmentBoard } from '@/hooks/useEvaluation'
 import type { AssignmentBoard } from '@/types'
@@ -18,7 +19,7 @@ const field = `rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 text-sm t
  * listed in here, and "Split the roster" cuts it into equal consecutive ranges, one per TA.
  */
 export function EvaluationTab({ eventId, done }: { eventId: number; done: boolean }) {
-  const { data: board, isLoading } = useAssignmentBoard(eventId)
+  const { data: board, isLoading, refetch, isFetching } = useAssignmentBoard(eventId)
   const source = useMemo(() => adminEvaluationApi.source(eventId), [eventId])
 
   return (
@@ -28,7 +29,11 @@ export function EvaluationTab({ eventId, done }: { eventId: number; done: boolea
           <Loader2 size={14} className="animate-spin" /> Loading…
         </div>
       ) : (
-        <Assignments eventId={eventId} board={board} done={done} />
+        <>
+          <Progress eventId={eventId} board={board} onRefresh={() => refetch()}
+            refreshing={isFetching} />
+          <Assignments eventId={eventId} board={board} done={done} />
+        </>
       )}
       <Panel title="Marks"
         description="Every answer, with the submission to read: the latest accepted one, else the latest. A mark set here replaces the judge's on the leaderboard">
@@ -222,5 +227,103 @@ function SplitRoster({ eventId, board, onDone }: {
         Assign these ranges
       </button>
     </div>
+  )
+}
+
+/**
+ * Where every TA stands: how much they have marked, whether they have frozen, and how many of
+ * their answers needed changing afterwards — sent back to them, or changed by an admin.
+ */
+function Progress({ eventId, board, onRefresh, refreshing }: {
+  eventId: number
+  board: AssignmentBoard
+  onRefresh: () => void
+  refreshing: boolean
+}) {
+  const { unfreeze } = useAssignmentActions(eventId)
+  const rows = board.progress
+  const frozen = rows.filter(r => r.frozenAt != null && r.cells > 0).length
+  const working = rows.filter(r => r.cells > 0).length
+
+  return (
+    <Panel title="TAs"
+      description={working === 0 ? 'Nobody has been given anything to mark yet'
+        : `${frozen} of ${working} TA${working === 1 ? '' : 's'} with marking have frozen`}
+      actions={
+        <button onClick={onRefresh} disabled={refreshing}
+          className="flex items-center gap-1.5 rounded-md border border-gray-800 px-2 py-1 text-xs
+                     text-gray-400 hover:border-gray-700 hover:text-gray-200">
+          <RefreshCw size={12} className={refreshing ? 'animate-spin' : undefined} /> Refresh
+        </button>
+      }>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-gray-800 text-left text-xs text-gray-500">
+              <th className="px-4 py-2 font-medium">TA</th>
+              <th className="px-4 py-2 font-medium">Marked by hand</th>
+              <th className="px-4 py-2 font-medium">Status</th>
+              <th className="px-4 py-2 font-medium"
+                title="Answers that needed a change after the TA froze">Changes required</th>
+              <th className="px-4 py-2 font-medium" />
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-800">
+            {rows.length === 0 && (
+              <EmptyRow colSpan={5}>This classroom has no TAs. Add them on the classroom's page.</EmptyRow>
+            )}
+            {rows.map(r => (
+              <tr key={r.taUserId}>
+                <td className="px-4 py-2.5">
+                  <span className="text-gray-200">{r.taUsername}</span>
+                  {r.taFullName && <span className="block text-xs text-gray-600">{r.taFullName}</span>}
+                </td>
+                <td className="px-4 py-2.5 text-xs tabular-nums text-gray-400">
+                  {r.cells === 0 ? <span className="text-gray-600">nothing assigned</span>
+                    : <>{r.marked} / {r.cells}</>}
+                </td>
+                <td className="px-4 py-2.5 text-xs">
+                  {r.cells === 0 ? null
+                    : r.frozenAt == null ? <Pill tone="amber">still marking</Pill>
+                    : r.reopened > 0 ? <Pill tone="amber">{r.reopened} sent back</Pill>
+                    : (
+                      <span className="inline-flex items-center gap-1.5">
+                        <Pill tone="green">frozen</Pill>
+                        <span className="text-gray-600">
+                          {formatDistanceToNow(new Date(r.frozenAt), { addSuffix: true })}
+                        </span>
+                      </span>
+                    )}
+                </td>
+                <td className="px-4 py-2.5 text-xs tabular-nums text-gray-400">
+                  {r.changesRequired === 0 ? <span className="text-gray-600">0</span> : (
+                    <>
+                      <span className="text-gray-200">{r.changesRequired}</span>
+                      <span className="ml-1.5 text-gray-600">
+                        ({r.sentBack} sent back · {r.changedByAdmin} changed by an admin)
+                      </span>
+                    </>
+                  )}
+                </td>
+                <td className="px-4 py-2.5 text-right">
+                  {r.frozenAt != null && board.state === 'OPEN' && (
+                    <button
+                      onClick={() => {
+                        if (confirm(`Unfreeze ${r.taUsername}? They can change all their marks again.`)) {
+                          unfreeze.mutate(r.taUserId)
+                        }
+                      }}
+                      disabled={unfreeze.isPending}
+                      className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-gray-200">
+                      <Snowflake size={12} /> Unfreeze
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Panel>
   )
 }

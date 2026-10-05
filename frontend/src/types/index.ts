@@ -1269,6 +1269,29 @@ export interface AssignmentBoard {
   problems: string[]
   /** The roster's usernames in natural order. */
   students: string[]
+  /** Every TA in the classroom and how far they have got. */
+  progress: TaProgress[]
+}
+
+export interface TaProgress {
+  taUserId: number
+  taUsername: string
+  taFullName: string | null
+  cells: number
+  marked: number
+  /** Answers sent back to them and still waiting. */
+  reopened: number
+  /** Distinct answers that needed a change after they froze. */
+  changesRequired: number
+  sentBack: number
+  changedByAdmin: number
+  frozenAt: string | null
+}
+
+export interface ReopenRequest {
+  userId: number
+  label: string
+  reopen: boolean
 }
 
 export interface TaExam {
@@ -1280,6 +1303,7 @@ export interface TaExam {
   state: EvaluationState
   cells: number
   marked: number
+  frozenAt: string | null
 }
 
 export interface EvaluationProblem {
@@ -1313,6 +1337,12 @@ export interface EvaluationCell {
   markedAt: string | null
   submission: EvaluationSubmission | null
   attempts: number
+  /** An admin sent this answer back to the TA who froze it. */
+  reopened: boolean
+  /** A TA who froze covers it. */
+  frozen: boolean
+  /** The one reading the sheet can't change this mark now. */
+  locked: boolean
 }
 
 export interface EvaluationSheet {
@@ -1322,6 +1352,8 @@ export interface EvaluationSheet {
   stateMessage: string | null
   problems: EvaluationProblem[]
   cells: EvaluationCell[]
+  /** On a TA's sheet, when they froze their marking. */
+  frozenAt: string | null
 }
 
 export interface MarkRequest {

@@ -4,7 +4,9 @@ import { useToast } from '@/components/common/Toaster'
 import { useIsAdmin } from '@/hooks/useAdmin'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAuthStore } from '@/store/authStore'
-import type { EvaluationSheet, MarkRequest, TaAssignmentRequest, TaRequest } from '@/types'
+import type {
+  EvaluationCell, EvaluationSheet, MarkRequest, ReopenRequest, TaAssignmentRequest, TaRequest,
+} from '@/types'
 
 function errorOf(err: any, fallback: string) {
   return err?.response?.data?.message ?? fallback
@@ -63,13 +65,22 @@ export function useAssignmentActions(eventId: number) {
     onSuccess: store,
     onError: err => toast.push('error', errorOf(err, 'Could not assign that')),
   })
+  const unfreeze = useMutation({
+    mutationFn: (taUserId: number) =>
+      adminEvaluationApi.unfreeze(eventId, taUserId).then(r => r.data),
+    onSuccess: board => {
+      store(board)
+      qc.invalidateQueries({ queryKey: ['admin', 'evaluation', eventId] })
+    },
+    onError: err => toast.push('error', errorOf(err, 'Could not unfreeze them')),
+  })
   const unassign = useMutation({
     mutationFn: (assignmentId: number) =>
       adminEvaluationApi.unassign(eventId, assignmentId).then(r => r.data),
     onSuccess: store,
     onError: err => toast.push('error', errorOf(err, 'Could not take that back')),
   })
-  return { assign, unassign }
+  return { assign, unassign, unfreeze }
 }
 
 // ---------------------------------------------------------------------- sheet
@@ -106,21 +117,55 @@ export function useEvaluationSubmission(source: EvaluationSource, userId: number
   })
 }
 
+/** Puts a saved cell straight into the sheet, so the row updates without a refetch. */
+function storeCell(qc: ReturnType<typeof useQueryClient>, source: EvaluationSource,
+                   cell: EvaluationCell) {
+  qc.setQueryData<EvaluationSheet>([...source.key, 'sheet'], sheet => sheet && {
+    ...sheet,
+    cells: sheet.cells.map(c => c.userId === cell.userId && c.label === cell.label ? cell : c),
+  })
+}
+
 export function useSetMark(source: EvaluationSource) {
   const qc = useQueryClient()
   const toast = useToast()
   return useMutation({
     mutationFn: (body: MarkRequest) => source.mark(body),
     onSuccess: cell => {
-      // Put the saved cell straight into the sheet, so the row updates without a refetch.
-      qc.setQueryData<EvaluationSheet>([...source.key, 'sheet'], sheet => sheet && {
-        ...sheet,
-        cells: sheet.cells.map(c =>
-          c.userId === cell.userId && c.label === cell.label ? cell : c),
-      })
+      storeCell(qc, source, cell)
+      qc.invalidateQueries({ queryKey: [...source.key, 'board'] })
       qc.invalidateQueries({ queryKey: ['evaluation', 'exams'] })
       qc.invalidateQueries({ queryKey: ['admin', 'exam-leaderboard'] })
     },
     onError: err => toast.push('error', errorOf(err, 'Could not save the mark')),
+  })
+}
+
+/** A TA freezing their marking on the examination. */
+export function useFreeze(source: EvaluationSource) {
+  const qc = useQueryClient()
+  const toast = useToast()
+  return useMutation({
+    mutationFn: () => source.freeze!(),
+    onSuccess: sheet => {
+      qc.setQueryData([...source.key, 'sheet'], sheet)
+      qc.invalidateQueries({ queryKey: ['evaluation', 'exams'] })
+      toast.push('info', 'Your marking is frozen')
+    },
+    onError: err => toast.push('error', errorOf(err, 'Could not freeze your marking')),
+  })
+}
+
+/** An admin sending an answer back to the TA who froze it, or taking it back. */
+export function useReopen(source: EvaluationSource) {
+  const qc = useQueryClient()
+  const toast = useToast()
+  return useMutation({
+    mutationFn: (body: ReopenRequest) => source.reopen!(body),
+    onSuccess: cell => {
+      storeCell(qc, source, cell)
+      qc.invalidateQueries({ queryKey: [...source.key, 'board'] })
+    },
+    onError: err => toast.push('error', errorOf(err, 'Could not change that')),
   })
 }

@@ -72,6 +72,23 @@ public class AdminEvaluationController {
             evaluation.adminSubmission(adminId, eventId, userId, label)));
     }
 
+    @DeleteMapping("/freezes/{taUserId}")
+    @Operation(summary = "Unfreeze a TA, so they can change all their marks again")
+    public ResponseEntity<ApiResponse<EvaluationDto.AssignmentBoard>> unfreeze(
+        @AuthenticationPrincipal Long adminId, @PathVariable Long eventId,
+        @PathVariable Long taUserId, HttpServletRequest httpReq) {
+        return ResponseEntity.ok(ApiResponse.ok(
+            evaluation.unfreeze(adminId, eventId, taUserId, httpReq)));
+    }
+
+    @PutMapping("/reopen")
+    @Operation(summary = "Send one answer back to the TA who froze it, or take it back")
+    public ResponseEntity<ApiResponse<EvaluationDto.Cell>> reopen(
+        @AuthenticationPrincipal Long adminId, @PathVariable Long eventId,
+        @Valid @RequestBody EvaluationDto.ReopenRequest req, HttpServletRequest httpReq) {
+        return ResponseEntity.ok(ApiResponse.ok(evaluation.reopen(adminId, eventId, req, httpReq)));
+    }
+
     @PutMapping("/marks")
     @Operation(summary = "Set or clear one mark",
         description = "Only between the end of the examination and its being marked done.")
