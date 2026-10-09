@@ -3,6 +3,9 @@
  * Returns null when running in the browser — all callers must handle that.
  */
 
+import type { RunnerRuntime } from '@/types'
+import type { RawRun } from '@/runner/judge'
+
 /** What the desktop app reports about the contest monitor. Mirrors LockdownState in main. */
 export interface LockdownState {
   engaged: boolean
@@ -62,6 +65,21 @@ declare global {
         /** A codeforces.com request made with the app's own Codeforces session. */
         fetch?: (request: { method?: 'GET' | 'POST'; url: string; form?: Record<string, string> })
           => Promise<{ status: number; url: string; body: string } | { error: string }>
+      }
+      /**
+       * Compiles and runs with the toolchains installed on this computer, outside examinations.
+       * Absent from desktop builds older than this bridge.
+       */
+      runner?: {
+        languages: () => Promise<RunnerRuntime[]>
+        run: (request: {
+          language: string
+          source: string
+          inputs: string[]
+          timeLimitMs: number
+          compileTimeLimitMs: number
+          outputLimitBytes: number
+        }) => Promise<RawRun & { declined?: boolean }>
       }
       lockdown: {
         engage:   (reason: string, policy?: Partial<LockdownPolicyRequest>)

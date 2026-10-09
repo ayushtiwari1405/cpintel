@@ -265,6 +265,11 @@ cpintel:
     # isolated runner container (see RunnerServer and docker-compose.yml), and the backend
     # never executes submitted code itself.
     enabled: ${CPINTEL_RUNNER_ENABLED:true}
+    # Only examination sessions run here. Everywhere else the page runs code on the student's
+    # own computer — the desktop app's compilers, or WebAssembly in the browser — so practice
+    # never competes with an examination room for this runner. False lets any signed-in user
+    # run on the server, as before.
+    exam-only: ${CPINTEL_RUNNER_EXAM_ONLY:true}
     url: ${CPINTEL_RUNNER_URL:}
     # Shared with the runner container; it refuses every request without it.
     token: ${CPINTEL_RUNNER_TOKEN:}

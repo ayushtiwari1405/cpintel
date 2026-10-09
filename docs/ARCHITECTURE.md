@@ -399,6 +399,31 @@ runner refuses every run rather than running unsandboxed. At most `CPINTEL_RUNNE
 runs execute at once; the rest wait up to 20 seconds. In development and in the desktop build the
 same `RunEngine` runs inside the backend instead, where the only code is the user's own.
 
+That runner is small, so it is kept for examinations, where every candidate must be run by the
+same machine under the same limits. Everywhere else the Run button costs the server nothing:
+`frontend/src/runner/local.ts` runs the code on the student's own computer.
+
+- **Desktop app:** with the computer's own g++ and Python (`electron/src/localRunner.ts`), using
+  the server runner's flags, a fresh temporary directory per run, the same time limit and output
+  cap, and no sandbox: it is the student's code on the student's machine. Because a page loaded
+  over the network is asking for native code to be run, the app asks the student once before the
+  first run; refusing sends every run to the browser engine instead.
+- **Website, or a language the computer has no toolchain for:** in the browser tab, in
+  WebAssembly. C++ is compiled by Clang/LLD built for WebAssembly (YoWASP) with libc++, a stand-in
+  `<bits/stdc++.h>` and a 64 MB stack, and each test runs in its own worker that is terminated at
+  the time limit. Python is Pyodide (CPython 3.14), through a harness that mirrors the server's:
+  a parse step first, then fresh globals, the test as stdin and capped output per test. Both are
+  fetched from jsDelivr at pinned versions, about 23 MB for C++ and 10 MB for Python, once — the
+  browser caches them for a year — and the site's CSP admits exactly those two package paths plus
+  `'wasm-unsafe-eval'`. Two differences from g++ are reported rather than hidden: exceptions are
+  unavailable, and GNU's `ext/pb_ds` does not exist.
+
+Verdicts are decided in one place for both (`runner/judge.ts`, the same comparison as
+`RunEngine.matches`). With `cpintel.runner.exam-only` on — the default — the server refuses a
+run from any session that is not an examination's, so an outdated page or a script cannot load
+the runner either; the language list stays open, since the page still asks it which languages an
+event allows.
+
 ## Codeforces through the user's browser
 
 Codeforces serves its website from behind Cloudflare, which ties the clearance a browser earns to

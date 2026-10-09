@@ -46,6 +46,15 @@ contextBridge.exposeInMainWorld('cpintelDesktop', {
       ipcRenderer.invoke('cf:fetch', request),
   },
 
+  /**
+   * Compiling and running with this computer's own toolchains, outside examinations. Main asks
+   * the student once before the first run, and answers a refusal with { declined: true }.
+   */
+  runner: {
+    languages: () => ipcRenderer.invoke('runner:languages'),
+    run: (request: unknown) => ipcRenderer.invoke('runner:run', request),
+  },
+
   // Contest lockdown
   lockdown: {
     // The policy travels with the request, because it belongs to the examination being sat

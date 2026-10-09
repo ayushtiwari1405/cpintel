@@ -307,7 +307,7 @@ export function EditorPane({
           {runtimes[0]?.unavailableReason ? ` ${runtimes[0].unavailableReason}` : ''}
         </p>
       )}
-      {runnerStatus?.enabled && runnerStatus.isolated === false && (
+      {runnerStatus?.enabled && !runnerStatus.local && runnerStatus.isolated === false && (
         <p className="flex items-start gap-1.5 text-[11px] text-amber-300/70">
           <ShieldAlert size={12} className="flex-shrink-0 mt-0.5" />
           Code runs with time and memory limits but without filesystem isolation — bubblewrap
@@ -503,6 +503,7 @@ export function EditorPane({
             tab={consoleTab}
             onTab={setConsoleTab}
             result={run.data ?? null}
+            progress={run.progress}
             running={run.isPending}
             error={run.isError
               ? ((run.error as any)?.response?.data?.message ?? 'Could not run the code.')

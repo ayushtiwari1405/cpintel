@@ -394,6 +394,11 @@ export interface RunnerStatus {
   enabled: boolean
   /** False means resource limits only — no filesystem or network isolation. */
   isolated: boolean
+  /**
+   * True when runs happen on the student's own machine (desktop compilers or the browser)
+   * rather than on the server, which is everywhere except an examination session.
+   */
+  local?: boolean
 }
 
 // ── Code archive ─────────────────────────────────────────────────────────────

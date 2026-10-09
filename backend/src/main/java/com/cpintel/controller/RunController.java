@@ -11,6 +11,8 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import com.cpintel.security.SessionMode;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -22,13 +24,24 @@ import java.util.Set;
 @RestController
 @RequestMapping("/api/v1/run")
 @RequiredArgsConstructor
-@Tag(name = "Runner", description = "Compile and run a solution against sample tests locally")
+@Tag(name = "Runner", description = "Compile and run a solution against sample tests")
 @SecurityRequirement(name = "bearerAuth")
 public class RunController {
 
     private final CodeRunnerService runner;
     private final LanguagePolicy languagePolicy;
     private final com.cpintel.events.ExamSessionGuard examGuard;
+
+    /**
+     * Run only for examination sessions.
+     *
+     * <p>Outside an examination the page runs code on the student's own computer, so a run
+     * arriving here from a normal session is an old page or a script — and the runner is small
+     * enough that it would come out of an examination room's share. Languages stay answerable
+     * for everyone: the page still asks which ones an event allows.
+     */
+    @Value("${cpintel.runner.exam-only:true}")
+    private boolean examOnly;
 
     /**
      * Languages this deployment can build and run, narrowed to what the event allows.
@@ -76,6 +89,10 @@ public class RunController {
         @Valid @RequestBody RunDto.RunRequest request) {
 
         examGuard.requireRunScope(request.platform(), request.contestId());
+        if (examOnly && !SessionMode.isExamSession()) {
+            throw ApiException.forbidden("Outside an examination, code runs on your own computer "
+                + "rather than on the server. Reload the page to get the version that does.");
+        }
         Set<String> allowed =
             restriction(userId, request.platform(), request.contestId());
         if (!allowed.isEmpty() && !allowed.contains(request.language())) {

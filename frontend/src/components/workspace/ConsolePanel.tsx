@@ -59,6 +59,8 @@ interface Props {
   tab: 'testcase' | 'result'
   onTab: (tab: 'testcase' | 'result') => void
   result: RunResponse | null
+  /** What a running local run is doing, when it is slow enough to say — a first download. */
+  progress?: string | null
   running: boolean
   error: string | null
   /** What the platform said about the last submission, if anything. */
@@ -86,7 +88,7 @@ interface Props {
  */
 export function ConsolePanel({
   cases, onCasesChange, activeCase, onActiveCase, tab, onTab,
-  result, running, error, verdict, polling, onShowSubmissionTests, actions, notes, disabled,
+  result, progress, running, error, verdict, polling, onShowSubmissionTests, actions, notes, disabled,
 }: Props) {
   const active = cases[activeCase]
 
@@ -205,6 +207,7 @@ export function ConsolePanel({
         ) : (
           <ResultView
             result={result}
+            progress={progress ?? null}
             running={running}
             error={error}
             cases={cases}
@@ -229,8 +232,9 @@ function ResultDot({ result }: { result: RunResponse }) {
   )
 }
 
-function ResultView({ result, running, error, cases, activeCase, onActiveCase }: {
+function ResultView({ result, progress, running, error, cases, activeCase, onActiveCase }: {
   result: RunResponse | null
+  progress: string | null
   running: boolean
   error: string | null
   cases: WorkCase[]
@@ -240,7 +244,7 @@ function ResultView({ result, running, error, cases, activeCase, onActiveCase }:
   if (running) {
     return (
       <div className="flex items-center justify-center gap-2 py-12 text-sm text-gray-500">
-        <Loader2 size={15} className="animate-spin" /> Compiling and running…
+        <Loader2 size={15} className="animate-spin" /> {progress ?? 'Compiling and running…'}
       </div>
     )
   }
