@@ -99,7 +99,12 @@ fi
 # Start frontend.
 # Via npm, not `npx vite`, so the predev hook runs and public/mathjax is populated —
 # statements are raw $$$ markup without it.
-nohup bash -c "cd '$ROOT/frontend' && npm run dev -- --port 5173" > /tmp/frontend.log 2>&1 &
+# CPINTEL_LAN=1 also listens on this machine's network address, so other computers on the same
+# network (a desktop test build stamped with http://<this-ip>:5173) can reach it. Off by default:
+# a dev server is not something to put on a shared network unasked.
+HOST_ARGS=""
+[ "${CPINTEL_LAN:-}" = "1" ] && HOST_ARGS="--host 0.0.0.0"
+nohup bash -c "cd '$ROOT/frontend' && npm run dev -- --port 5173 $HOST_ARGS" > /tmp/frontend.log 2>&1 &
 disown
 echo "Frontend starting (log: /tmp/frontend.log)..."
 for _ in $(seq 1 30); do
@@ -110,6 +115,11 @@ done
 echo ""
 echo "CPIntel is running from: $ROOT"
 echo "  Frontend: http://localhost:5173"
+if [ "${CPINTEL_LAN:-}" = "1" ]; then
+  for ip in $(hostname -I 2>/dev/null); do
+    case "$ip" in 172.1[7-9].*|172.2*|*:*) ;; *) echo "  On the network: http://$ip:5173" ;; esac
+  done
+fi
 echo "  Backend:  http://localhost:8080"
 echo "  Swagger:  http://localhost:8080/swagger-ui.html"
 echo "  CF helper: http://127.0.0.1:7717 (log: /tmp/cf-helper.log)"
