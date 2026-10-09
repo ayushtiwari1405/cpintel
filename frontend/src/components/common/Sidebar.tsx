@@ -2,13 +2,14 @@ import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard, BarChart2, Map, Link2, User, Zap, ChevronLeft,
   ChevronRight, LogOut, Code2, Swords, Shield, Users, ScrollText, FolderCog,
-  UsersRound, FileText, School, ClipboardCheck } from 'lucide-react'
+  UsersRound, FileText, School, ClipboardCheck, Monitor } from 'lucide-react'
 import { useLogout } from '@/hooks/useAuth'
 import { ThemeToggle } from './ThemeToggle'
 import { useAuth } from '@/contexts/AuthContext'
 import { isAdmin, isSuperAdmin, roleLabel } from '@/utils/roles'
 import { clsx } from 'clsx'
 import { useMyEvaluationExams } from '@/hooks/useEvaluation'
+import { isDesktop } from '@/utils/desktopBridge'
 
 const navItems = [
   { to: '/dashboard',       icon: LayoutDashboard, label: 'Dashboard' },
@@ -55,11 +56,15 @@ export function Sidebar({ open, onToggle, locked, examMode }: Props) {
   const showAdmin = isAdmin(user)
   // Teaching assistants get a marking page; everyone else never sees the link.
   const { data: marking } = useMyEvaluationExams()
-  const items = marking && marking.length > 0
+  const marked = marking && marking.length > 0
     ? [...navItems.slice(0, -1),
        { to: '/evaluate', icon: ClipboardCheck, label: 'Evaluate' },
        navItems[navItems.length - 1]]
     : navItems
+  // Where to get the desktop app — pointless inside it.
+  const items = isDesktop()
+    ? marked
+    : [...marked, { to: '/download', icon: Monitor, label: 'Desktop app' }]
 
   const linkClass = ({ isActive }: { isActive: boolean }) => clsx(
     'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors',

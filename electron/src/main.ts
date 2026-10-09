@@ -8,6 +8,7 @@ import Store from 'electron-store'
 import { Lockdown, disposeOnQuit, type LockdownPolicy, type LockdownState } from './lockdown'
 import { connectCodeforces, fetchCodeforces, forgetCodeforces } from './cfSession'
 import * as localRunner from './localRunner'
+import { installUpdate, type UpdateProgress } from './updater'
 
 const store = new Store()
 
@@ -312,4 +313,23 @@ handle('runner:run', async (_e, request: localRunner.RunRequest) => {
     return { compiled: false, compileOutput: '', compileMs: 0, runs: [],
       error: `Could not run the code on this computer: ${e?.message ?? e}` }
   }
+})
+
+// ── Updating ──────────────────────────────────────────────────
+
+/**
+ * The page's "new version" ribbon calls this when the student presses Update. Main fetches the
+ * release from this app's own server and checks the installer itself (updater.ts); the page only
+ * asks. Refused during a locked-down contest, where quitting mid-paper would be the update.
+ */
+handle('update:install', async () => {
+  if (lockdown.isEngaged()) {
+    return { ok: false, error: 'Update after the contest or examination; it cannot be '
+      + 'installed while one is in progress.' }
+  }
+  return installUpdate(APP_ORIGIN!, mainWindow, (progress: UpdateProgress) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('update:progress', progress)
+    }
+  })
 })

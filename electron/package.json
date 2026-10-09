@@ -5,8 +5,8 @@
   "main": "dist/main.js",
   "scripts": {
     "dev": "concurrently \"tsc -w\" \"cross-env NODE_ENV=development electron .\"",
-    "build": "tsc && node scripts/stamp-server.mjs && node scripts/fetch-toolchains.mjs && electron-builder",
-    "pack": "tsc && node scripts/stamp-server.mjs && node scripts/fetch-toolchains.mjs && electron-builder --dir",
+    "build": "tsc && node scripts/stamp-server.mjs && node scripts/fetch-toolchains.mjs && node scripts/package.mjs",
+    "pack": "tsc && node scripts/stamp-server.mjs && node scripts/fetch-toolchains.mjs && node scripts/package.mjs --dir",
     "test": "tsc && node --test dist",
     "toolchain": "node scripts/fetch-toolchains.mjs"
   },
@@ -36,24 +36,35 @@
         "AppImage",
         "deb"
       ],
-      "category": "Development"
+      "category": "Development",
+      "artifactName": "CPIntel-${version}-${arch}.${ext}",
+      "maintainer": "CPIntel <cpintel@localhost>",
+      "vendor": "CPIntel"
     },
     "mac": {
       "target": [
         "dmg"
       ],
-      "category": "public.app-category.developer-tools"
+      "category": "public.app-category.developer-tools",
+      "artifactName": "CPIntel-${version}-${arch}.${ext}"
     },
     "win": {
       "target": [
         "nsis"
-      ]
+      ],
+      "artifactName": "CPIntel-Setup-${version}-${arch}.${ext}"
     },
     "extraResources": [
       {
         "from": "toolchain",
         "to": "toolchain"
       }
-    ]
+    ],
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "runAfterFinish": true
+    },
+    "publish": null
   }
 }

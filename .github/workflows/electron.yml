@@ -1,8 +1,15 @@
 name: Electron Build
 
+# Pushing a version tag (v1.2.3) builds the desktop installers for every platform and publishes
+# them as a GitHub Release of whichever repository this runs in — a deployment's own copy of
+# CPIntel publishes its own. The CPIntel server reads that release (CPINTEL_DESKTOP_REPOSITORY)
+# for its download page and for the update ribbon in installed apps.
 on:
   push:
     tags: ['v*']
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -27,6 +34,13 @@ jobs:
           path: electron/.toolchain-cache
           key: toolchains-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('electron/scripts/fetch-toolchains.mjs') }}
 
+      # The tag is the version: installed apps compare their own version with the release's to
+      # decide whether to offer an update, so the two must not disagree.
+      - name: Take the version from the tag
+        working-directory: electron
+        shell: bash
+        run: npm version "${GITHUB_REF_NAME#v}" --no-git-tag-version --allow-same-version
+
       # The app is a window onto the central server, so the frontend is not bundled; the
       # server's address is stamped in instead. Set it as a repository variable
       # (Settings → Secrets and variables → Actions → Variables → CPINTEL_SERVER_URL).
@@ -36,11 +50,46 @@ jobs:
           npm ci
           npm run build
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CPINTEL_SERVER_URL: ${{ vars.CPINTEL_SERVER_URL }}
 
-      - name: Upload release artifacts
+      # macos-latest is Apple Silicon; Intel Macs need their own build, with Intel toolchains.
+      - name: Build for Intel Macs too
+        if: runner.os == 'macOS'
+        working-directory: electron
+        run: |
+          node scripts/fetch-toolchains.mjs
+          node scripts/package.mjs --mac --x64
+        env:
+          CPINTEL_TOOLCHAIN_TARGET: darwin-x64
+
+      - name: Upload installers
         uses: actions/upload-artifact@v4
         with:
           name: cpintel-${{ matrix.os }}
-          path: electron/release/**/*
+          path: |
+            electron/release/*.exe
+            electron/release/*.dmg
+            electron/release/*.AppImage
+            electron/release/*.deb
+          if-no-files-found: error
+
+  # One release with every installer, once all of them built. GitHub records each file's SHA-256,
+  # which the download page shows and the app's updater checks.
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: installers
+          merge-multiple: true
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ls -la installers
+          gh release create "$GITHUB_REF_NAME" installers/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "CPIntel $GITHUB_REF_NAME" \
+            --generate-notes

@@ -53,7 +53,11 @@ public class SecurityConfig {
                     "/api/v1/auth/verify-email",
                     // A separately-shipped client has to be able to ask what this server speaks
                     // before it has credentials.
-                    "/api/version"
+                    "/api/version",
+                    // The installed app checks for a newer version on its sign-in screen, and a
+                    // download link is nothing to protect.
+                    "/api/v1/desktop/release",
+                    "/api/v1/desktop/download/**"
                 ).permitAll()
                 .requestMatchers(
                     "/actuator/health",

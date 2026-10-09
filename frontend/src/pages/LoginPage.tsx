@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { useLogin } from '@/hooks/useAuth'
 import { Eye, EyeOff, Zap } from 'lucide-react'
 import { ThemeToggle } from '@/components/common/ThemeToggle'
+import { isDesktop } from '@/utils/desktopBridge'
 
 export default function LoginPage() {
   const [identifier, setIdentifier] = useState('')
@@ -110,6 +111,16 @@ export default function LoginPage() {
               {login.isPending ? 'Signing in…' : 'Sign in'}
             </button>
           </form>
+
+          {/* Not inside the desktop app, which is what the link offers. */}
+          {!isDesktop() && (
+            <p className="mt-4 text-center text-xs text-gray-500">
+              Sitting an examination on your own computer?{' '}
+              <Link to="/download" className="text-indigo-400 hover:text-indigo-300">
+                Get the desktop app
+              </Link>
+            </p>
+          )}
 
           {/*
             No sign-up link, because there is no sign-up. Accounts are created by a super

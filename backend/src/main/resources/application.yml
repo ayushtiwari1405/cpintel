@@ -152,6 +152,14 @@ cpintel:
     # Desktop builds older than this are told to update rather than left to fail on a route
     # they no longer recognise. 0.0.0 accepts everything.
     minimum-version: ${CPINTEL_MIN_DESKTOP_VERSION:0.0.0}
+    # The GitHub repository (owner/name) whose Releases carry the desktop installers — the copy
+    # of this repository the deployment builds from. Tagging v1.2.3 there builds and publishes
+    # them (.github/workflows/electron.yml); the download page and the app's update ribbon read
+    # the newest release from here. Blank: the download page says the app is not available yet.
+    release-repository: ${CPINTEL_DESKTOP_REPOSITORY:}
+    # Only if that repository is private: a token that can read it. Downloads are then streamed
+    # through this server instead of redirected to GitHub.
+    github-token: ${CPINTEL_DESKTOP_GITHUB_TOKEN:}
   rate-limit:
     # Ceilings on the handful of operations where one caller can spend a lot of somebody else's
     # resources: Argon2id on sign-in, a compiler on a run, a shared third-party quota on a sync.

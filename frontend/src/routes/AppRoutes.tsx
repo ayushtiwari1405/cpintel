@@ -31,6 +31,7 @@ const AdminExams        = lazy(() => import('@/pages/admin/AdminExamsPage'))
 const AdminExamDetail   = lazy(() => import('@/pages/admin/AdminExamDetailPage'))
 const GroupsPage        = lazy(() => import('@/pages/GroupsPage'))
 const ExtensionPage     = lazy(() => import('@/pages/ExtensionPage'))
+const DownloadPage      = lazy(() => import('@/pages/DownloadPage'))
 const EvaluatePage      = lazy(() => import('@/pages/EvaluatePage'))
 
 /**
@@ -60,6 +61,20 @@ function GuestRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth()
   const { user } = useAuth()
   return !isAuthenticated ? <>{children}</> : <Navigate to={homeFor(user)} replace />
+}
+
+/**
+ * Open to everyone, inside the app's layout for someone signed in and on its own otherwise — a
+ * lab administrator installs the desktop app before any student has signed in.
+ */
+function SignedInOrNot() {
+  const { isAuthenticated } = useAuth()
+  if (isAuthenticated) return <AppLayout />
+  return (
+    <div className="min-h-screen bg-gray-950 px-6 py-10">
+      <div className="mx-auto max-w-2xl"><Outlet /></div>
+    </div>
+  )
 }
 
 /** The landing page for whoever is signed in. */
@@ -117,6 +132,11 @@ export function AppRoutes() {
         <Route path="/reset-password" element={
           <GuestRoute><ResetPasswordPage /></GuestRoute>
         } />
+
+        {/* The desktop app's installers and how to install them. */}
+        <Route element={<SignedInOrNot />}>
+          <Route path="/download" element={<DownloadPage />} />
+        </Route>
 
         <Route element={
           <ProtectedRoute><AppLayout /></ProtectedRoute>

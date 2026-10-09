@@ -52,6 +52,19 @@ contextBridge.exposeInMainWorld('cpintelDesktop', {
     run: (request: unknown) => ipcRenderer.invoke('runner:run', request),
   },
 
+  /**
+   * Installing a newer version, when the student presses Update. Main picks the installer for
+   * this computer from the server's release and verifies it; progress arrives on onProgress.
+   */
+  update: {
+    install: () => ipcRenderer.invoke('update:install'),
+    onProgress: (callback: (progress: unknown) => void) => {
+      const listener = (_event: IpcRendererEvent, progress: unknown) => callback(progress)
+      ipcRenderer.on('update:progress', listener)
+      return () => ipcRenderer.off('update:progress', listener)
+    },
+  },
+
   // Contest lockdown
   lockdown: {
     // The policy travels with the request, because it belongs to the examination being sat

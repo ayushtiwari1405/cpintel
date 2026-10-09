@@ -81,6 +81,15 @@ declare global {
           outputLimitBytes: number
         }) => Promise<RawRun>
       }
+      /** Installing a newer version on request. Absent from builds older than the ribbon. */
+      update?: {
+        install: () => Promise<{ ok: true; message: string } | { ok: false; error: string }>
+        onProgress: (callback: (progress: {
+          phase: 'downloading' | 'verifying' | 'installing'
+          done: number
+          total: number
+        }) => void) => () => void
+      }
       lockdown: {
         engage:   (reason: string, policy?: Partial<LockdownPolicyRequest>)
           => Promise<LockdownState>

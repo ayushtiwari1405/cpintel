@@ -135,6 +135,12 @@ services:
       CPINTEL_RUNNER_TIME_LIMIT_MS: ${CPINTEL_RUNNER_TIME_LIMIT_MS:-5000}
       # Lab networks behind one NAT address; the same list nginx gets.
       CPINTEL_LAB_NETWORKS: ${CPINTEL_LAB_NETWORKS:-}
+      # The desktop app: which GitHub repository's Releases carry its installers (this
+      # deployment's own copy of CPIntel, owner/name), a token only if that repository is
+      # private, and the oldest installed version still allowed to talk to this server.
+      CPINTEL_DESKTOP_REPOSITORY: ${CPINTEL_DESKTOP_REPOSITORY:-}
+      CPINTEL_DESKTOP_GITHUB_TOKEN: ${CPINTEL_DESKTOP_GITHUB_TOKEN:-}
+      CPINTEL_MIN_DESKTOP_VERSION: ${CPINTEL_MIN_DESKTOP_VERSION:-0.0.0}
       # Encrypts each candidate's examination sign-in password and the optional room password.
       # Without it no examination can be sat; the backend warns at startup rather than
       # refusing, since a contest-only deployment does not need it.

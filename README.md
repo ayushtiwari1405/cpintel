@@ -311,7 +311,10 @@ Everything below has a working default; only the secrets in `.env` genuinely nee
 | `CPINTEL_FILES_MAX_TOTAL_BYTES` | `33554432` | Per-user vault cap |
 | `CPINTEL_STANDINGS_REFRESH_MS` | `180000` | How often live group boards are rebuilt |
 | `CPINTEL_RATE_LIMIT_ENABLED` | `true` | Per-account and per-address throttling on sign-in, runs and syncs |
-| `CPINTEL_MIN_DESKTOP_VERSION` | `0.0.0` | Desktop builds below this are told to update |
+| `CPINTEL_MIN_DESKTOP_VERSION` | `0.0.0` | Desktop builds below this are told to update, with a ribbon that cannot be closed |
+| `CPINTEL_DESKTOP_REPOSITORY` | *(unset)* | GitHub `owner/name` whose Releases carry the desktop installers; feeds `/download` and the update ribbon |
+| `CPINTEL_DESKTOP_GITHUB_TOKEN` | *(unset)* | Only for a private repository: read access to it; downloads are then streamed through the server |
+| `CPINTEL_RUNNER_EXAM_ONLY` | `true` | The server runner takes examination runs only; elsewhere code runs on the student's computer |
 | `CPINTEL_DOMJUDGE_CREDENTIAL_KEY` | *(unset)* | **Required to attach contestants' accounts.** AES-256-GCM key for the per-contestant, per-classroom DOMjudge logins and for classroom service-account passwords |
 | `CPINTEL_PROCTOR_HEARTBEAT_TTL` | `45` | How long one monitoring heartbeat vouches for. Submissions into a monitored examination are refused without a fresh one |
 | `CPINTEL_PROCTOR_HEARTBEAT_INTERVAL` | `15` | How often the page sends one |
@@ -841,8 +844,41 @@ from pinned, checksummed URLs into `electron/toolchain`, about 400–520 MB unpa
 In dev, run `npm run toolchain` once to get them; without them the app runs code in its browser
 engine instead.
 
-CI does this on a `v*` tag, against the repository variable `CPINTEL_SERVER_URL`. The Electron
-shell wraps the same React SPA used on web — there is no separate frontend codebase.
+The Electron shell wraps the same React SPA used on web — there is no separate frontend
+codebase.
+
+### Publishing the desktop app
+
+Whoever runs a deployment publishes the installers from their own copy of this repository —
+nothing points at any other. Once, in that GitHub repository and on the server:
+
+1. **Settings → Secrets and variables → Actions → Variables:** add `CPINTEL_SERVER_URL`, the
+   https address students open (e.g. `https://cpintel.college.edu`). Every installer is built
+   for that one server.
+2. **Server `.env`:** set `CPINTEL_DESKTOP_REPOSITORY` to the repository's `owner/name`. If the
+   repository is private, also set `CPINTEL_DESKTOP_GITHUB_TOKEN` to a fine-grained token with
+   read access to its Contents; downloads are then streamed through the server.
+
+Then, for every release:
+
+```bash
+git tag v1.0.0 && git push origin v1.0.0
+```
+
+`.github/workflows/electron.yml` builds the installers on Windows, macOS (Apple Silicon and
+Intel) and Linux, with the compilers bundled, takes the version from the tag, and publishes them
+as a GitHub Release (about 25 minutes). Within ten minutes the site's **Desktop app** page
+(`/download`, also linked from the sign-in page) offers the new version with step-by-step
+instructions for each system, the warnings students will see and what to do about them, the
+files' SHA-256 fingerprints, and what should make them stop and ask. Installed apps show a
+ribbon offering the update; pressing Update downloads the installer, checks it against the
+release's SHA-256 and installs it. Nothing updates on its own. To make an old version stop
+working with the server, raise `CPINTEL_MIN_DESKTOP_VERSION`: its ribbon can then not be closed.
+
+The installers are not code-signed, so a first install meets Windows SmartScreen ("Unknown
+publisher") and macOS Gatekeeper; the download page walks students through both. Updates made
+from inside the app do not, since the app downloads them itself. Signing needs paid
+certificates (Apple Developer Program; a Windows code-signing certificate) and is not set up.
 
 The desktop build is also where examination monitoring is strongest: the away-time accounting lives
 in the Electron main process, where the page cannot reach it. The browser build does the same
