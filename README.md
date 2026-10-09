@@ -835,6 +835,12 @@ refuses to start:
 cd electron && CPINTEL_SERVER_URL=https://<server> npm run build
 ```
 
+The build also bundles the compilers the Run button uses outside examinations — GCC on Windows,
+Zig's Clang on macOS and Linux, CPython everywhere — fetched by `scripts/fetch-toolchains.mjs`
+from pinned, checksummed URLs into `electron/toolchain`, about 400–520 MB unpacked per platform.
+In dev, run `npm run toolchain` once to get them; without them the app runs code in its browser
+engine instead.
+
 CI does this on a `v*` tag, against the repository variable `CPINTEL_SERVER_URL`. The Electron
 shell wraps the same React SPA used on web — there is no separate frontend codebase.
 
@@ -865,7 +871,9 @@ isolation, and the UI says so.
 
 **This is arbitrary code execution by design**, so where it happens depends on who is using it:
 
-- **Dev and the desktop build** run it inside the backend process — the only code there is yours.
+- **Dev** runs it inside the backend process — the only code there is yours. Outside
+  examinations the page does not use the server at all: the desktop app runs code with the
+  compilers it carries and the website runs it in WebAssembly (see `docs/ARCHITECTURE.md`).
 - **A shared server** never runs it in the backend, which holds the database credentials and
   every signing key. `CPINTEL_RUNNER_URL` sends each run to the `runner` container
   (`com.cpintel.runner.RunnerServer`, the same jar with a different entry point). That container

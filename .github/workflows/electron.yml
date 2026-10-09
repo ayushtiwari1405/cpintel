@@ -19,6 +19,14 @@ jobs:
         with:
           node-version: '20'
 
+      # The compilers the app ships with (scripts/fetch-toolchains.mjs): pinned, checksummed
+      # archives, about 350 MB per platform, kept between builds.
+      - name: Cache toolchain downloads
+        uses: actions/cache@v4
+        with:
+          path: electron/.toolchain-cache
+          key: toolchains-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('electron/scripts/fetch-toolchains.mjs') }}
+
       # The app is a window onto the central server, so the frontend is not bundled; the
       # server's address is stamped in instead. Set it as a repository variable
       # (Settings → Secrets and variables → Actions → Variables → CPINTEL_SERVER_URL).

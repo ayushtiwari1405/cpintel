@@ -67,7 +67,7 @@ declare global {
           => Promise<{ status: number; url: string; body: string } | { error: string }>
       }
       /**
-       * Compiles and runs with the toolchains installed on this computer, outside examinations.
+       * Compiles and runs with the toolchains the desktop build carries, outside examinations.
        * Absent from desktop builds older than this bridge.
        */
       runner?: {
@@ -79,7 +79,7 @@ declare global {
           timeLimitMs: number
           compileTimeLimitMs: number
           outputLimitBytes: number
-        }) => Promise<RawRun & { declined?: boolean }>
+        }) => Promise<RawRun>
       }
       lockdown: {
         engage:   (reason: string, policy?: Partial<LockdownPolicyRequest>)

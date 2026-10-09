@@ -5,9 +5,10 @@
   "main": "dist/main.js",
   "scripts": {
     "dev": "concurrently \"tsc -w\" \"cross-env NODE_ENV=development electron .\"",
-    "build": "tsc && node scripts/stamp-server.mjs && electron-builder",
-    "pack": "tsc && node scripts/stamp-server.mjs && electron-builder --dir",
-    "test": "tsc && node --test dist"
+    "build": "tsc && node scripts/stamp-server.mjs && node scripts/fetch-toolchains.mjs && electron-builder",
+    "pack": "tsc && node scripts/stamp-server.mjs && node scripts/fetch-toolchains.mjs && electron-builder --dir",
+    "test": "tsc && node --test dist",
+    "toolchain": "node scripts/fetch-toolchains.mjs"
   },
   "dependencies": {
     "electron-store": "^8.2.0"
@@ -47,6 +48,12 @@
       "target": [
         "nsis"
       ]
-    }
+    },
+    "extraResources": [
+      {
+        "from": "toolchain",
+        "to": "toolchain"
+      }
+    ]
   }
 }

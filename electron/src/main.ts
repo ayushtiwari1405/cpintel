@@ -199,6 +199,8 @@ app.whenReady().then(() => {
   }
   createWindow()
   if (process.platform !== 'linux') createTray()
+  // In the background, once the window is up: the first C++ compile after installing is slow.
+  setTimeout(() => { void localRunner.warmUp().catch(() => {}) }, 3000)
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
@@ -292,43 +294,18 @@ handle('lockdown:state', () => lockdown.state())
 // ── Running code on this computer ─────────────────────────────
 
 /**
- * Outside examinations the page runs solutions with this computer's own compilers rather than
- * on the server (see localRunner.ts). That is native code execution on request of a page loaded
- * over the network, so the student is asked once before the first run: a page that ever ended
- * up running someone else's script must not be able to start programs without anyone having
- * agreed to it. A refusal is remembered too, and the page then runs code in the browser instead.
+ * Outside examinations the page runs solutions here, with the compilers this build carries
+ * (see localRunner.ts), rather than on the server. Examinations still run on the server.
  */
-async function mayRunLocally(): Promise<boolean> {
-  const answer = store.get('runner.consent')
-  if (answer === 'allowed') return true
-  if (answer === 'denied') return false
-  const options = {
-    type: 'question' as const,
-    buttons: ['Allow', 'Run in the app instead'],
-    defaultId: 0,
-    cancelId: 1,
-    title: 'Run code on this computer?',
-    message: 'Run your solutions with the compilers installed on this computer?',
-    detail: 'Outside examinations, CPIntel can compile and run your code with g++ and Python '
-      + 'on this computer, which is faster and closer to the judge. Your program runs as you, '
-      + 'like a program started from a terminal.\n\nIf you choose not to, code runs inside the '
-      + 'app instead, which needs no permission. Examinations always run on the CPIntel server.',
-  }
-  const { response } = mainWindow
-    ? await dialog.showMessageBox(mainWindow, options)
-    : await dialog.showMessageBox(options)
-  const allowed = response === 0
-  store.set('runner.consent', allowed ? 'allowed' : 'denied')
-  return allowed
-}
+localRunner.configure(
+  app.isPackaged
+    ? path.join(process.resourcesPath, 'toolchain')
+    : path.join(__dirname, '..', 'toolchain'),
+  path.join(app.getPath('userData'), 'compiler-cache'))
 
-handle('runner:languages', async () =>
-  store.get('runner.consent') === 'denied' ? [] : localRunner.languages())
+handle('runner:languages', () => localRunner.languages())
 
 handle('runner:run', async (_e, request: localRunner.RunRequest) => {
-  if (!(await mayRunLocally())) {
-    return { compiled: false, compileOutput: '', compileMs: 0, runs: [], declined: true }
-  }
   try {
     return await localRunner.run(request)
   } catch (e: any) {

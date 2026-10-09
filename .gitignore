@@ -82,3 +82,7 @@ graphify-out/
 *.bak
 *.orig
 .claude/settings.local.json
+
+# Desktop build: compilers bundled into the installer (electron/scripts/fetch-toolchains.mjs)
+electron/toolchain/
+electron/.toolchain-cache/

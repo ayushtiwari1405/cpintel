@@ -46,10 +46,7 @@ contextBridge.exposeInMainWorld('cpintelDesktop', {
       ipcRenderer.invoke('cf:fetch', request),
   },
 
-  /**
-   * Compiling and running with this computer's own toolchains, outside examinations. Main asks
-   * the student once before the first run, and answers a refusal with { declined: true }.
-   */
+  /** Compiling and running with the toolchains this build carries, outside examinations. */
   runner: {
     languages: () => ipcRenderer.invoke('runner:languages'),
     run: (request: unknown) => ipcRenderer.invoke('runner:run', request),

@@ -9,6 +9,9 @@
  *
  * __gcd and __lg are libstdc++ internals that solutions use as if they were standard, so they
  * are defined here with libstdc++'s meaning.
+ *
+ * The desktop app's macOS and Linux builds use this same header with Zig's libc++:
+ * electron/scripts/fetch-toolchains.mjs copies the text between the backticks at build time.
  */
 export const BITS_STDCXX = `#pragma once
 #include <cassert>
@@ -52,10 +55,19 @@ export const BITS_STDCXX = `#pragma once
 #include <vector>
 
 namespace std {
+// Plain overloads for the integer types solutions call it with. They win over any template, so
+// they also shadow libc++ 21's own __gcd, which only accepts unsigned types; the template
+// covers anything else where libc++ (22 and later) has none.
+#define CPINTEL_GCD(T) inline T __gcd(T a, T b) { while (b != 0) { T t = a % b; a = b; b = t; } return a; }
+CPINTEL_GCD(int) CPINTEL_GCD(long) CPINTEL_GCD(long long)
+CPINTEL_GCD(unsigned) CPINTEL_GCD(unsigned long) CPINTEL_GCD(unsigned long long)
+#undef CPINTEL_GCD
+#if !defined(_LIBCPP_VERSION) || _LIBCPP_VERSION >= 220000
 template <class T> inline T __gcd(T a, T b) {
   while (b != 0) { T t = a % b; a = b; b = t; }
   return a;
 }
+#endif
 inline int __lg(unsigned long long n) { return n ? 63 - __builtin_clzll(n) : -1; }
 inline int __lg(long long n) { return __lg(static_cast<unsigned long long>(n)); }
 inline int __lg(unsigned n) { return n ? 31 - __builtin_clz(n) : -1; }

@@ -403,12 +403,18 @@ That runner is small, so it is kept for examinations, where every candidate must
 same machine under the same limits. Everywhere else the Run button costs the server nothing:
 `frontend/src/runner/local.ts` runs the code on the student's own computer.
 
-- **Desktop app:** with the computer's own g++ and Python (`electron/src/localRunner.ts`), using
-  the server runner's flags, a fresh temporary directory per run, the same time limit and output
-  cap, and no sandbox: it is the student's code on the student's machine. Because a page loaded
-  over the network is asking for native code to be run, the app asks the student once before the
-  first run; refusing sends every run to the browser engine instead.
-- **Website, or a language the computer has no toolchain for:** in the browser tab, in
+- **Desktop app:** with compilers the app carries, so nothing has to be installed and every
+  student gets the same ones: GCC 16 (WinLibs MinGW-w64) on Windows — what Codeforces' G++
+  compilers are — Zig 0.16's Clang and libc++ on macOS and Linux, and CPython 3.13
+  (python-build-standalone) everywhere (`electron/src/localRunner.ts`). `npm run build` fetches
+  them with `scripts/fetch-toolchains.mjs`: pinned URLs, each checked against its SHA-256, pruned
+  to what a judge needs (WinLibs goes from about 950 MB to 400 MB), and packaged as an extra
+  resource; the installer grows by roughly 100 MB. Runs use the server runner's flags, Codeforces'
+  256 MB stack (a link flag on Windows, `ulimit -s` elsewhere), a fresh temporary directory, the
+  same time limit and output cap, and no sandbox: it is the student's code on the student's
+  machine. Zig compiles libc++ on its first use (about 15 seconds), so the app does one small
+  compile in the background at start-up and keeps the cache in its data folder.
+- **Website, or a desktop build from before it carried compilers:** in the browser tab, in
   WebAssembly. C++ is compiled by Clang/LLD built for WebAssembly (YoWASP) with libc++, a stand-in
   `<bits/stdc++.h>` and a 64 MB stack, and each test runs in its own worker that is terminated at
   the time limit. Python is Pyodide (CPython 3.14), through a harness that mirrors the server's:

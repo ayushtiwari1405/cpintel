@@ -11,10 +11,10 @@ export type { Progress }
  * judged by the same machine under the same limits. Everywhere else a Run costs the server
  * nothing:
  *
- *  - In the desktop app, with the compilers installed on the computer (g++, Python). Fast, and
- *    the same compiler family as the judge.
- *  - On the website, or for a language the computer has no compiler for, in this browser tab
- *    in WebAssembly: Clang for C++ and Pyodide for Python, downloaded once from a CDN.
+ *  - In the desktop app, with the compilers the app ships with (GCC on Windows, Clang on macOS
+ *    and Linux, CPython), so nothing has to be installed. Fast, and full C++.
+ *  - On the website — or in a desktop build too old to carry compilers — in this browser tab in
+ *    WebAssembly: Clang for C++ and Pyodide for Python, downloaded once from a CDN.
  *
  * Runtime ids are the server runner's ("cpp", "python3"), so the language mapping and an
  * event's language restriction treat a local runtime exactly like a server one.
@@ -35,25 +35,22 @@ const BROWSER_RUNTIMES: RunnerRuntime[] = [
 
 type Route = 'desktop' | 'browser'
 
-/** Set when the student refuses to let the desktop app run code on their computer. */
-let desktopDeclined = false
-
 let routes: Promise<Map<string, { runtime: RunnerRuntime; route: Route }>> | null = null
 
-/** For each language, where it runs: the computer's own toolchain when it has one. */
+/** For each language, where it runs: the desktop app's own toolchain when there is one. */
 function resolveRoutes() {
   routes ??= (async () => {
     const map = new Map<string, { runtime: RunnerRuntime; route: Route }>()
     for (const r of BROWSER_RUNTIMES) map.set(r.id, { runtime: r, route: 'browser' })
 
     const desktop = window.cpintelDesktop?.runner
-    if (desktop && !desktopDeclined) {
+    if (desktop) {
       try {
         for (const r of await desktop.languages()) {
           if (r.available) map.set(r.id, { runtime: r, route: 'desktop' })
         }
       } catch {
-        // An older desktop build, or detection failed: the browser covers every language.
+        // A desktop build from before the bridge answered: the browser covers every language.
       }
     }
     return map
@@ -75,19 +72,14 @@ export const localRunner = {
     if (entry.route === 'desktop') {
       onProgress(request.language === 'cpp' ? 'Compiling…' : 'Running…')
       try {
-        const raw = await window.cpintelDesktop!.runner!.run({
+        return judge(request.tests, await window.cpintelDesktop!.runner!.run({
           language: request.language,
           source: request.source,
           inputs: request.tests.map(t => t.input),
           timeLimitMs: TIME_LIMIT_MS,
           compileTimeLimitMs: COMPILE_TIME_LIMIT_MS,
           outputLimitBytes: OUTPUT_LIMIT_BYTES,
-        })
-        if (!raw.declined) return judge(request.tests, raw)
-        // The student said no to running code on their computer. Respect it for the rest of
-        // the session and run in the browser instead, which needs no permission.
-        desktopDeclined = true
-        routes = null
+        }))
       } finally {
         onProgress(null)
       }
