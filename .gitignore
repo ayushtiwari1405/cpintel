@@ -74,3 +74,11 @@ nginx/certs/*
 
 # deploy.sh bookkeeping: which version is running and which came before.
 .deploy/
+
+# graphify knowledge-graph output (regenerated locally, never committed)
+graphify-out/
+
+# Local backups and Claude Code session files
+*.bak
+*.orig
+.claude/settings.local.json
