@@ -1,5 +1,4 @@
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { ArrowLeft } from 'lucide-react'
 import { Sidebar } from '@/components/common/Sidebar'
 import { useExamMode } from '@/store/examModeStore'
 import { useAuthStore } from '@/store/authStore'
@@ -72,11 +71,10 @@ export default function AppLayout() {
     <div className="flex h-screen bg-gray-950 overflow-hidden">
       <Sidebar open={sidebarOpen} onToggle={() => setSidebarOpen(v => !v)} locked={examLive}
         examMode={examMode}
-        // A workspace has no top bar: every row above the problem is a row of the problem
-        // pushed out of sight, so its title and Back live in the sidebar instead.
-        page={workspace
-          ? { title, onBack: canGoBack ? () => navigate(-1) : undefined }
-          : undefined} />
+        // The page's title and Back live in the sidebar, on every page: a bar across the top
+        // is a row of the page given to one button, and on a workspace a row of the problem
+        // pushed out of sight.
+        page={{ title, onBack: canGoBack ? () => navigate(-1) : undefined }} />
       <main className={clsx(
         'flex-1 flex flex-col min-h-0 transition-all duration-200',
         workspace ? 'overflow-hidden' : 'overflow-auto',
@@ -88,26 +86,6 @@ export default function AppLayout() {
           </div>
         ) : (
           <div className="p-6 max-w-7xl mx-auto w-full">
-            {/* The page's title, and Back, in its own top-left corner rather than on a bar
-                across the window: a strip for one button and a word is a row of the page
-                given to nothing. */}
-            <div className="-mt-2 mb-4 flex items-center gap-1">
-              {canGoBack && (
-                <button
-                  onClick={() => navigate(-1)}
-                  title="Back to the previous page"
-                  aria-label="Back"
-                  className="-ml-2 flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs
-                             text-gray-500 transition-colors hover:bg-gray-800 hover:text-gray-200"
-                >
-                  <ArrowLeft size={15} /> Back
-                </button>
-              )}
-              <span className={clsx('text-xs font-medium text-gray-500',
-                canGoBack && 'border-l border-gray-800 pl-2')}>
-                {title}
-              </span>
-            </div>
             <Outlet />
           </div>
         )}

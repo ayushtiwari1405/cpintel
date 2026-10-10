@@ -49,8 +49,9 @@ interface Props {
   /** Signed in with an examination password: no other page exists for this session. */
   examMode?: boolean
   /**
-   * The page's title and back action, on the workspace pages that give up the top bar so the
-   * problem starts at the top of the window. `onBack` is absent where there is nowhere to go.
+   * The page's title and back action. Every page shows them here rather than on a bar of its
+   * own, so content starts at the top of the window. `onBack` is absent where there is nowhere
+   * to go.
    */
   page?: { title: string; onBack?: () => void }
 }
