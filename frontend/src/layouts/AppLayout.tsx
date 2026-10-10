@@ -71,28 +71,35 @@ export default function AppLayout() {
   return (
     <div className="flex h-screen bg-gray-950 overflow-hidden">
       <Sidebar open={sidebarOpen} onToggle={() => setSidebarOpen(v => !v)} locked={examLive}
-        examMode={examMode} />
+        examMode={examMode}
+        // A workspace has no top bar: every row above the problem is a row of the problem
+        // pushed out of sight, so its title and Back live in the sidebar instead.
+        page={workspace
+          ? { title, onBack: canGoBack ? () => navigate(-1) : undefined }
+          : undefined} />
       <main className={clsx(
         'flex-1 flex flex-col min-h-0 transition-all duration-200',
         workspace ? 'overflow-hidden' : 'overflow-auto',
         sidebarOpen ? 'ml-60' : 'ml-16'
       )}>
         {/* Top bar */}
-        <div className="sticky top-0 z-20 flex h-14 flex-shrink-0 items-center border-b
-          border-gray-800 bg-gray-950/80 px-6 backdrop-blur-sm">
-          {canGoBack && (
-            <button
-              onClick={() => navigate(-1)}
-              title="Back to the previous page"
-              aria-label="Back"
-              className="-ml-2 mr-2 flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs
-                         text-gray-500 transition-colors hover:bg-gray-800 hover:text-gray-200"
-            >
-              <ArrowLeft size={15} /> Back
-            </button>
+        {!workspace && (
+          <div className="sticky top-0 z-20 flex h-14 flex-shrink-0 items-center border-b
+            border-gray-800 bg-gray-950/80 px-6 backdrop-blur-sm">
+            {canGoBack && (
+              <button
+                onClick={() => navigate(-1)}
+                title="Back to the previous page"
+                aria-label="Back"
+                className="-ml-2 mr-2 flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs
+                           text-gray-500 transition-colors hover:bg-gray-800 hover:text-gray-200"
+              >
+                <ArrowLeft size={15} /> Back
+              </button>
           )}
           <span className="text-sm font-medium text-gray-200">{title}</span>
         </div>
+        )}
 
         {workspace ? (
           <div className="flex flex-1 flex-col min-h-0">

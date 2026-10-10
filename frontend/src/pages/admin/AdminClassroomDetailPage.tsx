@@ -12,6 +12,7 @@ import { useAdminGroups } from '@/hooks/useGroups'
 import { useClassroomTaActions, useClassroomTas } from '@/hooks/useEvaluation'
 import { Ago, EmptyRow, Panel, Pill } from '@/components/admin/AdminUi'
 import type { ClassroomSummary, TaAdded } from '@/types'
+import { copyText } from '@/utils/clipboard'
 
 const field = `rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 text-sm text-gray-200
                placeholder-gray-600 outline-none focus:border-indigo-600`
@@ -423,7 +424,7 @@ function TeachingAssistants({ classroomId }: { classroomId: number }) {
               <p className="mt-1.5 flex flex-wrap items-center gap-2 text-gray-400">
                 Password for {added.ta.username}:
                 <code className="rounded bg-gray-900 px-1.5 py-0.5 text-gray-100">{added.password}</code>
-                <button onClick={() => navigator.clipboard?.writeText(added.password!)}
+                <button onClick={() => copyText(added.password!).catch(() => {})}
                   className="inline-flex items-center gap-1 text-gray-500 hover:text-gray-300">
                   <Copy size={11} /> Copy
                 </button>

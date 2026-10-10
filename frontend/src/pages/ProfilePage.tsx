@@ -13,8 +13,6 @@ export default function ProfilePage() {
 
   const [form, setForm] = useState({
     fullName:    user?.fullName ?? '',
-    country:     user?.country ?? '',
-    institution: user?.institution ?? '',
     avatarUrl:   user?.avatarUrl ?? '',
   })
 
@@ -61,8 +59,6 @@ export default function ProfilePage() {
       <div className="card space-y-4">
         {[
           { key: 'fullName',    label: 'Full name',    placeholder: 'Your name' },
-          { key: 'country',     label: 'Country',      placeholder: 'India' },
-          { key: 'institution', label: 'Institution',  placeholder: 'IIT Bombay' },
           { key: 'avatarUrl',   label: 'Avatar URL',   placeholder: 'https://...' },
         ].map(({ key, label, placeholder }) => (
           <div key={key}>

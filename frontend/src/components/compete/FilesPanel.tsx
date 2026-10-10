@@ -10,6 +10,7 @@ import {
   useDeleteFile, useDownloadFile, useFileContent, useFileVault, useUploadFile,
 } from '@/hooks/useFiles'
 import type { ContestRef, PersonalFile } from '@/types'
+import { copyText } from '@/utils/clipboard'
 
 function human(bytes: number): string {
   if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
@@ -203,8 +204,9 @@ export function FilesPanel({ open, onClose, contest, onUseInEditor }: Props) {
                       <div className="ml-auto flex items-center gap-2">
                         <button
                           onClick={() => {
-                            navigator.clipboard.writeText(content.text ?? '')
-                            toast.push('info', 'Copied to clipboard')
+                            copyText(content.text ?? '')
+                              .then(() => toast.push('info', 'Copied to clipboard'))
+                              .catch(() => toast.push('info', 'Could not reach the clipboard'))
                           }}
                           className="text-[11px] text-gray-500 hover:text-gray-300
                                      flex items-center gap-1 transition-colors"

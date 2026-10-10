@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import type { AdminUserRow, AssignableRole, Role } from '@/types'
+import { copyText } from '@/utils/clipboard'
 
 /**
  * Accounts, and what an admin can do to one.
@@ -705,7 +706,7 @@ function SetPasswordDialog({ user, onClose }: { user: AdminUserRow; onClose: () 
               {issued}
             </code>
             <button
-              onClick={() => navigator.clipboard?.writeText(issued)}
+              onClick={() => copyText(issued).catch(() => {})}
               className="flex w-full items-center justify-center gap-1.5 rounded-lg border
                 border-gray-800 px-3 py-2 text-sm text-gray-300 transition-colors
                 hover:bg-gray-800"

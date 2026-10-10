@@ -8,6 +8,7 @@ import { clsx } from 'clsx'
 import { useDesktopRelease } from '@/hooks/useDesktopRelease'
 import type { DesktopAsset, DesktopRelease } from '@/api/desktopApi'
 import { isDesktop } from '@/utils/desktopBridge'
+import { copyText } from '@/utils/clipboard'
 
 type Os = 'windows' | 'mac' | 'linux'
 
@@ -45,7 +46,7 @@ function Command({ text }: { text: string }) {
       <button
         onClick={async () => {
           try {
-            await navigator.clipboard.writeText(text)
+            await copyText(text)
             setCopied(true)
             setTimeout(() => setCopied(false), 2000)
           } catch { /* it is on screen to be typed */ }

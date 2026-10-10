@@ -7,6 +7,7 @@ import {
 import { openExternal } from '@/utils/desktopBridge'
 import { cfRelay, openCodeforces } from '@/api/cfBrowser'
 import type { ProblemDetail, ProblemSample } from '@/types'
+import { copyText } from '@/utils/clipboard'
 
 declare global {
   interface Window {
@@ -450,7 +451,7 @@ function SampleBlock({ label, value }: { label: string; value: string }) {
 
   const copy = async () => {
     try {
-      await navigator.clipboard.writeText(value)
+      await copyText(value)
       setCopied(true)
       setTimeout(() => setCopied(false), 1500)
     } catch {

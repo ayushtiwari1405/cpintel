@@ -1,6 +1,6 @@
 import { NavLink } from 'react-router-dom'
 import {
-  LayoutDashboard, BarChart2, Map, Link2, User, Zap, ChevronLeft,
+  ArrowLeft, LayoutDashboard, BarChart2, Map, Link2, User, Zap, ChevronLeft,
   ChevronRight, LogOut, Code2, Swords, Shield, Users, ScrollText, FolderCog,
   UsersRound, FileText, School, ClipboardCheck, Monitor } from 'lucide-react'
 import { useLogout } from '@/hooks/useAuth'
@@ -48,9 +48,14 @@ interface Props {
   locked?: boolean
   /** Signed in with an examination password: no other page exists for this session. */
   examMode?: boolean
+  /**
+   * The page's title and back action, on the workspace pages that give up the top bar so the
+   * problem starts at the top of the window. `onBack` is absent where there is nowhere to go.
+   */
+  page?: { title: string; onBack?: () => void }
 }
 
-export function Sidebar({ open, onToggle, locked, examMode }: Props) {
+export function Sidebar({ open, onToggle, locked, examMode, page }: Props) {
   const logout = useLogout()
   const { user } = useAuth()
   const showAdmin = isAdmin(user)
@@ -79,13 +84,50 @@ export function Sidebar({ open, onToggle, locked, examMode }: Props) {
       'flex flex-col transition-all duration-200 z-30',
       open ? 'w-60' : 'w-16'
     )}>
-      {/* Logo */}
+      {/* Logo, with the collapse control at the top right. Collapsed, the strip is one icon
+          wide, so the control stands in for the logo. */}
       <div className="flex items-center gap-3 p-4 h-16 border-b border-gray-800">
-        <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center flex-shrink-0">
-          <Zap size={16} className="text-white" />
-        </div>
-        {open && <span className="font-semibold text-gray-50 text-sm">CPIntel</span>}
+        {open && (
+          <>
+            <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center flex-shrink-0">
+              <Zap size={16} className="text-white" />
+            </div>
+            <span className="font-semibold text-gray-50 text-sm">CPIntel</span>
+          </>
+        )}
+        <button
+          onClick={onToggle}
+          title={open ? 'Collapse the sidebar' : 'Expand the sidebar'}
+          aria-label={open ? 'Collapse sidebar' : 'Expand sidebar'}
+          className={clsx('flex h-8 w-8 items-center justify-center rounded-lg text-gray-500',
+            'hover:bg-gray-800 hover:text-gray-300 transition-colors flex-shrink-0',
+            open && 'ml-auto')}
+        >
+          {open ? <ChevronLeft size={18} /> : <ChevronRight size={18} />}
+        </button>
       </div>
+
+      {page && (
+        <div className="flex items-center gap-1 px-2 py-2 border-b border-gray-800">
+          {page.onBack && (
+            <button
+              onClick={page.onBack}
+              title="Back to the previous page"
+              aria-label="Back"
+              className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs text-gray-500
+                         transition-colors hover:bg-gray-800 hover:text-gray-200 flex-shrink-0"
+            >
+              <ArrowLeft size={15} /> {open && 'Back'}
+            </button>
+          )}
+          {open && (
+            <span className={clsx('truncate text-sm font-medium text-gray-200',
+              !page.onBack && 'px-3 py-1.5')}>
+              {page.title}
+            </span>
+          )}
+        </div>
+      )}
 
       {examMode ? (
         <div className="flex-1 p-3">
@@ -172,14 +214,6 @@ export function Sidebar({ open, onToggle, locked, examMode }: Props) {
           {open && <span>Logout</span>}
         </button>
         <ThemeToggle showLabel={open} className="mt-0.5" />
-        <button
-          onClick={onToggle}
-          className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-500
-                     hover:text-gray-300 hover:bg-gray-800 transition-colors w-full mt-0.5"
-        >
-          {open ? <ChevronLeft size={18} /> : <ChevronRight size={18} />}
-          {open && <span className="text-xs">Collapse</span>}
-        </button>
       </div>
     </aside>
   )

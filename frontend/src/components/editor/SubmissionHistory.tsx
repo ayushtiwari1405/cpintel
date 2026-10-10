@@ -9,6 +9,7 @@ import { TestReportView } from '@/components/editor/TestReportView'
 import { detectLanguage } from '@/components/editor/languages'
 import { useAttemptSource, useProblemAttempts, useRecentAttempts } from '@/hooks/useArchive'
 import type { ArchiveAttempt, CompetePlatform } from '@/types'
+import { copyText } from '@/utils/clipboard'
 
 const VERDICTS: Record<string, string> = {
   OK: 'Accepted',
@@ -170,7 +171,7 @@ export function SubmissionHistory({
   const handleCopy = async () => {
     if (!source.data) return
     try {
-      await navigator.clipboard.writeText(source.data.source)
+      await copyText(source.data.source)
       setCopied(true)
       setTimeout(() => setCopied(false), 1500)
     } catch {

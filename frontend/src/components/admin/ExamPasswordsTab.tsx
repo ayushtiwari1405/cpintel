@@ -12,6 +12,7 @@ import {
 } from '@/hooks/useExams'
 import type { IssuedPasscode } from '@/types'
 import { downloadSpreadsheet } from '@/utils/spreadsheet'
+import { copyText } from '@/utils/clipboard'
 
 /**
  * The passwords that open one examination, and the screen that prints them.
@@ -56,7 +57,7 @@ export function ExamPasswordsTab({ eventId }: { eventId: number }) {
   const revoke = useRevokePasscodes()
 
   const copy = (value: string, what: string) => {
-    navigator.clipboard?.writeText(value)
+    copyText(value)
       .then(() => toast.push('success', `${what} copied`))
       // Clipboard access is refused in plenty of ordinary situations — an insecure origin, a
       // browser that wants a gesture it did not see. The code is on the screen either way, so

@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 
 import { isDesktop } from '@/utils/desktopBridge'
+import { copyText } from '@/utils/clipboard'
 import {
   downloadExtension, EXTENSION_FOLDER, EXTENSION_VERSION, installedExtensionVersion,
 } from '@/utils/cfExtension'
@@ -62,7 +63,7 @@ export default function ExtensionPage() {
 
   const copy = async () => {
     try {
-      await navigator.clipboard.writeText(extensionsPage)
+      await copyText(extensionsPage)
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch {

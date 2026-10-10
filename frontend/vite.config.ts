@@ -7,6 +7,12 @@ export default defineConfig({
   resolve: {
     alias: { '@': path.resolve(import.meta.dirname, './src') },
   },
+  optimizeDeps: {
+    // Imported only from the Run worker, which Vite's start-up scan does not follow. Left to be
+    // found on the first Run, it triggers a re-optimise and a full page reload that drops the
+    // code in the editor.
+    include: ['@bjorn3/browser_wasi_shim'],
+  },
   server: {
     port: 5173,
     proxy: {
