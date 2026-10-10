@@ -79,10 +79,16 @@ export async function cfFetch(request: CfRequest): Promise<CfPage> {
   return page
 }
 
-/** Opens codeforces.com in a tab, where a person can pass its browser check. */
-export function openCodeforces() {
+/**
+ * Opens codeforces.com where a person can pass its browser check: in the desktop app, its own
+ * Codeforces window, which closes itself once the check is through and resolves then. A system
+ * browser would not do there — its cookies are not the app's.
+ */
+export async function openCodeforces(): Promise<void> {
   if (cfRelay() === 'extension') {
     viaExtension({ kind: 'open' }).catch(() => window.open(CF, '_blank', 'noopener'))
+  } else if (window.cpintelDesktop?.cf?.open) {
+    await window.cpintelDesktop.cf.open(`${CF}/`)
   } else if (window.cpintelDesktop) {
     window.cpintelDesktop.openExternal(CF)
   } else {

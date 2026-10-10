@@ -119,8 +119,6 @@ export function EditorPane({
   contest, problemIndex, storageKey, submitLabel = 'Submit',
 }: Props) {
   const fileInput = useRef<HTMLInputElement>(null)
-  /** Explicit 'Run with' choice, overriding whatever the platform's label implies. */
-  const [runtimeOverride, setRuntimeOverride] = useState<string | null>(null)
   const [fileName, setFileName] = useState<string | null>(null)
   const [fileError, setFileError] = useState<string | null>(null)
   const [pickedLanguage, setPickedLanguage] = useState<string | null>(null)
@@ -178,23 +176,39 @@ export function EditorPane({
   const availableRuntimes = useMemo(
     () => (runtimes ?? []).filter(r => r.available), [runtimes])
 
+  /**
+   * The languages offered: only those Run can compile here, so what is written can be tried
+   * before it is sent. Everything while the runtimes are still loading (or the runner is off),
+   * and everything if none of the platform's languages can be run — an empty list would leave
+   * nothing to submit with.
+   */
+  const shownLanguages = useMemo(() => {
+    if (availableRuntimes.length === 0) return languages
+    const runnable = languages.filter(l => {
+      const runner = detectLanguage(l.label).runner
+      return runner != null && availableRuntimes.some(r => r.id === runner)
+    })
+    return runnable.length > 0 ? runnable : languages
+  }, [languages, availableRuntimes])
+
+  // A selection the list no longer offers moves to the first one it does.
+  useEffect(() => {
+    if (shownLanguages.length > 0 && !shownLanguages.some(l => l.id === languageId)) {
+      onLanguageChange(shownLanguages[0].id)
+    }
+  }, [shownLanguages, languageId, onLanguageChange])
+
   // What the platform's dropdown implies, if it has told us anything yet.
   const selectedLabel = languages.find(l => l.id === languageId)?.label
   const cfDetected = useMemo(() => detectLanguage(selectedLabel), [selectedLabel])
 
   /**
-   * Which local runtime Run uses.
-   *
-   * Deliberately independent of the Codeforces language list. That list comes from
-   * /api/practice/languages, which scrapes codeforces.com whenever a session is connected —
-   * so with no internet it stalls until the request times out, and anything derived from it
-   * stalls with it. Compiling is a purely local capability and must not wait on a remote
-   * site to become available. When Codeforces has told us nothing, fall back to the first
-   * runtime the backend reports it can actually run.
+   * Which runtime Run uses: the one the submit language implies, so there is one choice to
+   * make, not two. With no platform list at all — Codeforces unreachable, which must not stop
+   * a purely local capability — the first runtime that can actually run.
    */
   const runtimeId =
-    runtimeOverride
-    ?? cfDetected.runner
+    cfDetected.runner
     ?? (languages.length === 0 ? availableRuntimes[0]?.id ?? null : null)
 
   const runtime = availableRuntimes.find(r => r.id === runtimeId) ?? null
@@ -265,10 +279,10 @@ export function EditorPane({
     onSourceChange(text)
     setFileName(file.name)
 
-    const match = pickLanguageFor(file.name, languages)
+    const match = pickLanguageFor(file.name, shownLanguages)
     if (match && match !== languageId) {
       onLanguageChange(match)
-      setPickedLanguage(languages.find(l => l.id === match)?.label ?? null)
+      setPickedLanguage(shownLanguages.find(l => l.id === match)?.label ?? null)
     }
   }
 
@@ -339,37 +353,16 @@ export function EditorPane({
               </span>
             )}
 
-            {availableRuntimes.length > 0 && (
-              <label className="hidden min-w-0 items-center gap-1 text-[11px] text-gray-600
-                lg:flex">
-                <span className="flex-shrink-0">Run with</span>
-                <select
-                  value={runtime?.id ?? ''}
-                  onChange={e => setRuntimeOverride(e.target.value || null)}
-                  title="Which local toolchain compiles and runs the code. Independent of the
-                         submit language, which only affects what gets sent to the judge."
-                  className="min-w-0 flex-shrink rounded-md border border-gray-800 bg-gray-900
-                             px-1.5 py-1 text-[11px] text-gray-400 outline-none
-                             focus:border-indigo-600"
-                >
-                  {!runtime && <option value="">—</option>}
-                  {availableRuntimes.map(r => (
-                    <option key={r.id} value={r.id}>{r.displayName}</option>
-                  ))}
-                </select>
-              </label>
-            )}
-
             <select
               value={languageId}
               onChange={e => onLanguageChange(e.target.value)}
-              title="The language your submission is sent as"
+              title="The language you write in: Run compiles it as this, and Submit sends it as this"
               className="min-w-0 max-w-[13rem] flex-shrink rounded-md border border-gray-800
                          bg-gray-900 px-2 py-1 text-xs text-gray-300 outline-none
                          focus:border-indigo-600"
             >
-              {languages.length === 0 && <option value="">No languages loaded</option>}
-              {languages.map(l => (
+              {shownLanguages.length === 0 && <option value="">No languages loaded</option>}
+              {shownLanguages.map(l => (
                 <option key={l.id} value={l.id}>{l.label}</option>
               ))}
             </select>
@@ -540,7 +533,7 @@ export function EditorPane({
           onSourceChange(loaded)
           // Only if the platform still offers that compiler — Codeforces retires them, and
           // selecting a dead id would fail at submit time rather than here.
-          if (loadedLanguageId && languages.some(l => l.id === loadedLanguageId)) {
+          if (loadedLanguageId && shownLanguages.some(l => l.id === loadedLanguageId)) {
             onLanguageChange(loadedLanguageId)
           }
         }}

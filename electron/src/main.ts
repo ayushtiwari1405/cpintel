@@ -6,7 +6,9 @@ import fs from 'fs'
 import path from 'path'
 import Store from 'electron-store'
 import { Lockdown, disposeOnQuit, type LockdownPolicy, type LockdownState } from './lockdown'
-import { connectCodeforces, fetchCodeforces, forgetCodeforces } from './cfSession'
+import {
+  connectCodeforces, fetchCodeforces, forgetCodeforces, openCodeforces, signInCodeforces,
+} from './cfSession'
 import * as localRunner from './localRunner'
 import { installUpdate, type UpdateProgress } from './updater'
 
@@ -270,6 +272,37 @@ handle('cf:connect', async (_e, apiBase: string, token: string, handle?: string)
     // A closed window and a refused session are both ordinary outcomes, not crashes, and the
     // renderer has to tell the user which one happened.
     return { connected: false, error: e?.message ?? String(e) }
+  }
+})
+
+/**
+ * Signing in in the app's own Codeforces window. Only says whether it happened: the page then
+ * connects by reading codeforces.com through cf:fetch, so no session leaves this computer.
+ * Refused during a locked-down contest, like cf:connect.
+ */
+handle('cf:signIn', async () => {
+  if (lockdown.isEngaged()) {
+    lockdown.countBlocked()
+    return { ok: false, error: 'Codeforces cannot be connected during a locked-down contest. '
+      + 'Connect before the round starts.' }
+  }
+  const ok = await signInCodeforces(mainWindow ?? undefined)
+  return ok ? { ok: true } : { ok: false, error: 'The sign-in window was closed.' }
+})
+
+/**
+ * Codeforces' browser check, passed in the app's own window so the app's requests carry it. The
+ * same rule as any outside link during an examination that refuses them.
+ */
+handle('cf:open', async (_e, url: string) => {
+  if (lockdown.blocksExternalApps()) {
+    lockdown.countBlocked()
+    return { ok: false, error: 'Not available during this examination.' }
+  }
+  try {
+    return { ok: await openCodeforces(url, mainWindow ?? undefined) }
+  } catch (e: any) {
+    return { ok: false, error: e?.message ?? String(e) }
   }
 })
 

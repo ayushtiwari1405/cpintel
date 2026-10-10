@@ -195,6 +195,95 @@ export function connectCodeforces(
   })
 }
 
+/**
+ * A Codeforces window of the app's own, over the CPIntel window like any sign-in popup, that
+ * closes itself once {@code done} says its job is finished. Resolves true then, false if the
+ * user closes it first.
+ *
+ * <p>It shares the session {@link fetchCodeforces} uses, which is the point of it: a sign-in or
+ * a passed browser check here is one the app's own requests carry. A system browser has a
+ * cookie jar of its own, so signing in there is invisible to the app.
+ */
+function codeforcesWindow(
+  url: string, title: string, parent: BrowserWindow | undefined,
+  done: (win: BrowserWindow) => Promise<boolean>,
+): Promise<boolean> {
+  const win = new BrowserWindow({
+    width: 1000,
+    height: 760,
+    parent,
+    title,
+    backgroundColor: '#ffffff',
+    autoHideMenuBar: true,
+    webPreferences: {
+      session: session.fromPartition(PARTITION),
+      // A third-party site: no preload, no Node, no bridge.
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  })
+  // Links Codeforces opens in a new tab (its Google sign-in among them) stay in a window of
+  // this session too, rather than going to a browser whose sign-in the app cannot see.
+  win.webContents.setWindowOpenHandler(({ url: next }) => {
+    if (/^https:\/\//i.test(next)) win.loadURL(next)
+    return { action: 'deny' }
+  })
+
+  return new Promise(resolve => {
+    let settled = false
+    const check = async () => {
+      if (settled || win.isDestroyed()) return
+      try {
+        if (await done(win)) {
+          settled = true
+          resolve(true)
+          win.destroy()
+        }
+      } catch {
+        // A page mid-navigation cannot be asked anything; the next load asks again.
+      }
+    }
+    win.webContents.on('did-finish-load', check)
+    win.webContents.on('did-navigate-in-page', check)
+    win.on('closed', () => {
+      if (!settled) { settled = true; resolve(false) }
+    })
+    win.loadURL(url).catch(() => { /* reported by the page itself */ })
+  })
+}
+
+/** Cloudflare's "checking your browser" page, from inside it. */
+const IS_CHECK_PAGE = `document.title.includes('Just a moment')
+  || !!document.querySelector('#challenge-form, #cf-challenge-running, [name="cf-turnstile-response"]')`
+
+/** Codeforces' header has a logout link only for a signed-in user. */
+const IS_SIGNED_IN = `!!document.querySelector('a[href*="/logout"]')`
+
+/**
+ * Sign in to Codeforces. Resolves true once the window shows a signed-in page — at once, with no
+ * password, when the stored session is still good — and false if the user closes it.
+ *
+ * <p>Nothing is posted anywhere from here. The page then reads codeforces.com through
+ * {@link fetchCodeforces} and hands that page to the server, as the website's extension does.
+ * The server checking a copied cookie from its own address is what used to fail: Cloudflare ties
+ * the cookie to the browser that earned it, so a sign-in that worked never connected.
+ */
+export function signInCodeforces(parent?: BrowserWindow): Promise<boolean> {
+  return codeforcesWindow(SIGN_IN_URL, 'Sign in to Codeforces', parent, async win =>
+    !win.webContents.getURL().includes('/enter')
+      && await win.webContents.executeJavaScript(IS_SIGNED_IN) === true)
+}
+
+/** Shows Codeforces until its browser check has passed, then closes. */
+export function openCodeforces(url: string, parent?: BrowserWindow): Promise<boolean> {
+  if (new URL(url).origin !== 'https://codeforces.com') {
+    return Promise.reject(new Error('Only https://codeforces.com can be opened.'))
+  }
+  return codeforcesWindow(url, 'Codeforces', parent, async win =>
+    await win.webContents.executeJavaScript(IS_CHECK_PAGE) === false)
+}
+
 /** Forget the stored Codeforces sign-in, so the next connect starts from a clean window. */
 /** A Codeforces request made for the page, as the extension makes them on the website. */
 export interface CfFetchRequest { method?: 'GET' | 'POST'; url: string; form?: Record<string, string> }

@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { clsx } from 'clsx'
@@ -31,13 +32,21 @@ declare global {
  * one this is.
  */
 function MissingStatement({ issue }: { issue?: string | null }) {
+  const qc = useQueryClient()
+  // The desktop app's Codeforces window closes itself once the check is through; ask again then,
+  // rather than leaving the student to find a way to reopen the problem.
+  const passCheck = async () => {
+    await openCodeforces()
+    qc.invalidateQueries({ queryKey: ['practice', 'problem'] })
+    qc.invalidateQueries({ queryKey: ['compete', 'statement'] })
+  }
   const body = (() => {
     switch (issue) {
       case 'BROWSER_CHECK':
         return (
           <p>
             Codeforces wants to check this browser before showing the problem.{' '}
-            <button onClick={openCodeforces} className="underline hover:text-amber-200">
+            <button onClick={passCheck} className="underline hover:text-amber-200">
               Open codeforces.com
             </button>
             , let the check finish, then come back and reopen the problem.

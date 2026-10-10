@@ -62,6 +62,13 @@ declare global {
         connect: (apiBase: string, token: string, handle?: string)
           => Promise<{ connected: boolean; handle?: string; error?: string }>
         forget: () => Promise<void>
+        /**
+         * Sign in in the app's own Codeforces window; nothing is posted. Absent from builds
+         * older than it, which use connect.
+         */
+        signIn?: () => Promise<{ ok: boolean; error?: string }>
+        /** Codeforces in the app's own window, until its browser check has passed. */
+        open?: (url: string) => Promise<{ ok: boolean; error?: string }>
         /** A codeforces.com request made with the app's own Codeforces session. */
         fetch?: (request: { method?: 'GET' | 'POST'; url: string; form?: Record<string, string> })
           => Promise<{ status: number; url: string; body: string } | { error: string }>

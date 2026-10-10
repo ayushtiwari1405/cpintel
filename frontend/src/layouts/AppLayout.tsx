@@ -82,31 +82,32 @@ export default function AppLayout() {
         workspace ? 'overflow-hidden' : 'overflow-auto',
         sidebarOpen ? 'ml-60' : 'ml-16'
       )}>
-        {/* Top bar */}
-        {!workspace && (
-          <div className="sticky top-0 z-20 flex h-14 flex-shrink-0 items-center border-b
-            border-gray-800 bg-gray-950/80 px-6 backdrop-blur-sm">
-            {canGoBack && (
-              <button
-                onClick={() => navigate(-1)}
-                title="Back to the previous page"
-                aria-label="Back"
-                className="-ml-2 mr-2 flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs
-                           text-gray-500 transition-colors hover:bg-gray-800 hover:text-gray-200"
-              >
-                <ArrowLeft size={15} /> Back
-              </button>
-          )}
-          <span className="text-sm font-medium text-gray-200">{title}</span>
-        </div>
-        )}
-
         {workspace ? (
           <div className="flex flex-1 flex-col min-h-0">
             <Outlet />
           </div>
         ) : (
           <div className="p-6 max-w-7xl mx-auto w-full">
+            {/* The page's title, and Back, in its own top-left corner rather than on a bar
+                across the window: a strip for one button and a word is a row of the page
+                given to nothing. */}
+            <div className="-mt-2 mb-4 flex items-center gap-1">
+              {canGoBack && (
+                <button
+                  onClick={() => navigate(-1)}
+                  title="Back to the previous page"
+                  aria-label="Back"
+                  className="-ml-2 flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs
+                             text-gray-500 transition-colors hover:bg-gray-800 hover:text-gray-200"
+                >
+                  <ArrowLeft size={15} /> Back
+                </button>
+              )}
+              <span className={clsx('text-xs font-medium text-gray-500',
+                canGoBack && 'border-l border-gray-800 pl-2')}>
+                {title}
+              </span>
+            </div>
             <Outlet />
           </div>
         )}

@@ -136,13 +136,31 @@ function DesktopConnectForm() {
     setBusy(true)
     setError(null)
     try {
+      const signIn = window.cpintelDesktop?.cf?.signIn
+      if (signIn) {
+        // Read codeforces.com as this app and hand the page over, as the extension does. Signed
+        // in already, that is all; otherwise the app's own sign-in window first.
+        let status
+        try {
+          status = await browserConnect()
+        } catch {
+          const res = await signIn()
+          if (!res.ok) throw new Error(res.error || 'Could not sign in to Codeforces.')
+          status = await browserConnect()
+        }
+        qc.setQueryData(['practice', 'cf-session'], status)
+        qc.invalidateQueries({ queryKey: ['practice'] })
+        toast.push('success', `Connected as ${status.handle}`)
+        return
+      }
+      // Desktop builds from before the app read Codeforces itself.
       const token = useAuthStore.getState().accessToken ?? ''
       const handle = await desktopCf.connect(apiBase(), token)
       qc.invalidateQueries({ queryKey: ['practice', 'cf-session'] })
       qc.invalidateQueries({ queryKey: ['practice', 'languages'] })
       toast.push('success', handle ? `Connected as ${handle}` : 'Codeforces connected')
     } catch (e: any) {
-      setError(e?.message ?? 'Could not connect that account')
+      setError(e?.response?.data?.message ?? e?.message ?? 'Could not connect that account')
     } finally {
       setBusy(false)
     }
@@ -172,12 +190,19 @@ function DesktopConnectForm() {
 
       <div className="flex items-start gap-2 text-[11px] text-amber-300/80">
         <ShieldAlert size={12} className="flex-shrink-0 mt-0.5" />
-        <p>
-          The session that window creates is a key to your account while it lives. It is sent
-          straight to the CPIntel server — it never reaches this page — and stored encrypted,
-          never shown back to you. Revoke it any time from Codeforces → Settings → Sessions, or
-          with Disconnect here.
-        </p>
+        {window.cpintelDesktop?.cf?.signIn ? (
+          <p>
+            Your Codeforces sign-in stays in this app on this computer; CPIntel's server only
+            learns your handle. Sign out of it any time from Codeforces → Settings → Sessions.
+          </p>
+        ) : (
+          <p>
+            The session that window creates is a key to your account while it lives. It is sent
+            straight to the CPIntel server — it never reaches this page — and stored encrypted,
+            never shown back to you. Revoke it any time from Codeforces → Settings → Sessions, or
+            with Disconnect here.
+          </p>
+        )}
       </div>
     </div>
   )
