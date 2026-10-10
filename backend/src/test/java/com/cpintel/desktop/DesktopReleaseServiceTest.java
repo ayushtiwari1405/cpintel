@@ -4,9 +4,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -110,5 +114,40 @@ class DesktopReleaseServiceTest {
         } finally {
             github.stop(0);
         }
+    }
+
+    @Test
+    @DisplayName("A build made on this server is served before GitHub, and only files it lists")
+    void localBuild(@TempDir Path desktop) throws IOException {
+        Path current = Files.createDirectories(desktop.resolve("current"));
+        for (String f : List.of("CPIntel-Setup-1.0.0-x64.exe", "CPIntel-1.0.0-arm64.zip",
+                "CPIntel-1.0.0-x86_64.AppImage")) {
+            Files.writeString(current.resolve(f), "x");
+        }
+        Files.writeString(current.resolve("release.json"), """
+            {"version": "1.0.0", "builtAt": "2026-10-10T00:00:00Z",
+             "serverUrl": "https://cpintel.example.edu", "source": "abc",
+             "assets": [
+               {"name": "CPIntel-Setup-1.0.0-x64.exe", "size": 1, "sha256": "aa"},
+               {"name": "CPIntel-1.0.0-arm64.zip", "size": 1, "sha256": "bb"},
+               {"name": "CPIntel-1.0.0-x64.zip", "size": 1, "sha256": "cc"},
+               {"name": "../release.json", "size": 1, "sha256": "dd"}
+             ]}
+            """);
+        ReflectionTestUtils.setField(service, "localDir", desktop.toString());
+        // Pointing nowhere: a local build must be answered without asking GitHub.
+        ReflectionTestUtils.setField(service, "repository", "o/r");
+        ReflectionTestUtils.setField(service, "api", "http://127.0.0.1:1");
+
+        var release = service.latest().orElseThrow();
+        assertThat(release.version()).isEqualTo("1.0.0");
+        // Listed but missing (the x64 zip) and unsafe names are dropped; unlisted files ignored.
+        assertThat(release.assets()).extracting(DesktopReleaseService.Asset::name)
+            .containsExactly("CPIntel-Setup-1.0.0-x64.exe", "CPIntel-1.0.0-arm64.zip");
+        var mac = service.asset("CPIntel-1.0.0-arm64.zip").orElseThrow();
+        assertThat(mac.platform()).isEqualTo("mac");
+        assertThat(mac.format()).isEqualTo("zip");
+        assertThat(mac.file()).isEqualTo(current.resolve("CPIntel-1.0.0-arm64.zip"));
+        assertThat(service.asset("CPIntel-1.0.0-x86_64.AppImage")).isEmpty();
     }
 }

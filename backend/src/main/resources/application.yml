@@ -160,6 +160,9 @@ cpintel:
     # Only if that repository is private: a token that can read it. Downloads are then streamed
     # through this server instead of redirected to GitHub.
     github-token: ${CPINTEL_DESKTOP_GITHUB_TOKEN:}
+    # Where scripts/build-desktop.sh leaves installers built on this server for its own
+    # address (deploy.sh runs it). A build there is served before any GitHub release.
+    local-dir: ${CPINTEL_DESKTOP_DIR:}
   rate-limit:
     # Ceilings on the handful of operations where one caller can spend a lot of somebody else's
     # resources: Argon2id on sign-in, a compiler on a run, a shared third-party quota on a sync.

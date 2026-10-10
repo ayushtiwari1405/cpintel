@@ -6,7 +6,7 @@ export interface DesktopAsset {
   name: string
   platform: 'windows' | 'mac' | 'linux'
   arch: 'x64' | 'arm64'
-  format: 'exe' | 'dmg' | 'AppImage' | 'deb'
+  format: 'exe' | 'dmg' | 'zip' | 'AppImage' | 'deb'
   size: number
   /** Hex SHA-256 GitHub computed for the file; null for very old uploads. */
   sha256: string | null

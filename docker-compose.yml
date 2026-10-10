@@ -141,6 +141,10 @@ services:
       CPINTEL_DESKTOP_REPOSITORY: ${CPINTEL_DESKTOP_REPOSITORY:-}
       CPINTEL_DESKTOP_GITHUB_TOKEN: ${CPINTEL_DESKTOP_GITHUB_TOKEN:-}
       CPINTEL_MIN_DESKTOP_VERSION: ${CPINTEL_MIN_DESKTOP_VERSION:-0.0.0}
+      # Installers deploy.sh built for this server (scripts/build-desktop.sh), served before
+      # any GitHub release. The whole directory is mounted, not current/ inside it: a new build
+      # replaces current/ by renaming, which a mount of current/ itself would never see.
+      CPINTEL_DESKTOP_DIR: /desktop
       # Encrypts each candidate's examination sign-in password and the optional room password.
       # Without it no examination can be sat; the backend warns at startup rather than
       # refusing, since a contest-only deployment does not need it.
@@ -167,6 +171,10 @@ services:
       # security headers — and it made X-Forwarded-For spoofable, since a direct caller could
       # set it themselves. With this closed, the header can be trusted.
       - "127.0.0.1:8080:8080"
+    volumes:
+      # deploy.sh creates it first: left to Docker, it would be made owned by root, and the
+      # build that fills it runs as the deploying user.
+      - ./desktop:/desktop:ro
     depends_on:
       postgres:
         condition: service_healthy

@@ -86,3 +86,6 @@ graphify-out/
 # Desktop build: compilers bundled into the installer (electron/scripts/fetch-toolchains.mjs)
 electron/toolchain/
 electron/.toolchain-cache/
+
+# Desktop installers built for this server (scripts/build-desktop.sh)
+desktop/

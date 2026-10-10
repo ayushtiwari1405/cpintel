@@ -55,6 +55,8 @@ fi
 echo "Postgres ready."
 
 # Start backend
+# Serves desktop installers made by scripts/build-desktop.sh, if any, on /download.
+export CPINTEL_DESKTOP_DIR="${CPINTEL_DESKTOP_DIR:-$ROOT/desktop}"
 nohup bash -c "cd '$ROOT/backend' && ./mvnw spring-boot:run" > /tmp/backend.log 2>&1 &
 disown
 echo "Backend starting (log: /tmp/backend.log)..."

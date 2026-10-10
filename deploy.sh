@@ -10,7 +10,10 @@
 #   2. pull that version's images;
 #   3. restart the application containers on them — the databases keep running;
 #   4. wait for the backend to report healthy;
-#   5. on failure, put the previous version back. If the failed version had already migrated
+#   5. build the desktop installers for this server's address, if that or the app changed
+#      (scripts/build-desktop.sh; 10-20 minutes when it does, nothing when it did not). The
+#      site is already up on the new version meanwhile. CPINTEL_DESKTOP_BUILD=0 skips it;
+#   6. on failure, put the previous version back. If the failed version had already migrated
 #      the schema, say so and name the backup to restore: an older backend on a newer schema is
 #      not something to leave running without a person deciding.
 #
@@ -22,6 +25,8 @@ COMPOSE=(docker compose -f docker-compose.yml -f docker-compose.prod.yml)
 APP=(runner backend frontend nginx)
 STATE_DIR=.deploy
 mkdir -p "$STATE_DIR"
+# Mounted into the backend; made here so Docker does not create it owned by root.
+mkdir -p desktop
 
 current="$(cat "$STATE_DIR/current" 2>/dev/null || true)"
 previous="$(cat "$STATE_DIR/previous" 2>/dev/null || true)"
@@ -49,6 +54,26 @@ healthy() {
   return 1
 }
 
+# A setting from .env, which compose reads by itself but this script does not.
+env_value() {
+  grep -m1 "^$1=" .env 2>/dev/null | cut -d= -f2- | tr -d "\"'" || true
+}
+
+# The installers are built for the address people open CPIntel at. A failed build leaves the
+# previous installers in place and does not fail the deploy: the site itself is up.
+build_desktop() {
+  local enabled url
+  enabled="${CPINTEL_DESKTOP_BUILD:-$(env_value CPINTEL_DESKTOP_BUILD)}"
+  [ "$enabled" = "0" ] && return 0
+  url="$(env_value CPINTEL_PUBLIC_URL)"
+  if [ -z "$url" ] || [ "$url" = "http://localhost" ]; then
+    echo "--- CPINTEL_PUBLIC_URL is not set in .env; desktop installers not built."
+    return 0
+  fi
+  ./scripts/build-desktop.sh "$url" \
+    || echo "!!! The desktop build failed; the download page keeps the previous installers."
+}
+
 run_version() {
   CPINTEL_VERSION="$1" "${COMPOSE[@]}" up -d --remove-orphans "${APP[@]}"
 }
@@ -74,6 +99,7 @@ if healthy; then
   fi
   docker image prune -f >/dev/null
   echo "=== deployed $target (schema ${schema_before:-new} → $(schema_version)) ==="
+  build_desktop
   exit 0
 fi
 

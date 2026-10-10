@@ -3,7 +3,9 @@ name: Electron Build
 # Pushing a version tag (v1.2.3) builds the desktop installers for every platform and publishes
 # them as a GitHub Release of whichever repository this runs in — a deployment's own copy of
 # CPIntel publishes its own. The CPIntel server reads that release (CPINTEL_DESKTOP_REPOSITORY)
-# for its download page and for the update ribbon in installed apps.
+# for its download page and for the update ribbon in installed apps — unless deploy.sh built
+# installers on the server itself (scripts/build-desktop.sh), which is the default and comes
+# first. This route is for macOS disk images (.dmg), which only a Mac can make.
 on:
   push:
     tags: ['v*']

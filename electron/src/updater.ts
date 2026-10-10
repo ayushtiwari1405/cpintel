@@ -19,7 +19,8 @@ import path from 'path'
  *  - Windows: runs the new installer and quits; it replaces this version and starts the new one.
  *  - Linux AppImage: replaces the AppImage file in place and restarts.
  *  - Linux .deb: opens the package in the system installer.
- *  - macOS: opens the disk image; the student drags CPIntel into Applications over this one.
+ *  - macOS: opens the disk image, or unpacks the .zip a server-side (Linux) build makes; the
+ *    student drags CPIntel into Applications over this one.
  */
 
 interface Asset {
@@ -48,10 +49,14 @@ const PLATFORM: Record<string, string> = { win32: 'windows', darwin: 'mac', linu
 function pick(assets: Asset[]): Asset | undefined {
   const platform = PLATFORM[process.platform]
   const arch = process.arch === 'arm64' ? 'arm64' : 'x64'
-  const format = process.platform === 'win32' ? 'exe'
-    : process.platform === 'darwin' ? 'dmg'
-      : process.env.APPIMAGE ? 'AppImage' : 'deb'
-  return assets.find(a => a.platform === platform && a.arch === arch && a.format === format)
+  const formats = process.platform === 'win32' ? ['exe']
+    : process.platform === 'darwin' ? ['dmg', 'zip']
+      : process.env.APPIMAGE ? ['AppImage'] : ['deb']
+  for (const format of formats) {
+    const found = assets.find(a => a.platform === platform && a.arch === arch && a.format === format)
+    if (found) return found
+  }
+  return undefined
 }
 
 async function download(url: string, to: string, onProgress: (p: UpdateProgress) => void)
@@ -163,16 +168,22 @@ async function install(asset: Asset, file: string, version: string, window: Brow
       + 'Install (it asks for your password, as any package does), then restart CPIntel.' }
   }
 
-  // macOS: an app cannot replace its own bundle while running, so the disk image is opened and
-  // the student finishes it, the same way as the first install.
+  // macOS: an app cannot replace its own bundle while running, so the disk image is opened (or
+  // the zip unpacked into Downloads) and the student finishes it, the same way as the first
+  // install.
+  const zip = asset.format === 'zip'
   await shell.openPath(saved)
   const options = {
     type: 'info' as const,
     buttons: ['Quit CPIntel'],
     title: `Install CPIntel ${version}`,
     message: `Finish installing CPIntel ${version}`,
-    detail: 'In the window that opened, drag CPIntel onto the Applications folder and choose '
-      + 'Replace. Then open CPIntel again from Applications.\n\nCPIntel quits now so that it '
+    detail: (zip
+      ? 'The new CPIntel is being unpacked into your Downloads folder. Drag it from there onto '
+        + 'the Applications folder and choose Replace.'
+      : 'In the window that opened, drag CPIntel onto the Applications folder and choose '
+        + 'Replace.')
+      + ' Then open CPIntel again from Applications.\n\nCPIntel quits now so that it '
       + 'can be replaced.',
   }
   if (window) await dialog.showMessageBox(window, options)

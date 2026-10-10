@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.FileSystemResource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -29,9 +30,9 @@ import java.util.Map;
  * Where the desktop app is downloaded from, and how an installed one learns it is out of date.
  *
  * <p>Unauthenticated, like {@code /api/version}: the update check runs on the sign-in screen of
- * an installed app, and a download link is nothing to protect. Only installers attached to the
- * configured repository's latest release are ever served — the name in the path is looked up
- * there, never used to build a URL.
+ * an installed app, and a download link is nothing to protect. Only installers listed in the
+ * current release — this server's own build, or the configured repository's latest — are ever
+ * served: the name in the path is looked up there, never used to build a URL or a path.
  */
 @RestController
 @RequestMapping("/api/v1/desktop")
@@ -81,6 +82,15 @@ public class DesktopController {
         Asset asset = releases.asset(name)
             .orElseThrow(() -> ApiException.notFound("There is no installer called " + name
                 + " in the current desktop release."));
+
+        if (asset.file() != null) {
+            return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .contentLength(asset.size())
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                    "attachment; filename=\"" + asset.name() + "\"")
+                .body(new FileSystemResource(asset.file()));
+        }
 
         if (releases.redirectable()) {
             return ResponseEntity.status(HttpStatus.FOUND)

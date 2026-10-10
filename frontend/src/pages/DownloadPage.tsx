@@ -122,9 +122,13 @@ function WindowsSteps({ release }: { release: DesktopRelease }) {
 }
 
 function MacSteps({ release }: { release: DesktopRelease }) {
-  const arm = find(release, 'mac', 'dmg', 'arm64')
-  const intel = find(release, 'mac', 'dmg', 'x64')
+  // A disk image when the release was built on a Mac; a .zip when this server built it, since
+  // only a Mac can make a disk image.
+  const mac = (arch: string) => find(release, 'mac', 'dmg', arch) ?? find(release, 'mac', 'zip', arch)
+  const arm = mac('arm64')
+  const intel = mac('x64')
   if (!arm && !intel) return <NoInstaller os="mac" />
+  const zipped = (arm ?? intel)!.format === 'zip'
   return (
     <ol className="space-y-5">
       <Step n={1} title="Download the one for your Mac's chip">
@@ -137,9 +141,18 @@ function MacSteps({ release }: { release: DesktopRelease }) {
           Apple M…" means Apple Silicon; "Processor: … Intel" means Intel.
         </p>
       </Step>
-      <Step n={2} title="Open it and drag CPIntel into Applications">
-        <p>Then eject the CPIntel disk in Finder's sidebar.</p>
-      </Step>
+      {zipped ? (
+        <Step n={2} title="Open it and drag CPIntel into Applications">
+          <p>
+            Double-click the downloaded .zip in Downloads. It unpacks into CPIntel; drag that onto
+            the Applications folder in Finder's sidebar.
+          </p>
+        </Step>
+      ) : (
+        <Step n={2} title="Open it and drag CPIntel into Applications">
+          <p>Then eject the CPIntel disk in Finder's sidebar.</p>
+        </Step>
+      )}
       <Step n={3} title="Open CPIntel from Applications — the first time takes one extra step">
         <Expected>
           <p>
@@ -252,8 +265,8 @@ function RedFlags() {
         </li>
         <li>
           The file name does not start with <span className="font-mono text-gray-300">CPIntel-</span>,
-          or ends in anything other than .exe, .dmg, .deb or .AppImage (for example .zip, .msi,
-          .scr, .bat).
+          or ends in anything other than .exe, .dmg, .deb or .AppImage (or .zip, for a Mac
+          only) — for example .msi, .scr, .bat.
         </li>
         <li>The fingerprint above does not match.</li>
         <li>

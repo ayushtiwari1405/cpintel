@@ -11,6 +11,9 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.attribute.FileTime;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -20,9 +23,16 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * The newest desktop app, as published on the GitHub repository this deployment builds from.
+ * The newest desktop app: built on this server, or published on the GitHub repository this
+ * deployment builds from.
  *
- * <p>Installers are built by the repository's own Actions workflow on a version tag and attached
+ * <p>Built here first. deploy.sh runs scripts/build-desktop.sh for the deployment's own address,
+ * which leaves the installers and a release.json listing them in {@code <local-dir>/current}.
+ * The app's server address is fixed when it is built, so building where the server is deployed
+ * is what keeps the two in step without anybody making installers by hand. When that directory
+ * has no build, the GitHub release below is used instead.
+ *
+ * <p>Or on GitHub: installers are built by the repository's own Actions workflow on a version tag and attached
  * to a GitHub Release (.github/workflows/electron.yml). Whoever runs a deployment builds from
  * their own copy of the repository, so which repository to read is configuration — nothing here
  * names one. The download page and the desktop app's update ribbon both ask this server rather
@@ -42,9 +52,10 @@ public class DesktopReleaseService {
     /**
      * Installer names, as electron/package.json's artifactName settings write them:
      * CPIntel-Setup-1.2.3-x64.exe, CPIntel-1.2.3-arm64.dmg, CPIntel-1.2.3-x64.AppImage, ...
+     * A Mac build made on Linux is a .zip, since only a Mac can make a disk image.
      */
     private static final Pattern INSTALLER = Pattern.compile(
-        "^CPIntel-(?:Setup-)?[0-9][0-9A-Za-z.+-]*-(x64|arm64|amd64|x86_64|aarch64)\\.(exe|dmg|AppImage|deb)$");
+        "^CPIntel-(?:Setup-)?[0-9][0-9A-Za-z.+-]*-(x64|arm64|amd64|x86_64|aarch64)\\.(exe|dmg|zip|AppImage|deb)$");
 
     private final ObjectMapper json;
     private final HttpClient http = HttpClient.newBuilder()
@@ -65,20 +76,36 @@ public class DesktopReleaseService {
     @Value("${cpintel.desktop.github-api:https://api.github.com}")
     private String api;
 
+    /** Where scripts/build-desktop.sh leaves its builds; the newest is in current/. Blank: none. */
+    @Value("${cpintel.desktop.local-dir:}")
+    private String localDir;
+
     private volatile Release cached;
     private volatile Instant cachedAt = Instant.EPOCH;
+
+    private volatile Release local;
+    private volatile FileTime localStamp;
 
     public DesktopReleaseService(ObjectMapper json) {
         this.json = json;
     }
 
     public boolean configured() {
+        return githubConfigured() || localDir != null && !localDir.isBlank();
+    }
+
+    private boolean githubConfigured() {
         return repository != null && repository.matches("[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+");
     }
 
-    /** The newest published release, or empty when there is none or GitHub cannot be reached. */
+    /**
+     * The newest release: this server's own build if it has one, else the GitHub release. Empty
+     * when there is neither, or GitHub cannot be reached.
+     */
     public Optional<Release> latest() {
-        if (!configured()) return Optional.empty();
+        Optional<Release> built = localBuild();
+        if (built.isPresent()) return built;
+        if (!githubConfigured()) return Optional.empty();
         if (cached != null && Instant.now().isBefore(cachedAt.plus(CACHE_FOR))) {
             return Optional.of(cached);
         }
@@ -110,6 +137,45 @@ public class DesktopReleaseService {
         }
     }
 
+    /**
+     * The build in {@code <local-dir>/current}, re-read whenever its release.json changes. It is
+     * replaced by renaming a whole directory into place, so a half-written one is never seen.
+     */
+    private Optional<Release> localBuild() {
+        if (localDir == null || localDir.isBlank()) return Optional.empty();
+        Path dir = Path.of(localDir, "current");
+        Path list = dir.resolve("release.json");
+        try {
+            FileTime stamp = Files.getLastModifiedTime(list);
+            if (local == null || !stamp.equals(localStamp)) {
+                local = parseLocal(json.readTree(list.toFile()), dir);
+                localStamp = stamp;
+            }
+            return Optional.of(local);
+        } catch (java.nio.file.NoSuchFileException e) {
+            return Optional.empty();
+        } catch (Exception e) {
+            log.warn("Could not read the desktop build in {}: {}", dir, e.getMessage());
+            return Optional.ofNullable(local);
+        }
+    }
+
+    Release parseLocal(JsonNode release, Path dir) {
+        List<Asset> assets = new ArrayList<>();
+        for (JsonNode a : release.path("assets")) {
+            String name = a.path("name").asText("");
+            Matcher m = INSTALLER.matcher(name);
+            // The pattern admits no path separators, so the name cannot leave the directory.
+            if (!m.matches() || !Files.isRegularFile(dir.resolve(name))) continue;
+            String sha = a.path("sha256").asText("");
+            assets.add(new Asset(name, platformOf(m.group(2)), archOf(m.group(1)), m.group(2),
+                a.path("size").asLong(), sha.isEmpty() ? null : sha, null, null,
+                dir.resolve(name)));
+        }
+        return new Release(release.path("version").asText(""),
+            release.path("builtAt").asText(null), null, assets);
+    }
+
     Release parse(JsonNode release) {
         String tag = release.path("tag_name").asText("");
         String version = tag.startsWith("v") ? tag.substring(1) : tag;
@@ -127,7 +193,8 @@ public class DesktopReleaseService {
                 a.path("size").asLong(),
                 digest.startsWith("sha256:") ? digest.substring(7) : null,
                 a.path("browser_download_url").asText(),
-                a.path("url").asText()));
+                a.path("url").asText(),
+                null));
         }
         return new Release(version, release.path("published_at").asText(null),
             release.path("html_url").asText(null), assets);
@@ -136,7 +203,7 @@ public class DesktopReleaseService {
     private static String platformOf(String extension) {
         return switch (extension) {
             case "exe" -> "windows";
-            case "dmg" -> "mac";
+            case "dmg", "zip" -> "mac";
             default -> "linux";
         };
     }
@@ -198,5 +265,7 @@ public class DesktopReleaseService {
         /** Hex SHA-256 as GitHub computed it on upload; null for assets older than that. */
         String sha256,
         String browserUrl,
-        String apiUrl) {}
+        String apiUrl,
+        /** The file itself, for an installer built on this server; null for a GitHub one. */
+        Path file) {}
 }
