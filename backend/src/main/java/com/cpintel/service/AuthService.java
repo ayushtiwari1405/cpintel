@@ -178,19 +178,24 @@ public class AuthService {
     // spent, or it is still there to use the moment whatever refused it lifts.
     @Transactional(noRollbackFor = ApiException.class)
     public AuthDto.AuthResponse refresh(AuthDto.RefreshRequest req, HttpServletRequest httpReq) {
-        RefreshToken token = refreshTokenRepository.findByToken(req.getRefreshToken())
+        RefreshToken token = refreshTokenRepository
+            .findByToken(com.cpintel.common.TokenDigest.of(req.getRefreshToken()))
             .orElseThrow(() -> ApiException.unauthorized("Invalid refresh token"));
 
-        if (token.getRevoked())
+        Instant now = Instant.now();
+        if (token.getRevoked()) {
+            refuseReuse(token, now, httpReq);
             throw ApiException.unauthorized("Refresh token has been revoked");
+        }
 
-        if (token.getExpiresAt().isBefore(Instant.now())) {
+        if (token.getExpiresAt().isBefore(now)) {
             refreshTokenRepository.delete(token);
             throw ApiException.unauthorized("Refresh token expired");
         }
 
         // Rotate: revoke old, issue new
         token.setRevoked(true);
+        token.setRotatedAt(now);
         refreshTokenRepository.save(token);
 
         User user = token.getUser();
@@ -210,12 +215,47 @@ public class AuthService {
                 throw ApiException.unauthorized("The examination has ended. Sign in with your "
                     + "account password to see your submissions under Past examinations.");
             }
-            return buildAuthResponse(user, httpReq, exam);
+            return buildAuthResponse(user, httpReq, exam, token.getFamilyId());
         }
         // An ordinary session does not renew while its holder's examination runs. The token was
         // revoked by the rotation above, so this is the sign-out.
         refuseDuringExamination(user, httpReq);
-        return buildAuthResponse(user, httpReq);
+        return buildAuthResponse(user, httpReq, null, token.getFamilyId());
+    }
+
+    /**
+     * How long after a rotation the old token may arrive again without being taken for theft.
+     *
+     * Two tabs renewing at the same moment both send the cookie they hold, and only one of them
+     * can win the rotation; the other arrives a moment later with the token just retired. That is
+     * the owner racing themselves, and ending their session for it would sign people out for
+     * having two tabs open. A copy presented later than this is somebody else.
+     */
+    static final java.time.Duration REUSE_GRACE = java.time.Duration.ofSeconds(10);
+
+    /**
+     * A revoked token was presented. If it was retired by rotation, somebody already exchanged it
+     * for a successor, so two parties held it — the owner and whoever copied it — and there is no
+     * telling which is which. Every session renewed from that sign-in is ended, and the access
+     * tokens already issued with them, so both parties have to sign in again; only one of them
+     * can.
+     *
+     * A token revoked any other way (signing out, an admin, an examination starting) carries no
+     * such signal and is simply refused.
+     */
+    private void refuseReuse(RefreshToken token, Instant now, HttpServletRequest httpReq) {
+        Instant rotated = token.getRotatedAt();
+        if (rotated == null || !rotated.plus(REUSE_GRACE).isBefore(now)) return;
+
+        int ended = refreshTokenRepository.revokeFamily(token.getFamilyId());
+        if (ended == 0) return;  // The family was already over: nothing left to protect.
+
+        Long userId = token.getUser().getUserId();
+        jwtService.revokeUserTokens(userId);
+        auditService.record(userId, AuditService.REFRESH_TOKEN_REUSED, "USER",
+            String.valueOf(userId), httpReq);
+        log.warn("A retired refresh token for user {} was presented again; ended {} session(s) "
+            + "renewed from that sign-in", userId, ended);
     }
 
     /**
@@ -292,9 +332,18 @@ public class AuthService {
         return buildAuthResponse(user, req, null);
     }
 
-    /** @param exam the paper an examination session is for; null for an ordinary session. */
     private AuthDto.AuthResponse buildAuthResponse(User user, HttpServletRequest req,
                                                    com.cpintel.entity.GroupContest exam) {
+        return buildAuthResponse(user, req, exam, java.util.UUID.randomUUID().toString());
+    }
+
+    /**
+     * @param exam     the paper an examination session is for; null for an ordinary session
+     * @param familyId the sign-in this session was renewed from; a fresh one for a new sign-in
+     */
+    private AuthDto.AuthResponse buildAuthResponse(User user, HttpServletRequest req,
+                                                   com.cpintel.entity.GroupContest exam,
+                                                   String familyId) {
         Long examId = exam == null ? null : exam.getContestId();
         String accessToken  = jwtService.generateAccessToken(user.getUserId(), user.getEmail(),
             user.getRole(), examId);
@@ -309,7 +358,8 @@ public class AuthService {
 
         RefreshToken rt = RefreshToken.builder()
             .user(user)
-            .token(refreshToken)
+            .token(com.cpintel.common.TokenDigest.of(refreshToken))
+            .familyId(familyId)
             .examId(examId)
             .expiresAt(expires)
             .ipAddress(req.getRemoteAddr())

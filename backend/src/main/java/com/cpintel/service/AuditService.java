@@ -33,6 +33,8 @@ public class AuditService {
     /** Sign-in refused without checking the password, because the account was being guessed at. */
     public static final String LOGIN_THROTTLED = "LOGIN_THROTTLED";
     public static final String LOGOUT        = "LOGOUT";
+    /** A refresh token already exchanged for its successor was presented again: likely copied. */
+    public static final String REFRESH_TOKEN_REUSED = "REFRESH_TOKEN_REUSED";
     public static final String REGISTER      = "REGISTER";
     /** A sign-up attempt that arrived while self-registration was closed. */
     public static final String REGISTER_BLOCKED = "REGISTER_BLOCKED";

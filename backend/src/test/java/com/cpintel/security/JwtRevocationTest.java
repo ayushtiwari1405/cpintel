@@ -122,4 +122,27 @@ class JwtRevocationTest {
 
         assertFalse(jwt.isRevokedForUser(USER_ID, null));
     }
+
+    /**
+     * Signing out is checked on every request before anything else, so an exception here is not
+     * one failed check but the whole deployment refusing everybody until Redis is back.
+     */
+    @Test
+    @DisplayName("an unreachable Redis does not turn every signed-in request into an error")
+    void unreachableBlacklistFailsOpen() {
+        when(redis.hasKey(anyString()))
+            .thenThrow(new org.springframework.data.redis.RedisConnectionFailureException("down"));
+        String token = jwt.generateAccessToken(USER_ID, "ada@example.com", "USER");
+
+        assertTrue(assertDoesNotThrow(() -> jwt.isValid(token)));
+    }
+
+    @Test
+    @DisplayName("a signed-out token is still refused while Redis answers")
+    void blacklistedTokenIsRefused() {
+        when(redis.hasKey(anyString())).thenReturn(true);
+        String token = jwt.generateAccessToken(USER_ID, "ada@example.com", "USER");
+
+        assertFalse(jwt.isValid(token));
+    }
 }

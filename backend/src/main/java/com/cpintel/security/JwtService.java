@@ -111,8 +111,23 @@ public class JwtService {
         }
     }
 
+    /**
+     * Whether this token was signed out.
+     *
+     * Answers false when Redis cannot be read, the same direction {@link #isRevokedForUser} and
+     * the rate limiter take. Letting the exception out instead failed every authenticated request
+     * of the deployment for as long as Redis was down, because {@link JwtAuthFilter} asks this
+     * before anything else. What is given up is bounded: a token its holder signed out of stays
+     * usable until it expires on its own, at most one access-token lifetime, and the refresh
+     * tokens revoked in Postgres at the same sign-out still cannot mint another.
+     */
     private boolean isBlacklisted(String jti) {
-        return Boolean.TRUE.equals(redisTemplate.hasKey(BLACKLIST_PREFIX + jti));
+        try {
+            return Boolean.TRUE.equals(redisTemplate.hasKey(BLACKLIST_PREFIX + jti));
+        } catch (Exception e) {
+            log.debug("Could not read the sign-out list for token {}: {}", jti, e.getMessage());
+            return false;
+        }
     }
 
     /**

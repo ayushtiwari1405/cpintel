@@ -12,7 +12,14 @@ import java.util.Optional;
 
 @Repository
 public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long> {
-    Optional<RefreshToken> findByToken(String token);
+    /** @param tokenDigest the token's {@link com.cpintel.common.TokenDigest}, never the token */
+    Optional<RefreshToken> findByToken(String tokenDigest);
+
+    /** Ends every session renewed from one sign-in. Returns how many were still live. */
+    @Modifying
+    @Query("UPDATE RefreshToken rt SET rt.revoked = true "
+        + "WHERE rt.familyId = :familyId AND rt.revoked = false")
+    int revokeFamily(@Param("familyId") String familyId);
 
     @Modifying
     @Query("DELETE FROM RefreshToken rt WHERE rt.user.userId = :userId")
@@ -20,7 +27,7 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long
 
     @Modifying
     @Query("DELETE FROM RefreshToken rt WHERE rt.expiresAt < :now")
-    void deleteExpiredTokens(@Param("now") Instant now);
+    int deleteExpiredTokens(@Param("now") Instant now);
 
     @Modifying
     @Query("UPDATE RefreshToken rt SET rt.revoked = true WHERE rt.user.userId = :userId")

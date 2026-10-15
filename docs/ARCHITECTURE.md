@@ -671,6 +671,17 @@ to sit in `localStorage` beside the access token, where anything that ran on the
 week-long login. After a reload the first request gets a 401 and the client renews from the
 cookie.
 
+Only the refresh token's SHA-256 is stored (`TokenDigest`, migration V23), as the password-reset
+tokens already were, so a copy of `refresh_tokens` holds no session anybody can present. Every
+renewal retires the token it was given and issues the next in the same *family* — one family per
+sign-in. A retired token presented again more than ten seconds after its rotation means two
+parties held it, the owner and whoever copied it, and there is no telling which is which: the
+whole family is revoked, the user's access tokens with it, and `REFRESH_TOKEN_REUSED` is
+audited. Inside those ten seconds it is two tabs of one browser racing to renew, and is simply
+refused. A token revoked any other way — signing out, an admin, an examination starting — has no
+rotation behind it and raises nothing. Expired rows are deleted every six hours; revoked rows are
+kept until they expire, since recognising a replay needs them.
+
 ### Making "deactivate" mean something
 
 An account state that only takes effect at the next login is not an account state. Deactivating

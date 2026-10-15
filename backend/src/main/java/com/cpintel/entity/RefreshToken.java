@@ -23,8 +23,17 @@ public class RefreshToken {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
+    /** SHA-256 of the token, in hex; the token itself is never stored (V23). */
     @Column(name = "token", nullable = false, unique = true, length = 500)
     private String token;
+
+    /** Shared by every token renewed from one sign-in, so a stolen one can end them all. */
+    @Column(name = "family_id", nullable = false, length = 36)
+    private String familyId;
+
+    /** When this token was exchanged for its successor; null if it never was. */
+    @Column(name = "rotated_at")
+    private Instant rotatedAt;
 
     @Column(name = "device_info", length = 500)
     private String deviceInfo;

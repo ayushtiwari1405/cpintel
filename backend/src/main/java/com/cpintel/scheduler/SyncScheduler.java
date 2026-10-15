@@ -1,6 +1,7 @@
 package com.cpintel.scheduler;
 
 import com.cpintel.repository.jpa.PlatformAccountRepository;
+import com.cpintel.repository.jpa.RefreshTokenRepository;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Slice;
 import com.cpintel.service.SyncService;
@@ -9,6 +10,9 @@ import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.Instant;
 
 @Component
 @RequiredArgsConstructor
@@ -19,6 +23,7 @@ public class SyncScheduler {
 
     private final PlatformAccountRepository platformAccountRepository;
     private final SyncService syncService;
+    private final RefreshTokenRepository refreshTokenRepository;
 
     /**
      * Nightly incremental sync for all linked accounts.
@@ -53,7 +58,13 @@ public class SyncScheduler {
     }
 
     /**
-     * Clean up expired refresh tokens every 6 hours.
+     * Deletes refresh tokens past their expiry, every 6 hours.
+     *
+     * <p>This used to log and do nothing else, so the table grew by a row on every sign-in and
+     * every renewal, for ever; an expired row went only when somebody happened to present it.
+     * Revoked rows that have not yet expired are kept on purpose: presenting one of those again
+     * is how a stolen token is recognised (see {@code AuthService.refresh}), and that can only
+     * happen until it would have expired anyway.
      */
     @Scheduled(fixedRate = 6 * 60 * 60 * 1000)
     // lockAtLeastFor matters more than lockAtMostFor here.
@@ -64,7 +75,9 @@ public class SyncScheduler {
     // what actually prevents a double run of a fast job across instances whose clocks and
     // start times are not identical.
     @SchedulerLock(name = "cleanExpiredTokens", lockAtMostFor = "PT15M", lockAtLeastFor = "PT5M")
+    @Transactional
     public void cleanExpiredTokens() {
-        log.debug("Cleaning expired refresh tokens");
+        int deleted = refreshTokenRepository.deleteExpiredTokens(Instant.now());
+        log.debug("Deleted {} expired refresh tokens", deleted);
     }
 }
