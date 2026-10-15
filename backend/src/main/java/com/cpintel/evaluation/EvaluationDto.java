@@ -166,6 +166,14 @@ public final class EvaluationDto {
         @NotBlank @Size(max = 16) String label,
         /** Null takes the hand-set mark away, and the judge's mark stands again. */
         @DecimalMin("0") @DecimalMax("100000") Double marks,
-        @Size(max = 1000) String remark
+        @Size(max = 1000) String remark,
+        /**
+         * The {@code markedAt} of the mark the marker was looking at, or null if there was none.
+         * If somebody else has marked the answer since, the save is refused rather than written
+         * over theirs. Left out entirely (an older page), nothing is checked.
+         */
+        Instant seenMarkedAt,
+        /** True when the page sends {@link #seenMarkedAt}, so that "saw no mark" is a statement. */
+        Boolean checkSeen
     ) {}
 }

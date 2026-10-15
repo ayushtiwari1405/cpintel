@@ -116,4 +116,38 @@ class CRunnerTest {
         assertFalse(result.compiled());
         assertTrue(result.compileOutput().contains("main.c"), result.compileOutput());
     }
+
+    /**
+     * The case the error message cannot cover: C does not complain when malloc fails, it hands
+     * back a null pointer and the program dies writing to it. The run's peak memory says why.
+     */
+    @Test
+    @DisplayName("a C program that grows until malloc fails is a memory limit, not a crash")
+    void silentOutOfMemoryIsMemoryLimit() {
+        runner = new RunEngine(List.of(new CRuntime()), new Sandbox(),
+            new RunEngine.Limits(10_000L, 20_000L, 128, 65_536), false);
+
+        RunDto.RunResponse result = run("""
+            #include <stdlib.h>
+            #include <string.h>
+            int main(void) {
+                for (;;) {
+                    char *p = malloc(1 << 20);
+                    memset(p, 1, 1 << 20);
+                }
+            }
+            """, "", "");
+
+        assertTrue(result.compiled(), result.compileOutput());
+        RunDto.TestResult r = result.results().get(0);
+        assertEquals(RunDto.Verdict.MEMORY_LIMIT_EXCEEDED, r.verdict(),
+            "peak " + r.peakMemoryKb() + " KB, exit " + r.exitCode());
+    }
+
+    @Test
+    @DisplayName("every run reports its peak memory")
+    void reportsPeakMemory() {
+        RunDto.RunResponse result = run("int main(void) { return 0; }\n", "", null);
+        assertNotNull(result.results().get(0).peakMemoryKb());
+    }
 }

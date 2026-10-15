@@ -351,7 +351,10 @@ function CaseResult({ result }: { result: RunTestResult }) {
       <div className="flex items-center gap-2 text-xs">
         <VerdictIcon verdict={result.verdict} />
         <span className={clsx('font-medium', TONE_TEXT[meta.tone])}>{meta.label}</span>
-        <span className="ml-auto text-gray-600">{result.durationMs} ms</span>
+        <span className="ml-auto text-gray-600">
+          {result.durationMs} ms
+          {result.peakMemoryKb != null && ` · ${formatMemory(result.peakMemoryKb)}`}
+        </span>
       </div>
 
       {result.truncated && (
@@ -517,4 +520,8 @@ function Banner({ children, tone, icon }: {
       <span>{children}</span>
     </div>
   )
+}
+
+function formatMemory(kb: number) {
+  return kb < 1024 ? `${kb} KB` : `${(kb / 1024).toFixed(1)} MB`
 }

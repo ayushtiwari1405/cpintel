@@ -124,7 +124,7 @@ class EvaluationServiceTest {
     }
 
     private static EvaluationDto.MarkRequest mark(long userId, String label, Double value) {
-        return new EvaluationDto.MarkRequest(userId, label, value, null);
+        return new EvaluationDto.MarkRequest(userId, label, value, null, null, null);
     }
 
     @Test
@@ -197,7 +197,7 @@ class EvaluationServiceTest {
         assertThrows(ApiException.class, () -> service.taMark(TA, EXAM, mark(1, "B", 5.0), null));
         assertThrows(ApiException.class,
             () -> service.taSubmission(TA, EXAM, 2L, "A"));
-        verify(marks, never()).save(any());
+        verify(marks, never()).saveAndFlush(any());
     }
 
     @Test
@@ -209,10 +209,10 @@ class EvaluationServiceTest {
         assertThrows(ApiException.class, () -> service.taMark(TA, EXAM, mark(1, "A", 10.5), null));
 
         EvaluationDto.Cell cell = service.taMark(TA, EXAM,
-            new EvaluationDto.MarkRequest(1L, "a", 6.255, " nearly "), null);
+            new EvaluationDto.MarkRequest(1L, "a", 6.255, " nearly ", null, null), null);
 
         ArgumentCaptor<ExamMark> saved = ArgumentCaptor.forClass(ExamMark.class);
-        verify(marks).save(saved.capture());
+        verify(marks).saveAndFlush(saved.capture());
         assertEquals(new BigDecimal("6.26"), saved.getValue().getMarks());
         assertEquals("A", saved.getValue().getProblemLabel());
         assertEquals("nearly", saved.getValue().getRemark());
@@ -236,7 +236,7 @@ class EvaluationServiceTest {
         exam.setCompletedAt(Instant.now());
         assertEquals("DONE", service.taSheet(TA, EXAM).state());
         assertThrows(ApiException.class, () -> service.taMark(TA, EXAM, mark(1, "A", 5.0), null));
-        verify(marks, never()).save(any());
+        verify(marks, never()).saveAndFlush(any());
     }
 
     @Test
@@ -285,5 +285,69 @@ class EvaluationServiceTest {
         assertEquals(List.of(TA + ":1:A:ADMIN_CHANGED"), locks.changes);
         assertThrows(ApiException.class, () -> service.reopen(99L, EXAM,
             new EvaluationDto.ReopenRequest(2L, "A", true), null));   // no frozen TA covers it
+    }
+
+    // ── two people on one answer ──────────────────────────────────────────
+
+    private ExamMark storedMark(long markedBy, Instant at) {
+        ExamMark m = ExamMark.builder().contestId(EXAM).userId(1L).problemLabel("A")
+            .marks(new BigDecimal("7.00")).markedBy(markedBy).markedAt(at).build();
+        when(marks.findByContestIdAndUserIdAndProblemLabel(EXAM, 1L, "A")).thenReturn(Optional.of(m));
+        return m;
+    }
+
+    private static EvaluationDto.MarkRequest seen(Double value, Instant seenAt) {
+        return new EvaluationDto.MarkRequest(1L, "A", value, null, seenAt, true);
+    }
+
+    @Test
+    @DisplayName("a save against a mark somebody else has since changed is refused, and says who")
+    void refusesStaleSave() {
+        assign("A", null, null);
+        sent("a1", 1, "A", 100, "OK");
+        Instant theirs = Instant.parse("2026-10-15T10:00:00.123456Z");
+        storedMark(2L, theirs);
+
+        ApiException e = assertThrows(ApiException.class, () ->
+            service.taMark(TA, EXAM, seen(5.0, null), null));
+        assertEquals(409, e.getStatus().value());
+        assertTrue(e.getMessage().contains("cs2"), e.getMessage());
+        verify(marks, never()).saveAndFlush(any());
+    }
+
+    @Test
+    @DisplayName("a save against the mark that is still there goes through, nanoseconds aside")
+    void currentSaveGoesThrough() {
+        assign("A", null, null);
+        sent("a1", 1, "A", 100, "OK");
+        Instant stored = Instant.parse("2026-10-15T10:00:00.123456Z");
+        storedMark(2L, stored);
+
+        assertDoesNotThrow(() -> service.taMark(TA, EXAM,
+            seen(5.0, stored.plusNanos(789)), null));
+        verify(marks).saveAndFlush(any());
+    }
+
+    @Test
+    @DisplayName("one's own earlier save, from another tab, is not a conflict")
+    void ownEarlierSaveIsFine() {
+        assign("A", null, null);
+        sent("a1", 1, "A", 100, "OK");
+        storedMark(TA, Instant.parse("2026-10-15T10:00:00Z"));
+
+        assertDoesNotThrow(() -> service.taMark(TA, EXAM, seen(5.0, null), null));
+    }
+
+    @Test
+    @DisplayName("two first marks in the same instant: the loser is told, not given a 500")
+    void simultaneousFirstMarks() {
+        assign("A", null, null);
+        sent("a1", 1, "A", 100, "OK");
+        when(marks.saveAndFlush(any())).thenThrow(
+            new org.springframework.dao.DataIntegrityViolationException("uq_em_cell"));
+
+        ApiException e = assertThrows(ApiException.class, () ->
+            service.taMark(TA, EXAM, seen(5.0, null), null));
+        assertEquals(409, e.getStatus().value());
     }
 }

@@ -375,6 +375,8 @@ export interface RunTestResult {
   durationMs: number
   exitCode: number | null
   truncated: boolean
+  /** Peak memory in KB, when the run was measured (the server runner); absent otherwise. */
+  peakMemoryKb?: number | null
 }
 
 export interface RunResponse {
@@ -1387,4 +1389,7 @@ export interface MarkRequest {
   /** Null clears the hand-set mark. */
   marks: number | null
   remark?: string | null
+  /** The markedAt of the mark on screen (null if none): a newer one by somebody else refuses the save. */
+  seenMarkedAt?: string | null
+  checkSeen?: boolean
 }

@@ -3,6 +3,7 @@
 Downloads a sample of real Codeforces histories, for evaluating the skill models offline.
 
     ./scripts/analytics-eval/fetch.py --users 300
+    ./scripts/analytics-eval/fetch.py --users 600     # grows an existing sample to 600
 
 Users are sampled from the rating changes of recent rated rounds, stratified by rating band so
 the sample is not all newcomers (who dominate any round's participant list). For each one it
@@ -59,7 +60,7 @@ def call(method, **params):
     raise RuntimeError(f"{method}: gave up after retries")
 
 
-def sample_handles(per_band, contests):
+def sample_handles(per_band, contests, exclude=frozenset(), seed=20261015):
     pools = {b: set() for b in BANDS}
     for cid in contests:
         try:
@@ -68,12 +69,14 @@ def sample_handles(per_band, contests):
             print(f"  skipping contest {cid}: {e}", file=sys.stderr)
             continue
         for ch in changes:
+            if ch["handle"] in exclude:
+                continue
             for lo, hi in BANDS:
                 if lo <= ch["oldRating"] < hi:
                     pools[(lo, hi)].add(ch["handle"])
         if all(len(p) >= per_band * 3 for p in pools.values()):
             break
-    rng = random.Random(20261015)
+    rng = random.Random(seed)
     chosen = []
     for band, pool in pools.items():
         pick = rng.sample(sorted(pool), min(per_band, len(pool)))
@@ -90,12 +93,14 @@ def main():
     (DATA / "users").mkdir(parents=True, exist_ok=True)
     handles_file = DATA / "handles.json"
 
-    if handles_file.exists():
-        handles = json.loads(handles_file.read_text())
-    else:
+    handles = json.loads(handles_file.read_text()) if handles_file.exists() else []
+    if len(handles) < args.users:
+        # Growing an existing sample: new people, drawn the same way, from older rounds too.
         contests = [c["id"] for c in call("contest.list", gym="false")
-                    if c["phase"] == "FINISHED" and "Div." in c["name"]][:40]
-        handles = sample_handles(args.users // len(BANDS), contests)
+                    if c["phase"] == "FINISHED" and "Div." in c["name"]][:120]
+        more = sample_handles((args.users - len(handles)) // len(BANDS), contests,
+                              exclude=frozenset(handles), seed=20261015 + len(handles))
+        handles += more
         handles_file.write_text(json.dumps(handles))
 
     # Every problem's contest, rating and tags, so a round's unsolved problems can be counted

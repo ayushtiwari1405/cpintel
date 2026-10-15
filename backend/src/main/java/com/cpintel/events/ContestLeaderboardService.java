@@ -49,10 +49,18 @@ public class ContestLeaderboardService {
     private final UserRepository userRepository;
 
     /**
-     * Boards for contests with no event, which have no row to be stored on. Per instance, so
-     * two instances can be up to a refresh apart — and both are rebuilt from the same archive.
+     * Boards for contests with no event, which have no row to be stored on, are kept in Redis:
+     * every instance serves the same board, one recomputes it when it falls due, and an unread
+     * one expires on its own. Null in tests, and on a Redis failure, the board is kept in
+     * {@link #local} instead, per instance.
      */
-    private final Map<String, EventsDto.LeaderboardStandings> stored = new ConcurrentHashMap<>();
+    private final org.springframework.data.redis.core.RedisTemplate<String, Object> redis;
+    private final com.fasterxml.jackson.databind.ObjectMapper json;
+    private final com.cpintel.common.RecomputeLock recomputeLock;
+
+    private final Map<String, EventsDto.LeaderboardStandings> local = new ConcurrentHashMap<>();
+
+    private static final String PREFIX = "contest-board:";
 
     public EventsDto.Leaderboard forContest(Long userId, String platform, String contestId) {
         examGuard.requireContestAccess(userId, platform, contestId);
@@ -124,20 +132,52 @@ public class ContestLeaderboardService {
     private EventsDto.LeaderboardStandings current(GroupContest round,
                                                    CompeteDto.ContestInfo info, Instant now) {
         String key = round.getPlatform() + "|" + round.getExternalId();
-        EventsDto.LeaderboardStandings held = stored.get(key);
+        EventsDto.LeaderboardStandings held = load(key);
         if (held != null && !boards.due(round, held.generatedAt(), now)) return held;
-        // One recompute however many people the refresh found reading it.
-        EventsDto.LeaderboardStandings board = stored.compute(key, (k, latest) ->
-            latest != null && !boards.due(round, latest.generatedAt(), now)
-                ? latest : compute(round, info, now));
-        // Boards nobody has asked for in a while go: otherwise every contest anyone ever opened
-        // stays in memory, standings and all, until the instance restarts.
-        stored.values().removeIf(b -> b.generatedAt().isBefore(now.minus(FORGET_AFTER)));
-        return board;
+
+        // One recompute however many people, on however many instances, found it due; the
+        // rest serve the board they had. With none to serve yet, compute regardless.
+        EventsDto.LeaderboardStandings fresh = recomputeLock.ifFree(PREFIX + key, LOCK_TTL,
+            () -> save(key, compute(round, info, now), now));
+        if (fresh != null) return fresh;
+        return held != null ? held : save(key, compute(round, info, now), now);
     }
 
-    /** A board not recomputed for this long has not been read for this long. */
+    /** A board not recomputed for this long has not been read for this long, and goes. */
     private static final java.time.Duration FORGET_AFTER = java.time.Duration.ofHours(6);
+
+    /** Longer than a recompute takes, including fetching pending verdicts from the judge. */
+    private static final java.time.Duration LOCK_TTL = java.time.Duration.ofMinutes(2);
+
+    private EventsDto.LeaderboardStandings load(String key) {
+        if (redis != null) {
+            try {
+                Object stored = redis.opsForValue().get(PREFIX + key);
+                if (stored != null) {
+                    return json.readValue(stored.toString(), EventsDto.LeaderboardStandings.class);
+                }
+                return null;
+            } catch (Exception e) {
+                // Unreachable or unreadable: fall back to what this instance holds.
+            }
+        }
+        return local.get(key);
+    }
+
+    private EventsDto.LeaderboardStandings save(String key, EventsDto.LeaderboardStandings board,
+                                                Instant now) {
+        if (redis != null) {
+            try {
+                redis.opsForValue().set(PREFIX + key, json.writeValueAsString(board), FORGET_AFTER);
+                return board;
+            } catch (Exception e) {
+                // Kept on this instance instead, below.
+            }
+        }
+        local.put(key, board);
+        local.values().removeIf(b -> b.generatedAt().isBefore(now.minus(FORGET_AFTER)));
+        return board;
+    }
 
     private EventsDto.LeaderboardStandings compute(GroupContest round,
                                                    CompeteDto.ContestInfo info, Instant now) {

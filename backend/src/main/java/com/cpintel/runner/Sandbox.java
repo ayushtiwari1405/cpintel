@@ -123,6 +123,10 @@ public class Sandbox {
         }
 
         if (!exited) {
+            // The whole tree, not just the process started: a run under GNU time is a child of
+            // it, and outside bubblewrap (no PID namespace to tear down) killing only the parent
+            // would leave the program running on.
+            process.descendants().forEach(ProcessHandle::destroyForcibly);
             process.destroyForcibly();
             try {
                 process.waitFor(1, TimeUnit.SECONDS);

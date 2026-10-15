@@ -64,7 +64,9 @@ public final class RunDto {
         /** Non-zero exit status, when the process exited abnormally. */
         Integer exitCode,
         /** True when output was cut off at the cap rather than ending naturally. */
-        boolean truncated
+        boolean truncated,
+        /** Peak resident memory of the run in KB, where the runner can measure it; else null. */
+        Long peakMemoryKb
     ) {}
 
     public record RunResponse(

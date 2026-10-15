@@ -145,16 +145,28 @@ public class RunEngine {
         String label = (test.label() == null || test.label().isBlank())
             ? "Test " + (index + 1) : test.label();
 
-        Sandbox.ExecResult exec = sandbox.exec(
-            runtime.runCommand(workDir), workDir, test.input(),
+        // Run under GNU time where it is installed, for the run's peak memory: the one way to
+        // tell a program that ran out of memory from one that crashed, when it says nothing.
+        Path peakFile = workDir.resolve(".peak-" + index);
+        List<String> argv = runtime.runCommand(workDir);
+        boolean measured = Toolchains.onPath(GNU_TIME);
+        if (measured) {
+            List<String> timed = new ArrayList<>(List.of(GNU_TIME, "-f", "%M", "-o",
+                peakFile.toString()));
+            timed.addAll(argv);
+            argv = timed;
+        }
+
+        Sandbox.ExecResult exec = sandbox.exec(argv, workDir, test.input(),
             new Sandbox.Limits(Duration.ofMillis(limits.timeLimitMs()), limits.memoryLimitMb(),
                 runtime.limitAddressSpace(), limits.outputLimitBytes()));
+        Long peakKb = measured ? readPeak(peakFile) : null;
 
         RunDto.Verdict verdict;
         if (exec.timedOut()) {
             verdict = RunDto.Verdict.TIME_LIMIT_EXCEEDED;
         } else if (exec.exitCode() != 0) {
-            verdict = outOfMemory(exec.stderr())
+            verdict = outOfMemory(exec.stderr()) || nearLimit(peakKb, runtime)
                 ? RunDto.Verdict.MEMORY_LIMIT_EXCEEDED : RunDto.Verdict.RUNTIME_ERROR;
         } else if (test.expected() == null) {
             verdict = RunDto.Verdict.NO_EXPECTED;
@@ -165,7 +177,39 @@ public class RunEngine {
 
         return new RunDto.TestResult(
             label, verdict, test.input(), test.expected(), exec.stdout(), exec.stderr(),
-            exec.durationMs(), exec.exitCode() == 0 ? null : exec.exitCode(), exec.truncated());
+            exec.durationMs(), exec.exitCode() == 0 ? null : exec.exitCode(), exec.truncated(),
+            peakKb);
+    }
+
+    /** GNU time, which reports a run's peak resident memory. Absent, runs are not measured. */
+    static final String GNU_TIME = "/usr/bin/time";
+
+    /**
+     * A failed run that had used nine-tenths of its memory is taken to have run out of it.
+     *
+     * <p>The address-space cap fails an allocation instead of killing the process; a C program
+     * that allocates as it goes reaches the cap with its resident memory just under it, then
+     * crashes on the null pointer without a word. Its peak says what happened. One that asks for
+     * more than the cap in a single call fails with almost nothing resident, and cannot be told
+     * from any other crash; that stays a runtime error.
+     */
+    private boolean nearLimit(Long peakKb, LanguageRuntime runtime) {
+        return peakKb != null && runtime.limitAddressSpace()
+            && peakKb >= limits.memoryLimitMb() * 1024L * 9 / 10;
+    }
+
+    /** GNU time's report: the last line is the peak in KB; lines before it say how it ended. */
+    static Long readPeak(Path file) {
+        try {
+            List<String> lines = Files.readAllLines(file);
+            for (int i = lines.size() - 1; i >= 0; i--) {
+                String line = lines.get(i).trim();
+                if (line.matches("\\d+")) return Long.parseLong(line);
+            }
+        } catch (IOException | NumberFormatException e) {
+            // Not written (killed at the time limit) or unreadable: unmeasured, not an error.
+        }
+        return null;
     }
 
     /**

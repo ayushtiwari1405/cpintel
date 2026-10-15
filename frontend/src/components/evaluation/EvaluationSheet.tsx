@@ -269,7 +269,8 @@ function Reader({ source, cell, editable, open, onSaved }: {
 
   const submit = () => {
     if (parsed == null || invalid) return
-    save.mutate({ userId: cell.userId, label: cell.label, marks: parsed, remark: remark.trim() || null },
+    save.mutate({ userId: cell.userId, label: cell.label, marks: parsed, remark: remark.trim() || null,
+      seenMarkedAt: cell.markedAt, checkSeen: true },
       { onSuccess: onSaved })
   }
 
@@ -371,7 +372,8 @@ function Reader({ source, cell, editable, open, onSaved }: {
             </button>
             {cell.marks != null && (
               <button
-                onClick={() => save.mutate({ userId: cell.userId, label: cell.label, marks: null },
+                onClick={() => save.mutate({ userId: cell.userId, label: cell.label, marks: null,
+                  seenMarkedAt: cell.markedAt, checkSeen: true },
                   { onSuccess: () => { setValue(''); setRemark('') } })}
                 disabled={save.isPending}
                 className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs text-gray-500

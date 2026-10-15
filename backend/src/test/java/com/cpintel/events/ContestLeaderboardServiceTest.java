@@ -55,7 +55,8 @@ class ContestLeaderboardServiceTest {
             mock(AuditService.class), new ObjectMapper().findAndRegisterModules(),
             mock(com.cpintel.repository.jpa.ExamMarkRepository.class), new com.cpintel.common.RecomputeLock(null));
         service = new ContestLeaderboardService(boards, mock(ExamSessionGuard.class),
-            eventWindow, compete, userRepository);
+            eventWindow, compete, userRepository, null, new com.fasterxml.jackson.databind.ObjectMapper().findAndRegisterModules(),
+            new com.cpintel.common.RecomputeLock(null));
 
         start = Instant.now().minusSeconds(3600);
         when(compete.provider("DOMJUDGE")).thenReturn(provider);
@@ -115,6 +116,41 @@ class ContestLeaderboardServiceTest {
         service.forContest(VIEWER, "DOMJUDGE", CID);
         service.forContest(VIEWER, "DOMJUDGE", CID);
 
+        verify(submissions, times(1)).findByPlatformAndContestId("DOMJUDGE", CID);
+    }
+
+    /** What used to be per instance: two backends behind one balancer showed different boards. */
+    @Test
+    @DisplayName("Two instances sharing Redis serve one board, computed once")
+    @SuppressWarnings("unchecked")
+    void instancesShareTheBoard() {
+        judgeContest(start);
+        sent(2, "A", start.plusSeconds(600), "OK");
+
+        java.util.Map<String, Object> shared = new java.util.HashMap<>();
+        org.springframework.data.redis.core.RedisTemplate<String, Object> redis =
+            mock(org.springframework.data.redis.core.RedisTemplate.class);
+        org.springframework.data.redis.core.ValueOperations<String, Object> values =
+            mock(org.springframework.data.redis.core.ValueOperations.class);
+        when(redis.opsForValue()).thenReturn(values);
+        when(values.get(any())).thenAnswer(call -> shared.get(call.<String>getArgument(0)));
+        doAnswer(call -> shared.put(call.getArgument(0), call.getArgument(1)))
+            .when(values).set(any(), any(), any(java.time.Duration.class));
+
+        ExamLeaderboardService boards = new ExamLeaderboardService(events, eventRepository,
+            mock(ContestProblemRepository.class), submissions, userRepository, compete,
+            mock(AuditService.class), new ObjectMapper().findAndRegisterModules(),
+            mock(com.cpintel.repository.jpa.ExamMarkRepository.class),
+            new com.cpintel.common.RecomputeLock(null));
+        java.util.function.Supplier<ContestLeaderboardService> instance = () ->
+            new ContestLeaderboardService(boards, mock(ExamSessionGuard.class), eventWindow,
+                compete, userRepository, redis, new ObjectMapper().findAndRegisterModules(),
+                new com.cpintel.common.RecomputeLock(null));
+
+        EventsDto.Leaderboard first = instance.get().forContest(VIEWER, "DOMJUDGE", CID);
+        EventsDto.Leaderboard second = instance.get().forContest(VIEWER, "DOMJUDGE", CID);
+
+        assertEquals(first.standings().generatedAt(), second.standings().generatedAt());
         verify(submissions, times(1)).findByPlatformAndContestId("DOMJUDGE", CID);
     }
 

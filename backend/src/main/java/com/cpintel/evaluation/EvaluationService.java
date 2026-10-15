@@ -406,6 +406,7 @@ public class EvaluationService {
 
         ExamMark existing = markRepository.findByContestIdAndUserIdAndProblemLabel(
             eventId, req.userId(), problem.label()).orElse(null);
+        refuseIfChangedSinceSeen(existing, req, scope.viewerId(), paper);
 
         // An admin changing a mark a TA froze is a change that TA's marking needed.
         BigDecimal before = existing == null ? null : existing.getMarks();
@@ -442,8 +443,16 @@ public class EvaluationService {
             row.setRemark(trimToNull(req.remark()));
             row.setSubmissionId(chosen == null ? null : chosen.getId());
             row.setMarkedBy(scope.viewerId());
-            row.setMarkedAt(Instant.now());
-            markRepository.save(row);
+            // To the microsecond, which is what Postgres keeps: the page echoes this back as
+            // seenMarkedAt, and a nanosecond the database dropped would never compare equal.
+            row.setMarkedAt(Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MICROS));
+            try {
+                markRepository.saveAndFlush(row);
+            } catch (org.springframework.dao.DataIntegrityViolationException e) {
+                // Two first marks for one answer in the same instant: the other one was stored.
+                throw ApiException.conflict("Somebody else marked this answer just now. Reload "
+                    + "it to see their mark before changing it.");
+            }
             paper.marks().computeIfAbsent(req.userId(), k -> new HashMap<>())
                 .put(problem.label(), row);
             auditService.recordIn(event.getClassroomId(), scope.viewerId(),
@@ -455,6 +464,36 @@ public class EvaluationService {
         // The stored board was ranked on the old mark; drop it so the next read re-ranks.
         eventRepository.storeLeaderboard(eventId, null, null);
         return cell(scope, paper, target.student(), problem, markerNames(paper));
+    }
+
+    /**
+     * Refuses a save made against a mark that is no longer there.
+     *
+     * <p>Assignments may overlap and an admin may mark anything, so two people can have the same
+     * answer open. Without this the second save silently replaced the first, and neither found
+     * out. The page sends the {@code markedAt} it was showing; if the stored mark has moved on
+     * since — set, changed or cleared by somebody else — the save is refused and says by whom.
+     * One's own earlier save in another tab is not a conflict.
+     */
+    private void refuseIfChangedSinceSeen(ExamMark existing, EvaluationDto.MarkRequest req,
+                                          Long viewerId, Paper paper) {
+        if (!Boolean.TRUE.equals(req.checkSeen())) return;
+        Instant stored = existing == null ? null : micros(existing.getMarkedAt());
+        Instant seen = micros(req.seenMarkedAt());
+        if (java.util.Objects.equals(stored, seen)) return;
+        if (existing != null && viewerId.equals(existing.getMarkedBy())) return;
+        if (existing == null) {
+            throw ApiException.conflict("The mark you were looking at has been cleared by "
+                + "somebody else. Reload the answer before marking it.");
+        }
+        String who = markerNames(paper).getOrDefault(existing.getMarkedBy(), "somebody else");
+        throw ApiException.conflict(who + " has marked this answer " + number(
+            existing.getMarks().doubleValue()) + " since you opened it. Reload it to see "
+            + "their mark before changing it.");
+    }
+
+    private static Instant micros(Instant at) {
+        return at == null ? null : at.truncatedTo(java.time.temporal.ChronoUnit.MICROS);
     }
 
     private Target target(Scope scope, Paper paper, Long userId, String rawLabel) {

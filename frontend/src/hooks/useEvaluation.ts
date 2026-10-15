@@ -137,7 +137,11 @@ export function useSetMark(source: EvaluationSource) {
       qc.invalidateQueries({ queryKey: ['evaluation', 'exams'] })
       qc.invalidateQueries({ queryKey: ['admin', 'exam-leaderboard'] })
     },
-    onError: err => toast.push('error', errorOf(err, 'Could not save the mark')),
+    onError: (err: any) => {
+      toast.push('error', errorOf(err, 'Could not save the mark'))
+      // Somebody else marked it meanwhile: show their mark rather than leave ours on screen.
+      if (err?.response?.status === 409) qc.invalidateQueries({ queryKey: source.key })
+    },
   })
 }
 
