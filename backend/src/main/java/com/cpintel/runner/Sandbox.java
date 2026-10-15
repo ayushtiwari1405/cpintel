@@ -166,18 +166,74 @@ public class Sandbox {
         // Spelled two ways: bash calls it -u, but /bin/sh on Debian and Ubuntu is dash, where
         // it is -p and -u is an error. Written only as -u, it was never applied on those
         // systems, and every run's stderr began with "ulimit: Illegal option -u".
-        ulimits.append("if (ulimit -u ").append(MAX_PROCESSES).append(") 2>/dev/null; then ulimit -u ")
-            .append(MAX_PROCESSES).append("; else ulimit -p ").append(MAX_PROCESSES).append("; fi; ");
+        boolean sandboxed = bwrapAvailable();
+        long processes = sandboxed ? MAX_PROCESSES : tasksOfThisUser() + MAX_PROCESSES;
+        ulimits.append("if (ulimit -u ").append(processes).append(") 2>/dev/null; then ulimit -u ")
+            .append(processes).append("; elif (ulimit -p ").append(processes)
+            .append(") 2>/dev/null; then ulimit -p ").append(processes).append("; fi; ");
         ulimits.append("exec \"$@\"");
 
         List<String> inner = new ArrayList<>(List.of("/bin/sh", "-c", ulimits.toString(), "sh"));
         inner.addAll(argv);
 
-        if (!bwrapAvailable()) return inner;
+        if (!sandboxed) return inner;
 
         List<String> outer = new ArrayList<>(bwrapArgs(workDir));
         outer.addAll(inner);
         return outer;
+    }
+
+    /**
+     * How many processes and threads this user already has — what the process cap is counted
+     * against outside bubblewrap.
+     *
+     * <p>{@code ulimit -u} is not "this program may start 64 processes": the kernel counts every
+     * task the user owns, threads included. Inside bubblewrap's fresh user namespace that count
+     * starts near zero, so a flat 64 works. Without it, the count includes this JVM's own threads
+     * and everything else the account runs — on a CI runner that is already past 64, so gcc could
+     * not even start cc1. The cap is therefore set at what exists now plus the allowance.
+     *
+     * <p>Read from /proc where there is one (Linux, which counts threads); elsewhere processes
+     * are what is counted, and ProcessHandle can see those.
+     */
+    private static long tasksOfThisUser() {
+        Path proc = Path.of("/proc");
+        if (Files.isDirectory(proc.resolve("self"))) {
+            try {
+                String uid = uidLine(proc.resolve("self/status"));
+                long tasks = 0;
+                try (var entries = Files.newDirectoryStream(proc, "[0-9]*")) {
+                    for (Path entry : entries) {
+                        try {
+                            List<String> status = Files.readAllLines(entry.resolve("status"));
+                            if (!status.contains(uid)) continue;
+                            for (String line : status) {
+                                if (line.startsWith("Threads:")) {
+                                    tasks += Long.parseLong(line.substring(8).trim());
+                                }
+                            }
+                        } catch (IOException | NumberFormatException e) {
+                            // Exited while being read, or not ours to read: not counted.
+                        }
+                    }
+                }
+                return tasks;
+            } catch (IOException e) {
+                // Fall through to the portable count.
+            }
+        }
+        var user = ProcessHandle.current().info().user();
+        return ProcessHandle.allProcesses()
+            .filter(p -> user.isPresent() && p.info().user().equals(user))
+            .count();
+    }
+
+    /** The "Uid:" line of a /proc status file, compared whole so uid 10 is not uid 100. */
+    private static String uidLine(Path status) throws IOException {
+        for (String line : Files.readAllLines(status)) {
+            if (line.startsWith("Uid:")) return line;
+        }
+        throw new IOException("No Uid line in " + status);
     }
 
     /**

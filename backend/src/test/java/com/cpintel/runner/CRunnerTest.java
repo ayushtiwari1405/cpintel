@@ -4,6 +4,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIf;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
 
@@ -82,6 +83,26 @@ class CRunnerTest {
                 return 0;
             }
             """, "", "7\n");
+
+        assertTrue(result.compiled(), result.compileOutput());
+        assertEquals(RunDto.Verdict.OK, result.results().get(0).verdict());
+    }
+
+    /**
+     * Without bubblewrap the process cap is counted against everything this user runs, not
+     * just the build. A flat cap of 64 was already exhausted on a CI runner, and gcc failed with
+     * "cannot execute cc1: vfork: Resource temporarily unavailable" before compiling anything.
+     */
+    @Test
+    @DisplayName("compiles without bubblewrap, where the process cap counts the whole user")
+    void compilesWithoutBubblewrap() {
+        Sandbox sandbox = new Sandbox();
+        ReflectionTestUtils.setField(sandbox, "bwrapUsable", false);
+        runner = new RunEngine(List.of(new CRuntime()), sandbox,
+            new RunEngine.Limits(10_000L, 20_000L, 512, 65_536), false);
+
+        RunDto.RunResponse result = run("#include <stdio.h>\nint main(void) { puts(\"1\"); }\n",
+            "", "1\n");
 
         assertTrue(result.compiled(), result.compileOutput());
         assertEquals(RunDto.Verdict.OK, result.results().get(0).verdict());
