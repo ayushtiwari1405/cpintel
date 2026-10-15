@@ -197,4 +197,23 @@ class SkillRatingServiceTest {
         round(2, 1600, 1650, daysAgo(5));
         assertThrows(SkillRatingService.Unavailable.class, () -> service.profile(user("AUTO")));
     }
+
+    @Test
+    @DisplayName("a node no round touched reads like its topic, not like the overall rating")
+    void untouchedNodeFollowsItsTopic() {
+        // Strong in basic DP problems round after round; nothing in bitmask DP (dp + bitmasks).
+        for (int c = 1; c <= 10; c++) {
+            round(c, 1300, 1300, daysAgo(60 - c));
+            problem(c, "A", 1450, "dp");
+            solvedLive(c, "A");
+        }
+        var profile = service.profile(user("AUTO"));
+
+        double topic = profile.topics().get("Dynamic Programming").rating();
+        var bitmask = profile.nodes().get("dp-bitmask");
+        assertEquals(0, bitmask.problems());
+        assertTrue(topic > 1300);
+        assertTrue(bitmask.rating() > 1300 && bitmask.rating() <= topic,
+            "bitmask DP " + bitmask.rating() + ", topic " + topic);
+    }
 }

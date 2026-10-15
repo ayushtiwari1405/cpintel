@@ -220,19 +220,24 @@ public class SkillRatingService {
             }
         }
 
+        Map<String, Skill> topics = new LinkedHashMap<>();
+        Map<String, Double> poolCentre = new HashMap<>();
+        for (String topic : RoadmapTaxonomy.rollupTopics()) {
+            List<SkillRating.Evidence> evidence = byTopic.get(topic);
+            topics.put(topic, skill(rating, SkillRating.estimate(evidence)));
+            poolCentre.put(topic, SkillRating.estimate(evidence, 0.0, SkillRating.TOPIC_POOL_SD)
+                .offset());
+        }
+        // Each node drawn towards its topic: with little evidence of its own, it reads like it.
         Map<String, Skill> nodes = new LinkedHashMap<>();
         for (RoadmapTaxonomy.NodeDef def : RoadmapTaxonomy.NODES) {
-            nodes.put(def.id(), skill(rating, byNode.get(def.id())));
-        }
-        Map<String, Skill> topics = new LinkedHashMap<>();
-        for (String topic : RoadmapTaxonomy.rollupTopics()) {
-            topics.put(topic, skill(rating, byTopic.get(topic)));
+            nodes.put(def.id(), skill(rating, SkillRating.estimate(byNode.get(def.id()),
+                poolCentre.getOrDefault(def.rollupTopic(), 0.0), SkillRating.NODE_SD)));
         }
         return new Profile(CODEFORCES, requested, rating, true, gauntlet, nodes, topics);
     }
 
-    private static Skill skill(int rating, List<SkillRating.Evidence> evidence) {
-        SkillRating.Estimate e = SkillRating.estimate(evidence);
+    private static Skill skill(int rating, SkillRating.Estimate e) {
         return new Skill(rating + e.offset(), e.sd(), e.problems());
     }
 

@@ -80,4 +80,18 @@ class SkillRatingTest {
         assertTrue(old < recent);
         assertTrue(old > 0);
     }
+
+    @Test
+    @DisplayName("with no evidence a node sits at its topic's offset; its own evidence moves it from there")
+    void nodeLeansOnItsTopic() {
+        SkillRating.Estimate none = SkillRating.estimate(List.of(), 60, SkillRating.NODE_SD);
+        assertEquals(60, none.offset());
+        assertEquals(SkillRating.NODE_SD, none.sd());
+
+        double failing = SkillRating.estimate(rounds(10, 1600, 1600, false), 60,
+            SkillRating.NODE_SD).offset();
+        assertTrue(failing < 60, "own failures pull it below the topic: " + failing);
+        double fromZero = SkillRating.estimate(rounds(10, 1600, 1600, false)).offset();
+        assertTrue(failing > fromZero, "but not as far as it would fall from zero");
+    }
 }

@@ -27,16 +27,26 @@ import java.util.Collection;
  * evidence carries it. That is what keeps one lucky round from making anybody a DP expert. Older
  * rounds count for less, halving every {@link #HALF_LIFE_DAYS} days.
  *
+ * <h2>Nodes lean on their topic</h2>
+ *
+ * <p>A roadmap node has far less evidence than its topic — a few problems of a narrow band against
+ * every DP problem anybody met — so a node's prior is centred on its topic's offset rather than on
+ * zero ({@link #estimate(Collection, double, double)}): with little evidence of its own a node reads
+ * like its topic, and moves away only as far as its own problems carry it. Topics themselves are
+ * drawn to zero.
+ *
  * <h2>What it was measured to do</h2>
  *
- * <p>On 249 real histories (scripts/analytics-eval, 15 Oct 2026), predicting which problems of
- * their later rated rounds people solved, scored on users the parameters were not tuned on:
- * the old mastery score added nothing to the rating alone (log-loss -0.13 x 10^-3, interval
- * across zero); these offsets improved it by 1.4 x 10^-3, about 0.65%, with an interval that
- * only just reaches zero. The rating explains most of it. Offsets are small — their spread is
- * about 30 points, and only around one in twenty is larger than its own uncertainty — so the
- * page calls a topic a strength or a weak spot only when its offset clears its {@code sd}.
- * {@link #PRIOR_SD} and {@link #HALF_LIFE_DAYS} are the values chosen on the tuning half.
+ * <p>On 488 real histories (scripts/analytics-eval, 15 Oct 2026), predicting which problems of
+ * their later rated rounds people solved, scored on 250 users the parameters were not tuned on:
+ * the old mastery score added nothing to the rating alone (-0.09 x 10^-3 log-loss, interval across
+ * zero); per-node offsets drawn to zero improved it by 1.43 x 10^-3 [0.84, 1.97]; pooled towards
+ * the topic, by 1.68 x 10^-3 [0.89, 2.42], which is better than per-node by 0.25 [0.02, 0.48].
+ * Counting a problem tried but not solved as part of a solve added nothing. The rating explains
+ * most of it. Offsets are small — their spread is about 30 points, and only around one in twenty
+ * is larger than its own uncertainty — so the page calls a topic a strength or a weak spot only
+ * when its offset clears its {@code sd}. The constants below are the values chosen on the tuning
+ * half.
  *
  * <p>Pure functions over their inputs, like {@link ScoringFormulas}.
  */
@@ -44,8 +54,14 @@ public final class SkillRating {
 
     private SkillRating() {}
 
-    /** Spread of the prior on an offset, in rating points. Chosen on held-out users. */
+    /** Spread of the prior on a topic's offset, as shown, in rating points. */
     public static final double PRIOR_SD = 100.0;
+
+    /** Spread of the prior on a topic's offset when it is the centre a node is drawn towards. */
+    public static final double TOPIC_POOL_SD = 50.0;
+
+    /** Spread of a node's prior around its topic's offset. */
+    public static final double NODE_SD = 100.0;
 
     /** Evidence halves in weight over this many days. Chosen on held-out users. */
     public static final double HALF_LIFE_DAYS = 180.0;
@@ -72,15 +88,24 @@ public final class SkillRating {
         public static final Estimate NONE = new Estimate(0.0, PRIOR_SD, 0);
     }
 
-    /** The most likely offset given this evidence, and how sure of it to be. */
+    /** The most likely offset given this evidence, drawn towards zero, and how sure of it to be. */
     public static Estimate estimate(Collection<Evidence> evidence) {
-        if (evidence == null || evidence.isEmpty()) return Estimate.NONE;
+        return estimate(evidence, 0.0, PRIOR_SD);
+    }
 
-        double offset = 0.0;
-        double curvature = 1 / (PRIOR_SD * PRIOR_SD);
+    /**
+     * The most likely offset given this evidence, with a normal prior of this centre and spread.
+     * A node's prior is centred on its topic's offset; see the class comment.
+     */
+    public static Estimate estimate(Collection<Evidence> evidence, double priorMean, double priorSd) {
+        if (evidence == null || evidence.isEmpty()) return new Estimate(priorMean, priorSd, 0);
+
+        double prior = 1 / (priorSd * priorSd);
+        double offset = priorMean;
+        double curvature = prior;
         for (int iteration = 0; iteration < 30; iteration++) {
-            double gradient = -offset / (PRIOR_SD * PRIOR_SD);
-            curvature = 1 / (PRIOR_SD * PRIOR_SD);
+            double gradient = -(offset - priorMean) * prior;
+            curvature = prior;
             for (Evidence e : evidence) {
                 double w = weight(e.ageDays());
                 double p = solveProbability(e.ratingBefore() + offset, e.difficulty());

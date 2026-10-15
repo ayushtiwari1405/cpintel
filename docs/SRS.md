@@ -62,7 +62,7 @@ The desktop build is the same SPA plus a main process that can observe the windo
 
 ### FR-3 Skill ratings
 - FR-3.1 Submissions are folded to one entry per problem and attributed to the 140 skill-tree nodes and their roll-up topics, and stored in PostgreSQL `topic_mastery` rows with solved and attempted counts and the hardest problem solved.
-- FR-3.2 Each node and topic has a skill rating in Codeforces points with a standard deviation (`SkillRating`): on the Codeforces basis, the user's rating plus an offset estimated from every problem of their rated rounds (solved during the round or not), with a normal prior of spread 100 and a 180-day half-life. Ratings of accounts made since 2020 are corrected for Codeforces' hidden 1400 start.
+- FR-3.2 Each node and topic has a skill rating in Codeforces points with a standard deviation (`SkillRating`): on the Codeforces basis, the user's rating plus an offset estimated from every problem of their rated rounds (solved during the round or not), with a normal prior of spread 100 and a 180-day half-life; a node's prior is centred on its roll-up topic's offset (partial pooling). Ratings of accounts made since 2020 are corrected for Codeforces' hidden 1400 start.
 - FR-3.3 A user chooses the basis: AUTO (rated rounds, else the gauntlet), CODEFORCES, or GAUNTLET (the placement test's area ratings; rated rounds are ignored). With no basis available the analytics show coverage instead of a rating.
 - FR-3.4 A topic is presented as a strength or a weak spot only when its distance from the user's rating exceeds its own standard deviation.
 - FR-3.5 Ratings are rebuilt after a sync, after a placement and when the basis changes; the rebuild evicts only that user's cached analytics.

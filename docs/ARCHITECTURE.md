@@ -393,7 +393,8 @@ better or worse than their rating they did on that skill's problems in their rat
 problem of every round they sat counts, solved during the round or not, on the Elo curve problem
 ratings are defined on (a contestant rated *d* solves a problem rated *d* half the time). The
 offset has a normal prior centred on zero (spread 100), so a topic with little evidence stays at
-the person's rating; older rounds count for less (half-life 180 days). Practice is not used for
+the person's rating; a node's prior is centred on its topic's offset instead, so a node with
+little evidence of its own reads like its topic. Older rounds count for less (half-life 180 days). Practice is not used for
 the rating: about 94% of what anybody submits in practice ends accepted, so it says how much was
 done and almost nothing about where somebody fails. Accounts made since 2020 are corrected for
 the hidden 1400 start and the six catch-up bonuses.
@@ -405,10 +406,10 @@ takes rounds when there are any, then the gauntlet. Choosing the gauntlet never 
 Codeforces. With neither, there is no rating: the analytics show **coverage** instead (solved
 per topic and the hardest solved), and the roadmap runs on solve counts.
 
-`scripts/analytics-eval` is the evidence. On 249 real histories, scored on users the parameters
-were not tuned on, the old mastery score added nothing to the rating alone, and topic offsets
-from rounds improved predictions of later rounds by about 0.65% — real, small, with an interval
-that just reaches zero. Offsets are mostly small (spread about 30 points), so the page names a
+`scripts/analytics-eval` is the evidence. On 488 real histories, scored on 250 users the
+parameters were not tuned on, the old mastery score added nothing to the rating alone; node
+offsets drawn to their topic improved predictions of later rounds by about 0.8%, with an interval
+clear of zero, and beat nodes drawn to zero by a small margin also clear of it. Offsets are mostly small (spread about 30 points), so the page names a
 strength or a weak spot only when an offset clears its own uncertainty.
 
 The roadmap reads the same rows: a prerequisite clears a third of the way into its band and a
