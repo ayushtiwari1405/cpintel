@@ -60,8 +60,10 @@ public class ExamEventService {
     private static final int MAX_EVENTS_PER_REPORT = 200;
     private static final int MAX_PAGE_SIZE = 500;
 
+    /** What a client may report: every type except those only the server writes. */
     private static final Set<String> TYPES = Arrays.stream(ExamEvent.Type.values())
-        .map(Enum::name).collect(Collectors.toUnmodifiableSet());
+        .map(Enum::name).filter(t -> !ExamEvent.Type.SERVER_ONLY.contains(t))
+        .collect(Collectors.toUnmodifiableSet());
 
     private final ExamEventRepository events;
     private final GroupContestRepository eventRepository;

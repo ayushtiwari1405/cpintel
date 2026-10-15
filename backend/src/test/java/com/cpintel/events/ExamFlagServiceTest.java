@@ -107,4 +107,62 @@ class ExamFlagServiceTest {
         assertEquals("MULTIPLE_SIGN_INS", flag.kind());
         assertEquals("HIGH", flag.severity());
     }
+
+    // ── where the monitor reported from ───────────────────────────────────
+
+    private static final String BROWSER = "Mozilla/5.0 (X11; Linux x86_64) Chrome/141.0";
+
+    private void signedIn(String address, String program) {
+        when(auditLog.findByActionAndEntityTypeAndEntityIdOrderByCreatedAtAsc(
+            AuditService.EXAM_SIGN_IN, "EXAM", "42")).thenReturn(List.of(
+                AuditLog.builder().userId(7L).ipAddress(address).userAgent(program)
+                    .createdAt(T0).build()));
+    }
+
+    private void monitorFrom(int seconds, String address, String program) {
+        log.add(ExamEvent.builder().user(candidate).eventId("m" + log.size())
+            .type(ExamEvent.Type.MONITOR_SOURCE.name()).detail(address + " | " + program)
+            .occurredAt(T0.plusSeconds(seconds)).build());
+    }
+
+    @Test
+    @DisplayName("A monitor on the machine and in the program that signed in is nothing")
+    void monitorFromTheSignIn() {
+        signedIn("10.0.0.5", BROWSER);
+        monitorFrom(10, "10.0.0.5", BROWSER);
+
+        assertTrue(kinds().isEmpty());
+    }
+
+    @Test
+    @DisplayName("A heartbeat replayed by a script is flagged as another program")
+    void scriptedHeartbeat() {
+        signedIn("10.0.0.5", BROWSER);
+        monitorFrom(10, "10.0.0.5", BROWSER);
+        monitorFrom(900, "10.0.0.5", "python-requests/2.32");
+
+        EventsDto.Flag flag = service.flags(EXAM).flags().getFirst();
+        assertEquals("MONITOR_OTHER_PROGRAM", flag.kind());
+        assertEquals("HIGH", flag.severity());
+        assertTrue(flag.detail().contains("python-requests"));
+    }
+
+    @Test
+    @DisplayName("A monitor kept alive from another machine is flagged as another address")
+    void heartbeatFromElsewhere() {
+        signedIn("10.0.0.5", BROWSER);
+        monitorFrom(10, "10.0.0.5", BROWSER);
+        monitorFrom(60, "10.0.0.9", BROWSER);
+        monitorFrom(70, "10.0.0.8", BROWSER);
+
+        List<String> kinds = kinds();
+        assertEquals(List.of("MONITOR_OTHER_ADDRESS"), kinds, "flagged once, however many");
+    }
+
+    @Test
+    @DisplayName("A program string containing the separator is still read whole")
+    void separatorInProgram() {
+        assertArrayEquals(new String[] {"1.2.3.4", "odd | agent"},
+            ExamFlagService.splitSource("1.2.3.4 | odd | agent"));
+    }
 }

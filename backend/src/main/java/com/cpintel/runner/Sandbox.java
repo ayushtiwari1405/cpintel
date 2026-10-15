@@ -65,6 +65,9 @@ public class Sandbox {
      */
     private volatile boolean mountProc = true;
 
+    /** The per-run seccomp filter ({@link SeccompFilter}), or null where it cannot be applied. */
+    private volatile Path seccomp;
+
     public record ExecResult(
         int exitCode,
         String stdout,
@@ -250,8 +253,17 @@ public class Sandbox {
      * does not test the real configuration is worse than no probe.
      */
     private List<String> bwrapArgs(Path workDir) {
-        List<String> args = new ArrayList<>(List.of(
-            "bwrap",
+        List<String> args = new ArrayList<>();
+        Path filter = seccomp;
+        if (filter != null) {
+            // bubblewrap takes the filter on an open descriptor, which ProcessBuilder cannot hand
+            // over; the shell opens it as fd 9 and becomes bwrap. "$0" is the filter's path. Nine,
+            // not ten: /bin/sh on Debian and Ubuntu is dash, which redirects single digits only.
+            args.addAll(List.of("/bin/sh", "-c", "exec \"$@\" 9<\"$0\"", filter.toString()));
+        }
+        args.add("bwrap");
+        if (filter != null) args.addAll(List.of("--seccomp", "9"));
+        args.addAll(List.of(
             "--ro-bind", "/usr", "/usr",
             // Ubuntu and friends have merged /usr; these keep absolute paths like
             // /bin/sh and the dynamic loader in /lib64 resolving, without exposing
@@ -300,24 +312,39 @@ public class Sandbox {
 
         synchronized (this) {
             if (bwrapUsable != null) return bwrapUsable;
-            // With its own /proc first, as on a desktop; without, as inside a container.
-            mountProc = true;
-            boolean usable = probeBwrap();
-            if (!usable) {
-                mountProc = false;
-                usable = probeBwrap();
+            seccomp = SeccompFilter.writeForThisMachine().orElse(null);
+            boolean usable = probeBothWays();
+            if (!usable && seccomp != null) {
+                // The namespaces may still work where the filter does not; better a sandbox
+                // without it than none, but nobody should find that out by accident.
+                seccomp = null;
+                usable = probeBothWays();
+                if (usable) {
+                    log.error("bubblewrap works here but not with the per-run seccomp filter; "
+                        + "runs are isolated without it. Check that the kernel has "
+                        + "CONFIG_SECCOMP_FILTER and that bwrap supports --seccomp.");
+                }
             }
             if (!usable) {
                 log.warn("bubblewrap unavailable — code runs with resource limits but WITHOUT "
                     + "filesystem or network isolation. Keep cpintel.runner.enabled off on any "
                     + "shared deployment.");
             } else {
-                log.info("bubblewrap available — runner is filesystem and network isolated{}.",
+                log.info("bubblewrap available — runner is filesystem and network isolated{}{}.",
+                    seccomp != null ? ", with a per-run seccomp filter" : "",
                     mountProc ? "" : " (no /proc inside the sandbox)");
             }
             bwrapUsable = usable;
             return usable;
         }
+    }
+
+    /** With its own /proc first, as on a desktop; without, as inside a container. */
+    private boolean probeBothWays() {
+        mountProc = true;
+        if (probeBwrap()) return true;
+        mountProc = false;
+        return probeBwrap();
     }
 
     private boolean probeBwrap() {

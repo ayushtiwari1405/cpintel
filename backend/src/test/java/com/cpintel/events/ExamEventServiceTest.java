@@ -139,6 +139,19 @@ class ExamEventServiceTest {
         }
 
         @Test
+        @DisplayName("a client cannot file what only the server writes")
+        void dropsServerOnlyTypes() {
+            // Otherwise a tampered page could plant an "entered", a verdict, or a monitor source.
+            int stored = service.report(USER, EXAM, new EventsDto.EventReport(List.of(
+                event("e1", "EXAM_ENTERED", Instant.now()),
+                event("e2", "SUBMISSION_RESULT", Instant.now()),
+                event("e3", "MONITOR_SOURCE", Instant.now()))));
+
+            assertEquals(0, stored);
+            verify(events, never()).saveAll(any());
+        }
+
+        @Test
         @DisplayName("an event already stored is skipped, so a retry cannot inflate the log")
         void skipsDuplicates() {
             when(events.existsByContestContestIdAndUserUserIdAndEventId(EXAM, USER, "e1"))
@@ -201,7 +214,7 @@ class ExamEventServiceTest {
             Instant slightlyEarly = start.minus(Duration.ofSeconds(20));
 
             int stored = service.report(USER, EXAM, new EventsDto.EventReport(List.of(
-                event("e1", "EXAM_ENTERED", slightlyEarly))));
+                event("e1", "FOCUS_LOST", slightlyEarly))));
 
             assertEquals(1, stored);
             assertEquals(start, saved().get(0).getOccurredAt());

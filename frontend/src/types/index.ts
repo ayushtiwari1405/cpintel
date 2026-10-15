@@ -996,7 +996,7 @@ export type ExamEventType =
   | 'EXAM_STARTED' | 'EXAM_ENTERED' | 'PROBLEM_OPENED' | 'PROBLEM_SUBMITTED'
   | 'SUBMISSION_RESULT' | 'FOCUS_LOST' | 'FOCUS_REGAINED' | 'AWAY_THRESHOLD_EXCEEDED'
   | 'EXAM_EXITED' | 'EXAM_COMPLETED' | 'SESSION_TERMINATED' | 'LOCKDOWN_TRIGGERED'
-  | 'SUSPICIOUS_ACTIVITY'
+  | 'SUSPICIOUS_ACTIVITY' | 'MONITOR_SOURCE'
 
 export interface ExamClientEvent {
   /** Client-generated and stable across retries, so a dropped connection cannot inflate a log. */
@@ -1060,7 +1060,7 @@ export interface ExamMonitorSnapshot {
 
 export type ExamFlagKind =
   | 'LONG_AWAY' | 'FREQUENT_AWAY' | 'MULTIPLE_SIGN_INS' | 'FAST_SUBMISSION' | 'LOCKDOWN'
-  | 'FLAGGED'
+  | 'FLAGGED' | 'MONITOR_OTHER_ADDRESS' | 'MONITOR_OTHER_PROGRAM'
 
 /** Something in a session worth a human look — computed from the log, never a finding. */
 export interface ExamFlag {

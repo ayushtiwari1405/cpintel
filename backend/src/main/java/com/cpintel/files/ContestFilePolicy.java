@@ -26,9 +26,12 @@ import java.util.Optional;
  * admin decision. Keeping them apart is what lets the config default stay "on" while a
  * particular round is off, which is the shape every real request for this takes.
  *
- * A database that cannot be reached falls back to the configured default rather than failing
- * the contest page. The consequence of guessing wrong here is a panel that should have been
- * hidden, which during a live round beats a contest that will not load.
+ * A rule that cannot be read closes the files rather than failing the contest page. It used to
+ * fall back to the configured default, which is "on" — so a database blip in the middle of a
+ * round that an admin had closed opened every contestant's notebook. Closed is the safe way to be
+ * wrong: the page still loads, the panel says files are unavailable right now, and it comes back
+ * when the rule can be read again. (An examination does not rely on this: LiveExamGuard closes
+ * the vault for its candidates whatever the rule says.)
  */
 @Service
 @RequiredArgsConstructor
@@ -44,11 +47,20 @@ public class ContestFilePolicy {
 
     /** True when this contest may serve personal files to its contestants. */
     public boolean enabledFor(String platform, String contestId) {
-        if (contestId != null) {
-            Optional<ContestFileRule> rule = find(platform, contestId);
-            if (rule.isPresent()) return Boolean.TRUE.equals(rule.get().getEnabled());
+        try {
+            if (contestId != null) {
+                Optional<ContestFileRule> rule = repo.findByPlatformAndContestId(platform, contestId);
+                if (rule.isPresent()) return Boolean.TRUE.equals(rule.get().getEnabled());
+            }
+            return repo.findByPlatformAndContestId(ContestFileRule.GLOBAL, null)
+                .map(rule -> Boolean.TRUE.equals(rule.getEnabled()))
+                .orElse(configDefault);
+        } catch (Exception e) {
+            // Could not tell whether an admin closed it: closed. See the class comment.
+            log.warn("Contest file rule lookup failed ({} {}), treating files as off: {}",
+                platform, contestId, e.getMessage());
+            return false;
         }
-        return defaultEnabled();
     }
 
     /** Whether this contest has a rule of its own, rather than following the default. */

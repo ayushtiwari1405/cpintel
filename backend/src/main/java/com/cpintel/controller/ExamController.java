@@ -42,6 +42,7 @@ public class ExamController {
     private final EventService events;
     private final ExamEventService examEvents;
     private final ContestMonitorRegistry monitors;
+    private final com.cpintel.events.MonitorSources monitorSources;
     private final com.cpintel.events.ExamLeaderboardService leaderboard;
     /** Entering, unlocking and reporting belong to an examination session only. */
     private final com.cpintel.events.ExamSessionGuard examGuard;
@@ -169,10 +170,14 @@ public class ExamController {
     @Operation(summary = "Report that your examination monitoring is still running")
     public ResponseEntity<ApiResponse<Map<String, Long>>> heartbeat(
         @AuthenticationPrincipal Long userId,
-        @PathVariable Long examId) {
+        @PathVariable Long examId,
+        jakarta.servlet.http.HttpServletRequest request) {
         examGuard.requireExamSession(examId);
-        events.requireAssigned(userId, examId);
+        var exam = events.requireAssigned(userId, examId);
         monitors.beat(userId, examId);
+        // Where it came from, so a heartbeat replayed by a script or from another machine
+        // shows up beside the candidate's sign-ins. See MonitorSources.
+        monitorSources.observe(exam, userId, request);
         return ResponseEntity.ok(ApiResponse.ok(
             Map.of("intervalSeconds", monitors.intervalSeconds())));
     }

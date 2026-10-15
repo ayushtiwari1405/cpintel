@@ -431,7 +431,12 @@ which holds the database credentials and every signing key. The backend forwards
 database and no configuration beyond a token shared with the backend. The container has a
 read-only filesystem, no Linux capabilities, capped CPU, memory and processes, and only an
 internal network. Inside it every run still gets its own bubblewrap sandbox, so concurrent runs —
-an examination room's — cannot see each other's files. If the sandbox cannot be built there, the
+an examination room's — cannot see each other's files, and its own seccomp filter
+(`SeccompFilter`): the container's profile has to allow the calls bubblewrap uses to build
+namespaces, so the program is narrowed again, refused sockets, ptrace, bpf, perf events,
+userfaultfd, io_uring, the keyring, modules, mounts and new namespaces with EPERM. Threads are
+untouched. If the filter cannot be applied but bubblewrap works, runs go ahead without it and the
+runner logs an error saying so. If the sandbox cannot be built there, the
 runner refuses every run rather than running unsandboxed. At most `CPINTEL_RUNNER_CONCURRENCY`
 runs execute at once; the rest wait up to 20 seconds. In development and in the desktop build the
 same `RunEngine` runs inside the backend instead, where the only code is the user's own.
@@ -970,6 +975,18 @@ can be throttled or frozen, and anything running in the page can be closed outri
 numbers are a floor rather than a measurement. That is why an examination sat in a browser also
 reports `LOCKDOWN_UNAVAILABLE`: an admin sees that this is the weaker kind of monitoring rather
 than seeing a suspiciously clean record.
+
+### Where the heartbeat came from
+
+A heartbeat is a claim by a client, and anything a client sends can be replayed by something else
+holding the session: a script on the same machine, or the request sent from a second machine
+while the paper is worked on another. The server cannot prevent that — whatever the real monitor
+knows, a forger with the same session knows too — so it makes it visible. `MonitorSources` notes
+each new address and program a candidate's heartbeats arrive from as a server-side
+`MONITOR_SOURCE` row, and the suspicious-activity list sets them beside the candidate's
+examination sign-ins: a monitor reporting from an address they never signed in from
+(`MONITOR_OTHER_ADDRESS`), or from a different program than the one that signed in
+(`MONITOR_OTHER_PROGRAM`). Clients cannot file server-only event types, so neither can be planted.
 
 ### Only long absences are escalated
 

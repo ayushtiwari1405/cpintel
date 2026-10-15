@@ -88,13 +88,14 @@ class ContestFilePolicyTest {
     }
 
     @Test
-    @DisplayName("an unreachable database falls back to the configured default")
-    void databaseFailureFallsBack() {
+    @DisplayName("a rule that cannot be read closes the files, rather than opening them")
+    void databaseFailureClosesFiles() {
         when(repo.findByPlatformAndContestId(anyString(), any()))
             .thenThrow(new RuntimeException("mongo down"));
 
-        // Better a panel that should have been hidden than a contest page that will not load.
-        assertTrue(policy.enabledFor(CF, "2259"));
+        // The default is on; an admin may have closed this round. Unable to tell, it stays closed.
+        assertFalse(policy.enabledFor(CF, "2259"));
+        assertThrows(com.cpintel.exception.ApiException.class, () -> policy.require(CF, "2259"));
     }
 
     @Test

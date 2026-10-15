@@ -102,6 +102,20 @@ public class ExamEvent {
         /** A desktop restriction fired — a refused navigation, a wiped clipboard. */
         LOCKDOWN_TRIGGERED,
         /** Something worth a human look. Never a finding on its own. */
-        SUSPICIOUS_ACTIVITY
+        SUSPICIOUS_ACTIVITY,
+        /**
+         * The monitor's heartbeat arrived from an address or program not seen before in this
+         * session. Written by the server, once per new source; the detail is the address and
+         * the program.
+         */
+        MONITOR_SOURCE;
+
+        /**
+         * Written only by the server. A client report of one of these is dropped: otherwise a
+         * tampered client could plant "entered", a verdict, or a monitor source of its choosing.
+         */
+        public static final java.util.Set<String> SERVER_ONLY = java.util.Set.of(
+            "EXAM_STARTED", "EXAM_ENTERED", "PROBLEM_SUBMITTED", "SUBMISSION_RESULT",
+            "SESSION_TERMINATED", "MONITOR_SOURCE");
     }
 }

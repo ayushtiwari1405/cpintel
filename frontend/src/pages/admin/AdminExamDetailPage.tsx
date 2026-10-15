@@ -1139,6 +1139,7 @@ const TYPE_TONE: Record<string, 'gray' | 'green' | 'amber' | 'red' | 'indigo'> =
   SESSION_TERMINATED: 'red',
   LOCKDOWN_TRIGGERED: 'amber',
   SUSPICIOUS_ACTIVITY: 'amber',
+  MONITOR_SOURCE: 'gray',
 }
 
 type LogsView = 'students' | 'flags'
@@ -1328,6 +1329,8 @@ const FLAG_LABEL: Record<ExamFlagKind, string> = {
   FAST_SUBMISSION: 'fast submission',
   LOCKDOWN: 'desktop restriction',
   FLAGGED: 'flagged by system',
+  MONITOR_OTHER_ADDRESS: 'monitor on another machine',
+  MONITOR_OTHER_PROGRAM: 'monitor from another program',
 }
 
 function FlagList({ report, loading, onOpen }: {

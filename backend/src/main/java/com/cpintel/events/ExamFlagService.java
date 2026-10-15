@@ -82,6 +82,7 @@ public class ExamFlagService {
         List<EventsDto.Flag> flags = new ArrayList<>();
         byUser.forEach((userId, session) -> flagSession(users.get(userId), session, flags));
         flagSignIns(eventId, users, flags);
+        flagMonitorSources(eventId, users, flags);
 
         flags.sort(Comparator.comparing(EventsDto.Flag::occurredAt,
             Comparator.nullsLast(Comparator.reverseOrder())));
@@ -203,6 +204,74 @@ public class ExamFlagService {
                     + (addresses > 1 ? " from " + addresses + " different addresses" : ""),
                 signIns.get(signIns.size() - 1).getCreatedAt()));
         });
+    }
+
+    /**
+     * A monitor reporting from somewhere the candidate never signed in from.
+     *
+     * <p>A heartbeat can be replayed by anything holding the session: a script on the same
+     * machine, or the same request from a second one while the paper is worked somewhere else.
+     * {@link MonitorSources} notes each new address and program a candidate's heartbeats come
+     * from; this sets them beside the candidate's examination sign-ins. A source whose address,
+     * or whose program, matches none of them is the shape that forgery takes — and also, rarely,
+     * of a network change mid-paper — so it is listed for a person to look at, once per kind per
+     * candidate, never counted as a finding.
+     */
+    private void flagMonitorSources(Long eventId, Map<Long, User> users, List<EventsDto.Flag> out) {
+        Map<Long, List<ExamEvent>> sources = new LinkedHashMap<>();
+        for (ExamEvent row : examEvents.findTypesForContest(eventId,
+                List.of(ExamEvent.Type.MONITOR_SOURCE.name()))) {
+            if (!ExamEvent.Type.MONITOR_SOURCE.name().equals(row.getType())) continue;
+            users.putIfAbsent(row.getUser().getUserId(), row.getUser());
+            sources.computeIfAbsent(row.getUser().getUserId(), k -> new ArrayList<>()).add(row);
+        }
+        if (sources.isEmpty()) return;
+
+        Map<Long, List<AuditLog>> signIns = new LinkedHashMap<>();
+        for (AuditLog row : auditLog.findByActionAndEntityTypeAndEntityIdOrderByCreatedAtAsc(
+                AuditService.EXAM_SIGN_IN, "EXAM", String.valueOf(eventId))) {
+            if (row.getUserId() != null) {
+                signIns.computeIfAbsent(row.getUserId(), k -> new ArrayList<>()).add(row);
+            }
+        }
+
+        sources.forEach((userId, rows) -> {
+            List<AuditLog> in = signIns.get(userId);
+            User user = users.get(userId);
+            if (in == null || in.isEmpty() || user == null) return;
+            Set<String> addresses = new java.util.TreeSet<>();
+            Set<String> programs = new HashSet<>();
+            for (AuditLog a : in) {
+                if (a.getIpAddress() != null) addresses.add(a.getIpAddress());
+                if (a.getUserAgent() != null) programs.add(a.getUserAgent());
+            }
+            boolean addressFlagged = false;
+            boolean programFlagged = false;
+            for (ExamEvent row : rows) {
+                String[] source = splitSource(row.getDetail());
+                if (!addressFlagged && !addresses.isEmpty() && !addresses.contains(source[0])) {
+                    out.add(flag(user, "MONITOR_OTHER_ADDRESS", "HIGH", null,
+                        "Monitor reported from " + source[0] + ", an address this candidate "
+                            + "never signed in from (signed in from "
+                            + String.join(", ", addresses) + ")", row.getOccurredAt()));
+                    addressFlagged = true;
+                }
+                if (!programFlagged && !programs.isEmpty() && !programs.contains(source[1])) {
+                    out.add(flag(user, "MONITOR_OTHER_PROGRAM", "HIGH", null,
+                        "Monitor reported from a program that did not sign in: " + source[1],
+                        row.getOccurredAt()));
+                    programFlagged = true;
+                }
+            }
+        });
+    }
+
+    /** MonitorSources writes "address | program"; the program may itself contain " | ". */
+    static String[] splitSource(String detail) {
+        if (detail == null) return new String[] {"?", ""};
+        int at = detail.indexOf(" | ");
+        return at < 0 ? new String[] {detail, ""}
+            : new String[] {detail.substring(0, at), detail.substring(at + 3)};
     }
 
     private static EventsDto.Flag flag(User user, String kind, String severity, String problem,
