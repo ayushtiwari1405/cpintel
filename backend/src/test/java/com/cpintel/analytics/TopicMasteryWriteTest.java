@@ -48,6 +48,7 @@ class TopicMasteryWriteTest {
     private TopicMasteryRepository topicMastery;
     private CfSubmissionRepository cfSubmissions;
     private AnalyticsService service;
+    private final SkillRatingService skills = mock(SkillRatingService.class);
 
     @BeforeEach
     void setUp() {
@@ -66,9 +67,15 @@ class TopicMasteryWriteTest {
             mock(AnalyticsEngine.class),
             mock(UnifiedRatingService.class),
             mock(ContestAnalysisService.class),
-            mock(RecommendationEngine.class));
+            mock(RecommendationEngine.class),
+            skills,
+            mock(com.cpintel.service.RoadmapService.class));
 
-        when(users.existsById(USER_ID)).thenReturn(true);
+        when(users.findById(USER_ID)).thenReturn(java.util.Optional.of(
+            com.cpintel.entity.User.builder().userId(USER_ID).build()));
+        // No rated rounds and no gauntlet: coverage only, which is what these tests are about.
+        when(skills.profile(any())).thenReturn(
+            SkillRatingService.Profile.none(SkillRatingService.AUTO, false, false));
     }
 
     private CfSubmission cf(int contestId, String index, String verdict,
@@ -94,7 +101,7 @@ class TopicMasteryWriteTest {
 
         verify(topicMastery, atLeastOnce()).upsertCounts(
             eq(USER_ID), anyString(), anyString(), any(), any(),
-            anyInt(), anyInt(), any());
+            anyInt(), anyInt(), any(), any(), any(), any(), any(), any());
 
         // The two halves of the old race. Either one returning means a refresh can still lose to
         // a concurrent one, so both are asserted rather than trusting the upsert call alone.
@@ -124,7 +131,7 @@ class TopicMasteryWriteTest {
         ArgumentCaptor<Integer> attempted = ArgumentCaptor.forClass(Integer.class);
         verify(topicMastery, atLeastOnce()).upsertCounts(
             eq(USER_ID), anyString(), anyString(), any(), any(),
-            solved.capture(), attempted.capture(), any());
+            solved.capture(), attempted.capture(), any(), any(), any(), any(), any(), any());
 
         assertTrue(solved.getAllValues().stream().allMatch(v -> v == 1),
             "one problem solved once, got " + solved.getAllValues());
@@ -147,7 +154,7 @@ class TopicMasteryWriteTest {
         ArgumentCaptor<Instant> at = ArgumentCaptor.forClass(Instant.class);
         verify(topicMastery, atLeastOnce()).upsertCounts(
             eq(USER_ID), anyString(), anyString(), any(), any(),
-            anyInt(), anyInt(), at.capture());
+            anyInt(), anyInt(), at.capture(), any(), any(), any(), any(), any());
 
         for (Instant written : at.getAllValues()) {
             assertEquals(practised, written,
@@ -166,7 +173,7 @@ class TopicMasteryWriteTest {
         ArgumentCaptor<String> scope = ArgumentCaptor.forClass(String.class);
         verify(topicMastery, atLeastOnce()).upsertCounts(
             eq(USER_ID), anyString(), scope.capture(), any(), any(),
-            anyInt(), anyInt(), any());
+            anyInt(), anyInt(), any(), any(), any(), any(), any(), any());
 
         assertTrue(scope.getAllValues().contains(TopicMastery.Scope.NODE),
             "expected at least one NODE row");
@@ -177,7 +184,7 @@ class TopicMasteryWriteTest {
     @Test
     @DisplayName("an account that does not exist is refused before anything is written")
     void unknownUserWritesNothing() {
-        when(users.existsById(USER_ID)).thenReturn(false);
+        when(users.findById(USER_ID)).thenReturn(java.util.Optional.empty());
         when(cfSubmissions.findByUserId(USER_ID)).thenReturn(List.of(
             cf(1000, "A", "OK", DP_RATING, Instant.now(), "dp")));
 

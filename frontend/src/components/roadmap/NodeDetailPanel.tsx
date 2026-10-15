@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import { clsx } from 'clsx'
+import { bandPoint, cleared, COVERAGE_UNLOCK_SOLVED, doneWhen, isRated, UNLOCK_SHARE } from './rules'
 
 const STATUS_LABEL: Record<string, { label: string; cls: string; icon: any }> = {
   COMPLETED:   { label: 'Completed',   cls: 'badge-green', icon: CheckCircle2 },
@@ -47,7 +48,7 @@ export function NodeDetailPanel({ node, allNodes }: Props) {
   const prereqs = node.prereqKeys
     .map(k => byKey.get(k))
     .filter((n): n is RoadmapNodeData => !!n)
-  const blocking = prereqs.filter(p => p.status !== 'COMPLETED' && p.masteryScore < 35)
+  const blocking = prereqs.filter(p => p.status !== 'COMPLETED' && !cleared(p))
 
   return (
     <div className="card space-y-4">
@@ -68,23 +69,30 @@ export function NodeDetailPanel({ node, allNodes }: Props) {
         )}
       </div>
 
-      {/* Mastery in this node specifically. It used to be impossible to show anything here:
-          mastery was only ever stored per coarse topic, so every node under "Dynamic
-          Programming" would have reported the same number. */}
-      <div className="grid grid-cols-3 gap-2 text-center">
-        <Stat label="Mastery" value={`${Math.round(node.masteryScore)}%`} tone="text-indigo-300" />
-        <Stat
-          label="Confidence"
-          value={`${Math.round(node.confidenceScore)}%`}
-          tone="text-gray-300"
-          hint={node.problemsAttempted < 13 ? 'Small sample so far' : undefined}
-        />
-        <Stat
-          label="Decayed"
-          value={`${Math.round(node.decayScore)}%`}
-          tone={node.decayScore > 15 ? 'text-amber-400' : 'text-gray-300'}
-        />
-      </div>
+      {isRated(node) ? (
+        <div className={clsx('grid gap-2 text-center',
+          node.skillBasis === 'GAUNTLET' ? 'grid-cols-2' : 'grid-cols-3')}>
+          <Stat label="Rating here"
+            value={`${Math.round(node.skillRating ?? 0)} ± ${Math.round(node.skillSd ?? 0)}`}
+            tone="text-indigo-300"
+            hint={node.skillBasis === 'GAUNTLET' ? 'From your gauntlet placement for this area'
+              : node.skillProblems === 0 ? 'No round problems here yet: your overall rating' : undefined} />
+          {node.skillBasis !== 'GAUNTLET' && (
+            <Stat label="Round problems" value={`${node.skillProblems}`} tone="text-gray-300" />
+          )}
+          <Stat label="Hardest solved" value={node.maxSolvedRating ? `${node.maxSolvedRating}` : '—'}
+            tone="text-gray-300" />
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-2 text-center">
+          <Stat label="Solved" value={`${node.problemsSolved}`} tone="text-indigo-300" />
+          <Stat label="Hardest solved" value={node.maxSolvedRating ? `${node.maxSolvedRating}` : '—'}
+            tone="text-gray-300" />
+        </div>
+      )}
+      {node.status !== 'COMPLETED' && (
+        <p className="text-xs text-gray-500">{doneWhen(node)}.</p>
+      )}
 
       <div className="flex items-center justify-between text-xs text-gray-500">
         <span>{node.problemsSolved} solved of {node.problemsAttempted} attempted</span>
@@ -105,7 +113,9 @@ export function NodeDetailPanel({ node, allNodes }: Props) {
               <li key={p.nodeKey} className="text-xs text-gray-400 flex justify-between gap-2">
                 <span className="truncate">{p.topic}</span>
                 <span className="text-gray-600 tabular-nums flex-shrink-0">
-                  {Math.round(p.masteryScore)}% / 35%
+                  {isRated(p)
+                    ? `${Math.round(p.skillRating ?? 0)} / ${bandPoint(p, UNLOCK_SHARE)}`
+                    : `${p.problemsSolved} / ${COVERAGE_UNLOCK_SOLVED} solved`}
                 </span>
               </li>
             ))}

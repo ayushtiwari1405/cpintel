@@ -268,6 +268,24 @@ public final class ScoringFormulas {
         return round2(clamp(score, 0, 100));
     }
 
+    /**
+     * How far above a skill rating to aim. On the Elo curve a problem this far above somebody is
+     * one they solve in a round about three times in ten: a stretch, and not a wall.
+     */
+    public static final int FIT_SKILL_STRETCH = 150;
+
+    /**
+     * How well a problem suits someone rated {@code skillRating} on its skill, 0-100. Peaks at
+     * {@link #FIT_SKILL_STRETCH} above the rating and falls away as a Gaussian of
+     * {@link #FIT_SIGMA}, as {@link #scoreProblemFit} does; the difference is that a rating and
+     * a problem rating are already in the same units, so nothing has to be converted first.
+     */
+    public static double scoreProblemFitForSkill(double skillRating, Integer problemRating) {
+        if (problemRating == null) return 0.0;
+        double gap = problemRating - (skillRating + FIT_SKILL_STRETCH);
+        return round2(100.0 * Math.exp(-(gap * gap) / (2 * FIT_SIGMA * FIT_SIGMA)));
+    }
+
     // ── Spaced repetition (SM-2 derived) ───────────────────────────────────
 
     /** Floor on the SM-2 ease factor; below this, intervals stop growing usefully. */

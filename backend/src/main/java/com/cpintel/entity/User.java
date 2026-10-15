@@ -50,6 +50,11 @@ public class User extends BaseEntity {
     @Builder.Default
     private Boolean isActive = true;
 
+    /** What this person's skill ratings are based on: AUTO, CODEFORCES or GAUNTLET (V24). */
+    @Column(name = "skill_basis", nullable = false, length = 12)
+    @Builder.Default
+    private String skillBasis = "AUTO";
+
     @Column(name = "is_verified", nullable = false)
     @Builder.Default
     private Boolean isVerified = false;

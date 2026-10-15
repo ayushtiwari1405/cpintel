@@ -1,5 +1,5 @@
 import { apiClient } from './client'
-import type { ApiResponse } from '@/types'
+import type { ApiResponse, SkillBasis } from '@/types'
 
 export const analyticsApi = {
   getOverview: () =>
@@ -12,6 +12,10 @@ export const analyticsApi = {
     apiClient.get<ApiResponse<any>>('/analytics/trends').then(r => r.data),
   refresh: () =>
     apiClient.post<ApiResponse<void>>('/analytics/refresh').then(r => r.data),
+  getSkillBasis: () =>
+    apiClient.get<ApiResponse<SkillBasis>>('/analytics/skill-basis').then(r => r.data),
+  setSkillBasis: (basis: SkillBasis['requested']) =>
+    apiClient.put<ApiResponse<SkillBasis>>('/analytics/skill-basis', { basis }).then(r => r.data),
 }
 
 export const recommendationApi = {

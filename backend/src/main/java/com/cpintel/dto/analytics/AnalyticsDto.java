@@ -22,6 +22,7 @@ public class AnalyticsDto {
         private Integer currentStreak;
         private List<TopicSummary> topicSummaries;
         private List<PlatformStats> platformStats;
+        private SkillBasis skillBasis;
     }
 
     /**
@@ -48,6 +49,27 @@ public class AnalyticsDto {
         private Integer problemsAttempted;
         private Instant lastPracticedAt;
         private String masteryBand;
+        /** Rating on this skill in Codeforces points; null when there is no basis to rate from. */
+        private Double skillRating;
+        /** One standard deviation of {@code skillRating}. */
+        private Double skillSd;
+        /** Rated-round problems behind {@code skillRating}; 0 means it is the starting rating. */
+        private Integer skillProblems;
+        /** Rating of the hardest problem solved on this skill. */
+        private Integer maxSolvedRating;
+    }
+
+    /** What skill ratings are based on, for the analytics header and the settings control. */
+    @Getter @Builder @Jacksonized
+    public static class SkillBasis {
+        /** CODEFORCES or GAUNTLET; null when ratings cannot be given and coverage is shown. */
+        private String basis;
+        /** What the person chose: AUTO, CODEFORCES or GAUNTLET. */
+        private String requested;
+        /** The rating skills start from on that basis. */
+        private Integer rating;
+        private boolean codeforcesAvailable;
+        private boolean gauntletAvailable;
     }
 
     @Getter @Builder @Jacksonized

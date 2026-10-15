@@ -28,8 +28,9 @@ public interface TopicMasteryRepository extends JpaRepository<TopicMastery, Long
          + "AND tm.scope = :scope ORDER BY tm.masteryScore ASC")
     List<TopicMastery> findWeakest(@Param("userId") Long userId, @Param("scope") String scope);
 
+    /** Highest skill rating first; without ratings (coverage), most solved first. */
     @Query("SELECT tm FROM TopicMastery tm WHERE tm.user.userId = :userId "
-         + "AND tm.scope = :scope ORDER BY tm.masteryScore DESC")
+         + "AND tm.scope = :scope ORDER BY tm.skillRating DESC NULLS LAST, tm.problemsSolved DESC")
     List<TopicMastery> findStrongest(@Param("userId") Long userId, @Param("scope") String scope);
 
     /**
@@ -72,16 +73,24 @@ public interface TopicMasteryRepository extends JpaRepository<TopicMastery, Long
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query(value = """
         INSERT INTO topic_mastery (user_id, topic, scope, parent_topic, track,
-                                   problems_solved, problems_attempted, last_practiced_at)
+                                   problems_solved, problems_attempted, last_practiced_at,
+                                   max_solved_rating, skill_rating, skill_sd, skill_problems,
+                                   skill_basis)
         VALUES (:userId, :topic, :scope, :parentTopic, :track,
-                :solved, :attempted, :lastPracticedAt)
+                :solved, :attempted, :lastPracticedAt,
+                :maxSolvedRating, :skillRating, :skillSd, :skillProblems, :skillBasis)
         ON CONFLICT ON CONSTRAINT uq_tm_user_topic DO UPDATE SET
             scope              = EXCLUDED.scope,
             parent_topic       = EXCLUDED.parent_topic,
             track              = EXCLUDED.track,
             problems_solved    = EXCLUDED.problems_solved,
             problems_attempted = EXCLUDED.problems_attempted,
-            last_practiced_at  = EXCLUDED.last_practiced_at
+            last_practiced_at  = EXCLUDED.last_practiced_at,
+            max_solved_rating  = EXCLUDED.max_solved_rating,
+            skill_rating       = EXCLUDED.skill_rating,
+            skill_sd           = EXCLUDED.skill_sd,
+            skill_problems     = EXCLUDED.skill_problems,
+            skill_basis        = EXCLUDED.skill_basis
         """, nativeQuery = true)
     void upsertCounts(@Param("userId") Long userId,
                       @Param("topic") String topic,
@@ -90,7 +99,12 @@ public interface TopicMasteryRepository extends JpaRepository<TopicMastery, Long
                       @Param("track") String track,
                       @Param("solved") int solved,
                       @Param("attempted") int attempted,
-                      @Param("lastPracticedAt") Instant lastPracticedAt);
+                      @Param("lastPracticedAt") Instant lastPracticedAt,
+                      @Param("maxSolvedRating") Integer maxSolvedRating,
+                      @Param("skillRating") Double skillRating,
+                      @Param("skillSd") Double skillSd,
+                      @Param("skillProblems") Integer skillProblems,
+                      @Param("skillBasis") String skillBasis);
 
     /**
      * Drops rows for skills the user no longer has any evidence for.

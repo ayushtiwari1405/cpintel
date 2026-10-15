@@ -227,7 +227,8 @@ public class RecommendationEngine {
     private Map<String, Object> item(RoadmapTaxonomy.NodeDef def, TopicMastery tm,
                                      double mastery, String reason, Set<String> solvedKeys) {
         List<ProblemRecommender.Recommended> problems =
-            problemRecommender.forNode(def, mastery, solvedKeys, PROBLEMS_PER_ITEM);
+            problemRecommender.forNode(def, tm == null ? null : tm.getSkillRating(), mastery,
+                solvedKeys, PROBLEMS_PER_ITEM);
 
         List<Map<String, Object>> problemPayload = new ArrayList<>(problems.size());
         for (ProblemRecommender.Recommended p : problems) {

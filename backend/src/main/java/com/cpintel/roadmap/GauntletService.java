@@ -47,6 +47,7 @@ public class GauntletService {
     private final PlacementResultRepository results;
     private final GauntletAttempts attempts;
     private final ObjectMapper json;
+    private final org.springframework.beans.factory.ObjectProvider<com.cpintel.analytics.AnalyticsService> analytics;
 
     /**
      * Days between completed attempts.
@@ -209,6 +210,12 @@ public class GauntletService {
             throw new IllegalStateException("Could not store a placement result", e);
         }
         log.info("Placed user {} at ~{} ({} roadmap skills marked done)", userId, overall, placed);
+        // Someone whose skill ratings come from the gauntlet has just been given new ones.
+        try {
+            analytics.ifAvailable(a -> a.triggerAnalyticsRefresh(userId));
+        } catch (Exception e) {
+            log.warn("Analytics refresh after placement failed for user {}: {}", userId, e.getMessage());
+        }
         return toView(saved);
     }
 

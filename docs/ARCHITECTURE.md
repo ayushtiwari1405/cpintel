@@ -382,6 +382,42 @@ Two Oracle facilities had to be replaced rather than ported:
   non-concurrent, because Postgres rejects `CONCURRENTLY` on a view that has never been
   populated.
 
+## Skill ratings, and what they were measured against
+
+Each skill-tree node and each roll-up topic has a **rating in Codeforces points**, with an
+uncertainty, replacing the 0-100 mastery score as what the analytics and the roadmap read
+(`SkillRating`, `SkillRatingService`, migration V24).
+
+On the **Codeforces basis** a skill's rating is the person's rating plus an offset: how much
+better or worse than their rating they did on that skill's problems in their rated rounds. Every
+problem of every round they sat counts, solved during the round or not, on the Elo curve problem
+ratings are defined on (a contestant rated *d* solves a problem rated *d* half the time). The
+offset has a normal prior centred on zero (spread 100), so a topic with little evidence stays at
+the person's rating; older rounds count for less (half-life 180 days). Practice is not used for
+the rating: about 94% of what anybody submits in practice ends accepted, so it says how much was
+done and almost nothing about where somebody fails. Accounts made since 2020 are corrected for
+the hidden 1400 start and the six catch-up bonuses.
+
+On the **gauntlet basis** each area's placement rating is used and rated rounds are ignored. A
+person chooses it (`PUT /analytics/skill-basis`) when their Codeforces rating does not describe
+them — rounds sat with an AI's or somebody else's help, or an account they no longer use. AUTO
+takes rounds when there are any, then the gauntlet. Choosing the gauntlet never falls back to
+Codeforces. With neither, there is no rating: the analytics show **coverage** instead (solved
+per topic and the hardest solved), and the roadmap runs on solve counts.
+
+`scripts/analytics-eval` is the evidence. On 249 real histories, scored on users the parameters
+were not tuned on, the old mastery score added nothing to the rating alone, and topic offsets
+from rounds improved predictions of later rounds by about 0.65% — real, small, with an interval
+that just reaches zero. Offsets are mostly small (spread about 30 points), so the page names a
+strength or a weak spot only when an offset clears its own uncertainty.
+
+The roadmap reads the same rows: a prerequisite clears a third of the way into its band and a
+node is done three-quarters of the way up with three of its problems solved (with a rating), or
+after three and five solves respectively (coverage). Done stays done and nothing re-locks, so a
+change of basis can only move people forward. Ratings are rebuilt when a sync finishes, when a
+placement is submitted and when the basis changes; the refresh evicts that user's cache entries
+only.
+
 ## Why MongoDB for submissions
 
 Judge submission payloads, archived source and uploaded files have shapes that change independently of the relational model. Storing them as loosely-typed documents avoids a brittle shared schema, while normalized aggregates (topic mastery, contest summaries) still live in PostgreSQL once computed. Codeforces is the only platform synced for analytics; LeetCode and CodeChef were dropped because their APIs returned only a slice of a user's history.

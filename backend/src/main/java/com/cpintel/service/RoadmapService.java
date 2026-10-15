@@ -54,21 +54,24 @@ public class RoadmapService {
     private final CfSubmissionRepository cfSubmissionRepository;
     private final ProblemRecommender problemRecommender;
 
-    /** Mastery in a prerequisite that counts as having cleared it. */
-    private static final double UNLOCK_THRESHOLD = 35.0;
-
-    /** Mastery at which a node is considered done. */
-    private static final double COMPLETE_THRESHOLD = 75.0;
-
-    /**
-     * Confidence a node also needs before it may be called complete.
+    /*
+     * When a node opens and when it is done.
      *
-     * <p>Mastery alone would let three-for-three on a node read as total command of it, because
-     * perfect accuracy on a tiny sample scores high. Confidence is the sample-size term that
-     * already exists to say how much the mastery number can be trusted, and it was being
-     * computed and then never used for anything. Roughly thirteen attempts clears this bar.
+     * With a skill rating (Codeforces or gauntlet): a prerequisite is cleared once its rating
+     * reaches a third of the way into its band, and a node is done at three-quarters of the way
+     * up — someone rated there solves the band's harder problems in a round about as often as
+     * not — provided they have also solved a few of its problems. The rating alone could be the
+     * person's overall rating with nothing behind it, and "done" should rest on something they
+     * did here.
+     *
+     * Without one (coverage): a prerequisite is cleared by a few solves in it, and a node is done
+     * after five solves of which the hardest reaches the middle of its band.
      */
-    private static final double COMPLETE_MIN_CONFIDENCE = 40.0;
+    static final double UNLOCK_SHARE = 0.35;
+    static final double COMPLETE_SHARE = 0.75;
+    static final int COMPLETE_MIN_SOLVED = 3;
+    static final int COVERAGE_UNLOCK_SOLVED = 3;
+    static final int COVERAGE_COMPLETE_SOLVED = 5;
 
     /** Problems offered per node in the detail panel. */
     private static final int PROBLEMS_PER_NODE = 10;
@@ -145,7 +148,8 @@ public class RoadmapService {
         return roadmapNodeRepository.findByUserUserIdOrderByOrderIndex(userId).stream()
             .filter(n -> "UNLOCKED".equals(n.getStatus()) || "IN_PROGRESS".equals(n.getStatus()))
             .sorted(Comparator
-                .comparingDouble((RoadmapNode n) -> masteryScore(mastery, n.getNodeKey()))
+                .comparingDouble((RoadmapNode n) -> progress(
+                    RoadmapTaxonomy.byId(n.getNodeKey()), mastery.get(n.getNodeKey())))
                 .thenComparing(RoadmapNode::getOrderIndex))
             .limit(NEXT_UP_COUNT)
             .map(n -> toView(n, mastery, solved))
@@ -269,20 +273,17 @@ public class RoadmapService {
     private String statusFor(RoadmapTaxonomy.NodeDef def, RoadmapNode node,
                              Map<String, RoadmapNode> byKey, Map<String, TopicMastery> mastery) {
         // A status the user set by hand is theirs to keep; nothing here overrides it downwards.
-        double own = masteryScore(mastery, def.id());
-        double confidence = confidenceScore(mastery, def.id());
+        TopicMastery own = mastery.get(def.id());
 
         boolean prereqsMet = def.prereqIds().stream().allMatch(pid -> {
             RoadmapNode prereq = byKey.get(pid);
             if (prereq == null) return true;
             return "COMPLETED".equals(prereq.getStatus())
-                || masteryScore(mastery, pid) >= UNLOCK_THRESHOLD;
+                || cleared(RoadmapTaxonomy.byId(pid), mastery.get(pid));
         });
 
-        if (own >= COMPLETE_THRESHOLD && confidence >= COMPLETE_MIN_CONFIDENCE) {
-            return "COMPLETED";
-        }
-        // Done stays done, however it got there — by mastery, by hand, or by the placement
+        if (done(def, own)) return "COMPLETED";
+        // Done stays done, however it got there — by rating, by hand, or by the placement
         // gauntlet. This used to return UNLOCKED for a completed node whose own mastery was
         // low, which undid every hand-marked and placed completion on the next regenerate.
         if ("COMPLETED".equals(node.getStatus())) return "COMPLETED";
@@ -290,7 +291,49 @@ public class RoadmapService {
             // Never re-lock something already opened; that reads as lost progress.
             return node.getStatus() == null ? "LOCKED" : node.getStatus();
         }
-        return own > 0 ? "IN_PROGRESS" : "UNLOCKED";
+        return attempted(own) > 0 ? "IN_PROGRESS" : "UNLOCKED";
+    }
+
+    /** Whether a prerequisite has been got far enough into to open what depends on it. */
+    static boolean cleared(RoadmapTaxonomy.NodeDef def, TopicMastery tm) {
+        if (def == null || tm == null) return false;
+        if (tm.getSkillRating() != null) {
+            return tm.getSkillRating() >= bandPoint(def, UNLOCK_SHARE);
+        }
+        return solved(tm) >= COVERAGE_UNLOCK_SOLVED;
+    }
+
+    static boolean done(RoadmapTaxonomy.NodeDef def, TopicMastery tm) {
+        if (def == null || tm == null) return false;
+        if (tm.getSkillRating() != null) {
+            return tm.getSkillRating() >= bandPoint(def, COMPLETE_SHARE)
+                && solved(tm) >= COMPLETE_MIN_SOLVED;
+        }
+        return solved(tm) >= COVERAGE_COMPLETE_SOLVED
+            && tm.getMaxSolvedRating() != null
+            && tm.getMaxSolvedRating() >= bandPoint(def, 0.5);
+    }
+
+    /** How far along a node someone is, 0 to 1: the order "weakest first" is read in. */
+    static double progress(RoadmapTaxonomy.NodeDef def, TopicMastery tm) {
+        if (def == null || tm == null) return 0;
+        if (tm.getSkillRating() != null) {
+            double span = Math.max(1, def.maxRating() - def.minRating());
+            return Math.max(0, Math.min(1, (tm.getSkillRating() - def.minRating()) / span));
+        }
+        return Math.min(1.0, solved(tm) / (double) COVERAGE_COMPLETE_SOLVED);
+    }
+
+    private static double bandPoint(RoadmapTaxonomy.NodeDef def, double share) {
+        return def.minRating() + share * (def.maxRating() - def.minRating());
+    }
+
+    private static int solved(TopicMastery tm) {
+        return tm.getProblemsSolved() == null ? 0 : tm.getProblemsSolved();
+    }
+
+    private static int attempted(TopicMastery tm) {
+        return tm == null || tm.getProblemsAttempted() == null ? 0 : tm.getProblemsAttempted();
     }
 
     private boolean definitionDrifted(RoadmapNode node, RoadmapTaxonomy.NodeDef def) {
@@ -340,7 +383,8 @@ public class RoadmapService {
 
         List<ProblemRecommender.Recommended> problems = List.of();
         if (def != null && !"LOCKED".equals(node.getStatus())) {
-            problems = problemRecommender.forNode(def, masteryScore, solvedKeys, PROBLEMS_PER_NODE);
+            problems = problemRecommender.forNode(def, tm == null ? null : tm.getSkillRating(),
+                masteryScore, solvedKeys, PROBLEMS_PER_NODE);
         }
 
         return new RoadmapNodeView(
@@ -364,6 +408,11 @@ public class RoadmapService {
             tm == null ? null : tm.getLastPracticedAt(),
             node.getUnlockedAt(),
             node.getCompletedAt(),
+            tm == null ? null : tm.getSkillRating(),
+            tm == null ? null : tm.getSkillSd(),
+            tm == null || tm.getSkillProblems() == null ? 0 : tm.getSkillProblems(),
+            tm == null ? null : tm.getSkillBasis(),
+            tm == null ? null : tm.getMaxSolvedRating(),
             problems
         );
     }
@@ -389,6 +438,13 @@ public class RoadmapService {
         Instant lastPracticedAt,
         Instant unlockedAt,
         Instant completedAt,
+        /** Rating on this skill in Codeforces points; null when coverage is shown instead. */
+        Double skillRating,
+        Double skillSd,
+        int skillProblems,
+        /** CODEFORCES or GAUNTLET: where skillRating came from. */
+        String skillBasis,
+        Integer maxSolvedRating,
         List<ProblemRecommender.Recommended> problems
     ) {}
 }

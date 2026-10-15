@@ -83,6 +83,26 @@ public class TopicMastery {
     @Column(name = "computed_at")
     private Instant computedAt;
 
+    /** Rating on this skill, in Codeforces points; null with nothing to base one on (V24). */
+    @Column(name = "skill_rating")
+    private Double skillRating;
+
+    /** One standard deviation of {@link #skillRating}, in rating points. */
+    @Column(name = "skill_sd")
+    private Double skillSd;
+
+    /** Rated-round problems the rating rests on; 0 when it is the person's rating unchanged. */
+    @Column(name = "skill_problems")
+    private Integer skillProblems;
+
+    /** The hardest problem solved on this skill, practice or round; null if none (V24). */
+    @Column(name = "max_solved_rating")
+    private Integer maxSolvedRating;
+
+    /** CODEFORCES or GAUNTLET: where {@link #skillRating} came from. */
+    @Column(name = "skill_basis", length = 12)
+    private String skillBasis;
+
     /** Values of {@link #scope}. A plain constant holder rather than an enum: the column is
      *  written by a native upsert, which cannot bind a Java enum. */
     public static final class Scope {

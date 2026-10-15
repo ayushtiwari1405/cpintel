@@ -44,6 +44,14 @@ export interface RoadmapNodeData {
   decayScore: number
   problemsSolved: number
   problemsAttempted: number
+  /** Rating on this skill in Codeforces points; null when coverage is shown instead. */
+  skillRating?: number | null
+  skillSd?: number | null
+  /** Rated-round problems behind the rating. */
+  skillProblems: number
+  skillBasis?: 'CODEFORCES' | 'GAUNTLET' | null
+  /** Rating of the hardest problem solved here. */
+  maxSolvedRating?: number | null
   lastPracticedAt: string | null
   unlockedAt: string | null
   completedAt: string | null

@@ -25,6 +25,8 @@ public class PlatformNormalizer {
             .language(s.getProgrammingLanguage())
             .timeConsumedMs(s.getTimeConsumedMillis())
             .memoryConsumedBytes(s.getMemoryConsumedBytes())
+            .participantType(s.getAuthor() != null ? s.getAuthor().getParticipantType() : null)
+            .passedTestCount(s.getPassedTestCount())
             .submittedAt(s.getCreationTimeSeconds() != null
                 ? Instant.ofEpochSecond(s.getCreationTimeSeconds()) : null)
             .createdAt(Instant.now())

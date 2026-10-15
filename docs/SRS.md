@@ -13,10 +13,11 @@ Out of scope: **being an online judge.** CPIntel never decides a verdict. It com
 An earlier revision listed code execution, direct submission and live contest tracking as out of scope. All three were subsequently built; this section has been corrected rather than left to disagree with the product.
 
 ### 1.3 Definitions
-- **Mastery score** - 0-100 score per DSA topic derived from accuracy, solve volume and recency.
-- **Decay score** - portion of mastery score considered "faded" due to inactivity, computed via exponential decay.
+- **Skill rating** - a rating per DSA topic and skill-tree node, in Codeforces points with an uncertainty: the user's rating moved by their results on that topic's problems in rated rounds, or their placement-gauntlet area rating, as the user chooses. Replaces the earlier 0-100 mastery score, which measured on real histories added nothing to the rating alone (scripts/analytics-eval).
+- **Coverage** - what a user without a rating basis is shown instead: problems solved per topic and the hardest solved.
+- **Decay score** - portion of the old mastery score considered "faded" through inactivity; still computed for the revision queue.
 - **Unified score** - the user's Codeforces rating mapped onto a 0-1000 scale.
-- **Roadmap node** - one DSA sub-skill (e.g. "DFS & BFS") in the 35-node dependency tree.
+- **Roadmap node** - one DSA sub-skill (e.g. "DFS & BFS") in the 140-node dependency tree.
 - **Team** - a named set of CPIntel users an administrator measures against each other. Stored as a contest group; "team" is the name used throughout the product.
 - **Event** - a contest or an examination. One record, with the rules that differ stated per kind.
 - **Examination** - an assigned, monitored, logged event run on DOMjudge. Never public.
@@ -59,10 +60,13 @@ The desktop build is the same SPA plus a main process that can observe the windo
 - FR-2.4 Subsequent syncs are incremental, run on demand or nightly via scheduler.
 - FR-2.5 Codeforces web pages (statements, the submit form) are fetched by the user's own browser — the CPIntel extension, or the desktop app — and read by the server; a hosted server cannot fetch them itself.
 
-### FR-3 Topic mastery
-- FR-3.1 Mongo-stored submissions are normalized into PostgreSQL `topic_mastery` rows per canonical topic (14 topics: Arrays, Strings, Binary Search, Two Pointers, Greedy, DP, Graphs, Trees, Segment Trees, Binary Lifting, Number Theory, Bit Manipulation, Tries, Geometry).
-- FR-3.2 Mastery score is computed by `ScoringFormulas.mastery` from a weighted blend of accuracy (40%), solve volume on a log scale saturating near 1500 solves (35%) and recency (25%).
-- FR-3.3 Decay score uses exponential half-life decay (30-day half-life) applied to mastery based on days since last practice in that topic.
+### FR-3 Skill ratings
+- FR-3.1 Submissions are folded to one entry per problem and attributed to the 140 skill-tree nodes and their roll-up topics, and stored in PostgreSQL `topic_mastery` rows with solved and attempted counts and the hardest problem solved.
+- FR-3.2 Each node and topic has a skill rating in Codeforces points with a standard deviation (`SkillRating`): on the Codeforces basis, the user's rating plus an offset estimated from every problem of their rated rounds (solved during the round or not), with a normal prior of spread 100 and a 180-day half-life. Ratings of accounts made since 2020 are corrected for Codeforces' hidden 1400 start.
+- FR-3.3 A user chooses the basis: AUTO (rated rounds, else the gauntlet), CODEFORCES, or GAUNTLET (the placement test's area ratings; rated rounds are ignored). With no basis available the analytics show coverage instead of a rating.
+- FR-3.4 A topic is presented as a strength or a weak spot only when its distance from the user's rating exceeds its own standard deviation.
+- FR-3.5 Ratings are rebuilt after a sync, after a placement and when the basis changes; the rebuild evicts only that user's cached analytics.
+- FR-3.6 The model is evaluated offline against later rated rounds of real users (`scripts/analytics-eval`), and the parameters in FR-3.2 are the ones chosen there.
 
 ### FR-4 Contest analytics
 - FR-4.1 Codeforces rating history and per-contest submission stats (wrong-submission count, first-solve time) are pulled and stored as `contest_summaries`.

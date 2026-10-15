@@ -16,4 +16,9 @@ public class TopicMasteryDto {
     private Integer problemsAttempted;
     private Instant lastPracticedAt;
     private String masteryBand;
+    /** Rating on this topic in Codeforces points; null when coverage is shown instead. */
+    private Double skillRating;
+    private Double skillSd;
+    private Integer skillProblems;
+    private Integer maxSolvedRating;
 }

@@ -1,15 +1,18 @@
 import { useState } from 'react'
 import {
   useOverview, useTopicAnalytics, useContestAnalytics,
-  useRefreshAnalytics
+  useRefreshAnalytics, useSkillBasis
 } from '@/hooks/useAnalytics'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, BarChart, Bar,
-  Cell
+  Cell, ReferenceLine
 } from 'recharts'
 import { RefreshCw, Loader2, TrendingUp, Target} from 'lucide-react'
-import { tooltipStyle, axisStyle, CHROME, PLATFORM_COLORS, MASTERY_COLORS } from '@/charts/ChartTheme'
+import { tooltipStyle, axisStyle, CHROME, PLATFORM_COLORS } from '@/charts/ChartTheme'
+import { SkillBasisPanel } from '@/components/analytics/SkillBasisPanel'
+import { fmtRating, readSkill, type SkillReading } from '@/components/analytics/skill'
+import type { TopicMastery } from '@/types'
 import { clsx } from 'clsx'
 
 const TABS = ['Overview', 'Topics', 'Contests'] as const
@@ -127,104 +130,187 @@ function OverviewTab() {
 
 function TopicsTab() {
   const { data: topics, isLoading } = useTopicAnalytics()
+  const { data: basis } = useSkillBasis()
   if (isLoading) return <LoadingCard />
-  if (!topics?.length) return <EmptyCard text="No topic data yet — sync a platform first" />
-
-  const barData = [...topics]
-    .sort((a: any, b: any) => b.masteryScore - a.masteryScore)
 
   return (
     <div className="space-y-6">
-      {/* Bar chart */}
+      <SkillBasisPanel />
+      {!topics?.length
+        ? <EmptyCard text="No topic data yet — sync a platform first" />
+        : basis?.basis
+          ? <RatedTopics topics={topics} base={basis.rating} fromRounds={basis.basis === 'CODEFORCES'} />
+          : <CoverageTopics topics={topics} />}
+    </div>
+  )
+}
+
+/** Topic ratings in Codeforces points, each read against the rating it started from. */
+function RatedTopics({ topics, base, fromRounds }:
+  { topics: TopicMastery[]; base: number | null; fromRounds: boolean }) {
+  const rows = [...topics].sort((a, b) => (b.skillRating ?? 0) - (a.skillRating ?? 0))
+  const values = rows.map(t => t.skillRating ?? 0)
+  const lo = Math.floor((Math.min(...values, base ?? Infinity) - 150) / 100) * 100
+  const hi = Math.ceil((Math.max(...values, base ?? -Infinity) + 150) / 100) * 100
+  // Bars are drawn as the distance above the axis floor and labelled back in rating points:
+  // a bar chart measures from zero, and an axis that starts at 0 would flatten every rating
+  // into the same long bar.
+  const chart = rows.map(t => ({ ...t, value: Math.round(t.skillRating ?? 0), span: Math.round(t.skillRating ?? 0) - lo }))
+
+  return (
+    <>
       <div className="card">
-        <p className="text-sm font-medium text-gray-300 mb-4 flex items-center gap-1.5">
-          <Target size={14} className="text-indigo-400" /> Mastery by topic
+        <p className="text-sm font-medium text-gray-300 mb-1 flex items-center gap-1.5">
+          <Target size={14} className="text-indigo-400" /> Rating by topic
         </p>
-        <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={barData} layout="vertical"
-            margin={{ top: 0, right: 20, bottom: 0, left: 100 }}>
+        <p className="text-xs text-gray-500 mb-4">
+          In Codeforces points. A topic is marked a strength or a weak spot only when it sits
+          further from {base ?? 'your rating'} than its own uncertainty; most topics sit close to
+          your overall rating, and saying otherwise would be inventing a difference.
+        </p>
+        <ResponsiveContainer width="100%" height={Math.max(240, rows.length * 30)}>
+          <BarChart data={chart} layout="vertical"
+            margin={{ top: 0, right: 20, bottom: 0, left: 10 }}>
             <CartesianGrid strokeDasharray="3 3" stroke={CHROME.grid} horizontal={false} />
-            <XAxis type="number" domain={[0, 100]} {...axisStyle} />
-            <YAxis type="category" dataKey="topic" width={95}
+            <XAxis type="number" domain={[0, hi - lo]} {...axisStyle}
+              tickFormatter={(v: number) => `${v + lo}`} />
+            <YAxis type="category" dataKey="topic" width={130} interval={0}
               tick={{ fill: CHROME.label, fontSize: 11 }} />
             <Tooltip
               contentStyle={tooltipStyle}
-              formatter={(v: any) => [`${Number(v).toFixed(1)}%`, 'Mastery']}
+              formatter={(_v: any, _n: any, item: any) =>
+                [`${item.payload.value} ± ${Math.round(item.payload.skillSd ?? 0)}`, 'Rating']}
             />
-            <Bar dataKey="masteryScore" radius={[0, 4, 4, 0]}>
-              {barData.map((entry: any, i: number) => (
-                <Cell key={i} fill={MASTERY_COLORS[entry.masteryBand] ?? '#6366f1'} />
+            {base != null && <ReferenceLine x={base - lo} stroke={CHROME.label} strokeDasharray="4 4" />}
+            <Bar dataKey="span" radius={[0, 4, 4, 0]}>
+              {chart.map((t, i) => (
+                <Cell key={i} fill={READING_COLOR[readSkill(t, base).kind]} />
               ))}
             </Bar>
           </BarChart>
         </ResponsiveContainer>
-        {/* Legend */}
-        <div className="flex gap-4 mt-3 justify-center flex-wrap">
-          {Object.entries(MASTERY_COLORS).map(([band, color]) => (
-            <div key={band} className="flex items-center gap-1.5 text-xs text-gray-400">
-              <div className="w-2.5 h-2.5 rounded-full" style={{ background: color }} />
-              {band}
-            </div>
-          ))}
-        </div>
       </div>
 
-      {/* Topic table */}
       <div className="card overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="text-left text-xs text-gray-500 border-b border-gray-800">
               <th className="pb-2 font-medium">Topic</th>
-              <th className="pb-2 font-medium">Mastery</th>
-              <th className="pb-2 font-medium">Confidence</th>
-              <th className="pb-2 font-medium">Decay</th>
+              <th className="pb-2 font-medium">Rating</th>
+              <th className="pb-2 font-medium">Reading</th>
+              {fromRounds && (
+                <th className="pb-2 font-medium" title="Problems from your rated rounds behind the rating">
+                  Round problems
+                </th>
+              )}
               <th className="pb-2 font-medium">Solved</th>
-              <th className="pb-2 font-medium">Band</th>
+              <th className="pb-2 font-medium">Hardest solved</th>
             </tr>
           </thead>
           <tbody>
-            {barData.map((t: any) => (
+            {rows.map(t => {
+              const r = readSkill(t, base)
+              return (
+                <tr key={t.topic} className="border-b border-gray-800/50 last:border-0">
+                  <td className="py-2.5 text-gray-200 font-medium">{t.topic}</td>
+                  <td className="py-2.5 tabular-nums text-gray-200">
+                    {fmtRating(t.skillRating)}
+                    <span className="text-gray-500 text-xs"> ± {Math.round(t.skillSd ?? 0)}</span>
+                  </td>
+                  <td className="py-2.5 text-xs">
+                    {r.kind === 'strength' && <span className="badge badge-green">
+                      Strength +{Math.round(r.offset)}</span>}
+                    {r.kind === 'weak' && <span className="badge badge-red">
+                      Weak spot {Math.round(r.offset)}</span>}
+                    {r.kind === 'in-line' && <span className="text-gray-500">In line with your rating</span>}
+                  </td>
+                  {fromRounds && (
+                    <td className="py-2.5 text-gray-400 text-xs tabular-nums">{t.skillProblems ?? 0}</td>
+                  )}
+                  <td className="py-2.5 text-gray-400 text-xs tabular-nums">{t.problemsSolved ?? 0}</td>
+                  <td className="py-2.5 text-gray-400 text-xs tabular-nums">{fmtRating(t.maxSolvedRating)}</td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </>
+  )
+}
+
+/**
+ * What has been practised, for someone with no rating to show: how many problems on each
+ * topic, and how hard the hardest one was. Says what was done, not how good anyone is.
+ */
+function CoverageTopics({ topics }: { topics: TopicMastery[] }) {
+  const rows = [...topics]
+    .filter(t => (t.problemsAttempted ?? 0) > 0)
+    .sort((a, b) => (b.problemsSolved ?? 0) - (a.problemsSolved ?? 0))
+  if (!rows.length) return <EmptyCard text="Nothing practised yet — sync a platform first" />
+
+  return (
+    <>
+      <div className="card">
+        <p className="text-sm font-medium text-gray-300 mb-1 flex items-center gap-1.5">
+          <Target size={14} className="text-indigo-400" /> What you have practised
+        </p>
+        <p className="text-xs text-gray-500 mb-4">
+          Problems solved per topic. Practice says how much you have done, not how strong you
+          are: nearly everything anybody submits in practice ends accepted. Take part in rated
+          rounds or the gauntlet to get a rating per topic.
+        </p>
+        <ResponsiveContainer width="100%" height={Math.max(240, rows.length * 30)}>
+          <BarChart data={rows} layout="vertical"
+            margin={{ top: 0, right: 20, bottom: 0, left: 10 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke={CHROME.grid} horizontal={false} />
+            <XAxis type="number" allowDecimals={false} {...axisStyle} />
+            <YAxis type="category" dataKey="topic" width={130} interval={0}
+              tick={{ fill: CHROME.label, fontSize: 11 }} />
+            <Tooltip contentStyle={tooltipStyle}
+              formatter={(v: any) => [v, 'Solved']} />
+            <Bar dataKey="problemsSolved" fill="#6366f1" radius={[0, 4, 4, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+
+      <div className="card overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-xs text-gray-500 border-b border-gray-800">
+              <th className="pb-2 font-medium">Topic</th>
+              <th className="pb-2 font-medium">Solved</th>
+              <th className="pb-2 font-medium">Tried, not solved</th>
+              <th className="pb-2 font-medium">Hardest solved</th>
+              <th className="pb-2 font-medium">Last practised</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(t => (
               <tr key={t.topic} className="border-b border-gray-800/50 last:border-0">
                 <td className="py-2.5 text-gray-200 font-medium">{t.topic}</td>
-                <td className="py-2.5">
-                  <div className="flex items-center gap-2">
-                    <div className="w-20 bg-gray-800 rounded-full h-1.5">
-                      <div className="h-1.5 rounded-full"
-                        style={{
-                          width: `${t.masteryScore}%`,
-                          background: MASTERY_COLORS[t.masteryBand]
-                        }} />
-                    </div>
-                    <span className="text-gray-300 text-xs w-9">
-                      {(t.masteryScore ?? 0).toFixed(0)}%
-                    </span>
-                  </div>
+                <td className="py-2.5 text-gray-200 tabular-nums">{t.problemsSolved ?? 0}</td>
+                <td className="py-2.5 text-gray-400 text-xs tabular-nums">
+                  {(t.problemsAttempted ?? 0) - (t.problemsSolved ?? 0)}
                 </td>
-                <td className="py-2.5 text-gray-400 text-xs">
-                  {(t.confidenceScore ?? 0).toFixed(0)}%
-                </td>
-                <td className="py-2.5 text-xs">
-                  <span className={t.decayScore > 15 ? 'text-red-400' : 'text-gray-500'}>
-                    {(t.decayScore ?? 0).toFixed(0)}%
-                  </span>
-                </td>
-                <td className="py-2.5 text-gray-400 text-xs">{t.problemsSolved ?? 0}</td>
-                <td className="py-2.5">
-                  <span className={`badge text-xs ${
-                    t.masteryBand === 'STRONG'   ? 'badge-green' :
-                    t.masteryBand === 'MODERATE' ? 'badge-yellow' :
-                    t.masteryBand === 'WEAK'     ? 'badge-red' : 'badge-gray'
-                  }`}>
-                    {t.masteryBand}
-                  </span>
+                <td className="py-2.5 text-gray-400 text-xs tabular-nums">{fmtRating(t.maxSolvedRating)}</td>
+                <td className="py-2.5 text-gray-500 text-xs">
+                  {t.lastPracticedAt ? new Date(t.lastPracticedAt).toLocaleDateString() : '—'}
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-    </div>
+    </>
   )
+}
+
+const READING_COLOR: Record<SkillReading['kind'], string> = {
+  strength: '#22c55e',
+  weak: '#ef4444',
+  'in-line': '#6366f1',
+  none: '#6b7280',
 }
 
 function ContestsTab() {

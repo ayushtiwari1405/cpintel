@@ -34,6 +34,30 @@ export function useTrends() {
   })
 }
 
+export function useSkillBasis() {
+  return useQuery({
+    queryKey: ['analytics', 'skill-basis'],
+    queryFn: () => analyticsApi.getSkillBasis().then(r => r.data),
+    staleTime: 1000 * 60 * 10,
+  })
+}
+
+/** Changing the basis rebuilds every rating, the roadmap with them. */
+export function useSetSkillBasis() {
+  const queryClient = useQueryClient()
+  const toast = useToast()
+  return useMutation({
+    mutationFn: analyticsApi.setSkillBasis,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['analytics'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+      queryClient.invalidateQueries({ queryKey: ['roadmap'] })
+      toast.push('success', 'Skill ratings rebuilt')
+    },
+    onError: () => toast.push('error', 'Could not change what ratings are based on'),
+  })
+}
+
 export function useRefreshAnalytics() {
   const queryClient = useQueryClient()
   const toast = useToast()

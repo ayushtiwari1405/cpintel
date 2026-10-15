@@ -29,6 +29,19 @@ public class ContestSyncService {
     private final PlatformAccountRepository platformAccountRepository;
     private final CfSubmissionRepository cfSubmissionRepository;
     private final CodeforcesClient cfClient;
+    private final com.cpintel.integration.codeforces.CfProblemsetClient problemset;
+
+    /**
+     * Whether a submission was sent while its author was competing in the round. Rows stored
+     * before the participant type was kept fall back to "accepted in the few hours before the
+     * rating update", until a sync fills the type in.
+     */
+    public static boolean inRound(CfSubmission s, Instant ratedAt) {
+        if (s.getParticipantType() != null) return "CONTESTANT".equals(s.getParticipantType());
+        return ratedAt != null && s.getSubmittedAt() != null
+            && !s.getSubmittedAt().isAfter(ratedAt)
+            && s.getSubmittedAt().isAfter(ratedAt.minus(java.time.Duration.ofHours(5)));
+    }
 
     @Transactional
     public int syncCfContests(Long userId) {
@@ -65,6 +78,11 @@ public class ContestSyncService {
             .filter(s -> s.getContestId() != null)
             .collect(Collectors.groupingBy(CfSubmission::getContestId));
 
+        Map<Integer, Integer> problemsIn = new java.util.HashMap<>();
+        for (CfModels.Submission.Problem p : problemset.getAllProblems()) {
+            if (p.getContestId() != null) problemsIn.merge(p.getContestId(), 1, Integer::sum);
+        }
+
         List<CfModels.RatingChange> ratings = ratingResp.getResult();
         int saved = 0;
 
@@ -78,8 +96,11 @@ public class ContestSyncService {
             // Compute stats from submissions in this contest
             List<CfSubmission> contestSubs = subsByContest.getOrDefault(rc.getContestId(), List.of());
 
+            // Solved in the round, not afterwards: an upsolve the next day is not a result.
+            Instant ratedAt = rc.getRatingUpdateTimeSeconds() == null ? null
+                : Instant.ofEpochSecond(rc.getRatingUpdateTimeSeconds());
             int problemsSolved = (int) contestSubs.stream()
-                .filter(s -> "OK".equals(s.getVerdict()))
+                .filter(s -> "OK".equals(s.getVerdict()) && inRound(s, ratedAt))
                 .map(s -> s.getProblemIndex())
                 .filter(Objects::nonNull)
                 .distinct().count();
@@ -114,7 +135,7 @@ public class ContestSyncService {
                 .ratingAfter(rc.getNewRating())
                 .ratingChange(ratingChange)
                 .problemsSolved(problemsSolved)
-                .totalProblems(0) // unknown without contest API
+                .totalProblems(problemsIn.getOrDefault(rc.getContestId(), 0))
                 .firstSolveMins(firstSolveMins)
                 .wrongSubmissions(wrongSubs)
                 .penaltyMins(0)

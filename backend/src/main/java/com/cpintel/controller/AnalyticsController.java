@@ -61,6 +61,25 @@ public class AnalyticsController {
         return ResponseEntity.ok(ApiResponse.ok(analyticsService.getTrends(userId)));
     }
 
+    @GetMapping("/skill-basis")
+    @Operation(summary = "What skill ratings are based on, and what they could be based on")
+    public ResponseEntity<ApiResponse<AnalyticsDto.SkillBasis>> skillBasis(
+        @AuthenticationPrincipal Long userId
+    ) {
+        return ResponseEntity.ok(ApiResponse.ok(analyticsService.getSkillBasis(userId)));
+    }
+
+    /** Body: {@code {"basis": "AUTO" | "CODEFORCES" | "GAUNTLET"}}. Rebuilds the ratings on it. */
+    @PutMapping("/skill-basis")
+    @Operation(summary = "Choose what skill ratings are based on")
+    public ResponseEntity<ApiResponse<AnalyticsDto.SkillBasis>> setSkillBasis(
+        @AuthenticationPrincipal Long userId,
+        @RequestBody java.util.Map<String, String> body
+    ) {
+        return ResponseEntity.ok(ApiResponse.ok(
+            analyticsService.setSkillBasis(userId, body.get("basis"))));
+    }
+
     @PostMapping("/refresh")
     @Operation(summary = "Trigger analytics recompute")
     public ResponseEntity<ApiResponse<Void>> refresh(@AuthenticationPrincipal Long userId) {

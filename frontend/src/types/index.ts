@@ -51,6 +51,25 @@ export interface TopicMastery {
   problemsAttempted: number
   lastPracticedAt?: string
   masteryBand: 'STRONG' | 'MODERATE' | 'WEAK' | 'UNTOUCHED'
+  /** Rating on this topic in Codeforces points; absent when coverage is shown instead. */
+  skillRating?: number | null
+  /** One standard deviation of skillRating. */
+  skillSd?: number | null
+  /** Rated-round problems the rating rests on; 0 means it is the starting rating unchanged. */
+  skillProblems?: number | null
+  /** Rating of the hardest problem solved on this topic. */
+  maxSolvedRating?: number | null
+}
+
+/** What skill ratings are based on. */
+export interface SkillBasis {
+  /** Null when there is nothing to rate from, and coverage is shown. */
+  basis: 'CODEFORCES' | 'GAUNTLET' | null
+  requested: 'AUTO' | 'CODEFORCES' | 'GAUNTLET'
+  /** The rating every skill starts from on that basis. */
+  rating: number | null
+  codeforcesAvailable: boolean
+  gauntletAvailable: boolean
 }
 
 export interface ContestSummary {

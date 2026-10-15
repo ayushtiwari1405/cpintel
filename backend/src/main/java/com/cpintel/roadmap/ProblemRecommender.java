@@ -71,8 +71,12 @@ public class ProblemRecommender {
      * done - and within that, by how well the difficulty suits the user's current level in this
      * node. Solved ones are kept at the tail rather than dropped so the panel can show progress.
      */
-    public List<Recommended> forNode(RoadmapTaxonomy.NodeDef def, double masteryScore,
-                                     Set<String> solvedKeys, int limit) {
+    /**
+     * @param skillRating the person's rating on this skill, when they have one; problems are then
+     *                    aimed just above it. Without one, the older mastery-based aim is used.
+     */
+    public List<Recommended> forNode(RoadmapTaxonomy.NodeDef def, Double skillRating,
+                                     double masteryScore, Set<String> solvedKeys, int limit) {
         if (def == null) return List.of();
 
         List<CfModels.Submission.Problem> candidates = candidatesFor(def);
@@ -91,8 +95,10 @@ public class ProblemRecommender {
                 p.getRating(),
                 p.getTags() == null ? List.of() : p.getTags(),
                 solved.contains(key),
-                ScoringFormulas.scoreProblemFit(
-                    masteryScore, def.minRating(), def.maxRating(), p.getRating()),
+                skillRating != null
+                    ? ScoringFormulas.scoreProblemFitForSkill(skillRating, p.getRating())
+                    : ScoringFormulas.scoreProblemFit(
+                        masteryScore, def.minRating(), def.maxRating(), p.getRating()),
                 practicePath(p.getContestId(), p.getIndex(), def.id()),
                 judgeUrl(p.getContestId(), p.getIndex())));
         }

@@ -38,7 +38,7 @@ the reasoning behind the harder decisions, and [`docs/SRS.md`](docs/SRS.md) for 
 | Document DB | MongoDB — raw submission history, personal files, contest snapshots |
 | Cache | Redis — sessions, JWT blacklist, per-user token revocation, analytics cache |
 | Integrations | Codeforces REST + scraping, DOMjudge REST v4 |
-| Migrations | Flyway — 23 versioned migrations (schema, indexes, materialized views, audit indexes, groups, super admin role, scheduler locks, node-level mastery, examinations, examination access, placement results, Codeforces-only cleanup, examination-mode sessions, several events per judge contest, examination leaderboards, classrooms, audit log by classroom, DOMjudge logins in PostgreSQL, marking an event done, rejudging a problem, TA marking, freezing TA marks, refresh-token digests and families) |
+| Migrations | Flyway — 24 versioned migrations (schema, indexes, materialized views, audit indexes, groups, super admin role, scheduler locks, node-level mastery, examinations, examination access, placement results, Codeforces-only cleanup, examination-mode sessions, several events per judge contest, examination leaderboards, classrooms, audit log by classroom, DOMjudge logins in PostgreSQL, marking an event done, rejudging a problem, TA marking, freezing TA marks, refresh-token digests and families, skill ratings) |
 | Containerization | Docker Compose — 11 services: 3 behind the `monitoring` profile and certbot behind `letsencrypt`. `docker-compose.prod.yml` swaps the builds for CI images |
 | Editor | Monaco, bundled locally (no CDN) — shared by the Practice, Compete and examination workspaces |
 | Code runner | g++ and CPython under bubblewrap + rlimits, in its own locked-down container on a server; judged against the statement's sample tests |
@@ -52,14 +52,17 @@ the reasoning behind the harder decisions, and [`docs/SRS.md`](docs/SRS.md) for 
 - Link a Codeforces account; async background sync of its full submission and contest history.
   (LeetCode and CodeChef were supported once and dropped: their APIs gave only a slice of a
   user's history, so analytics built on them misdescribed people.)
-- Topic mastery engine: accuracy, volume, recency-decay and confidence scored per topic in
-  `ScoringFormulas`
+- Skill ratings in Codeforces points per topic and per skill-tree node, with an uncertainty:
+  the person's rating moved by how they did on each topic's problems in their rated rounds, or
+  their placement-gauntlet areas if they choose (for anyone whose Codeforces rating does not
+  reflect them). Without either, practice coverage is shown instead of a number. Measured on
+  real histories in `scripts/analytics-eval` — see there for what it does and does not predict
 - Contest analytics: rating history, wrong-submission patterns, behavioural insight generation
 - Unified rating: the Codeforces rating mapped onto a 0-1000 scale
 - Daily/weekly recommendation sheets and an SM-2-style spaced repetition revision queue. The
   page is parked — out of the sidebar, and `/recommendations` redirects to the roadmap — because
   the roadmap already answers "what next", and two answers that can disagree are worse than one
-- 35-node adaptive roadmap with real prerequisite chains, live-pulled Codeforces problems per
+- 140-node adaptive roadmap with real prerequisite chains, live-pulled Codeforces problems per
   node, and auto-unlock based on measured mastery
 - A placement gauntlet (`/roadmap/gauntlet`): a short tiered test per area whose result moves
   roadmap nodes forward — never back — so a newcomer does not start at the bottom of a tree they
@@ -755,7 +758,7 @@ Three things are worth checking by hand as well:
 | `/dashboard` | anyone | Topic radar, streak, recent contests |
 | `/analytics` | anyone | Mastery heatmap, rating history, behavioural insights |
 | `/recommendations` | — | Parked; redirects to `/roadmap` |
-| `/roadmap` | anyone | The 35-node dependency graph with problems per node |
+| `/roadmap` | anyone | The 140-node dependency graph with problems per node |
 | `/roadmap/gauntlet` | anyone | The placement gauntlet |
 | `/practice` | anyone | Problem search, statement, editor, local runner, submit |
 | `/compete` | anyone | Contests on Codeforces or DOMjudge: statements, editor, submissions, rank |

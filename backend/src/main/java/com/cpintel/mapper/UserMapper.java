@@ -70,6 +70,10 @@ public class UserMapper {
             .problemsAttempted(tm.getProblemsAttempted())
             .lastPracticedAt(tm.getLastPracticedAt())
             .masteryBand(TopicMastery.MasteryBand.from(tm.getMasteryScore()).name())
+            .skillRating(tm.getSkillRating())
+            .skillSd(tm.getSkillSd())
+            .skillProblems(tm.getSkillProblems())
+            .maxSolvedRating(tm.getMaxSolvedRating())
             .build();
     }
 

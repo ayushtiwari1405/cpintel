@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import type { RoadmapNodeData } from '@/api/roadmapApi'
 import { Lock, CircleDot, CheckCircle2, Circle, ChevronRight } from 'lucide-react'
 import { clsx } from 'clsx'
+import { progress } from './rules'
 
 /**
  * The skill tree, at a hundred and forty nodes.
@@ -205,7 +206,7 @@ function NodeChip({ node, selected, onSelect }: {
         <div className="flex-1 h-1 rounded-full bg-gray-800 overflow-hidden min-w-0">
           <div
             className={clsx('h-full', style.dot)}
-            style={{ width: `${Math.min(100, Math.max(0, node.masteryScore))}%` }}
+            style={{ width: `${Math.round(100 * progress(node))}%` }}
           />
         </div>
         <span className="text-[10px] text-gray-600 tabular-nums flex-shrink-0">

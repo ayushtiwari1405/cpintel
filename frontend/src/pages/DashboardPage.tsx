@@ -2,14 +2,13 @@ import { useQuery } from '@tanstack/react-query'
 import { userApi } from '@/api/userApi'
 import { useAuth } from '@/contexts/AuthContext'
 import { useRefreshAnalytics } from '@/hooks/useAnalytics'
-import { useEffect } from 'react'
 import {
   Zap, Target, Award, RefreshCw,
   Loader2, Link2, ChevronRight
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import {
-  RadarChart, Radar, PolarGrid, PolarAngleAxis,
+  RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   ResponsiveContainer, Tooltip
 } from 'recharts'
 import { tooltipStyle, CHROME } from '@/charts/ChartTheme'
@@ -24,22 +23,28 @@ export default function DashboardPage() {
     staleTime: 0,
     refetchOnMount: true,
   })
-  // Once per visit. The mutation object changes identity every render; depending on it would
-  // refresh in a loop.
-  useEffect(() => {
-    refresh.mutate()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  // No recompute on opening the page: a sync rebuilds the analytics when it finishes, and the
+  // Refresh button is there for anything else. Recomputing on every visit cost a full rebuild
+  // per page view and, until the eviction was made per user, emptied everybody's cache.
 
   const platforms = dashboard?.user?.platforms ?? []
   const score = dashboard?.unifiedScore
   const topics = dashboard?.topTopics ?? []
   const contests = dashboard?.recentContests ?? []
 
+  // Ratings when there is a basis for them, otherwise how much was solved (coverage).
+  const rated = topics.some((t: any) => t.skillRating != null)
+  const valueOf = (t: any) => rated ? Math.round(t.skillRating ?? 0) : (t.problemsSolved ?? 0)
   const radarData = topics.slice(0, 7).map((t: any) => ({
     topic: t.topic.length > 10 ? t.topic.slice(0, 10) + '…' : t.topic,
-    mastery: Math.round(t.masteryScore ?? 0),
+    value: valueOf(t),
   }))
+  const values = radarData.map((d: any) => d.value)
+  const radarDomain: [number, number] = rated
+    ? [Math.floor((Math.min(...values) - 200) / 100) * 100, Math.ceil((Math.max(...values) + 100) / 100) * 100]
+    : [0, Math.max(1, ...values)]
+  const [lo, hi] = radarDomain
+  const width = (v: number) => Math.min(100, Math.max(0, 100 * (v - lo) / Math.max(1, hi - lo)))
 
   if (isLoading) return (
     <div className="flex items-center justify-center h-64">
@@ -124,7 +129,7 @@ export default function DashboardPage() {
         <div className="card">
           <div className="flex items-center justify-between mb-4">
             <p className="text-sm font-medium text-gray-300 flex items-center gap-1.5">
-              <Target size={14} className="text-indigo-400" /> Topic mastery
+              <Target size={14} className="text-indigo-400" /> {rated ? 'Topic ratings' : 'What you have practised'}
             </p>
             <Link to="/analytics"
               className="text-xs text-indigo-400 flex items-center gap-0.5 hover:underline">
@@ -141,10 +146,11 @@ export default function DashboardPage() {
               <RadarChart data={radarData}>
                 <PolarGrid stroke={CHROME.grid} />
                 <PolarAngleAxis dataKey="topic" tick={{ fill: CHROME.label, fontSize: 11 }} />
-                <Radar dataKey="mastery" stroke="#6366f1" fill="#6366f1" fillOpacity={0.25} />
+                <PolarRadiusAxis domain={radarDomain} tick={false} axisLine={false} />
+                <Radar dataKey="value" stroke="#6366f1" fill="#6366f1" fillOpacity={0.25} />
                 <Tooltip
                   contentStyle={tooltipStyle}
-                  formatter={(v: any) => [`${v}%`, 'Mastery']}
+                  formatter={(v: any) => [v, rated ? 'Rating' : 'Solved']}
                 />
               </RadarChart>
             </ResponsiveContainer>
@@ -153,19 +159,18 @@ export default function DashboardPage() {
             // that reads as a broken chart. Bars say the same thing at any count.
             <div className="space-y-3 py-2">
               {topics.slice(0, 7).map((t: any) => {
-                const mastery = Math.round(t.masteryScore ?? 0)
+                const value = valueOf(t)
                 return (
                   <div key={t.topic}>
                     <div className="flex items-center justify-between text-xs mb-1">
                       <span className="text-gray-300">{t.topic}</span>
                       <span className="tabular-nums text-gray-500">
-                        {mastery}%
-                        {t.problemsSolved != null && ` · ${t.problemsSolved} solved`}
+                        {rated ? `${value} ± ${Math.round(t.skillSd ?? 0)}` : `${value} solved`}
                       </span>
                     </div>
                     <div className="h-1.5 rounded-full bg-gray-800 overflow-hidden">
                       <div className="h-full rounded-full bg-indigo-500"
-                        style={{ width: `${Math.min(100, Math.max(0, mastery))}%` }} />
+                        style={{ width: `${width(value)}%` }} />
                     </div>
                   </div>
                 )

@@ -17,6 +17,14 @@ public interface CfSubmissionRepository extends MongoRepository<CfSubmission, St
     boolean existsByUserIdAndCfSubmissionId(Long userId, Long cfSubmissionId);
     long countByUserIdAndVerdict(Long userId, String verdict);
 
+    /**
+     * Which of these submissions are already stored, with the one field a re-sync may still
+     * have to fill in. One query per page of history, rather than one per submission.
+     */
+    @Query(value = "{ 'userId': ?0, 'cfSubmissionId': { $in: ?1 } }",
+           fields = "{ 'cfSubmissionId': 1, 'participantType': 1 }")
+    List<CfSubmission> findKnown(Long userId, java.util.Collection<Long> cfSubmissionIds);
+
     @Query("{ 'userId': ?0, 'verdict': 'OK', 'tags': { $in: ?1 } }")
     List<CfSubmission> findSolvedByUserIdAndTags(Long userId, List<String> tags);
 

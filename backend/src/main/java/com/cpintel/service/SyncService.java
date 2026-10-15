@@ -26,7 +26,9 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import java.time.Instant;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -42,6 +44,8 @@ public class SyncService {
     private final CodeforcesClient cfClient;
     private final PlatformNormalizer normalizer;
     private final ContestSyncService contestSyncService;
+    private final org.springframework.data.mongodb.core.MongoTemplate mongoTemplate;
+    private final org.springframework.beans.factory.ObjectProvider<com.cpintel.analytics.AnalyticsService> analytics;
 
     /**
      * This service through its proxy. {@code @Async} is applied by the proxy, so calling
@@ -219,6 +223,15 @@ public class SyncService {
                 }
             }
 
+            // Ratings, coverage and the roadmap move as soon as new history lands, rather than
+            // whenever somebody next opens their dashboard. A failure here leaves last night's
+            // analytics in place; it does not fail a sync that already succeeded.
+            try {
+                analytics.ifAvailable(a -> a.triggerAnalyticsRefresh(userId));
+            } catch (Exception e) {
+                log.warn("Analytics refresh after sync failed for userId={}: {}", userId, e.getMessage());
+            }
+
             job.setStatus("COMPLETED");
             job.setItemsSynced(synced);
             job.setProgressPct(100.0);
@@ -262,9 +275,19 @@ public class SyncService {
             var resp = cfClient.getSubmissions(handle, from, CF_BATCH);
             if (resp == null || resp.getResult() == null || resp.getResult().isEmpty()) break;
 
+            Map<Long, CfSubmission> known = new HashMap<>();
+            for (CfSubmission k : cfSubmissionRepository.findKnown(userId,
+                    resp.getResult().stream().map(CfModels.Submission::getId).toList())) {
+                known.put(k.getCfSubmissionId(), k);
+            }
+            int backfilled = 0;
             for (CfModels.Submission s : resp.getResult()) {
-                if (!cfSubmissionRepository.existsByUserIdAndCfSubmissionId(userId, s.getId())) {
+                CfSubmission stored = known.get(s.getId());
+                if (stored == null) {
                     batch.add(normalizer.normalizeCf(userId, s));
+                } else if (stored.getParticipantType() == null && s.getAuthor() != null
+                        && s.getAuthor().getParticipantType() != null) {
+                    backfilled += backfill(userId, s);
                 }
             }
 
@@ -277,14 +300,33 @@ public class SyncService {
             // Incremental stops at the first page with nothing new on it — not at the first
             // submission already stored. History can have gaps (a sync that died halfway, or
             // rows the old global index filed under another account), and stopping at the first
-            // known row left everything behind a gap unsynced for good.
-            if (!full && fresh == 0) break;
+            // known row left everything behind a gap unsynced for good. A page that only filled
+            // in fields older rows were stored without counts as work too, so the first sync
+            // after an upgrade walks the whole history once.
+            if (!full && fresh == 0 && backfilled == 0) break;
             from += CF_BATCH;
         }
 
         account.setLastSyncedAt(Instant.now());
         platformAccountRepository.save(account);
         return total;
+    }
+
+    /**
+     * Fills in what a submission stored before they were kept is missing: how it was sent
+     * (in the round or in practice) and how many tests it passed. Contest-based skill ratings
+     * need the first; without it every old submission would read as practice.
+     */
+    private int backfill(Long userId, CfModels.Submission s) {
+        var result = mongoTemplate.updateFirst(
+            org.springframework.data.mongodb.core.query.Query.query(
+                org.springframework.data.mongodb.core.query.Criteria.where("userId").is(userId)
+                    .and("cfSubmissionId").is(s.getId())),
+            new org.springframework.data.mongodb.core.query.Update()
+                .set("participantType", s.getAuthor().getParticipantType())
+                .set("passedTestCount", s.getPassedTestCount()),
+            CfSubmission.class);
+        return (int) result.getModifiedCount();
     }
 
     public SyncJob getSyncStatus(Long jobId) {

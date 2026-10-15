@@ -62,6 +62,18 @@ public class CfSubmission {
     @Field("memoryConsumedBytes")
     private Long memoryConsumedBytes;
 
+    /**
+     * How it was sent: CONTESTANT (in the live round), OUT_OF_COMPETITION, VIRTUAL or PRACTICE.
+     * A solve under contest conditions is stronger evidence of skill than one in practice.
+     * Null on submissions stored before this was kept; a full sync fills it in.
+     */
+    @Field("participantType")
+    private String participantType;
+
+    /** Tests passed before the verdict; how near a wrong answer came. Null as above. */
+    @Field("passedTestCount")
+    private Integer passedTestCount;
+
     @Field("submittedAt")
     private Instant submittedAt;
 

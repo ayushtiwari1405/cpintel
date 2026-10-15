@@ -3,6 +3,7 @@ import { Target, Check, ArrowUpRight, Loader2 } from 'lucide-react'
 import { clsx } from 'clsx'
 import type { RoadmapNodeData, RoadmapProblem } from '@/api/roadmapApi'
 import type { ProblemSummary } from '@/types'
+import { headline, progress } from '@/components/roadmap/rules'
 
 /**
  * What the practice workspace shows about the skill a problem was suggested for.
@@ -58,11 +59,11 @@ export function SkillBanner({ node }: { node: RoadmapNodeData }) {
         <div className="w-16 h-1 rounded-full bg-gray-800 overflow-hidden">
           <div
             className="h-full bg-indigo-500"
-            style={{ width: `${Math.min(100, Math.max(0, node.masteryScore))}%` }}
+            style={{ width: `${Math.round(100 * progress(node))}%` }}
           />
         </div>
         <span className="text-[11px] text-gray-500 tabular-nums">
-          {Math.round(node.masteryScore)}%
+          {headline(node)}
         </span>
         <Link
           to="/roadmap"
@@ -167,7 +168,7 @@ export function NextUpList({ nodes, isLoading, onSelect }: {
               <Target size={11} className="text-indigo-400 flex-shrink-0" />
               <span className="text-xs text-gray-300 truncate min-w-0 flex-1">{node.topic}</span>
               <span className="text-[10px] text-gray-600 tabular-nums flex-shrink-0">
-                {Math.round(node.masteryScore)}%
+                {headline(node)}
               </span>
             </div>
             <div className="flex items-center gap-2 mt-1 pl-[19px]">

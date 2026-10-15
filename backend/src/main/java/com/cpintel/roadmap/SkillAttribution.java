@@ -53,14 +53,22 @@ public final class SkillAttribution {
         private int solved;
         private int attempted;
         private Instant lastPractisedAt;
+        private Integer maxSolvedRating;
 
         public int solved() { return solved; }
         public int attempted() { return attempted; }
         public Instant lastPractisedAt() { return lastPractisedAt; }
+        /** Rating of the hardest problem solved here, or null if none was, or none was rated. */
+        public Integer maxSolvedRating() { return maxSolvedRating; }
 
         void record(Practised p) {
             attempted++;
-            if (p.solved()) solved++;
+            if (p.solved()) {
+                solved++;
+                if (p.rating() != null && (maxSolvedRating == null || p.rating() > maxSolvedRating)) {
+                    maxSolvedRating = p.rating();
+                }
+            }
             if (p.lastAttemptAt() != null
                 && (lastPractisedAt == null || p.lastAttemptAt().isAfter(lastPractisedAt))) {
                 lastPractisedAt = p.lastAttemptAt();

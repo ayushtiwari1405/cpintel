@@ -53,7 +53,9 @@ class GauntletServiceTest {
         when(nodes.findByUserUserIdOrderByOrderIndex(USER)).thenReturn(tree);
 
         service = new GauntletService(mock(RoadmapService.class), nodes, results,
-            new MemoryAttempts(), new ObjectMapper().registerModule(new JavaTimeModule()));
+            new MemoryAttempts(), new ObjectMapper().registerModule(new JavaTimeModule()),
+            new org.springframework.beans.factory.support.StaticListableBeanFactory()
+                .getBeanProvider(com.cpintel.analytics.AnalyticsService.class));
     }
 
     private static List<GauntletBank.Question> tier(String section, int tier) {

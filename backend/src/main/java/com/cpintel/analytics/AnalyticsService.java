@@ -4,6 +4,7 @@ import com.cpintel.dto.analytics.AnalyticsDto;
 import com.cpintel.entity.ContestSummary;
 import com.cpintel.entity.PlatformAccount;
 import com.cpintel.entity.TopicMastery;
+import com.cpintel.entity.User;
 import com.cpintel.exception.ApiException;
 import com.cpintel.repository.jpa.ContestSummaryRepository;
 import com.cpintel.repository.jpa.PlatformAccountRepository;
@@ -15,6 +16,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -45,6 +47,13 @@ public class AnalyticsService {
     private final UnifiedRatingService unifiedRatingService;
     private final ContestAnalysisService contestAnalysisService;
     private final RecommendationEngine recommendationEngine;
+    private final SkillRatingService skillRatings;
+    private final com.cpintel.service.RoadmapService roadmapService;
+
+    /** Through the proxy, so the per-user cache eviction on the refresh actually happens. */
+    @org.springframework.context.annotation.Lazy
+    @org.springframework.beans.factory.annotation.Autowired
+    private AnalyticsService self;
 
     private static final DateTimeFormatter DATE_FMT =
         DateTimeFormatter.ofPattern("yyyy-MM-dd").withZone(ZoneId.of("UTC"));
@@ -55,9 +64,52 @@ public class AnalyticsService {
     /** Days counted as "recent" when reporting how much work went into a topic lately. */
     private static final int RECENT_WINDOW_DAYS = 30;
 
+    /**
+     * Strongest skill first: by rating where there is one, otherwise by how much was solved —
+     * the order coverage is read in.
+     */
+    private static final Comparator<AnalyticsDto.TopicSummary> STRONGEST_FIRST =
+        Comparator.comparing((AnalyticsDto.TopicSummary t) -> t.getSkillRating() == null ? 1 : 0)
+            .thenComparing(t -> -(t.getSkillRating() == null ? 0 : t.getSkillRating()))
+            .thenComparing(t -> -(t.getProblemsSolved() == null ? 0 : t.getProblemsSolved()));
+
+    /** What this user's skill ratings are based on, and what they could be based on. */
+    public AnalyticsDto.SkillBasis getSkillBasis(Long userId) {
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> ApiException.notFound("User not found"));
+        return toDto(skillRatings.summary(user));
+    }
+
+    /**
+     * Chooses what skill ratings are based on, and rebuilds them on it.
+     *
+     * @param basis AUTO, CODEFORCES or GAUNTLET
+     */
+    @Transactional
+    public AnalyticsDto.SkillBasis setSkillBasis(Long userId, String basis) {
+        String chosen = basis == null ? "" : basis.trim().toUpperCase(java.util.Locale.ROOT);
+        if (!List.of(SkillRatingService.AUTO, SkillRatingService.CODEFORCES,
+                SkillRatingService.GAUNTLET).contains(chosen)) {
+            throw ApiException.badRequest("Choose AUTO, CODEFORCES or GAUNTLET.");
+        }
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> ApiException.notFound("User not found"));
+        user.setSkillBasis(chosen);
+        userRepository.save(user);
+        self.triggerAnalyticsRefresh(userId);
+        return toDto(skillRatings.summary(user));
+    }
+
+    private static AnalyticsDto.SkillBasis toDto(SkillRatingService.Summary s) {
+        return AnalyticsDto.SkillBasis.builder()
+            .basis(s.basis()).requested(s.requested()).rating(s.rating())
+            .codeforcesAvailable(s.codeforcesAvailable()).gauntletAvailable(s.gauntletAvailable())
+            .build();
+    }
+
     @Cacheable(value = "analytics", key = "'overview:' + #userId")
     public AnalyticsDto.Overview getOverview(Long userId) {
-        userRepository.findById(userId)
+        User user = userRepository.findById(userId)
             .orElseThrow(() -> ApiException.notFound("User not found"));
 
         List<TopicMastery> rollups =
@@ -74,9 +126,7 @@ public class AnalyticsService {
 
         List<AnalyticsDto.TopicSummary> topicSummaries = rollups.stream()
             .map(this::toTopicSummary)
-            .sorted(Comparator.comparingDouble(
-                (AnalyticsDto.TopicSummary t) -> t.getMasteryScore() == null ? 0 : t.getMasteryScore())
-                .reversed())
+            .sorted(STRONGEST_FIRST)
             .collect(Collectors.toList());
 
         List<AnalyticsDto.PlatformStats> platformStats = platforms.stream()
@@ -105,6 +155,7 @@ public class AnalyticsService {
             .currentStreak(practiceHistory.currentStreak(history))
             .topicSummaries(topicSummaries)
             .platformStats(platformStats)
+            .skillBasis(toDto(skillRatings.summary(user)))
             .build();
     }
 
@@ -169,21 +220,23 @@ public class AnalyticsService {
         return topicMasteryRepository
             .findByUserUserIdAndScope(userId, TopicMastery.Scope.TOPIC).stream()
             .map(this::toTopicSummary)
-            .sorted(Comparator.comparingDouble(
-                (AnalyticsDto.TopicSummary t) -> t.getMasteryScore() == null ? 0 : t.getMasteryScore())
-                .reversed())
+            .sorted(STRONGEST_FIRST)
             .collect(Collectors.toList());
     }
 
-    /** Every skill-tree node the user has evidence for, strongest first. */
+    /**
+     * Every skill-tree node the user has evidence for, strongest first. With a rating basis
+     * every node has a row (the roadmap needs them all), so the ones nothing has touched —
+     * no practice and no rated-round problem — are left out here.
+     */
     @Cacheable(value = "analytics", key = "'nodes:' + #userId")
     public List<AnalyticsDto.TopicSummary> getNodeAnalytics(Long userId) {
         return topicMasteryRepository
             .findByUserUserIdAndScope(userId, TopicMastery.Scope.NODE).stream()
+            .filter(tm -> (tm.getProblemsAttempted() != null && tm.getProblemsAttempted() > 0)
+                || (tm.getSkillProblems() != null && tm.getSkillProblems() > 0))
             .map(this::toTopicSummary)
-            .sorted(Comparator.comparingDouble(
-                (AnalyticsDto.TopicSummary t) -> t.getMasteryScore() == null ? 0 : t.getMasteryScore())
-                .reversed())
+            .sorted(STRONGEST_FIRST)
             .collect(Collectors.toList());
     }
 
@@ -250,8 +303,23 @@ public class AnalyticsService {
             .build();
     }
 
+    /**
+     * Rebuilds one user's analytics.
+     *
+     * <p>Evicts that user's cached entries and nobody else's. It used to clear the whole
+     * analytics cache, and the dashboard asked for a refresh on every visit, so one person
+     * opening their dashboard emptied the cache for everyone and it was effectively never warm.
+     */
     @Transactional
-    @CacheEvict(value = "analytics", allEntries = true)
+    @Caching(evict = {
+        @CacheEvict(value = "analytics", key = "'overview:' + #userId"),
+        @CacheEvict(value = "analytics", key = "'contests:' + #userId"),
+        @CacheEvict(value = "analytics", key = "'topics:' + #userId"),
+        @CacheEvict(value = "analytics", key = "'nodes:' + #userId"),
+        @CacheEvict(value = "analytics", key = "'trends:' + #userId"),
+        @CacheEvict(value = "recommendations", key = "'daily:' + #userId"),
+        @CacheEvict(value = "recommendations", key = "'weekly:' + #userId"),
+    })
     public void triggerAnalyticsRefresh(Long userId) {
         log.info("Triggering analytics refresh for user {}", userId);
         // Step 1: fold the raw submissions into per-skill counts
@@ -262,6 +330,8 @@ public class AnalyticsService {
         recommendationEngine.generateDailySheet(userId);
         recommendationEngine.generateWeeklySheet(userId);
         recommendationEngine.generateRevisionSchedule(userId);
+        // The roadmap's statuses are read from the ratings just written.
+        roadmapService.regenerateRoadmap(userId);
     }
 
     /**
@@ -279,38 +349,39 @@ public class AnalyticsService {
         Map<String, SkillAttribution.NodeStat> nodeStats = SkillAttribution.attribute(history);
         Map<String, SkillAttribution.NodeStat> topicStats = SkillAttribution.rollUp(history);
 
-        if (nodeStats.isEmpty() && topicStats.isEmpty()) {
+        // Confirms the account exists before writing rows keyed to it - the upsert below is
+        // native, so it would not raise the foreign key as a readable error on its own.
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> ApiException.notFound("User not found"));
+        SkillRatingService.Profile skills = skillRatings.profile(user);
+
+        if (nodeStats.isEmpty() && topicStats.isEmpty() && skills.basis() == null) {
             log.warn("No skills attributed for user {} from {} distinct problems",
                 userId, history.size());
             return;
         }
 
-        // Confirms the account exists before writing rows keyed to it - the upsert below is
-        // native, so it would not raise the foreign key as a readable error on its own.
-        if (!userRepository.existsById(userId)) {
-            throw ApiException.notFound("User not found");
-        }
+        List<String> written = new ArrayList<>(RoadmapTaxonomy.NODES.size() + topicStats.size());
 
-        List<String> written = new ArrayList<>(nodeStats.size() + topicStats.size());
-
-        for (Map.Entry<String, SkillAttribution.NodeStat> e : nodeStats.entrySet()) {
-            RoadmapTaxonomy.NodeDef def = RoadmapTaxonomy.byId(e.getKey());
+        // With a rating to base them on, every node gets a row: one never practised still has a
+        // rating (the person's own, until evidence moves it), and the roadmap reads it. Without
+        // one, only what was practised is written, which is what coverage shows.
+        Set<String> nodeIds = new java.util.LinkedHashSet<>(nodeStats.keySet());
+        nodeIds.addAll(skills.nodes().keySet());
+        for (String nodeId : nodeIds) {
+            RoadmapTaxonomy.NodeDef def = RoadmapTaxonomy.byId(nodeId);
             if (def == null) continue;
-            SkillAttribution.NodeStat stat = e.getValue();
-            topicMasteryRepository.upsertCounts(
-                userId, def.id(), TopicMastery.Scope.NODE,
-                def.rollupTopic(), def.track(),
-                stat.solved(), stat.attempted(), stat.lastPractisedAt());
+            write(userId, def.id(), TopicMastery.Scope.NODE, def.rollupTopic(), def.track(),
+                nodeStats.get(nodeId), skills.nodes().get(nodeId), skills.basis());
             written.add(def.id());
         }
 
-        for (Map.Entry<String, SkillAttribution.NodeStat> e : topicStats.entrySet()) {
-            SkillAttribution.NodeStat stat = e.getValue();
-            topicMasteryRepository.upsertCounts(
-                userId, e.getKey(), TopicMastery.Scope.TOPIC,
-                null, null,
-                stat.solved(), stat.attempted(), stat.lastPractisedAt());
-            written.add(e.getKey());
+        Set<String> topicIds = new java.util.LinkedHashSet<>(topicStats.keySet());
+        topicIds.addAll(skills.topics().keySet());
+        for (String topic : topicIds) {
+            write(userId, topic, TopicMastery.Scope.TOPIC, null, null,
+                topicStats.get(topic), skills.topics().get(topic), skills.basis());
+            written.add(topic);
         }
 
         // Rows for skills the user no longer has evidence for - a renamed node, a retired one,
@@ -320,8 +391,23 @@ public class AnalyticsService {
             topicMasteryRepository.deleteStale(userId, written);
         }
 
-        log.info("Mastery rebuilt for user {}: {} nodes, {} topics, from {} distinct problems",
-            userId, nodeStats.size(), topicStats.size(), history.size());
+        log.info("Mastery rebuilt for user {}: {} nodes, {} topics, from {} distinct problems; "
+            + "skill ratings from {}", userId, nodeStats.size(), topicStats.size(), history.size(),
+            skills.basis() == null ? "nothing (coverage only)" : skills.basis());
+    }
+
+    private void write(Long userId, String topic, String scope, String parentTopic, String track,
+                       SkillAttribution.NodeStat stat, SkillRatingService.Skill skill,
+                       String basis) {
+        topicMasteryRepository.upsertCounts(
+            userId, topic, scope, parentTopic, track,
+            stat == null ? 0 : stat.solved(), stat == null ? 0 : stat.attempted(),
+            stat == null ? null : stat.lastPractisedAt(),
+            stat == null ? null : stat.maxSolvedRating(),
+            skill == null ? null : ScoringFormulas.round2(skill.rating()),
+            skill == null ? null : ScoringFormulas.round2(skill.sd()),
+            skill == null ? null : skill.problems(),
+            skill == null ? null : basis);
     }
 
     // -- internals ---------------------------------------------------------
@@ -384,6 +470,10 @@ public class AnalyticsService {
             .problemsAttempted(tm.getProblemsAttempted())
             .lastPracticedAt(tm.getLastPracticedAt())
             .masteryBand(TopicMastery.MasteryBand.from(orZero(tm.getMasteryScore())).name())
+            .skillRating(tm.getSkillRating())
+            .skillSd(tm.getSkillSd())
+            .skillProblems(tm.getSkillProblems())
+            .maxSolvedRating(tm.getMaxSolvedRating())
             .build();
     }
 
