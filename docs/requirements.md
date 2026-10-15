@@ -25,7 +25,7 @@ or **Optional** (recommended, not blocking). Tick items off as they are arranged
 │             └┬───┬───┬───┬┘                                                    │
 │   ┌──────────▼┐ ┌▼────┐ ┌▼────┐ ┌▼────────────────┐                            │
 │   │ Postgres  │ │Mongo│ │Redis│ │ runner (sandbox, │   optional "monitoring":  │
-│   └───────────┘ └─────┘ └─────┘ │ no network)      │   Prometheus·Grafana·Loki │
+│   └───────────┘ └─────┘ └─────┘ │ no network)      │ Prometheus·Grafana·node-x │
 │                                 └──────────────────┘                           │
 └────────────────────────────────────────────────────────────────────────────────┘
         │ HTTPS                                                  ▲
@@ -159,8 +159,9 @@ copy has to live off the server, or a disk failure loses everything.
 - [ ] **An off-server place for the nightly dumps** — *Required.* Another machine, object
   storage, or a mounted network share.
 - [ ] **One test restore after the first nightly backup** — *Required.* Run
-  `scripts/restore.sh --test <stamp>` once and write down the result. (Verified on a development
-  copy, 2026-09-24.)
+  `scripts/restore.sh --test <stamp>` once and write down the result. (A full restore — backup,
+  drill, data deleted, restored in place, backend started on the result — was rehearsed on
+  throwaway containers on 2026-10-15; see the head of `scripts/restore.sh`.)
 
 ### 1.8 Lab PCs and browsers
 
@@ -194,6 +195,15 @@ Decisions and routines the college owns rather than the software.
   - Optionally, generate a room password to read out at the start.
 - [ ] **No updates while an exam is running** — *Required.* A restart drops every live session
   for about a minute.
+- [ ] **Monitoring on during exams** — *Recommended.* Start it for the day with
+  `docker compose --profile monitoring up -d` (Prometheus, Grafana and node-exporter; about
+  100 MB in use, capped at 700 MB, a week of history, at most 1 GB of disk) and stop it afterwards
+  if memory is tight. Grafana and Prometheus listen on the server's loopback only: reach them
+  with `ssh -L 3000:127.0.0.1:3000 -L 9090:127.0.0.1:9090 <server>`, then open
+  http://localhost:3000 (dashboard "CPIntel Backend": requests, errors, latency, heap, database
+  pool, and the server's CPU, memory and disk) and http://localhost:9090/alerts (backend down,
+  server errors, throttling, slow requests, pool exhausted, heap, host memory, disk, CPU). Nothing
+  is sent anywhere: somebody keeps it open during the sitting.
 - [ ] **Tell users they will need to sign in again after the first deploy** — *Optional.*
 
 ---

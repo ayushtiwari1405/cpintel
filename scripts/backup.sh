@@ -29,6 +29,9 @@ if [ -f "$ROOT/.env" ]; then
 fi
 
 DIR="${CPINTEL_BACKUP_DIR:-/var/backups/cpintel}"
+# The containers, by name; set only to point at another stack, as the restore drill does.
+PG_CONTAINER="${CPINTEL_PG_CONTAINER:-cpintel-postgres}"
+MONGO_CONTAINER="${CPINTEL_MONGO_CONTAINER:-cpintel-mongo}"
 KEEP="${CPINTEL_BACKUP_KEEP_DAYS:-14}"
 TAG="${1:-nightly}"
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)-$TAG"
@@ -41,12 +44,12 @@ echo "[$(date -u +%FT%TZ)] backup $STAMP → $DIR"
 # Written under a temporary name and renamed once complete, so a dump cut short by a full disk
 # or a killed container never sits in the directory looking like a good one.
 pg_out="$DIR/postgres-$STAMP.dump"
-docker exec cpintel-postgres sh -c 'pg_dump -U "$POSTGRES_USER" -d cpintel -Fc' \
+docker exec "$PG_CONTAINER" sh -c 'pg_dump -U "$POSTGRES_USER" -d cpintel -Fc' \
   > "$pg_out.partial"
 mv "$pg_out.partial" "$pg_out"
 
 mongo_out="$DIR/mongo-$STAMP.archive.gz"
-docker exec cpintel-mongo sh -c 'mongodump --quiet --archive --gzip --db cpintel \
+docker exec "$MONGO_CONTAINER" sh -c 'mongodump --quiet --archive --gzip --db cpintel \
     -u "$MONGO_INITDB_ROOT_USERNAME" -p "$MONGO_INITDB_ROOT_PASSWORD" \
     --authenticationDatabase admin' > "$mongo_out.partial"
 mv "$mongo_out.partial" "$mongo_out"

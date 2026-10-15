@@ -18,6 +18,14 @@ public interface ExamPasscodeRepository extends JpaRepository<ExamPasscode, Long
     Optional<ExamPasscode> find(@Param("contestId") Long contestId,
                                 @Param("userId") Long userId);
 
+    /** Records an unlock under this password generation; null takes it away. */
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.transaction.annotation.Transactional
+    @Query("UPDATE ExamPasscode p SET p.unlockedGeneration = :generation "
+         + "WHERE p.contest.contestId = :contestId AND p.user.userId = :userId")
+    int setUnlocked(@Param("contestId") Long contestId, @Param("userId") Long userId,
+                    @Param("generation") Integer generation);
+
     /**
      * Every code for an examination, with the people fetched.
      *

@@ -35,6 +35,8 @@ class ExamAccessServiceTest {
     private ExamPasswordService passwords;
     private ExamAccessService service;
     private final Map<String, String> redisStore = new HashMap<>();
+    private final Map<String, Integer> postgresStore = new HashMap<>();
+    private StringRedisTemplate redis;
 
     private GroupContest exam;
 
@@ -51,10 +53,23 @@ class ExamAccessServiceTest {
             redisStore.remove(c.<String>getArgument(0)) != null);
 
         passwords = mock(ExamPasswordService.class);
+        this.redis = redis;
+        // The unlock as Postgres keeps it (V26): one generation per candidate per paper.
+        com.cpintel.repository.jpa.ExamPasscodeRepository passcodes =
+            mock(com.cpintel.repository.jpa.ExamPasscodeRepository.class);
+        when(passcodes.setUnlocked(anyLong(), anyLong(), any())).thenAnswer(c -> {
+            Integer gen = c.getArgument(2);
+            String k = c.getArgument(0) + ":" + c.getArgument(1);
+            if (gen == null) postgresStore.remove(k); else postgresStore.put(k, gen);
+            return 1;
+        });
+        when(passcodes.find(anyLong(), anyLong())).thenAnswer(c -> java.util.Optional.of(
+            com.cpintel.entity.ExamPasscode.builder().unlockedGeneration(
+                postgresStore.get(c.getArgument(0) + ":" + c.getArgument(1))).build()));
         service = new ExamAccessService(redis, passwords,
             mock(ExamEventService.class), mock(AuditService.class),
             mock(com.cpintel.repository.jpa.RefreshTokenRepository.class),
-            mock(com.cpintel.security.JwtService.class));
+            mock(com.cpintel.security.JwtService.class), passcodes);
         signedInFor(EXAM);
 
         redisStore.clear();
@@ -253,6 +268,68 @@ class ExamAccessServiceTest {
             when(passwords.requiresExamPassword(other)).thenReturn(true);
 
             assertFalse(service.isUnlocked(other, USER));
+        }
+    }
+
+    @Nested
+    @DisplayName("When Redis loses the grant")
+    class RedisOutage {
+
+        private void unlocked() {
+            paperAsksForAPassword();
+            when(passwords.matchesExamPassword(exam, "K7FQ-M2XB")).thenReturn(true);
+            service.unlock(exam, USER, "K7FQ-M2XB", null, null);
+        }
+
+        @Test
+        @DisplayName("Redis restarting empty mid-paper does not send the room back to the unlock screen")
+        void restartKeepsGrant() {
+            unlocked();
+            redisStore.clear();
+
+            assertTrue(service.isUnlocked(exam, USER));
+            assertEquals("1", redisStore.get("exam:access:" + EXAM + ":" + USER),
+                "and the grant is put back in Redis");
+        }
+
+        @Test
+        @DisplayName("Redis unreachable: the grant is read from Postgres")
+        void unreachableReadsPostgres() {
+            unlocked();
+            when(redis.opsForValue().get(anyString()))
+                .thenThrow(new org.springframework.data.redis.RedisConnectionFailureException("down"));
+
+            assertTrue(service.isUnlocked(exam, USER));
+        }
+
+        @Test
+        @DisplayName("a stored grant does not outlive its paper")
+        void notAfterThePaper() {
+            unlocked();
+            redisStore.clear();
+            exam.setEndsAt(Instant.now().minus(Duration.ofHours(2)));
+
+            assertFalse(service.isUnlocked(exam, USER));
+        }
+
+        @Test
+        @DisplayName("revoking clears both copies, so a restart cannot bring it back")
+        void revokeClearsPostgres() {
+            unlocked();
+            service.revoke(EXAM, USER);
+            redisStore.clear();
+
+            assertFalse(service.isUnlocked(exam, USER));
+        }
+
+        @Test
+        @DisplayName("rotating the password ends grants in Postgres too")
+        void rotationStillEnds() {
+            unlocked();
+            redisStore.clear();
+            exam.setExamPasswordGen(2);
+
+            assertFalse(service.isUnlocked(exam, USER));
         }
     }
 }

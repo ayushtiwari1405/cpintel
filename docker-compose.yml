@@ -74,12 +74,17 @@ services:
     # lists, and silently dropping those would lock a candidate out mid-paper or bring a
     # revoked session back. A full Redis refuses writes instead; the caches survive that
     # (CacheErrorConfig), and 512mb is far above what a deployment of this size uses.
+    # Append-only, flushed every second: a restart mid-paper loses at most a second of grants
+    # and heartbeats rather than up to a minute (--save alone snapshots once a minute). The
+    # grants are in Postgres too (V26), so even an empty Redis does not lock a room out.
     command: >
       redis-server
       --requirepass ${REDIS_PASSWORD}
       --maxmemory 512mb
       --maxmemory-policy noeviction
       --save 60 1
+      --appendonly yes
+      --appendfsync everysec
     ports:
       # Bound to loopback, not 0.0.0.0. These publishes exist so the backend can run on
       # the host during development; nothing outside this machine has any reason to reach
@@ -335,10 +340,15 @@ services:
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
-      - '--storage.tsdb.retention.time=30d'
+      # Sized to sit beside an examination on the 4-core, 8 GB server: a week of history, never
+      # more than 1 GB on disk, and capped in memory below. Start it for exam days with
+      #   docker compose --profile monitoring up -d
+      - '--storage.tsdb.retention.time=7d'
+      - '--storage.tsdb.retention.size=1GB'
       - '--web.enable-lifecycle'
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
       - prometheus_data:/prometheus
     ports:
       - "127.0.0.1:9090:9090"
@@ -346,6 +356,33 @@ services:
       - cpintel-net
     restart: unless-stopped
     profiles: ["monitoring"]
+    deploy:
+      resources:
+        limits:
+          memory: 384m
+
+  # The server itself — CPU, memory, disk — which is what runs out first on exam day.
+  node-exporter:
+    logging: *default-logging
+    image: prom/node-exporter:v1.8.2
+    container_name: cpintel-node-exporter
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--path.rootfs=/rootfs'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro,rslave
+    networks:
+      - cpintel-net
+    restart: unless-stopped
+    profiles: ["monitoring"]
+    deploy:
+      resources:
+        limits:
+          memory: 64m
 
   grafana:
     logging: *default-logging
@@ -368,6 +405,10 @@ services:
       - cpintel-net
     restart: unless-stopped
     profiles: ["monitoring"]
+    deploy:
+      resources:
+        limits:
+          memory: 256m
 
   loki:
     logging: *default-logging
@@ -382,7 +423,10 @@ services:
     networks:
       - cpintel-net
     restart: unless-stopped
-    profiles: ["monitoring"]
+    # Its own profile, out of "monitoring": nothing ships logs to it yet (the containers log to
+    # Docker's json-file driver), so on the exam-day profile it would cost memory and hold
+    # nothing. Read logs with `docker compose logs backend` until a shipper is added.
+    profiles: ["logs"]
 
 volumes:
   letsencrypt:

@@ -60,6 +60,10 @@ public class ExamPasscode {
     @Column(name = "first_used_at")
     private Instant firstUsedAt;
 
+    /** The password generation this candidate unlocked the paper under; null if not (V26). */
+    @Column(name = "unlocked_generation")
+    private Integer unlockedGeneration;
+
     @Column(name = "use_count", nullable = false)
     @Builder.Default
     private Integer useCount = 0;

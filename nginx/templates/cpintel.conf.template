@@ -128,12 +128,15 @@ server {
         proxy_read_timeout    120s;
     }
 
-    # Actuator — internal only
-    location /actuator/ {
-        allow 172.16.0.0/12;
-        allow 10.0.0.0/8;
-        deny  all;
+    # Actuator: only the health check is public. Prometheus scrapes the backend directly on the
+    # Docker network and never comes through here. This used to allow 10.0.0.0/8 and
+    # 172.16.0.0/12, which on a campus network is every student, and /actuator/prometheus needs
+    # no sign-in — so anyone in the building could read the backend's internals.
+    location = /actuator/health {
         proxy_pass http://backend;
+    }
+    location /actuator/ {
+        return 404;
     }
 
     # Frontend SPA

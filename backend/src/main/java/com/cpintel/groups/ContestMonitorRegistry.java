@@ -65,14 +65,35 @@ public class ContestMonitorRegistry {
 
     /** Records that this contestant's monitor was alive just now. */
     public void beat(Long userId, Long contestId) {
-        redis.opsForValue().set(key(contestId, userId),
-            String.valueOf(Instant.now().getEpochSecond()),
-            Duration.ofSeconds(ttlSeconds));
+        try {
+            redis.opsForValue().set(key(contestId, userId),
+                String.valueOf(Instant.now().getEpochSecond()),
+                Duration.ofSeconds(ttlSeconds));
+        } catch (Exception e) {
+            // Nothing to record it in; the gate below knows Redis is down and does not ask.
+            log.debug("Heartbeat for user {} on {} not recorded: {}", userId, contestId,
+                e.getMessage());
+        }
     }
 
-    /** True while a heartbeat from this contestant is still within its window. */
+    /**
+     * True while a heartbeat from this contestant is still within its window.
+     *
+     * <p>True as well when Redis cannot be read at all. The alternative refuses every
+     * submission in every monitored paper for as long as Redis is down — a whole room unable to
+     * hand in, for a fault none of them caused — and what it would guard against, a monitor
+     * closed during the outage, is still in the examination log as the focus losses and
+     * absences the client reports. After a restart Redis is merely empty, and the next beat,
+     * at most one interval away, refills it.
+     */
     public boolean isMonitored(Long userId, Long contestId) {
-        return Boolean.TRUE.equals(redis.hasKey(key(contestId, userId)));
+        try {
+            return Boolean.TRUE.equals(redis.hasKey(key(contestId, userId)));
+        } catch (Exception e) {
+            log.warn("Monitor check for user {} on {} skipped, Redis unavailable: {}",
+                userId, contestId, e.getMessage());
+            return true;
+        }
     }
 
     /**

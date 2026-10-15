@@ -76,6 +76,7 @@ public class ExamAccessService {
     private final AuditService auditService;
     private final com.cpintel.repository.jpa.RefreshTokenRepository refreshTokens;
     private final com.cpintel.security.JwtService jwtService;
+    private final com.cpintel.repository.jpa.ExamPasscodeRepository passcodes;
 
     private String key(Long examId, Long userId) {
         return KEY_PREFIX + examId + ":" + userId;
@@ -104,17 +105,36 @@ public class ExamAccessService {
         // session — the account password — never is, however the rest reads.
         if (!SessionMode.isExamSessionFor(exam.getContestId())) return false;
 
-        String stored = redis.opsForValue().get(key(exam.getContestId(), userId));
-        if (stored == null) return false;
-
         // The grant names the password generation it was minted under. A rotation moves the
         // examination past it, and every grant from before is stale in the same instant.
         int generation = exam.getExamPasswordGen() == null ? 0 : exam.getExamPasswordGen();
         try {
-            return Integer.parseInt(stored) == generation;
+            String stored = redis.opsForValue().get(key(exam.getContestId(), userId));
+            if (stored != null) return Integer.parseInt(stored) == generation;
         } catch (NumberFormatException e) {
             return false;
+        } catch (Exception e) {
+            // Redis unreachable: the copy in Postgres answers instead, below.
+            log.warn("Exam grant for user {} on {} read from Postgres, Redis unavailable: {}",
+                userId, exam.getContestId(), e.getMessage());
         }
+        return fromPostgres(exam, userId, generation);
+    }
+
+    /**
+     * The grant as Postgres has it, for when Redis has lost it (a restart, a flush) or cannot be
+     * reached. Honoured only inside the window a Redis grant would have lived for, so a stored
+     * unlock cannot outlast its paper; put back into Redis when it is there to take it.
+     */
+    private boolean fromPostgres(GroupContest exam, Long userId, int generation) {
+        if (exam.getEndsAt() != null && Instant.now().isAfter(exam.getEndsAt().plus(GRACE))) {
+            return false;
+        }
+        boolean unlocked = passcodes.find(exam.getContestId(), userId)
+            .map(p -> p.getUnlockedGeneration() != null && p.getUnlockedGeneration() == generation)
+            .orElse(false);
+        if (unlocked) cacheGrant(exam, userId, generation);
+        return unlocked;
     }
 
     // --------------------------------------------------------------- unlock
@@ -204,6 +224,7 @@ public class ExamAccessService {
      */
     @org.springframework.transaction.annotation.Transactional
     public void revoke(Long examId, Long userId) {
+        passcodes.setUnlocked(examId, userId, null);
         redis.delete(key(examId, userId));
         // And the examination sessions themselves: a grant alone would be handed straight back
         // to a session that is still signed in. The access tokens it holds stop at once; the
@@ -213,13 +234,25 @@ public class ExamAccessService {
     }
 
     private void grant(GroupContest exam, Long userId) {
+        int generation = exam.getExamPasswordGen() == null ? 0 : exam.getExamPasswordGen();
+        // Postgres first: it is the copy that survives Redis. See V26.
+        passcodes.setUnlocked(exam.getContestId(), userId, generation);
+        cacheGrant(exam, userId, generation);
+    }
+
+    private void cacheGrant(GroupContest exam, Long userId, int generation) {
         Duration ttl = GRACE;
         if (exam.getEndsAt() != null) {
             Duration left = Duration.between(Instant.now(), exam.getEndsAt());
             if (!left.isNegative()) ttl = left.plus(GRACE);
         }
-        int generation = exam.getExamPasswordGen() == null ? 0 : exam.getExamPasswordGen();
-        redis.opsForValue().set(key(exam.getContestId(), userId),
-            String.valueOf(generation), ttl);
+        try {
+            redis.opsForValue().set(key(exam.getContestId(), userId),
+                String.valueOf(generation), ttl);
+        } catch (Exception e) {
+            // Held in Postgres; read from there until Redis is back.
+            log.warn("Could not cache the exam grant for user {} on {}: {}",
+                userId, exam.getContestId(), e.getMessage());
+        }
     }
 }
