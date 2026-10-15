@@ -1,0 +1,156 @@
+# The production stack, shaped like the server it will run on, for a load test on one machine.
+#
+# Used on top of docker-compose.yml by stack.sh, under its own project name (cpintel-loadtest)
+# and its own container names (cpintel-lt-*), so its volumes and containers are its own and a
+# development stack — running or stopped — is never touched. Every CPIntel
+# service is pinned to the same LOADTEST_CPUS (default 4-7: four physical cores, the target
+# server's count) and the memory limits below add up to about 8 GB, the target's (monitoring
+# comes on top, capped at about 0.7 GB). What is
+# left of the machine is split between the judge and the simulator, so neither takes its CPU
+# from the system being measured.
+#
+# The judge (profile "judge") is DOMjudge 9.0.0 on the same network, at http://domserver: the
+# database and the domserver on JUDGE_CPUS (default 3,8), one judgehost on each of
+# JUDGEHOST_0_CPU, JUDGEHOST_1_CPU and JUDGEHOST_2_CPU (9, 10, 11). The judgehosts are a profile of their own
+# ("judgehosts") because they need the password the domserver generates on its first start;
+# stack.sh brings them up once it can read it.
+# The databases and the backend are not published on this machine: the simulator goes through
+# nginx as a room would, and a development database already on 5432 would collide.
+services:
+  postgres:
+    ports: !reset []
+    container_name: cpintel-lt-postgres
+    cpuset: "${LOADTEST_CPUS:-4-7}"
+    deploy: { resources: { limits: { memory: 1g } } }
+  mongodb:
+    ports: !reset []
+    container_name: cpintel-lt-mongo
+    cpuset: "${LOADTEST_CPUS:-4-7}"
+    deploy: { resources: { limits: { memory: 1536m } } }
+  redis:
+    ports: !reset []
+    container_name: cpintel-lt-redis
+    cpuset: "${LOADTEST_CPUS:-4-7}"
+    deploy: { resources: { limits: { memory: 640m } } }
+  backend:
+    ports: !reset []
+    container_name: cpintel-lt-backend
+    cpuset: "${LOADTEST_CPUS:-4-7}"
+    deploy: { resources: { limits: { memory: 2560m } } }
+  runner:
+    container_name: cpintel-lt-runner
+    cpuset: "${LOADTEST_CPUS:-4-7}"
+  frontend:
+    container_name: cpintel-lt-frontend
+    cpuset: "${LOADTEST_CPUS:-4-7}"
+    deploy: { resources: { limits: { memory: 128m } } }
+  nginx:
+    container_name: cpintel-lt-nginx
+    cpuset: "${LOADTEST_CPUS:-4-7}"
+    deploy: { resources: { limits: { memory: 128m } } }
+  prometheus:
+    container_name: cpintel-lt-prometheus
+    cpuset: "${LOADTEST_CPUS:-4-7}"
+  grafana:
+    container_name: cpintel-lt-grafana
+    cpuset: "${LOADTEST_CPUS:-4-7}"
+  node-exporter:
+    container_name: cpintel-lt-node-exporter
+    cpuset: "${LOADTEST_CPUS:-4-7}"
+
+  judge-db:
+    profiles: [judge]
+    image: mariadb:11.4
+    container_name: cpintel-lt-judge-db
+    cpuset: "${JUDGE_CPUS:-3,8}"
+    deploy: { resources: { limits: { memory: 1g } } }
+    command: --max-connections=1000 --max-allowed-packet=512M --innodb-buffer-pool-size=256M
+    environment:
+      MYSQL_ROOT_PASSWORD: ${JUDGE_DB_ROOT_PASSWORD}
+      MYSQL_USER: domjudge
+      MYSQL_PASSWORD: ${JUDGE_DB_PASSWORD}
+      MYSQL_DATABASE: domjudge
+    volumes:
+      - judge_db:/var/lib/mysql
+    networks: [cpintel-net]
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      retries: 30
+
+  domserver:
+    profiles: [judge]
+    image: domjudge/domserver:9.0.0
+    container_name: cpintel-lt-domserver
+    cpuset: "${JUDGE_CPUS:-3,8}"
+    deploy: { resources: { limits: { memory: 1g } } }
+    depends_on:
+      judge-db: { condition: service_healthy }
+    environment:
+      CONTAINER_TIMEZONE: Asia/Kolkata
+      MYSQL_HOST: judge-db
+      MYSQL_ROOT_PASSWORD: ${JUDGE_DB_ROOT_PASSWORD}
+      MYSQL_USER: domjudge
+      MYSQL_PASSWORD: ${JUDGE_DB_PASSWORD}
+      MYSQL_DATABASE: domjudge
+      DJ_DB_INSTALL_BARE: "1"
+    # Published on this machine only, for a look at the jury pages during the run.
+    ports: ["127.0.0.1:12345:80"]
+    networks: [cpintel-net]
+
+  judgehost-0: &judgehost
+    profiles: [judgehosts]
+    image: domjudge/judgehost:9.0.0
+    container_name: cpintel-lt-judgehost-0
+    hostname: judgehost-0
+    cpuset: "${JUDGEHOST_0_CPU:-9}"
+    deploy: { resources: { limits: { memory: 2g } } }
+    # The daemon binds each run to core DAEMON_ID, so it is the same number as the cpuset.
+    # 9.0 is the first judgehost that works on cgroup v2 alone (8.x wants v1), and on v2 it needs
+    # the host's cgroup namespace: it puts each run in a cgroup below its own container's, and
+    # checks that +memory and +cpuset are delegated from the root, which Docker already does.
+    privileged: true
+    cgroup: host
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup
+    environment:
+      CONTAINER_TIMEZONE: Asia/Kolkata
+      DOMSERVER_BASEURL: http://domserver/
+      JUDGEDAEMON_USERNAME: judgehost
+      JUDGEDAEMON_PASSWORD: ${JUDGEDAEMON_PASSWORD:-}
+      DAEMON_ID: "${JUDGEHOST_0_CPU:-9}"
+    networks: [cpintel-net]
+
+  judgehost-1:
+    <<: *judgehost
+    container_name: cpintel-lt-judgehost-1
+    hostname: judgehost-1
+    cpuset: "${JUDGEHOST_1_CPU:-10}"
+    environment:
+      CONTAINER_TIMEZONE: Asia/Kolkata
+      DOMSERVER_BASEURL: http://domserver/
+      JUDGEDAEMON_USERNAME: judgehost
+      JUDGEDAEMON_PASSWORD: ${JUDGEDAEMON_PASSWORD:-}
+      DAEMON_ID: "${JUDGEHOST_1_CPU:-10}"
+
+  judgehost-2:
+    <<: *judgehost
+    container_name: cpintel-lt-judgehost-2
+    hostname: judgehost-2
+    cpuset: "${JUDGEHOST_2_CPU:-11}"
+    environment:
+      CONTAINER_TIMEZONE: Asia/Kolkata
+      DOMSERVER_BASEURL: http://domserver/
+      JUDGEDAEMON_USERNAME: judgehost
+      JUDGEDAEMON_PASSWORD: ${JUDGEDAEMON_PASSWORD:-}
+      DAEMON_ID: "${JUDGEHOST_2_CPU:-11}"
+
+volumes:
+  judge_db:
+
+networks:
+  # A subnet of its own, so this can be created beside a development stack's network.
+  cpintel-net:
+    ipam:
+      config:
+        - subnet: 172.29.0.0/16

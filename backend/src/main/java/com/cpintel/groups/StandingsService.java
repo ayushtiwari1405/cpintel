@@ -56,6 +56,9 @@ public class StandingsService {
      */
     @Transactional
     public void refresh(GroupContest contest) {
+        // Events assigned to teams have no group, and no board here to rebuild: theirs is
+        // ranked from the submission archive on read.
+        if (contest.getGroup() == null) return;
         List<GroupMember> members = memberRepository.findByGroup(contest.getGroup().getGroupId());
         if (members.isEmpty()) {
             standingRepository.deleteByContestContestId(contest.getContestId());

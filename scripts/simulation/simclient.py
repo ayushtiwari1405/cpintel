@@ -34,6 +34,15 @@ class Response:
     elapsed: float
     #: Parsed JSON, or None when the body was not JSON.
     json: Optional[Any] = None
+    #: Response headers, as (name, value) pairs; a name can repeat (Set-Cookie).
+    headers: tuple = ()
+
+    def cookie(self, name: str) -> Optional[str]:
+        """The value a Set-Cookie header in this response gives ``name``, if any."""
+        for key, value in self.headers:
+            if key.lower() == "set-cookie" and value.startswith(name + "="):
+                return value.split(";", 1)[0].split("=", 1)[1]
+        return None
 
     @property
     def ok(self) -> bool:
@@ -156,6 +165,7 @@ class Client:
                 raw = conn.getresponse()
                 payload = raw.read()
                 status = raw.status
+                headers = tuple(raw.getheaders())
                 break
             except (http.client.HTTPException, OSError):
                 self.close()
@@ -170,7 +180,8 @@ class Client:
             except (ValueError, UnicodeDecodeError):
                 parsed = None
 
-        return Response(status=status, body=payload, elapsed=elapsed, json=parsed)
+        return Response(status=status, body=payload, elapsed=elapsed, json=parsed,
+                        headers=headers)
 
     # ------------------------------------------------------------- convenience
 

@@ -69,11 +69,13 @@ public class DomjudgeSampleClient {
      *
      * The API routes are preferred over the web-UI ones because they return structured data
      * and are stable across themes; the zip routes are the fallback for builds that never
-     * exposed test cases through the API at all.
+     * exposed test cases through the API at all. DOMjudge 9 has no per-problem route of either
+     * kind: its API serves one samples.zip for the whole contest, a folder per problem label.
      */
     private enum Route {
         API_CONTEST_TESTCASES,
         API_PROBLEM_TESTCASES,
+        API_CONTEST_SAMPLES_ZIP,
         WEB_TEAM_SAMPLES_ZIP,
         WEB_PUBLIC_SAMPLES_ZIP
     }
@@ -155,6 +157,7 @@ public class DomjudgeSampleClient {
                     contestId, problemId);
                 case API_PROBLEM_TESTCASES -> viaTestcaseApi(as,
                     "/problems/" + problemId + "/testcases", contestId, problemId);
+                case API_CONTEST_SAMPLES_ZIP -> viaContestZip(as, contestId, problemId);
                 case WEB_TEAM_SAMPLES_ZIP -> viaZip(as,
                     "/team/problems/" + problemId + "/samples.zip");
                 case WEB_PUBLIC_SAMPLES_ZIP -> viaZip(as,
@@ -271,7 +274,42 @@ public class DomjudgeSampleClient {
             .retrieve()
             .bodyToMono(byte[].class)
             .block(Duration.ofSeconds(30));
+        return unzip(archive, null);
+    }
 
+    /**
+     * DOMjudge 9's contest-wide samples.zip: {@code A/1.in}, {@code A/1.ans},
+     * {@code A/statement.pdf}, {@code B/...}. The folder is the problem's label, so the label is
+     * looked up first. Every problem of the contest arrives in the one download, so all of them
+     * are cached from it and opening the next problem costs nothing.
+     */
+    private List<PracticeDto.Sample> viaContestZip(DomjudgeCredentialStore.Stored as,
+                                                   String contestId, String problemId)
+            throws Exception {
+        List<DjModels.ContestProblem> problems = domjudge.getProblems(as, contestId);
+        if (problems == null || problems.isEmpty()) return List.of();
+
+        byte[] archive = domjudge.apiClient(as).get()
+            .uri("/contests/{cid}/samples.zip", contestId)
+            .retrieve()
+            .bodyToMono(byte[].class)
+            .block(Duration.ofSeconds(30));
+
+        List<PracticeDto.Sample> wanted = List.of();
+        for (DjModels.ContestProblem problem : problems) {
+            if (problem.getId() == null || problem.getLabel() == null) continue;
+            List<PracticeDto.Sample> found = unzip(archive, problem.getLabel());
+            if (problem.getId().equals(problemId)) {
+                wanted = found;
+            } else if (!found.isEmpty()) {
+                cache.put(contestId + "/" + problem.getId(), new Entry(found, Instant.now()));
+            }
+        }
+        return wanted;
+    }
+
+    /** The samples in an archive, or in one folder of it when {@code folder} is given. */
+    static List<PracticeDto.Sample> unzip(byte[] archive, String folder) throws Exception {
         if (archive == null || archive.length == 0) return List.of();
 
         Map<String, String> inputs = new LinkedHashMap<>();
@@ -283,6 +321,7 @@ public class DomjudgeSampleClient {
                 if (entry.isDirectory()) continue;
 
                 String name = entry.getName();
+                if (folder != null && !name.startsWith(folder + "/")) continue;
                 int slash = name.lastIndexOf('/');
                 if (slash >= 0) name = name.substring(slash + 1);
 
@@ -304,7 +343,5 @@ public class DomjudgeSampleClient {
         }
         return out;
     }
-
-    /** The API client, reached through the same credentials the rest of the integration uses. */
 
 }

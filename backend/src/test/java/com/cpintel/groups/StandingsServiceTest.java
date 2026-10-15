@@ -228,4 +228,18 @@ class StandingsServiceTest {
             assertNull(service.handleFor(contest, member(2, null)));
         }
     }
+
+    @Test
+    @DisplayName("an event assigned to teams has no group board, and refreshing it is a no-op")
+    void eventWithoutGroupIsLeftAlone() {
+        GroupMemberRepository members = mock(GroupMemberRepository.class);
+        GroupStandingRepository standings = mock(GroupStandingRepository.class);
+        StandingsService teamless = new StandingsService(members, standings, accounts, List.of(),
+            mock(DomjudgeCredentialStore.class));
+        GroupContest exam = GroupContest.builder()
+            .contestId(11L).platform("DOMJUDGE").externalId("1~loadtest").name("Exam").build();
+
+        assertDoesNotThrow(() -> teamless.refresh(exam));
+        verifyNoInteractions(members, standings);
+    }
 }

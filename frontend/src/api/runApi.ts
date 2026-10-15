@@ -24,6 +24,13 @@ export const runApi = {
       params: { platform: scope.platform, contestId: scope.contestId },
     }).then(r => r.data),
 
+  /**
+   * Longer than the client's 30 s default, which a run can legitimately outlast: the backend
+   * waits for the runner's queue (20 s), the compile (20 s) and every test (6 s each). The load
+   * test's room of 200 had runs at 56 s; at 30 s the page reported a failure the server was
+   * still about to answer.
+   */
   run: (body: RunRequest) =>
-    apiClient.post<ApiResponse<RunResponse>>('/run', body).then(r => r.data),
+    apiClient.post<ApiResponse<RunResponse>>('/run', body, { timeout: 120_000 })
+      .then(r => r.data),
 }

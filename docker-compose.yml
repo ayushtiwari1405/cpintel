@@ -117,8 +117,8 @@ services:
       SPRING_DATA_REDIS_PORT: 6379
       SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
-      JWT_EXPIRY_MS: ${JWT_EXPIRY_MS}
-      JWT_REFRESH_EXPIRY_MS: ${JWT_REFRESH_EXPIRY_MS}
+      JWT_EXPIRY_MS: ${JWT_EXPIRY_MS:-900000}
+      JWT_REFRESH_EXPIRY_MS: ${JWT_REFRESH_EXPIRY_MS:-604800000}
       # Required under the prod profile — SecretsCheck refuses to start without it, rather
       # than falling back to a value published in this repository.
       CPINTEL_SESSION_KEY: ${CPINTEL_SESSION_KEY}
@@ -241,6 +241,12 @@ services:
       RUNNER_TIME_LIMIT_MS: ${CPINTEL_RUNNER_TIME_LIMIT_MS:-5000}
       RUNNER_MEMORY_LIMIT_MB: ${CPINTEL_RUNNER_MEMORY_MB:-512}
       RUNNER_COMPILE_TIME_LIMIT_MS: ${CPINTEL_RUNNER_COMPILE_LIMIT_MS:-20000}
+    # A real PID 1 that reaps. Runs leave orphaned bubblewrap processes behind,
+    # and orphans are handed to PID 1; with the JVM as PID 1 nothing ever waited for
+    # them, so each stayed a zombie holding one of the 1024 pids below. The load test reached
+    # the limit 40 minutes in, and from then on every run, and every new runner thread,
+    # failed with EAGAIN until the container was restarted.
+    init: true
     read_only: true
     tmpfs:
       - /tmp:rw,exec,nosuid,nodev,size=1g

@@ -24,6 +24,13 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends bubblewrap gcc g++ python3 time \
  && rm -rf /var/lib/apt/lists/* \
  && useradd --uid 10001 --no-create-home --shell /usr/sbin/nologin runner
+# <bits/stdc++.h>, precompiled beside the header itself, where g++ looks for it unasked. Nearly
+# every competitive solution includes it, and parsing it is most of a compile: 2.6 s to 0.7 s
+# on the load test's cores, which is the runner's throughput when a room presses Run at the
+# bell. Built with CppRuntime's flags; a build whose flags differ ignores it and compiles from
+# the header as before, so it can only make a run faster, never different.
+RUN h="$(echo '#include <bits/stdc++.h>' | g++ -std=c++20 -x c++ -M - | tr ' ' '\n' | grep 'bits/stdc++\.h$')" \
+ && g++ -std=c++20 -O2 -m64 -x c++-header "$h" -o "$h.gch"
 WORKDIR /app
 COPY --from=builder /app/target/*.jar app.jar
 USER 10001

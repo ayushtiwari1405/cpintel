@@ -8,7 +8,9 @@ import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Instant;
 import java.util.List;
@@ -31,6 +33,7 @@ public class StandingsScheduler {
 
     private final GroupContestRepository contestRepository;
     private final StandingsService standingsService;
+    private final PlatformTransactionManager transactions;
 
     @Scheduled(fixedDelayString = "${cpintel.groups.standings-refresh-ms:180000}",
                initialDelayString = "${cpintel.groups.standings-initial-delay-ms:60000}")
@@ -41,21 +44,32 @@ public class StandingsScheduler {
     // when no contest is live, so without a floor the lock would be free again instantly and a
     // second instance would refresh the same boards on the same tick.
     @SchedulerLock(name = "refreshLiveContests", lockAtMostFor = "PT10M", lockAtLeastFor = "PT2M")
-    @Transactional
     public void refreshLiveContests() {
         List<GroupContest> live = contestRepository.findLive(Instant.now());
         if (live.isEmpty()) return;
 
+        // A transaction per contest. In one shared transaction, a single contest throwing marked
+        // it rollback-only: every other board refreshed on the same tick was thrown away with
+        // it, and the commit's failure escaped the catch below.
+        TransactionTemplate perContest = new TransactionTemplate(transactions);
+        perContest.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+
         log.debug("Refreshing standings for {} live group contest(s)", live.size());
-        for (GroupContest contest : live) {
+        for (GroupContest found : live) {
+            Long id = found.getContestId();
             try {
-                standingsService.refresh(contest);
-                contestRepository.save(contest);
+                perContest.executeWithoutResult(status -> contestRepository.findById(id)
+                    // An event assigned to teams, rather than run for one group, has no group
+                    // board: it is ranked from the submission archive on read.
+                    .filter(contest -> contest.getGroup() != null)
+                    .ifPresent(contest -> {
+                        standingsService.refresh(contest);
+                        contestRepository.save(contest);
+                    }));
             } catch (Exception e) {
                 // One unreachable judge must not stop the others being refreshed. The failure
                 // is already recorded on the contest row by the service.
-                log.warn("Standings refresh failed for contest {}: {}",
-                    contest.getContestId(), e.getMessage());
+                log.warn("Standings refresh failed for contest {}: {}", id, e.getMessage());
             }
         }
     }
