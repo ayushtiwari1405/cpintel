@@ -21,7 +21,7 @@ RUN mvn -B clean package -DskipTests -q
 # the judge — musl differs in small ways that would make Run and Submit disagree.
 FROM eclipse-temurin:21-jre-noble AS runner
 RUN apt-get update \
- && apt-get install -y --no-install-recommends bubblewrap g++ python3 \
+ && apt-get install -y --no-install-recommends bubblewrap gcc g++ python3 \
  && rm -rf /var/lib/apt/lists/* \
  && useradd --uid 10001 --no-create-home --shell /usr/sbin/nologin runner
 WORKDIR /app

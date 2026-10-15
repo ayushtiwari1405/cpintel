@@ -93,7 +93,7 @@ public final class RunnerServer {
             String.valueOf(Runtime.getRuntime().availableProcessors())));
 
         RunEngine engine = new RunEngine(
-            List.of(new CppRuntime(), new PythonRuntime()),
+            List.of(new CppRuntime(), new CRuntime(), new PythonRuntime()),
             new Sandbox(),
             new RunEngine.Limits(
                 Long.parseLong(env("RUNNER_TIME_LIMIT_MS", "5000")),

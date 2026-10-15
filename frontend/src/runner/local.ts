@@ -14,15 +14,20 @@ export type { Progress }
  *  - In the desktop app, with the compilers the app ships with (GCC on Windows, Clang on macOS
  *    and Linux, CPython), so nothing has to be installed. Fast, and full C++.
  *  - On the website — or in a desktop build too old to carry compilers — in this browser tab in
- *    WebAssembly: Clang for C++ and Pyodide for Python, downloaded once from a CDN.
+ *    WebAssembly: Clang for C and C++ and Pyodide for Python, downloaded once from a CDN.
  *
- * Runtime ids are the server runner's ("cpp", "python3"), so the language mapping and an
+ * Runtime ids are the server runner's ("cpp", "c", "python3"), so the language mapping and an
  * event's language restriction treat a local runtime exactly like a server one.
  */
 
 const BROWSER_RUNTIMES: RunnerRuntime[] = [
   {
     id: 'cpp', displayName: 'C++ (Clang, in this browser)', editorLanguage: 'cpp',
+    available: browserEngine.supported,
+    unavailableReason: browserEngine.supported ? null : 'This browser cannot run WebAssembly.',
+  },
+  {
+    id: 'c', displayName: 'C (Clang, in this browser)', editorLanguage: 'c',
     available: browserEngine.supported,
     unavailableReason: browserEngine.supported ? null : 'This browser cannot run WebAssembly.',
   },
@@ -70,7 +75,7 @@ export const localRunner = {
     if (!entry) return judge(request.tests, error(`Unknown language: ${request.language}`))
 
     if (entry.route === 'desktop') {
-      onProgress(request.language === 'cpp' ? 'Compiling…' : 'Running…')
+      onProgress(request.language === 'python3' ? 'Running…' : 'Compiling…')
       try {
         return judge(request.tests, await window.cpintelDesktop!.runner!.run({
           language: request.language,

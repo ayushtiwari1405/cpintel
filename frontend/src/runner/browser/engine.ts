@@ -19,7 +19,7 @@ export const browserEngine = {
 
   async run(language: string, source: string, tests: RunTestCase[], onProgress: Progress)
     : Promise<RawRun> {
-    if (language === 'cpp') return runCpp(source, tests, onProgress)
+    if (language === 'cpp' || language === 'c') return runNative(language, source, tests, onProgress)
     if (language === 'python3') return runPython(source, tests, onProgress)
     return failed(`${language} cannot be run in the browser.`)
   },
@@ -39,11 +39,12 @@ const crashed = (message: string): RawExec => ({
 
 const mb = (bytes: number) => (bytes / 1024 / 1024).toFixed(0)
 
-// ── C++ ───────────────────────────────────────────────────────────────────
+// ── C and C++ ─────────────────────────────────────────────────────────────
 
 let compiler: Worker | null = null
 
-function compile(source: string, onProgress: Progress): Promise<CompileMessage> {
+function compile(language: 'cpp' | 'c', source: string, onProgress: Progress)
+  : Promise<CompileMessage> {
   compiler ??= new Worker(new URL('./cppCompile.worker.ts', import.meta.url), { type: 'module' })
   const worker = compiler
 
@@ -67,7 +68,7 @@ function compile(source: string, onProgress: Progress): Promise<CompileMessage> 
       if (m.kind === 'progress') {
         arm()
         onProgress(m.done < m.total
-          ? `Downloading the C++ compiler, once: ${mb(m.done)} of ${mb(m.total)} MB…`
+          ? `Downloading the compiler, once: ${mb(m.done)} of ${mb(m.total)} MB…`
           : 'Compiling…')
         return
       }
@@ -78,10 +79,10 @@ function compile(source: string, onProgress: Progress): Promise<CompileMessage> 
       clearTimeout(timer)
       worker.terminate()
       compiler = null
-      resolve({ kind: 'failed', error: `The C++ compiler stopped: ${e.message || 'unknown error'}` })
+      resolve({ kind: 'failed', error: `The compiler stopped: ${e.message || 'unknown error'}` })
     }
     onProgress('Compiling…')
-    worker.postMessage({ source })
+    worker.postMessage({ source, language })
   })
 }
 
@@ -108,12 +109,12 @@ function runWasm(module: WebAssembly.Module, input: string): Promise<RawExec> {
   })
 }
 
-async function runCpp(source: string, tests: RunTestCase[], onProgress: Progress)
-  : Promise<RawRun> {
+async function runNative(language: 'cpp' | 'c', source: string, tests: RunTestCase[],
+  onProgress: Progress): Promise<RawRun> {
   try {
-    const built = await compile(source, onProgress)
+    const built = await compile(language, source, onProgress)
     if (built.kind === 'failed') return failed(built.error)
-    if (built.kind !== 'done') return failed('The C++ compiler did not answer.')
+    if (built.kind !== 'done') return failed('The compiler did not answer.')
     if (!built.ok) return { compiled: false, compileOutput: built.output, compileMs: built.ms, runs: [] }
 
     const runs: RawExec[] = []

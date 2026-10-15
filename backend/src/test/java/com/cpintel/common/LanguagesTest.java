@@ -34,6 +34,10 @@ class LanguagesTest {
             "'Clang++20 Diagnostics',               cpp",
             "'MS C++ 2017',                         cpp",
             "'GNU GCC C11 5.1.0',                   c",
+            "'C',                                   c",
+            "'C (gcc)',                             c",
+            "'GNU C17',                             c",
+            "'C99',                                 c",
             "'Python 3.13.2',                       python3",
             "'PyPy 3.10 (7.3.15, 64bit)',           python3",
             "'CPython 3.11.2',                      python3",
@@ -69,6 +73,16 @@ class LanguagesTest {
         }
 
         /** The other one: "JavaScript" contains "Java". */
+        /** A label that is only "C" must not catch the languages whose names start with it. */
+        @Test
+        @DisplayName("a bare C label is C, and C++ and C# are not")
+        void bareCLabel() {
+            assertEquals("c", Languages.classify(null, "C"));
+            assertEquals("cpp", Languages.classify(null, "C++"));
+            assertEquals("csharp", Languages.classify(null, "C# 10"));
+            assertNotEquals("c", Languages.classify(null, "Clang++20 Diagnostics"));
+        }
+
         @Test
         @DisplayName("JavaScript is not Java")
         void javascriptIsNotJava() {

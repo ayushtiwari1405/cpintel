@@ -470,7 +470,7 @@ fails:
   the difference between a laptop and an external monitor, none of which a stored pixel width
   survives.
 
-The runner speaks C++ and Python 3, one `LanguageRuntime` each. Python's is the interesting one:
+The runner speaks C++, C (GNU C11, linked with libm) and Python 3, one `LanguageRuntime` each. Python's is the interesting one:
 it has a build step although it does not need one. `py_compile` parses the file before anything
 runs, so a syntax error is reported once with a line and a caret rather than as the same runtime
 error on all twelve of a problem's samples with the real message buried in twelve tracebacks.

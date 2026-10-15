@@ -4,8 +4,8 @@
 // The desktop app runs code on the student's computer outside examinations, and must do so
 // whether or not anything is installed there, so it carries its own toolchains:
 //
-//   Windows        C++  GCC (WinLibs MinGW-w64, UCRT) — what Codeforces' G++ compilers are
-//   macOS, Linux   C++  Zig's Clang + libc++ (on a Mac, "g++" is Clang anyway)
+//   Windows        C, C++  GCC (WinLibs MinGW-w64, UCRT) — what Codeforces' GCC compilers are
+//   macOS, Linux   C, C++  Zig's Clang + libc++ (on a Mac, "gcc" is Clang anyway)
 //   everywhere     Python  CPython from python-build-standalone
 //
 // Every download is pinned and checked against its SHA-256 before it is unpacked. Archives are
@@ -126,8 +126,9 @@ function copy(from, to) {
 }
 
 /**
- * Only what g++ needs, out of WinLibs' 950 MB: the driver, cc1plus, binutils, the MinGW headers
- * and import libraries, and libstdc++. Fortran, Objective-C, cmake, gdb and the rest stay out.
+ * Only what gcc and g++ need, out of WinLibs' 950 MB: the drivers, cc1 and cc1plus, binutils, the
+ * MinGW headers and import libraries, and libstdc++. Fortran, Objective-C, cmake, gdb and the
+ * rest stay out.
  */
 function stageGcc(unpacked, to) {
   const src = join(unpacked, 'mingw64')
@@ -135,6 +136,7 @@ function stageGcc(unpacked, to) {
   const triple = 'x86_64-w64-mingw32'
   mkdirSync(join(to, 'bin'), { recursive: true })
   copy(join(src, 'bin', 'g++.exe'), join(to, 'bin', 'g++.exe'))
+  copy(join(src, 'bin', 'gcc.exe'), join(to, 'bin', 'gcc.exe'))
   // The driver's own DLLs. bin/ also holds cmake's, gdb's, Python 3.9's and more.
   for (const name of ['libgcc_s_seh-1.dll', 'libgmp-10.dll', 'libiconv-2.dll', 'libintl-8.dll',
     'libisl-23.dll', 'libmpc-3.dll', 'libmpfr-6.dll', 'libstdc++-6.dll', 'libwinpthread-1.dll',
@@ -145,7 +147,7 @@ function stageGcc(unpacked, to) {
   copy(join(src, triple), join(to, triple))
 
   const libexec = join('libexec', 'gcc', triple, gccVersion)
-  const skip = new Set(['cc1.exe', 'cc1obj.exe', 'cc1objplus.exe', 'f951.exe', 'lto1.exe',
+  const skip = new Set(['cc1obj.exe', 'cc1objplus.exe', 'f951.exe', 'lto1.exe',
     'gnat1.exe', 'd21.exe', 'go1.exe', 'cc1gm2.exe', 'rust1.exe', 'crab1.exe', 'algol681.exe',
     'cobol1.exe', 'install-tools', 'plugin'])
   mkdirSync(join(to, libexec), { recursive: true })
@@ -167,7 +169,10 @@ function stageGcc(unpacked, to) {
       copy(join(src, 'lib', name), join(to, 'lib', name))
     }
   }
-  return { kind: 'gcc', compiler: join('cpp', 'bin', 'g++.exe') }
+  return {
+    cpp: { kind: 'gcc', compiler: join('cpp', 'bin', 'g++.exe') },
+    c: { kind: 'gcc', compiler: join('cpp', 'bin', 'gcc.exe') },
+  }
 }
 
 /**
@@ -182,10 +187,11 @@ function stageZig(unpacked, to) {
   if (!shim) throw new Error('Could not find BITS_STDCXX in stdcxxShim.ts')
   mkdirSync(join(OUT, 'cpp-include', 'bits'), { recursive: true })
   writeFileSync(join(OUT, 'cpp-include', 'bits', 'stdc++.h'), shim[1])
+  const compiler = join('cpp', TARGET.startsWith('win32') ? 'zig.exe' : 'zig')
+  // One Zig for both: "zig c++" and "zig cc" are its two drivers.
   return {
-    kind: 'zig',
-    compiler: join('cpp', TARGET.startsWith('win32') ? 'zig.exe' : 'zig'),
-    include: 'cpp-include',
+    cpp: { kind: 'zig', compiler, include: 'cpp-include' },
+    c: { kind: 'zig', compiler },
   }
 }
 
@@ -214,7 +220,7 @@ mkdirSync(OUT, { recursive: true })
 
 const cppArchive = await download(spec.cpp)
 const cppUnpacked = extract(cppArchive, join(work, 'cpp'))
-const cpp = spec.cpp.kind === 'gcc'
+const { cpp, c } = spec.cpp.kind === 'gcc'
   ? stageGcc(cppUnpacked, join(OUT, 'cpp'))
   : stageZig(cppUnpacked, join(OUT, 'cpp'))
 
@@ -223,5 +229,5 @@ const python = stagePython(extract(pyArchive, join(work, 'python')), join(OUT, '
 rmSync(work, { recursive: true, force: true })
 
 // Read by electron/src/localRunner.ts; paths are relative to this directory.
-writeFileSync(join(OUT, 'manifest.json'), JSON.stringify({ target: TARGET, cpp, python }, null, 2))
+writeFileSync(join(OUT, 'manifest.json'), JSON.stringify({ target: TARGET, cpp, c, python }, null, 2))
 console.log(`Toolchains for ${TARGET} in ${OUT} (${(sizeOf(OUT) / 1048576).toFixed(0)} MB)`)

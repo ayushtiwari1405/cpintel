@@ -8,7 +8,8 @@ import path from 'path'
  *
  * Outside examinations the desktop app runs code here rather than on the CPIntel server, whose
  * runner is kept for examinations. Nothing has to be installed: the build bundles its compilers
- * (scripts/fetch-toolchains.mjs) — GCC on Windows, Zig's Clang on macOS and Linux, and CPython
+ * (scripts/fetch-toolchains.mjs) — GCC on Windows, Zig's Clang on macOS and Linux, for C and C++,
+ * and CPython
  * everywhere — so every student gets the same compiler whatever their machine has. It is the
  * student's own code on the student's own machine, so there is no sandbox, the same footing as
  * running it from a terminal; every run still gets a fresh temporary directory, a time limit and
@@ -55,6 +56,8 @@ export interface RawRun {
 /** What fetch-toolchains.mjs bundled, from toolchain/manifest.json. */
 interface Manifest {
   cpp: { kind: 'gcc' | 'zig'; compiler: string; include?: string }
+  /** Absent from builds made before C was added; those offer C++ and Python only. */
+  c?: { kind: 'gcc' | 'zig'; compiler: string }
   python: { interpreter: string }
 }
 
@@ -128,6 +131,21 @@ export function configure(toolchainDir: string, cacheDir: string) {
       run: () => [python, '-I', 'main.py'],
     }],
   ])
+
+  // GNU C11, linked with libm, as on the server's runner.
+  const c = manifest.c
+  if (c) {
+    toolchains.set('c', {
+      info: { id: 'c', displayName: c.kind === 'gcc' ? 'C (gcc, built in)' : 'C (Clang, built in)',
+        editorLanguage: 'c', available: true, unavailableReason: null },
+      source: 'main.c',
+      build: c.kind === 'gcc'
+        ? [at(c.compiler), '-std=gnu11', '-O2', '-pipe', '-static',
+          `-Wl,--stack=${STACK_BYTES}`, '-o', program, 'main.c', '-lm']
+        : [at(c.compiler), 'cc', '-std=gnu11', '-O2', '-o', program, 'main.c', '-lm'],
+      run: dir => [path.join(dir, program)],
+    })
+  }
 }
 
 /** Languages this build carries. */
@@ -221,7 +239,7 @@ export async function run(request: RunRequest): Promise<RawRun> {
   }
   // The first compile after installing fills Zig's cache; let a warm-up in progress finish
   // rather than compile alongside it and run into the time limit.
-  if (request.language === 'cpp' && warming) await warming
+  if (request.language !== 'python3' && warming) await warming
 
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cpintel-run-'))
   try {

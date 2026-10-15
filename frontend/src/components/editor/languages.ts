@@ -24,8 +24,13 @@ const PLAIN: LanguageMatch = { monaco: 'plaintext', runner: null }
  */
 const RULES: Array<{ pattern: RegExp; match: LanguageMatch }> = [
   { pattern: /\bG\+\+|\bclang\+\+|\bC\+\+/i, match: { monaco: 'cpp', runner: 'cpp' } },
-  // Must come after C++: "GNU GCC C11" contains no '+', but plain /C\b/ would over-match.
-  { pattern: /\bGCC C\d|\bGNU GCC\b/i,       match: { monaco: 'c', runner: null } },
+  // Must come after C++: "GNU GCC C11" contains no '+', but plain /C\b/ would over-match. The
+  // last alternative is a label that is just the language (DOMjudge's "C"), without C++ or C#.
+  // Kept in step with Languages.java on the server.
+  {
+    pattern: /\bGCC C\d|\bGNU GCC\b|\bGNU C\d|\bC(89|99|1\d|2\d)\b|\bANSI C\b|^C(?![+#])\b/i,
+    match: { monaco: 'c', runner: 'c' },
+  },
   // PyPy runs here as CPython, which is a deliberate approximation. The two agree on what a
   // program computes and disagree on how fast; the local runner checks answers against samples
   // and has never claimed to predict a judge's timing, so the useful thing is to run it.
@@ -69,6 +74,18 @@ export function starterFor(monacoLanguage: string): string {
         '    cin.tie(nullptr);',
         '',
         '    ',
+        '}',
+        '',
+      ].join('\n')
+    case 'c':
+      return [
+        '#include <stdio.h>',
+        '#include <stdlib.h>',
+        '#include <string.h>',
+        '',
+        'int main(void) {',
+        '    ',
+        '    return 0;',
         '}',
         '',
       ].join('\n')

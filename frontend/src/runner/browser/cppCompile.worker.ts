@@ -1,6 +1,6 @@
 /// <reference lib="webworker" />
 /**
- * Compiles C++ to WebAssembly in the browser, with Clang/LLD built for WebAssembly (YoWASP).
+ * Compiles C and C++ to WebAssembly in the browser, with Clang/LLD built for WebAssembly (YoWASP).
  *
  * The toolchain is about 27 MB compressed and comes from jsDelivr at a pinned version, so the
  * CPIntel server neither hosts nor runs any of it. The browser keeps it in its HTTP cache, so
@@ -31,7 +31,7 @@ const load = () => {
   return clang
 }
 
-export interface CompileRequest { source: string }
+export interface CompileRequest { source: string; language: 'cpp' | 'c' }
 export type CompileMessage =
   | { kind: 'progress'; done: number; total: number }
   | { kind: 'done'; ok: true; module: WebAssembly.Module; output: string; ms: number }
@@ -45,7 +45,7 @@ self.onmessage = async (e: MessageEvent<CompileRequest>) => {
   try {
     api = await load()
   } catch {
-    post({ kind: 'failed', error: 'Could not download the C++ compiler. Check the internet '
+    post({ kind: 'failed', error: 'Could not download the compiler. Check the internet '
       + 'connection and try again.' })
     return
   }
@@ -54,20 +54,27 @@ self.onmessage = async (e: MessageEvent<CompileRequest>) => {
   let output = ''
   const collect = (bytes: Uint8Array | null) => { if (bytes) output += decoder.decode(bytes) }
 
-  const started = performance.now()
-  try {
-    const files = await api.runClang([
-      'clang++', '-std=c++20', '-O2',
+  const isC = e.data.language === 'c'
+  const file = isC ? 'main.c' : 'main.cpp'
+  const args = isC
+    // The maths functions are in WASI's libc itself, so there is no -lm to pass.
+    ? ['clang', '-std=gnu11', '-O2']
+    : ['clang++', '-std=c++20', '-O2',
       // The WebAssembly C++ library is built without exception support, and a clear
       // "exceptions are disabled" from the compiler beats a wall of undefined symbols from
       // the linker.
       '-fno-exceptions',
-      '-Iinclude',
+      '-Iinclude']
+
+  const started = performance.now()
+  try {
+    const files = await api.runClang([
+      ...args,
       `-Wl,-z,stack-size=${STACK_BYTES}`,
-      'main.cpp', '-o', 'program',
+      file, '-o', 'program',
     ], {
-      'main.cpp': e.data.source,
-      include: { bits: { 'stdc++.h': BITS_STDCXX } },
+      [file]: e.data.source,
+      ...(isC ? {} : { include: { bits: { 'stdc++.h': BITS_STDCXX } } }),
     }, {
       stdout: collect,
       stderr: collect,
@@ -77,14 +84,14 @@ self.onmessage = async (e: MessageEvent<CompileRequest>) => {
     })
     const ms = Math.round(performance.now() - started)
     const module = await WebAssembly.compile(files.program as Uint8Array<ArrayBuffer>)
-    post({ kind: 'done', ok: true, module, output: output.split('/main.cpp').join('main.cpp'), ms })
+    post({ kind: 'done', ok: true, module, output: output.split(`/${file}`).join(file), ms })
   } catch (err: any) {
     const ms = Math.round(performance.now() - started)
     // The YoWASP runtime reports a non-zero exit as an Exit error carrying the status.
     if (typeof err?.code === 'number') {
-      post({ kind: 'done', ok: false, output: explain(output), ms })
+      post({ kind: 'done', ok: false, output: explain(output.split(`/${file}`).join(file)), ms })
     } else {
-      post({ kind: 'failed', error: `The C++ compiler crashed: ${err?.message ?? err}` })
+      post({ kind: 'failed', error: `The compiler crashed: ${err?.message ?? err}` })
     }
   }
 }

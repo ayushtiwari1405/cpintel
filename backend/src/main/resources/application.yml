@@ -294,6 +294,9 @@ cpintel:
     cpp:
       compiler: ${CPINTEL_RUNNER_CPP:g++}
       standard: ${CPINTEL_RUNNER_CPP_STD:c++20}
+    c:
+      compiler: ${CPINTEL_RUNNER_C:gcc}
+      standard: ${CPINTEL_RUNNER_C_STD:gnu11}
     python:
       # CPython. A language whose toolchain is missing is reported as unavailable with the
       # reason, rather than hidden — somebody wondering why Python is not in the picker gets

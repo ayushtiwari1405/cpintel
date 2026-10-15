@@ -118,7 +118,10 @@ public final class Languages {
      */
     private static final List<Rule> RULES = List.of(
         rule("cpp",        "\\bG\\+\\+|\\bclang\\+\\+|\\bC\\+\\+"),
-        rule("c",          "\\bGCC C\\d|\\bGNU GCC\\b|\\bC1\\d\\b|\\bANSI C\\b"),
+        // The last alternative is a label that is just the language — DOMjudge's "C", or
+        // "C (gcc)" — with the lookahead keeping "C++" and "C# 10" out.
+        rule("c",          "\\bGCC C\\d|\\bGNU GCC\\b|\\bGNU C\\d|\\bC(89|99|1\\d|2\\d)\\b"
+                         + "|\\bANSI C\\b|^C(?![+#])\\b"),
         // "CPython 3.11" is a label a judge may reasonably use, and a bare \bPython\b does
         // not match it — the word boundary falls before the C.
         rule("python3",    "\\bPyPy\\b|\\bC?Python\\b"),
