@@ -360,6 +360,7 @@ export type RunVerdict =
   | 'OK'
   | 'WRONG_ANSWER'
   | 'TIME_LIMIT_EXCEEDED'
+  | 'MEMORY_LIMIT_EXCEEDED'
   | 'RUNTIME_ERROR'
   /** Ran, but there was no expected answer to compare against. */
   | 'NO_EXPECTED'

@@ -65,7 +65,7 @@ export function judge(tests: RunTestCase[], raw: RawRun): RunResponse {
     const test = tests[i]
     const verdict: RunTestResult['verdict'] =
       exec.timedOut ? 'TIME_LIMIT_EXCEEDED'
-        : exec.exitCode !== 0 ? 'RUNTIME_ERROR'
+        : exec.exitCode !== 0 ? (outOfMemory(exec.stderr) ? 'MEMORY_LIMIT_EXCEEDED' : 'RUNTIME_ERROR')
           : test.expected == null ? 'NO_EXPECTED'
             : matches(exec.stdout, test.expected) ? 'OK' : 'WRONG_ANSWER'
     return {
@@ -117,4 +117,15 @@ export class CappedText {
     for (const c of this.chunks) { all.set(c, at); at += c.length }
     return new TextDecoder().decode(all)
   }
+}
+
+/**
+ * Whether a failed run died for want of memory, as far as its own error output says: C++ throws
+ * std::bad_alloc and Python raises MemoryError, and both say so. A C program that carries on with
+ * a null malloc just crashes and stays a runtime error. The same rule as RunEngine.outOfMemory.
+ */
+export function outOfMemory(stderr: string | null | undefined): boolean {
+  if (!stderr) return false
+  return stderr.includes('std::bad_alloc') || stderr.includes('MemoryError')
+    || stderr.includes('Cannot allocate memory') || stderr.includes('out of memory')
 }

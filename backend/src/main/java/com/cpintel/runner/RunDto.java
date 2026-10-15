@@ -45,6 +45,8 @@ public final class RunDto {
         OK,
         WRONG_ANSWER,
         TIME_LIMIT_EXCEEDED,
+        /** Died for want of memory: see {@code RunEngine.outOfMemory}. */
+        MEMORY_LIMIT_EXCEEDED,
         RUNTIME_ERROR,
         /** No expected output was supplied, so the program's output is reported unjudged. */
         NO_EXPECTED

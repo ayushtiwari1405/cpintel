@@ -84,6 +84,17 @@ class RateLimitRouteTest {
     }
 
     @Test
+    @DisplayName("rebuilding analytics, by hand or by changing the basis, shares one per-user bucket")
+    void analyticsRebuildsAreLimited() throws Exception {
+        post("/api/v1/analytics/refresh");
+        MockHttpServletRequest put = new MockHttpServletRequest("PUT", "/api/v1/analytics/skill-basis");
+        put.setRemoteAddr("10.0.0.1");
+        invoke(put);
+
+        verify(limiter, times(2)).tryAcquire(eq(RateLimitFilter.ANALYTICS), isNull(), any());
+    }
+
+    @Test
     @DisplayName("an unversioned path still matches, so a rollback does not turn the limits off")
     void unversionedStillMatches() throws Exception {
         post("/api/auth/login");

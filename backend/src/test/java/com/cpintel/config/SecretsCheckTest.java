@@ -59,6 +59,22 @@ class SecretsCheckTest {
         }
 
         @Test
+        @DisplayName("a short encryption key is refused; an absent one only turns its feature off")
+        void sealingKeysMustBeLong() {
+            MockEnvironment shortKey = env("prod");
+            shortKey.setProperty("cpintel.exams.password-key", "exam2026");
+            var ex = assertThrows(IllegalStateException.class, () -> verify(shortKey));
+            assertTrue(ex.getMessage().contains("CPINTEL_EXAM_PASSWORD_KEY"), ex.getMessage());
+
+            MockEnvironment longKey = env("prod");
+            longKey.setProperty("cpintel.exams.password-key",
+                "q3Xv0b8r9mZk2sYdP1aW7cLnE4tGhJ6uQ0iO5fR8yT2wB9xC");
+            longKey.setProperty("cpintel.domjudge.credential-key",
+                "Lp7Hs2Kd9Fq4Wm1Zr8Tn3Vb6Xc0Yg5Ja2Ue7Io4Pl9Mk1Nh6");
+            assertDoesNotThrow(() -> verify(longKey));
+        }
+
+        @Test
         @DisplayName("the runner needs its token")
         void runnerNeedsToken() {
             MockEnvironment e = env("prod");

@@ -87,6 +87,7 @@ public class ExamLeaderboardService {
     private final AuditService auditService;
     private final ObjectMapper json;
     private final com.cpintel.repository.jpa.ExamMarkRepository markRepository;
+    private final com.cpintel.common.RecomputeLock recomputeLock;
 
     // --------------------------------------------------------------- readers
 
@@ -192,6 +193,22 @@ public class ExamLeaderboardService {
         if (stored != null && event.isCompleted()) return stored;
         if (!force && at != null && !due(event, at, now)) return stored;
 
+        // Due, and everybody polling sees that at once. One of them recomputes; the rest keep the
+        // board they had until it lands. With no board yet there is nothing to serve, so the
+        // first one is computed regardless. An admin's forced recompute always runs.
+        if (!force && stored != null) {
+            EventsDto.LeaderboardStandings fresh = recomputeLock.ifFree(
+                "leaderboard:" + event.getContestId(), RECOMPUTE_LOCK_TTL,
+                () -> recomputeAndStore(event, now));
+            return fresh != null ? fresh : stored;
+        }
+        return recomputeAndStore(event, now);
+    }
+
+    /** Longer than a recompute ever takes, including fetching pending verdicts from the judge. */
+    private static final Duration RECOMPUTE_LOCK_TTL = Duration.ofMinutes(2);
+
+    private EventsDto.LeaderboardStandings recomputeAndStore(GroupContest event, Instant now) {
         EventsDto.LeaderboardStandings fresh = compute(event, now);
         try {
             eventRepository.storeLeaderboard(event.getContestId(),

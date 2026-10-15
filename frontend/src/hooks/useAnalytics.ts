@@ -54,7 +54,8 @@ export function useSetSkillBasis() {
       queryClient.invalidateQueries({ queryKey: ['roadmap'] })
       toast.push('success', 'Skill ratings rebuilt')
     },
-    onError: () => toast.push('error', 'Could not change what ratings are based on'),
+    onError: (err: any) => toast.push('error',
+      err.response?.data?.message ?? 'Could not change what ratings are based on'),
   })
 }
 
@@ -68,7 +69,7 @@ export function useRefreshAnalytics() {
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       toast.push('success', 'Analytics refreshed')
     },
-    onError: () => toast.push('error', 'Refresh failed'),
+    onError: (err: any) => toast.push('error', err.response?.data?.message ?? 'Refresh failed'),
   })
 }
 

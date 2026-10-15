@@ -59,6 +59,12 @@ public class SyncService {
 
     private static final int CF_BATCH = 200;
 
+    /**
+     * A sync marked in flight for longer than this is taken to have died with its backend. A
+     * full sync of a long history is minutes, bounded by Codeforces' rate limit.
+     */
+    static final java.time.Duration ABANDONED_AFTER = java.time.Duration.ofHours(1);
+
     @Transactional
     public PlatformDto.Summary linkAccount(Long userId, String platform, String handle) {
         User user = userRepository.findById(userId)
@@ -165,12 +171,34 @@ public class SyncService {
         User user = userRepository.findById(userId)
             .orElseThrow(() -> ApiException.notFound("User not found"));
 
-        SyncJob job = syncJobRepository.save(SyncJob.builder()
-            .user(user)
-            .platform(platform)
-            .jobType(jobType)
-            .status("QUEUED")
-            .build());
+        // One at a time per account. A job that has shown no sign of life for an hour belongs to
+        // a backend that stopped mid-sync; it is closed rather than left to block this account.
+        Instant now = Instant.now();
+        for (SyncJob inFlight : syncJobRepository.findInFlight(userId, platform)) {
+            Instant since = inFlight.getStartedAt() != null ? inFlight.getStartedAt()
+                : inFlight.getCreatedAt();
+            if (since != null && since.isAfter(now.minus(ABANDONED_AFTER))) {
+                throw ApiException.conflict("A sync of this account is already running. "
+                    + "It will finish on its own; there is no need to start another.");
+            }
+            inFlight.setStatus("FAILED");
+            inFlight.setErrorMsg("Abandoned: no progress for an hour");
+            inFlight.setCompletedAt(now);
+            syncJobRepository.saveAndFlush(inFlight);
+        }
+
+        SyncJob job;
+        try {
+            job = syncJobRepository.saveAndFlush(SyncJob.builder()
+                .user(user)
+                .platform(platform)
+                .jobType(jobType)
+                .status("QUEUED")
+                .build());
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            // Two requests in the same instant: the index let one of them in.
+            throw ApiException.conflict("A sync of this account is already running.");
+        }
         return new QueuedJob(job.getJobId(), account.getAccountId());
     }
 

@@ -43,6 +43,8 @@ public class RateLimitFilter extends OncePerRequestFilter {
     public static final String SYNC     = "sync";
     /** Guesses at an examination password, counted against the candidate. */
     public static final String EXAM_UNLOCK = "exam-unlock";
+    /** Full rebuilds of one person's analytics: the refresh button, and changing the basis. */
+    public static final String ANALYTICS = "analytics";
 
     private final RateLimitService rateLimiter;
     private final RateLimitProperties props;
@@ -94,7 +96,17 @@ public class RateLimitFilter extends OncePerRequestFilter {
                 bucket = SYNC;
                 key = principal();
                 rule = props.getSync();
+
+            } else if (path.equals("/analytics/refresh")) {
+                bucket = ANALYTICS;
+                key = principal();
+                rule = props.getAnalytics();
             }
+        } else if ("PUT".equals(method) && path.equals("/analytics/skill-basis")) {
+            // Each change rebuilds every rating and the roadmap, like the refresh above.
+            bucket = ANALYTICS;
+            key = principal();
+            rule = props.getAnalytics();
         }
 
         if (rule != null && !rateLimiter.tryAcquire(bucket, key, rule)) {

@@ -188,4 +188,13 @@ class SkillRatingServiceTest {
         assertEquals(1, dp.problems());
         assertTrue(dp.rating() < 1300, "dp " + dp.rating());
     }
+
+    /** Rating without it would reset every skill to the overall rating and call it fresh. */
+    @Test
+    @DisplayName("no problem list from Codeforces means no new ratings, not empty ones")
+    void unavailableProblemList() {
+        round(1, 1500, 1600, daysAgo(10));
+        round(2, 1600, 1650, daysAgo(5));
+        assertThrows(SkillRatingService.Unavailable.class, () -> service.profile(user("AUTO")));
+    }
 }

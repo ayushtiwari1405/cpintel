@@ -47,6 +47,10 @@ public class SyncScheduler {
                     // On this thread, one after another — see SyncService.syncNow.
                     syncService.syncNow(account.getUserId(), account.getPlatform(), "INCREMENTAL");
                     count++;
+                } catch (com.cpintel.exception.ApiException e) {
+                    // Already syncing — somebody pressed Sync — which is this job's work done.
+                    log.debug("Nightly sync skipped account {}: {}", account.getAccountId(),
+                        e.getMessage());
                 } catch (Exception e) {
                     log.warn("Nightly sync failed for account {}: {}",
                         account.getAccountId(), e.getMessage());

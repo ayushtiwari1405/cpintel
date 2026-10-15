@@ -44,7 +44,7 @@ class ExamLeaderboardServiceTest {
             mock(GroupContestRepository.class), mock(ContestProblemRepository.class),
             mock(CodeSubmissionRepository.class), mock(UserRepository.class),
             mock(CompeteService.class), mock(AuditService.class), new ObjectMapper(),
-            mock(com.cpintel.repository.jpa.ExamMarkRepository.class));
+            mock(com.cpintel.repository.jpa.ExamMarkRepository.class), new com.cpintel.common.RecomputeLock(null));
         exam = GroupContest.builder().contestId(1L).kind("EXAM").platform("DOMJUDGE")
             .externalId("paper").name("Paper").startsAt(START)
             .endsAt(START.plusSeconds(3 * 3600)).wrongPenaltyMinutes(0).build();

@@ -133,7 +133,7 @@ class PythonRunnerTest {
             "x = bytearray(2 * 1024 * 1024 * 1024)\nprint(len(x))\n", "", "");
 
         assertTrue(result.compiled());
-        assertEquals(RunDto.Verdict.RUNTIME_ERROR, result.results().get(0).verdict());
+        assertEquals(RunDto.Verdict.MEMORY_LIMIT_EXCEEDED, result.results().get(0).verdict());
         assertTrue(result.results().get(0).stderr().contains("MemoryError"),
             result.results().get(0).stderr());
     }

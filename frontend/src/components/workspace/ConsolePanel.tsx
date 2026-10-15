@@ -24,6 +24,7 @@ const VERDICT_META: Record<RunVerdict, { label: string; tone: Tone }> = {
   OK:                  { label: 'Accepted',            tone: 'ok' },
   WRONG_ANSWER:        { label: 'Wrong answer',        tone: 'bad' },
   TIME_LIMIT_EXCEEDED: { label: 'Time limit exceeded', tone: 'warn' },
+  MEMORY_LIMIT_EXCEEDED: { label: 'Memory limit exceeded', tone: 'warn' },
   RUNTIME_ERROR:       { label: 'Runtime error',       tone: 'bad' },
   NO_EXPECTED:         { label: 'Finished',            tone: 'plain' },
 }
@@ -469,6 +470,7 @@ function VerdictIcon({ verdict }: { verdict: RunVerdict }) {
   const cls = 'flex-shrink-0'
   if (verdict === 'OK') return <CheckCircle2 size={13} className={clsx(cls, 'text-green-400')} />
   if (verdict === 'TIME_LIMIT_EXCEEDED') return <Clock size={13} className={clsx(cls, 'text-amber-400')} />
+  if (verdict === 'MEMORY_LIMIT_EXCEEDED') return <XCircle size={13} className={clsx(cls, 'text-amber-400')} />
   if (verdict === 'NO_EXPECTED') return <Terminal size={13} className={clsx(cls, 'text-gray-400')} />
   return <XCircle size={13} className={clsx(cls, 'text-red-400')} />
 }

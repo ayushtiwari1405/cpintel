@@ -184,10 +184,20 @@ public class SkillRatingService {
         return 1400 - paid;
     }
 
+    /**
+     * The problem list rated rounds are read against could not be had — Codeforces unreachable
+     * since the last restart. Rating from it anyway would find no evidence and quietly put every
+     * skill back to the person's overall rating, so the caller keeps the ratings it has.
+     */
+    public static class Unavailable extends RuntimeException {
+        Unavailable() { super("Codeforces' problem list is unavailable"); }
+    }
+
     private Profile fromRounds(Long userId, String requested, List<Round> rounds,
                                boolean gauntlet) {
         int rating = rounds.get(rounds.size() - 1).ratingAfter();
         Map<String, List<CfModels.Submission.Problem>> byContest = problemsByContest();
+        if (byContest.isEmpty()) throw new Unavailable();
         Set<String> solvedLive = solvedInRounds(userId, rounds);
 
         Map<String, List<SkillRating.Evidence>> byNode = new HashMap<>();

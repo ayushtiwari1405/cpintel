@@ -154,7 +154,8 @@ public class RunEngine {
         if (exec.timedOut()) {
             verdict = RunDto.Verdict.TIME_LIMIT_EXCEEDED;
         } else if (exec.exitCode() != 0) {
-            verdict = RunDto.Verdict.RUNTIME_ERROR;
+            verdict = outOfMemory(exec.stderr())
+                ? RunDto.Verdict.MEMORY_LIMIT_EXCEEDED : RunDto.Verdict.RUNTIME_ERROR;
         } else if (test.expected() == null) {
             verdict = RunDto.Verdict.NO_EXPECTED;
         } else {
@@ -165,6 +166,22 @@ public class RunEngine {
         return new RunDto.TestResult(
             label, verdict, test.input(), test.expected(), exec.stdout(), exec.stderr(),
             exec.durationMs(), exec.exitCode() == 0 ? null : exec.exitCode(), exec.truncated());
+    }
+
+    /**
+     * Whether a failed run died for want of memory, as far as its own error output says.
+     *
+     * <p>The address-space limit makes an allocation fail rather than killing the process, and
+     * what happens next depends on the language: C++ throws {@code std::bad_alloc}, Python raises
+     * {@code MemoryError}, and those say so on stderr. A C program that carries on with the null
+     * {@code malloc} gave it just crashes, and cannot be told from any other crash, so it stays a
+     * runtime error — telling those apart needs the peak memory of the run, which nothing here
+     * measures. Kept in step with runner/judge.ts on the page.
+     */
+    static boolean outOfMemory(String stderr) {
+        if (stderr == null || stderr.isEmpty()) return false;
+        return stderr.contains("std::bad_alloc") || stderr.contains("MemoryError")
+            || stderr.contains("Cannot allocate memory") || stderr.contains("out of memory");
     }
 
     /**

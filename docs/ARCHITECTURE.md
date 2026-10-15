@@ -461,7 +461,10 @@ same machine under the same limits. Everywhere else the Run button costs the ser
   unavailable, and GNU's `ext/pb_ds` does not exist.
 
 Verdicts are decided in one place for both (`runner/judge.ts`, the same comparison as
-`RunEngine.matches`). With `cpintel.runner.exam-only` on — the default — the server refuses a
+`RunEngine.matches`). A run that fails saying it ran out of memory — C++'s `std::bad_alloc`,
+Python's `MemoryError` — is reported as a memory limit rather than a runtime error. A C program
+that carries on with a null `malloc` just crashes and stays a runtime error: telling those apart
+would need the run's peak memory, which nothing measures yet. With `cpintel.runner.exam-only` on — the default — the server refuses a
 run from any session that is not an examination's, so an outdated page or a script cannot load
 the runner either; the language list stays open, since the page still asks it which languages an
 event allows.

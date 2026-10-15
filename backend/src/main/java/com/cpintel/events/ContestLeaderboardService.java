@@ -127,10 +127,17 @@ public class ContestLeaderboardService {
         EventsDto.LeaderboardStandings held = stored.get(key);
         if (held != null && !boards.due(round, held.generatedAt(), now)) return held;
         // One recompute however many people the refresh found reading it.
-        return stored.compute(key, (k, latest) ->
+        EventsDto.LeaderboardStandings board = stored.compute(key, (k, latest) ->
             latest != null && !boards.due(round, latest.generatedAt(), now)
                 ? latest : compute(round, info, now));
+        // Boards nobody has asked for in a while go: otherwise every contest anyone ever opened
+        // stays in memory, standings and all, until the instance restarts.
+        stored.values().removeIf(b -> b.generatedAt().isBefore(now.minus(FORGET_AFTER)));
+        return board;
     }
+
+    /** A board not recomputed for this long has not been read for this long. */
+    private static final java.time.Duration FORGET_AFTER = java.time.Duration.ofHours(6);
 
     private EventsDto.LeaderboardStandings compute(GroupContest round,
                                                    CompeteDto.ContestInfo info, Instant now) {

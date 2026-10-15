@@ -213,4 +213,21 @@ class TopicMasteryWriteTest {
 
         verify(topicMastery).deleteStale(eq(USER_ID), argThat(keep -> !keep.isEmpty()));
     }
+
+    @Test
+    @DisplayName("when ratings cannot be recomputed, the ones already stored are written back")
+    void keepsRatingsWhenUnavailable() {
+        when(skills.profile(any())).thenThrow(new SkillRatingService.Unavailable());
+        when(cfSubmissions.findByUserId(USER_ID)).thenReturn(List.of(
+            cf(1000, "A", "OK", DP_RATING, Instant.now(), "dp")));
+        TopicMastery stored = TopicMastery.builder().topic("dp-basics")
+            .scope(TopicMastery.Scope.NODE).skillRating(1640.0).skillSd(80.0).skillProblems(12)
+            .skillBasis("CODEFORCES").build();
+        when(topicMastery.findByUserUserId(USER_ID)).thenReturn(List.of(stored));
+
+        service.updateTopicMasteryFromSubmissions(USER_ID);
+
+        verify(topicMastery).upsertCounts(eq(USER_ID), eq("dp-basics"), anyString(), any(), any(),
+            anyInt(), anyInt(), any(), any(), eq(1640.0), eq(80.0), eq(12), eq("CODEFORCES"));
+    }
 }

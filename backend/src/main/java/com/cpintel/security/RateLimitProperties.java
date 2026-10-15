@@ -31,6 +31,11 @@ public class RateLimitProperties {
     private Rule run      = new Rule(30, Duration.ofMinutes(1));
     private Rule sync     = new Rule(5,  Duration.ofMinutes(5));
     /**
+     * Rebuilds of one person's analytics — every rating, the roadmap and the sheets, from their
+     * whole history. Syncs and placements rebuild on their own, so asking by hand is rare.
+     */
+    private Rule analytics = new Rule(10, Duration.ofMinutes(5));
+    /**
      * Guesses at an examination password, per candidate.
      *
      * Tighter than the others, because the thing being guessed at is short enough to be worth

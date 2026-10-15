@@ -31,6 +31,11 @@ public interface SyncJobRepository extends JpaRepository<SyncJob, Long> {
     @Query("SELECT sj FROM SyncJob sj WHERE sj.status IN ('QUEUED','RUNNING') ORDER BY sj.createdAt ASC")
     List<SyncJob> findPendingJobs();
 
+    /** This account's syncs still marked queued or running (at most one, by V25). */
+    @Query("SELECT sj FROM SyncJob sj WHERE sj.user.userId = :userId AND sj.platform = :platform "
+        + "AND sj.status IN ('QUEUED','RUNNING')")
+    List<SyncJob> findInFlight(@Param("userId") Long userId, @Param("platform") String platform);
+
     // ------------------------------------------------------ admin console counts
 
     long countByStatus(String status);

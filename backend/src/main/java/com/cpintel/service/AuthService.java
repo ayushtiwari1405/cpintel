@@ -143,19 +143,24 @@ public class AuthService {
             throw ApiException.forbidden("Account is deactivated");
         }
 
+        // The examination password on this person's slip signs them in to examination mode for
+        // that one paper. Tried before the account password because it is the cheap check — a
+        // decrypt and a constant-time compare, against papers whose sign-in window is open — and
+        // the expensive one is Argon2id at 64 MB a hash: a room of two hundred signing in at the
+        // start of a paper used to pay that two hundred times before reaching the check that
+        // let them in. The codes are generated at random, so no account password collides.
+        var exam = examLogin.match(user.getUserId(), req.getPassword());
+        if (exam.isPresent()) {
+            rateLimiter.reset(ACCOUNT_BUCKET, identifier);
+            examAccess.onExamSignIn(exam.get(), user.getUserId());
+            auditService.record(user.getUserId(), AuditService.EXAM_SIGN_IN, "EXAM",
+                String.valueOf(exam.get().getContestId()), httpReq);
+            log.info("User {} signed in to examination {}", user.getUserId(),
+                exam.get().getContestId());
+            return buildAuthResponse(user, httpReq, exam.get());
+        }
+
         if (!passwordEncoder.matches(req.getPassword(), user.getPasswordHash())) {
-            // Not the account password — perhaps the examination password on this person's
-            // slip, which signs them in to examination mode for that one paper instead.
-            var exam = examLogin.match(user.getUserId(), req.getPassword());
-            if (exam.isPresent()) {
-                rateLimiter.reset(ACCOUNT_BUCKET, identifier);
-                examAccess.onExamSignIn(exam.get(), user.getUserId());
-                auditService.record(user.getUserId(), AuditService.EXAM_SIGN_IN, "EXAM",
-                    String.valueOf(exam.get().getContestId()), httpReq);
-                log.info("User {} signed in to examination {}", user.getUserId(),
-                    exam.get().getContestId());
-                return buildAuthResponse(user, httpReq, exam.get());
-            }
             auditService.record(user.getUserId(), AuditService.LOGIN_FAILED, "USER",
                 "bad-password", httpReq);
             throw ApiException.unauthorized("Invalid credentials");

@@ -72,6 +72,9 @@ public class SecretsCheck {
         check(problems, "REDIS_PASSWORD", "spring.data.redis.password", 1);
         checkMongoUri(problems);
         checkRunner(problems, isProd);
+        // Optional, but a short one is worse than none: see checkSealingKey.
+        checkSealingKey(problems, "CPINTEL_EXAM_PASSWORD_KEY", "cpintel.exams.password-key");
+        checkSealingKey(problems, "CPINTEL_DOMJUDGE_CREDENTIAL_KEY", "cpintel.domjudge.credential-key");
 
         // Warnings rather than refusals: these two make a feature weaker, not the deployment
         // insecure, and a lab running examinations on a closed network with no SMTP is a real
@@ -135,6 +138,30 @@ public class SecretsCheck {
         }
         return warnings;
     }
+
+    /**
+     * An encryption key that is set must be long enough to be random.
+     *
+     * <p>{@code SecretBox} turns the configured string into an AES-256 key with one SHA-256. That
+     * is sound for a random string — the documented {@code openssl rand -base64 48} is 64
+     * characters — and weak for a memorable one, because a single fast hash puts no cost on
+     * guessing it: anyone holding a database copy could try phrases until the examination
+     * passwords and DOMjudge logins open. Unset is allowed (the feature is then off, and
+     * {@link #advisories} says so); set and short is refused, since it looks configured while
+     * protecting little.
+     */
+    private void checkSealingKey(List<String> problems, String envVar, String property) {
+        String value = env.getProperty(property);
+        if (value == null || value.isBlank()) return;
+        if (value.length() < MIN_SEALING_KEY_CHARS) {
+            problems.add(envVar + " is " + value.length() + " characters; use a random one of at "
+                + "least " + MIN_SEALING_KEY_CHARS + " (openssl rand -base64 48). Changing it "
+                + "makes values sealed under the old key unreadable, so set it before first use.");
+        }
+    }
+
+    /** {@code openssl rand -base64 24} and up: at least 192 random bits. */
+    static final int MIN_SEALING_KEY_CHARS = 32;
 
     private boolean isBlank(String property) {
         String value = env.getProperty(property);

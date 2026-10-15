@@ -353,7 +353,13 @@ public class AnalyticsService {
         // native, so it would not raise the foreign key as a readable error on its own.
         User user = userRepository.findById(userId)
             .orElseThrow(() -> ApiException.notFound("User not found"));
-        SkillRatingService.Profile skills = skillRatings.profile(user);
+        SkillRatingService.Profile skills;
+        try {
+            skills = skillRatings.profile(user);
+        } catch (SkillRatingService.Unavailable e) {
+            log.warn("Keeping user {}'s skill ratings as they were: {}", userId, e.getMessage());
+            skills = storedProfile(userId);
+        }
 
         if (nodeStats.isEmpty() && topicStats.isEmpty() && skills.basis() == null) {
             log.warn("No skills attributed for user {} from {} distinct problems",
@@ -394,6 +400,22 @@ public class AnalyticsService {
         log.info("Mastery rebuilt for user {}: {} nodes, {} topics, from {} distinct problems; "
             + "skill ratings from {}", userId, nodeStats.size(), topicStats.size(), history.size(),
             skills.basis() == null ? "nothing (coverage only)" : skills.basis());
+    }
+
+    /** The ratings as last written, to write back unchanged when they cannot be recomputed. */
+    private SkillRatingService.Profile storedProfile(Long userId) {
+        Map<String, SkillRatingService.Skill> nodes = new LinkedHashMap<>();
+        Map<String, SkillRatingService.Skill> topics = new LinkedHashMap<>();
+        String basis = null;
+        for (TopicMastery tm : topicMasteryRepository.findByUserUserId(userId)) {
+            if (tm.getSkillRating() == null) continue;
+            basis = tm.getSkillBasis();
+            var skill = new SkillRatingService.Skill(tm.getSkillRating(),
+                tm.getSkillSd() == null ? SkillRating.PRIOR_SD : tm.getSkillSd(),
+                tm.getSkillProblems() == null ? 0 : tm.getSkillProblems());
+            (tm.isNode() ? nodes : topics).put(tm.getTopic(), skill);
+        }
+        return new SkillRatingService.Profile(basis, null, null, false, false, nodes, topics);
     }
 
     private void write(Long userId, String topic, String scope, String parentTopic, String track,

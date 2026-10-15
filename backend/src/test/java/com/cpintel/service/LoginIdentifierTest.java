@@ -172,6 +172,20 @@ class LoginIdentifierTest {
         assertNull(normal.getExamId());
     }
 
+    /** Argon2id is 64 MB a hash; a room signing in at the start of a paper must not pay it. */
+    @Test
+    @DisplayName("an examination sign-in never runs the account-password hash")
+    void examSignInSkipsArgon2() {
+        com.cpintel.entity.GroupContest paper = com.cpintel.entity.GroupContest.builder()
+            .contestId(7L).kind("EXAM")
+            .startsAt(java.time.Instant.now().minusSeconds(60))
+            .endsAt(java.time.Instant.now().plusSeconds(3600)).build();
+        when(examLogin.match(42L, "K7FQ-M2XB")).thenReturn(Optional.of(paper));
+
+        assertEquals("EXAM", signIn("ada", "K7FQ-M2XB").getMode());
+        verify(encoder, never()).matches(any(), any());
+    }
+
     @Test
     @DisplayName("neither password is still a failed sign-in")
     void neitherPasswordFails() {
