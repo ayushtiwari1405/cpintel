@@ -41,7 +41,7 @@ the reasoning behind the harder decisions, and [`docs/SRS.md`](docs/SRS.md) for 
 | Migrations | Flyway — 26 versioned migrations (schema, indexes, materialized views, audit indexes, groups, super admin role, scheduler locks, node-level mastery, examinations, examination access, placement results, Codeforces-only cleanup, examination-mode sessions, several events per judge contest, examination leaderboards, classrooms, audit log by classroom, DOMjudge logins in PostgreSQL, marking an event done, rejudging a problem, TA marking, freezing TA marks, refresh-token digests and families, skill ratings, one sync at a time, examination grants kept in PostgreSQL) |
 | Containerization | Docker Compose — 11 services: 3 behind the `monitoring` profile and certbot behind `letsencrypt`. `docker-compose.prod.yml` swaps the builds for CI images |
 | Editor | Monaco, bundled locally (no CDN) — shared by the Practice, Compete and examination workspaces |
-| Code runner | g++ and CPython under bubblewrap + rlimits, in its own locked-down container on a server; judged against the statement's sample tests |
+| Code runner | g++, gcc and CPython under bubblewrap + rlimits, in its own locked-down container on a server; judged against the statement's sample tests |
 | Desktop | Electron wrapper that loads the deployed server, plus examination monitoring and Codeforces access through its own browser session |
 | Monitoring | Prometheus, Grafana, Loki (optional profile) |
 
@@ -932,10 +932,13 @@ does not say `sandbox active`, set `kernel.apparmor_restrict_unprivileged_userns
 ### Languages
 
 **C++** (`g++`, `-std=c++20 -O2 -m64`, statically linked so the binary does not need shared
-libraries visible inside the sandbox) and **Python 3** (CPython). Each toolchain is probed on
+libraries visible inside the sandbox), **C** (`gcc`, `-std=gnu11 -O2 -m64`, linked with `-lm` as
+the judges do) and **Python 3** (CPython). Each toolchain is probed on
 `PATH` per request, so installing one does not need a restart, and a language whose toolchain is
 absent appears in the picker as unavailable *with the reason* rather than silently missing.
-The runner image carries g++ 13 and Python 3.12 (Ubuntu 24.04, glibc — as on the judges).
+The runner image carries gcc/g++ 13 and Python 3.12 (Ubuntu 24.04, glibc — as on the judges),
+with `<bits/stdc++.h>` precompiled, and starts under `tini` (see `docs/ARCHITECTURE.md` for why
+the runner must not be PID 1).
 
 Python gets a build step even though it does not need one: `py_compile` parses the file before
 anything runs. Without it, a syntax error would surface as the same runtime error on all twelve

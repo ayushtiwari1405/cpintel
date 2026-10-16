@@ -447,6 +447,18 @@ runner refuses every run rather than running unsandboxed. At most `CPINTEL_RUNNE
 runs execute at once; the rest wait up to 20 seconds. In development and in the desktop build the
 same `RunEngine` runs inside the backend instead, where the only code is the user's own.
 
+The container's PID 1 is `tini`, not the JVM, and that is load-bearing. Bubblewrap's outer
+process exits as soon as it has the program's exit code, before its inner one (PID 1 of the
+sandbox) has exited, so every sandbox (each compile, each test) leaves one process for the
+container's PID 1 to reap. The JVM never waits for children it did not start: in the load test
+they piled up as zombies until the container's 1024-pid cap, and from then on every run failed
+while still answering 200. Compose's `init: true` is kept as a second reaper.
+
+A run that comes back without a result is counted by the backend as `cpintel_run_failed_total`,
+by reason (`error` inside a 200, `busy`, `timeout`, `unreachable`, `rejected`), and Prometheus
+alerts on it (`RunnerFailing`, `RunnerBusy` in `monitoring/alerts.yml`). Without that, a broken
+runner looks like a working one from outside.
+
 That runner is small, so it is kept for examinations, where every candidate must be run by the
 same machine under the same limits. Everywhere else the Run button costs the server nothing:
 `frontend/src/runner/local.ts` runs the code on the student's own computer.
@@ -474,9 +486,12 @@ same machine under the same limits. Everywhere else the Run button costs the ser
 
 Verdicts are decided in one place for both (`runner/judge.ts`, the same comparison as
 `RunEngine.matches`). A run that fails saying it ran out of memory — C++'s `std::bad_alloc`,
-Python's `MemoryError` — is reported as a memory limit rather than a runtime error. A C program
-that carries on with a null `malloc` just crashes and stays a runtime error: telling those apart
-would need the run's peak memory, which nothing measures yet. With `cpintel.runner.exam-only` on — the default — the server refuses a
+Python's `MemoryError` — is reported as a memory limit rather than a runtime error. On the server
+(`RunEngine`) two silent cases are caught as well: a crash after the run's peak memory, measured
+with GNU time, reached nine-tenths of the cap (a C program that carries on with a null `malloc`),
+and a crash of a program whose static image, read from its ELF load segments, is that large on
+its own (a global array too big for the cap, which dies at exec having used nothing). In the
+browser and the desktop app's local runs neither is measured, and those stay runtime errors. With `cpintel.runner.exam-only` on — the default — the server refuses a
 run from any session that is not an examination's, so an outdated page or a script cannot load
 the runner either; the language list stays open, since the page still asks it which languages an
 event allows.

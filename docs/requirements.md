@@ -202,7 +202,8 @@ Decisions and routines the college owns rather than the software.
   with `ssh -L 3000:127.0.0.1:3000 -L 9090:127.0.0.1:9090 <server>`, then open
   http://localhost:3000 (dashboard "CPIntel Backend": requests, errors, latency, heap, database
   pool, and the server's CPU, memory and disk) and http://localhost:9090/alerts (backend down,
-  server errors, throttling, slow requests, pool exhausted, heap, host memory, disk, CPU). Nothing
+  server errors, throttling, slow requests, pool exhausted, heap, host memory, disk, CPU, runs
+  failing in the runner, runner queue full). Nothing
   is sent anywhere: somebody keeps it open during the sitting.
 - [ ] **Tell users they will need to sign in again after the first deploy** — *Optional.*
 
