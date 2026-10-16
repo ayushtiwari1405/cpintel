@@ -107,14 +107,20 @@ sequenceDiagram
 
 ```mermaid
 flowchart TD
-    A[Node has prereqIds] --> B{All prereqs<br/>mastery >= 35%?}
-    B -- No --> L[Status: LOCKED]
-    B -- Yes --> C{Own topic<br/>mastery >= 75%?}
+    A[Regenerate a node] --> C{Done?<br/>rating >= 75% of band and 3 solved,<br/>or 5 solved reaching mid-band}
     C -- Yes --> D[Status: COMPLETED]
-    C -- No --> E{Own mastery > 0?}
+    C -- No --> K{Already COMPLETED?}
+    K -- Yes --> D
+    K -- No --> B{Every prereq completed or cleared?<br/>rating >= 35% of its band,<br/>or 3 solved}
+    B -- No --> L[Status unchanged:<br/>LOCKED, or stays open]
+    B -- Yes --> E{Own problems attempted?}
     E -- Yes --> F[Status: IN_PROGRESS]
     E -- No --> G[Status: UNLOCKED]
 ```
+
+The rating thresholds are a share of the node's Codeforces rating band (`RoadmapService`); the
+solve counts apply when the user has no skill rating (coverage only). An opened node is never
+locked again, and a completion stays, however it came.
 
 ## Entity-relationship diagram
 

@@ -47,9 +47,10 @@ judge for the room: judgehosts at one submission per ~4.6 s each on this class o
 
 ## Not fixed, worth knowing
 
-- A refresh of the shared contest cache runs on whichever request finds it stale, so a slow
-  judge shows in CPIntel's own `GET .../submissions` (p90 0.6 s at 100, 1.2 s at 200). A
-  background refresher would decouple it.
+- ~~A refresh of the shared contest cache runs on whichever request finds it stale, so a slow
+  judge shows in CPIntel's own `GET .../submissions` (p90 0.6 s at 100, 1.2 s at 200).~~ Now
+  refreshed in the background (eight at a time); every reader gets the stale copy meanwhile.
+  Not re-measured under load.
 - ~~A Run that fails inside the runner is logged at WARN only; nothing alerts on it.~~ Now
   counted (`cpintel_run_failed_total` by reason) and alerted on (`RunnerFailing`, `RunnerBusy`).
 - DOMjudge 8.x judgehosts need cgroup v1; on a cgroup-v2-only host (current Ubuntu), use 9.x.

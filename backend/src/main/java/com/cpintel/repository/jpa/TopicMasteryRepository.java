@@ -14,6 +14,16 @@ import java.util.Optional;
 @Repository
 public interface TopicMasteryRepository extends JpaRepository<TopicMastery, Long> {
 
+    /**
+     * Which of these users had a full rebuild since {@code since}. {@code computed_at} is
+     * written only by the scoring step of a full refresh, which a sync and a gauntlet both end
+     * with, so it says when the whole rebuild last ran.
+     */
+    @Query("SELECT DISTINCT tm.user.userId FROM TopicMastery tm "
+         + "WHERE tm.user.userId IN :userIds AND tm.computedAt >= :since")
+    java.util.Set<Long> findRebuiltSince(@Param("userIds") java.util.Collection<Long> userIds,
+                                         @Param("since") Instant since);
+
     List<TopicMastery> findByUserUserId(Long userId);
 
     Optional<TopicMastery> findByUserUserIdAndTopic(Long userId, String topic);

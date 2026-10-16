@@ -4,6 +4,7 @@ import com.cpintel.integration.domjudge.DjModels;
 import com.cpintel.integration.domjudge.DomjudgeJudges;
 import com.cpintel.integration.domjudge.JudgeContestRef;
 import com.cpintel.integration.domjudge.DomjudgeCredentialStore;
+import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -15,7 +16,15 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
 
@@ -53,6 +62,13 @@ import java.util.function.Supplier;
  * returns immediately. Only a completely cold entry makes readers wait, and then they all wait
  * on the same single fetch. During a contest the practical effect is that a verdict is at most
  * one live-TTL window old and no reader ever queues behind the judge.
+ *
+ * <p><b>The refresh itself runs in the background.</b> It used to run on the request that found
+ * the entry stale, so one contestant in each window waited for the judge: in the load test that
+ * was {@code GET .../submissions} at p90 1.2 s with 200 in the room, all of it the judge's time.
+ * Now that reader is handed the stale copy too, and a small pool fetches. The pool is bounded,
+ * which also bounds how many reads the arena has in flight at the judge; a refresh it cannot
+ * take is simply tried again by the next read.
  */
 @Component
 @Slf4j
@@ -70,6 +86,10 @@ public class DomjudgeContestCache {
 
     private final Map<String, Slot<?>> slots = new ConcurrentHashMap<>();
 
+    /** Where stale entries are refreshed; the pool is shut down only when this created it. */
+    private final Executor refresher;
+    private final ExecutorService ownPool;
+
     /**
      * Annotated because there are two constructors and Spring will not guess between them: it
      * looks for a no-arg one instead, finds none, and refuses to start the whole application
@@ -78,7 +98,23 @@ public class DomjudgeContestCache {
      */
     @Autowired
     public DomjudgeContestCache(DomjudgeJudges judges) {
-        this(judges, LIVE_TTL, STATIC_TTL);
+        this(judges, LIVE_TTL, STATIC_TTL, refreshPool());
+    }
+
+    /**
+     * Eight fetches at the judge at once, sixty-four waiting. Without a service account every
+     * contestant has entries of their own, so a full room is a few hundred refreshes a window;
+     * past the queue they are dropped, not run inline, and their readers keep the stale copy.
+     */
+    private static ExecutorService refreshPool() {
+        AtomicInteger n = new AtomicInteger();
+        return new ThreadPoolExecutor(8, 8, 60, TimeUnit.SECONDS, new ArrayBlockingQueue<>(64),
+            r -> {
+                Thread t = new Thread(r, "judge-refresh-" + n.incrementAndGet());
+                t.setDaemon(true);
+                return t;
+            },
+            new ThreadPoolExecutor.AbortPolicy());
     }
 
     /**
@@ -89,9 +125,22 @@ public class DomjudgeContestCache {
      * and waiting four seconds per assertion to reach that moment is not a test anyone runs.
      */
     DomjudgeContestCache(DomjudgeJudges judges, Duration liveTtl, Duration staticTtl) {
+        this(judges, liveTtl, staticTtl, Runnable::run);
+    }
+
+    /** Test-only as well: the executor stale entries are refreshed on. */
+    DomjudgeContestCache(DomjudgeJudges judges, Duration liveTtl, Duration staticTtl,
+                         Executor refresher) {
         this.judges = judges;
         this.liveTtl = liveTtl;
         this.staticTtl = staticTtl;
+        this.refresher = refresher;
+        this.ownPool = refresher instanceof ExecutorService pool ? pool : null;
+    }
+
+    @PreDestroy
+    void shutdown() {
+        if (ownPool != null) ownPool.shutdownNow();
     }
 
     /**
@@ -256,11 +305,13 @@ public class DomjudgeContestCache {
      *
      * {@code value} is deliberately readable without holding the lock — a reader that finds a
      * refresh already in flight takes the stale value and leaves rather than queueing.
+     * {@code refreshing} is what keeps a stale entry to one background fetch at a time.
      */
     private static final class Slot<T> {
         volatile T value;
         volatile Instant loadedAt;
         final ReentrantLock lock = new ReentrantLock();
+        final AtomicBoolean refreshing = new AtomicBoolean();
     }
 
     @SuppressWarnings("unchecked")
@@ -285,20 +336,30 @@ public class DomjudgeContestCache {
             }
         }
 
-        // Warm but stale: one thread refreshes, everyone else keeps reading the old copy.
-        if (slot.lock.tryLock()) {
+        // Warm but stale: one background refresh, and every reader, this one included, keeps
+        // the old copy meanwhile.
+        if (slot.refreshing.compareAndSet(false, true)) {
             try {
-                Instant since = slot.loadedAt;
-                if (since != null && Instant.now().isBefore(since.plus(ttl))) {
-                    return slot.value;   // somebody refreshed while we were deciding to
-                }
-                T refreshed = load(slot, key, loader);
-                return refreshed == null ? current : refreshed;
-            } finally {
-                slot.lock.unlock();
+                refresher.execute(() -> refresh(slot, key, ttl, loader));
+            } catch (RejectedExecutionException e) {
+                slot.refreshing.set(false);   // the pool is full; the next read tries again
             }
         }
         return current;
+    }
+
+    private <T> void refresh(Slot<T> slot, String key, Duration ttl, Supplier<T> loader) {
+        slot.lock.lock();
+        try {
+            Instant since = slot.loadedAt;
+            if (since != null && Instant.now().isBefore(since.plus(ttl))) return;
+            load(slot, key, loader);
+        } catch (RuntimeException e) {
+            log.warn("DOMjudge refresh failed for {}: {}", key, e.getMessage());
+        } finally {
+            slot.lock.unlock();
+            slot.refreshing.set(false);
+        }
     }
 
     private <T> T load(Slot<T> slot, String key, Supplier<T> loader) {

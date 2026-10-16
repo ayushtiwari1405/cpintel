@@ -84,9 +84,9 @@ The desktop build is the same SPA plus a main process that can observe the windo
 - FR-6.4 The recommendations page is currently withdrawn from navigation and its route redirects to the roadmap, which answers the same question; the endpoints remain.
 
 ### FR-7 Adaptive roadmap
-- FR-7.1 35 DSA sub-skill nodes (e.g. "Two Pointers", "Segment Trees with Lazy Propagation") form a directed prerequisite graph.
-- FR-7.2 A node unlocks when all prerequisite nodes' parent-topic mastery reaches >=35%; it is marked complete at >=75% mastery.
-- FR-7.3 Each unlocked node displays up to 8 live Codeforces problems filtered by the node's tag set and difficulty band, pulled from the cached CF problemset (`problemset.problems`, 6-hour in-memory TTL) and cross-referenced against the user's solved-problem set.
+- FR-7.1 140 DSA sub-skill nodes (e.g. "Two Pointers", "Segment Trees with Lazy Propagation"), each with a Codeforces rating band, form a directed prerequisite graph.
+- FR-7.2 A node unlocks when every prerequisite is completed or cleared: with a skill rating, the prerequisite's rating reaches 35% of the way into its band; without one (coverage only), 3 of its problems are solved. A node is complete at 75% of the way into its band with at least 3 solved, or, without a rating, 5 solved of which the hardest reaches the middle of the band. A completed node stays completed (by rating, by hand or by the gauntlet), and an opened node is never locked again.
+- FR-7.3 Each unlocked node displays up to 10 live Codeforces problems filtered by the node's tag set and difficulty band, pulled from the cached CF problemset (`problemset.problems`, 6-hour in-memory TTL) and cross-referenced against the user's solved-problem set.
 - FR-7.4 A placement gauntlet tests the user per area in rising tiers and maps the result onto the roadmap. Marking is done on the server from the full set of answers. Placement only moves nodes forward — it never undoes one already completed — and may be retaken after a configurable interval (default 7 days).
 
 ### FR-8 Administration

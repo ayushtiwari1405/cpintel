@@ -3,6 +3,7 @@ package com.cpintel.scheduler;
 import com.cpintel.analytics.AnalyticsService;
 import com.cpintel.analytics.MaterializedViewRefresher;
 import com.cpintel.analytics.UnifiedRatingService;
+import com.cpintel.repository.jpa.TopicMasteryRepository;
 import com.cpintel.repository.jpa.UserRepository;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Slice;
@@ -12,6 +13,10 @@ import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Set;
+
 @Component
 @RequiredArgsConstructor
 @Slf4j
@@ -20,7 +25,17 @@ public class AnalyticsScheduler {
     /** Big enough to keep the round trips down, small enough to stay bounded. */
     private static final int BATCH_SIZE = 200;
 
+    /**
+     * A user rebuilt this recently is skipped. The 02:00 sync ends every account's sync with a
+     * full rebuild, so without this the 04:00 pass repeated it for nearly everyone two hours
+     * later. Not skipped altogether: evidence is weighted by its age, so ratings move a little
+     * each day with no new data, and a user nobody syncs still needs the nightly pass for that.
+     * Twenty hours keeps anyone from going much past a day and a half without one.
+     */
+    static final Duration RECENTLY_REBUILT = Duration.ofHours(20);
+
     private final UserRepository userRepository;
+    private final TopicMasteryRepository topicMasteryRepository;
     private final AnalyticsService analyticsService;
     private final UnifiedRatingService unifiedRatingService;
     private final MaterializedViewRefresher materializedViewRefresher;
@@ -31,7 +46,8 @@ public class AnalyticsScheduler {
     public void refreshAllAnalytics() {
         log.info("Starting nightly analytics refresh");
 
-        int success = 0, failed = 0, page = 0;
+        int success = 0, failed = 0, skipped = 0, page = 0;
+        Instant since = Instant.now().minus(RECENTLY_REBUILT);
         Slice<Long> batch;
 
         // Paged rather than findAll().
@@ -42,7 +58,13 @@ public class AnalyticsScheduler {
         // is now a page of longs regardless of how large the deployment gets.
         do {
             batch = userRepository.findAllUserIds(PageRequest.of(page++, BATCH_SIZE));
+            Set<Long> rebuilt = batch.getContent().isEmpty() ? Set.of()
+                : topicMasteryRepository.findRebuiltSince(batch.getContent(), since);
             for (Long userId : batch) {
+                if (rebuilt.contains(userId)) {
+                    skipped++;
+                    continue;
+                }
                 try {
                     analyticsService.updateTopicMasteryFromSubmissions(userId);
                     success++;
@@ -55,7 +77,8 @@ public class AnalyticsScheduler {
             }
         } while (batch.hasNext());
 
-        log.info("Nightly analytics done. success={} failed={}", success, failed);
+        log.info("Nightly analytics done. success={} failed={} skipped (rebuilt since {})={}",
+            success, failed, since, skipped);
     }
 
     /** Update unified scores every 6 hours */

@@ -130,6 +130,45 @@ class DomjudgeContestCacheTest {
     }
 
     @Test
+    @DisplayName("a stale read returns at once while the refresh waits on a slow judge")
+    void staleReadDoesNotWaitForTheJudge() throws Exception {
+        DomjudgeClient client = mock(DomjudgeClient.class);
+        CountDownLatch judgeAnswers = new CountDownLatch(1);
+        when(client.getSubmissions(null, RAW))
+            .thenReturn(List.of(submission("1")))
+            .thenAnswer(invocation -> {
+                judgeAnswers.await(10, TimeUnit.SECONDS);
+                return List.of(submission("1"), submission("2"));
+            });
+
+        ExecutorService pool = Executors.newSingleThreadExecutor();
+        try {
+            DomjudgeContestCache cache = new DomjudgeContestCache(
+                judgesFor(client), Duration.ZERO, Duration.ZERO, pool);
+            cache.submissions(null, CID);   // cold: fills the entry
+
+            // The judge is now stuck. Before, the reader that found the entry stale did the
+            // fetch itself and waited; in the load test that was the p90 of GET submissions.
+            long started = System.nanoTime();
+            for (int i = 0; i < 20; i++) {
+                assertEquals(1, cache.submissions(null, CID).size(), "stale copy expected");
+            }
+            assertTrue(System.nanoTime() - started < TimeUnit.SECONDS.toNanos(1),
+                "stale reads must not wait for the judge");
+
+            judgeAnswers.countDown();
+            pool.shutdown();
+            assertTrue(pool.awaitTermination(10, TimeUnit.SECONDS));
+
+            assertEquals(2, cache.submissions(null, CID).size(), "the refresh landed");
+            // One refresh in flight at a time: the 20 stale reads asked the judge once.
+            verify(client, times(2)).getSubmissions(null, RAW);
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    @Test
     @DisplayName("a cold read against a dead judge surfaces the failure rather than lying")
     void coldFailurePropagates() {
         DomjudgeClient client = mock(DomjudgeClient.class);

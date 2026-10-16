@@ -167,6 +167,7 @@ public class RunEngine {
             verdict = RunDto.Verdict.TIME_LIMIT_EXCEEDED;
         } else if (exec.exitCode() != 0) {
             verdict = outOfMemory(exec.stderr()) || nearLimit(peakKb, runtime)
+                || imageTooBig(runtime, workDir)
                 ? RunDto.Verdict.MEMORY_LIMIT_EXCEEDED : RunDto.Verdict.RUNTIME_ERROR;
         } else if (test.expected() == null) {
             verdict = RunDto.Verdict.NO_EXPECTED;
@@ -191,11 +192,26 @@ public class RunEngine {
      * that allocates as it goes reaches the cap with its resident memory just under it, then
      * crashes on the null pointer without a word. Its peak says what happened. One that asks for
      * more than the cap in a single call fails with almost nothing resident, and cannot be told
-     * from any other crash; that stays a runtime error.
+     * from any other crash; that stays a runtime error. A global array too big for the cap is
+     * caught by {@link #imageTooBig} instead.
      */
     private boolean nearLimit(Long peakKb, LanguageRuntime runtime) {
         return peakKb != null && runtime.limitAddressSpace()
             && peakKb >= limits.memoryLimitMb() * 1024L * 9 / 10;
+    }
+
+    /**
+     * A failed native program whose static image (code, data, global arrays) is nine-tenths of
+     * the cap ran out of memory before it started; see {@link ElfImage}. The program is the
+     * first word of the run command, relative to the work directory; anything that is not an
+     * ELF there (an interpreter, a script) is never taken for one.
+     */
+    private boolean imageTooBig(LanguageRuntime runtime, Path workDir) {
+        if (!runtime.limitAddressSpace()) return false;
+        List<String> command = runtime.runCommand(workDir);
+        if (command.isEmpty()) return false;
+        long kb = ElfImage.loadKb(workDir.resolve(command.get(0)).normalize());
+        return kb >= limits.memoryLimitMb() * 1024L * 9 / 10;
     }
 
     /** GNU time's report: the last line is the peak in KB; lines before it say how it ended. */
@@ -218,9 +234,9 @@ public class RunEngine {
      * <p>The address-space limit makes an allocation fail rather than killing the process, and
      * what happens next depends on the language: C++ throws {@code std::bad_alloc}, Python raises
      * {@code MemoryError}, and those say so on stderr. A C program that carries on with the null
-     * {@code malloc} gave it just crashes, and cannot be told from any other crash, so it stays a
-     * runtime error — telling those apart needs the peak memory of the run, which nothing here
-     * measures. Kept in step with runner/judge.ts on the page.
+     * {@code malloc} gave it just crashes, and says nothing; {@link #nearLimit} and
+     * {@link #imageTooBig} tell those apart from other crashes. Kept in step with
+     * runner/judge.ts on the page.
      */
     static boolean outOfMemory(String stderr) {
         if (stderr == null || stderr.isEmpty()) return false;

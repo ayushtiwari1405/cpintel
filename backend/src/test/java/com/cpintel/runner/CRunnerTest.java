@@ -144,6 +144,49 @@ class CRunnerTest {
             "peak " + r.peakMemoryKb() + " KB, exit " + r.exitCode());
     }
 
+    /**
+     * The commonest memory limit of all: a global array too big for the cap. The kernel cannot
+     * map it, so the program dies at exec having used nothing, and its peak cannot say why.
+     */
+    @Test
+    @DisplayName("a global array bigger than the cap is a memory limit, not a crash")
+    void oversizedGlobalArrayIsMemoryLimit() {
+        runner = new RunEngine(List.of(new CRuntime()), new Sandbox(),
+            new RunEngine.Limits(10_000L, 20_000L, 128, 65_536), false);
+
+        RunDto.RunResponse result = run("""
+            #include <stdio.h>
+            static char a[256 << 20];
+            int main(void) {
+                for (long i = 0; i < (long) sizeof a; i += 4096) a[i] = 1;
+                printf("%d\\n", a[4096]);
+                return 0;
+            }
+            """, "", "1\n");
+
+        assertTrue(result.compiled(), result.compileOutput());
+        RunDto.TestResult r = result.results().get(0);
+        assertEquals(RunDto.Verdict.MEMORY_LIMIT_EXCEEDED, r.verdict(),
+            "peak " + r.peakMemoryKb() + " KB, exit " + r.exitCode());
+    }
+
+    /** And a plain crash with a small image stays a runtime error. */
+    @Test
+    @DisplayName("a null-pointer crash is still a runtime error")
+    void nullPointerIsRuntimeError() {
+        RunDto.RunResponse result = run("""
+            #include <stdio.h>
+            int main(void) {
+                volatile int *p = 0;
+                *p = 1;
+                return 0;
+            }
+            """, "", "");
+
+        assertTrue(result.compiled(), result.compileOutput());
+        assertEquals(RunDto.Verdict.RUNTIME_ERROR, result.results().get(0).verdict());
+    }
+
     @Test
     @DisplayName("every run reports its peak memory")
     void reportsPeakMemory() {
