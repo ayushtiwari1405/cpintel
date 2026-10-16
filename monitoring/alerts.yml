@@ -66,3 +66,19 @@ groups:
         labels: { severity: warning }
         annotations:
           summary: The server's CPUs have been over 90% busy for five minutes.
+
+      # The runner answers a failed run like any other, so these are the only sign that Run has
+      # stopped working. "busy" is left out of the first: a full queue at the bell is load, not
+      # a fault, and has its own rule.
+      - alert: RunnerFailing
+        expr: sum(increase(cpintel_run_failed_total{reason!="busy"}[5m])) >= 3
+        labels: { severity: critical }
+        annotations:
+          summary: Runs are failing in or on the way to the runner (cpintel_run_failed_total by reason; the backend log says why).
+
+      - alert: RunnerBusy
+        expr: sum(increase(cpintel_run_failed_total{reason="busy"}[5m])) > 20
+        for: 2m
+        labels: { severity: warning }
+        annotations:
+          summary: Runs are being turned away because every runner slot is taken.

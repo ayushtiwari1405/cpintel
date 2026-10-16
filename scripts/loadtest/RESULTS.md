@@ -9,7 +9,7 @@ after it. Reports and samples are in `out/` (not committed).
 
 | # | Finding | Severity | Fix |
 |---|---|---|---|
-| 1 | **The runner leaked zombie processes.** Runs left orphaned `bwrap` processes behind (975 by the time it failed), and the JVM, as PID 1, never reaped them; at 1024 (the container's pids limit) every Run, and every new runner thread, failed with EAGAIN until the runner was restarted. Reached 40 minutes into the test. Run still answered 200, with the failure inside. | Exam-stopping | `init: true` on the runner (docker-init as PID 1). 200 candidates afterwards: runner peaked at 73 pids, no zombies, no "Runner unreachable". |
+| 1 | **The runner leaked zombie processes.** Runs left orphaned `bwrap` processes behind (975 by the time it failed), and the JVM, as PID 1, never reaped them; at 1024 (the container's pids limit) every Run, and every new runner thread, failed with EAGAIN until the runner was restarted. Reached 40 minutes into the test. Run still answered 200, with the failure inside. | Exam-stopping | `init: true` on the runner (docker-init as PID 1). 200 candidates afterwards: runner peaked at 73 pids, no zombies, no "Runner unreachable". Root cause found afterwards, in bubblewrap rather than RunEngine: its outer process exits once it has the exit code, before its inner one (PID 1 of the sandbox) exits, so every sandbox (each compile and each test) orphans one process to the container's PID 1. The image now starts under tini as well. |
 | 2 | **The standings scheduler rolled back every live board** whenever a team-assigned event (every classroom exam or contest, which has no group) was live: NullPointerException in one contest marked the shared transaction rollback-only, and it recurred every 10 minutes (ShedLock's ceiling). | High | Team-assigned events are skipped (their boards come from the submission archive); one transaction per contest. Tested. |
 | 3 | **No samples on DOMjudge 9.** Its API has no per-problem test cases; samples come in one `contests/{cid}/samples.zip`, a folder per label. Run had nothing to run. | High (on DOMjudge 9) | New route `API_CONTEST_SAMPLES_ZIP`; one download caches the whole contest. Tested. |
 | 4 | **Run was compile-bound**: `<bits/stdc++.h>` took 2.6 s of a run. | High at a bell | Precompiled header in the runner image, beside the header, built with the runner's flags: 0.8 s. A flag mismatch makes g++ ignore it, so it cannot change a result. |
@@ -50,8 +50,8 @@ judge for the room: judgehosts at one submission per ~4.6 s each on this class o
 - A refresh of the shared contest cache runs on whichever request finds it stale, so a slow
   judge shows in CPIntel's own `GET .../submissions` (p90 0.6 s at 100, 1.2 s at 200). A
   background refresher would decouple it.
-- A Run that fails inside the runner is logged at WARN only; nothing alerts on it. Finding 1
-  went unnoticed for an hour of the test for that reason (the runs reported 200).
+- ~~A Run that fails inside the runner is logged at WARN only; nothing alerts on it.~~ Now
+  counted (`cpintel_run_failed_total` by reason) and alerted on (`RunnerFailing`, `RunnerBusy`).
 - DOMjudge 8.x judgehosts need cgroup v1; on a cgroup-v2-only host (current Ubuntu), use 9.x.
 - The judgehosts compile `<bits/stdc++.h>` from source too; the same precompiled header in the
   judgehost chroot would cut judging time the same way.

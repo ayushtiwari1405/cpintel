@@ -21,7 +21,7 @@ RUN mvn -B clean package -DskipTests -q
 # the judge — musl differs in small ways that would make Run and Submit disagree.
 FROM eclipse-temurin:21-jre-noble AS runner
 RUN apt-get update \
- && apt-get install -y --no-install-recommends bubblewrap gcc g++ python3 time \
+ && apt-get install -y --no-install-recommends bubblewrap gcc g++ python3 time tini \
  && rm -rf /var/lib/apt/lists/* \
  && useradd --uid 10001 --no-create-home --shell /usr/sbin/nologin runner
 # <bits/stdc++.h>, precompiled beside the header itself, where g++ looks for it unasked. Nearly
@@ -35,7 +35,13 @@ WORKDIR /app
 COPY --from=builder /app/target/*.jar app.jar
 USER 10001
 EXPOSE 8090
-ENTRYPOINT ["java", \
+# tini as PID 1, so the JVM is not. Every sandbox leaves a process for PID 1 to reap: bubblewrap's
+# outer process exits as soon as it has the run's exit code, before its inner one (PID 1 of the
+# sandbox) has exited, and that one is handed to the container's PID 1. The JVM never waits for
+# children it did not start, so each became a zombie holding a pid: one per compile and per test,
+# and at the container's 1024 every run failed. -s keeps it reaping under `docker run --init`.
+ENTRYPOINT ["/usr/bin/tini", "-s", "--", \
+  "java", \
   "-XX:+UseContainerSupport", \
   "-XX:MaxRAMPercentage=15.0", \
   "-Dloader.main=com.cpintel.runner.RunnerServer", \

@@ -84,6 +84,16 @@ public class AppMetrics {
         registry.counter("cpintel.run.verdict", "verdict", verdict).increment();
     }
 
+    /**
+     * A Run that came back with no result: {@code busy} (every slot taken), {@code timeout},
+     * {@code unreachable}, {@code rejected} (the runner answered neither 200 nor 503), or
+     * {@code error} (the runner answered 200 with the failure inside — the load test's pid
+     * exhaustion looked like this, and went unnoticed for an hour).
+     */
+    public void runFailed(String reason) {
+        registry.counter("cpintel.run.failed", "reason", reason).increment();
+    }
+
     public void runCompiled(boolean success, Duration took) {
         Timer.builder("cpintel.run.compile")
             .tag("outcome", success ? "success" : "failure")

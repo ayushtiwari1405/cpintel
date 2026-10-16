@@ -241,11 +241,8 @@ services:
       RUNNER_TIME_LIMIT_MS: ${CPINTEL_RUNNER_TIME_LIMIT_MS:-5000}
       RUNNER_MEMORY_LIMIT_MB: ${CPINTEL_RUNNER_MEMORY_MB:-512}
       RUNNER_COMPILE_TIME_LIMIT_MS: ${CPINTEL_RUNNER_COMPILE_LIMIT_MS:-20000}
-    # A real PID 1 that reaps. Runs leave orphaned bubblewrap processes behind,
-    # and orphans are handed to PID 1; with the JVM as PID 1 nothing ever waited for
-    # them, so each stayed a zombie holding one of the 1024 pids below. The load test reached
-    # the limit 40 minutes in, and from then on every run, and every new runner thread,
-    # failed with EAGAIN until the container was restarted.
+    # A reaping PID 1. The image already starts under tini (see the Dockerfile for why every run
+    # leaves a process to reap); this is a second one, for an image built before that.
     init: true
     read_only: true
     tmpfs:

@@ -117,7 +117,7 @@ public class CodeRunnerService {
         }
         RunDto.RunResponse response = remote()
             ? runRemote(request)
-            : local.run(request.language(), request.source(), request.tests());
+            : failedIfError(local.run(request.language(), request.source(), request.tests()));
         record(response);
         return response;
     }
@@ -143,19 +143,23 @@ public class CodeRunnerService {
                 HttpResponse.BodyHandlers.ofString());
 
             if (res.statusCode() == 503) {
+                metrics.runFailed("busy");
                 return RunDto.RunResponse.unavailable(
                     "Lots of people are running code right now. Try again in a few seconds.");
             }
             if (res.statusCode() != 200) {
                 log.warn("Runner answered {}: {}", res.statusCode(), res.body());
+                metrics.runFailed("rejected");
                 return RunDto.RunResponse.unavailable("The code runner could not take this run.");
             }
-            return json.readValue(res.body(), RunDto.RunResponse.class);
+            return failedIfError(json.readValue(res.body(), RunDto.RunResponse.class));
         } catch (java.net.http.HttpTimeoutException e) {
+            metrics.runFailed("timeout");
             return RunDto.RunResponse.unavailable("The code runner took too long to answer.");
         } catch (Exception e) {
             if (e instanceof InterruptedException) Thread.currentThread().interrupt();
             log.warn("Runner unreachable: {}", e.getMessage());
+            metrics.runFailed("unreachable");
             return RunDto.RunResponse.unavailable(
                 "The code runner is not reachable right now. Submitting still works.");
         }
@@ -183,6 +187,18 @@ public class CodeRunnerService {
             log.debug("Runner health check failed: {}", e.getMessage());
             return null;
         }
+    }
+
+    /**
+     * Counts a run the engine could not carry out. It still answers normally, so without this a
+     * runner that has stopped working looks, from outside, like one that is fine.
+     */
+    private RunDto.RunResponse failedIfError(RunDto.RunResponse response) {
+        if (response.error() != null) {
+            log.warn("Run failed in the runner: {}", response.error());
+            metrics.runFailed("error");
+        }
+        return response;
     }
 
     private void record(RunDto.RunResponse response) {
