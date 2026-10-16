@@ -362,6 +362,16 @@ export function useSetLifecycle() {
   )
 }
 
+export function useSetDesktopAppRequired() {
+  return useEventMutation(
+    ({ eventId, required }: { eventId: number; required: boolean }) =>
+      adminEventsApi.desktopApp(eventId, required),
+    ({ required }) => required
+      ? 'Desktop app required — a browser can no longer sign in for it'
+      : 'Desktop app no longer required — a browser can sign in for it',
+  )
+}
+
 export function useCompleteEvent() {
   return useEventMutation(
     ({ eventId }: { eventId: number }) => adminEventsApi.complete(eventId),

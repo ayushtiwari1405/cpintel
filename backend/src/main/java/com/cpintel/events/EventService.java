@@ -389,6 +389,36 @@ public class EventService {
     }
 
     /**
+     * Requires the desktop app for an examination, or stops requiring it.
+     *
+     * <p>Apart from the form on purpose: the rest of an examination's settings are fixed once it
+     * starts, and this must not be. It is the college's decision whether to require the app, and
+     * the one an invigilator most needs to undo mid-paper — when the app fails on the lab's
+     * machines, the room has to be able to carry on in a browser. Turning it on mid-paper applies
+     * to every new sign-in at once and to sessions already open at their next renewal, within
+     * the access token's fifteen minutes.
+     */
+    @Transactional
+    public EventsDto.EventDetail setDesktopAppRequired(Long adminId, Long eventId, boolean required,
+                                                       HttpServletRequest httpReq) {
+        GroupContest event = require(eventId);
+        if (!event.isExam()) {
+            throw ApiException.badRequest("Only an examination can require the desktop app.");
+        }
+        if (event.isCompleted()) {
+            throw ApiException.badRequest("This is marked done. Reopen it before changing it.");
+        }
+        if (required != Boolean.TRUE.equals(event.getDesktopAppRequired())) {
+            event.setDesktopAppRequired(required);
+            eventRepository.save(event);
+            auditService.recordIn(event.getClassroomId(), adminId, AuditService.EVENT_UPDATED,
+                event.getKind(), eventId + ":desktop-app-" + (required ? "required" : "optional"),
+                httpReq);
+        }
+        return detail(eventId);
+    }
+
+    /**
      * Deletes an event and everything recorded about it.
      *
      * Refused while it is running, and refused once it has been sat: standings, the violation

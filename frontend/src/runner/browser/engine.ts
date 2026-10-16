@@ -122,7 +122,8 @@ async function runNative(language: 'cpp' | 'c', source: string, tests: RunTestCa
       onProgress(tests.length > 1 ? `Running test ${i + 1} of ${tests.length}…` : 'Running…')
       runs.push(await runWasm(built.module, tests[i].input))
     }
-    return { compiled: true, compileOutput: built.output, compileMs: built.ms, runs }
+    return { compiled: true, compileOutput: built.output, compileMs: built.ms, runs,
+      staticKb: built.staticBytes == null ? null : Math.floor(built.staticBytes / 1024) }
   } finally {
     onProgress(null)
   }

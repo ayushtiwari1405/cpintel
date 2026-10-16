@@ -72,14 +72,17 @@ public class SecretsCheck {
         check(problems, "REDIS_PASSWORD", "spring.data.redis.password", 1);
         checkMongoUri(problems);
         checkRunner(problems, isProd);
-        // Optional, but a short one is worse than none: see checkSealingKey.
-        checkSealingKey(problems, "CPINTEL_EXAM_PASSWORD_KEY", "cpintel.exams.password-key");
-        checkSealingKey(problems, "CPINTEL_DOMJUDGE_CREDENTIAL_KEY", "cpintel.domjudge.credential-key");
+        // Required in prod, optional elsewhere, and a short one is worse than none: see
+        // checkSealingKey.
+        checkSealingKey(problems, "CPINTEL_EXAM_PASSWORD_KEY", "cpintel.exams.password-key",
+            isProd);
+        checkSealingKey(problems, "CPINTEL_DOMJUDGE_CREDENTIAL_KEY",
+            "cpintel.domjudge.credential-key", isProd);
 
         // Warnings rather than refusals: these two make a feature weaker, not the deployment
         // insecure, and a lab running examinations on a closed network with no SMTP is a real
         // arrangement rather than a mistake. See the method for what each one costs.
-        List<String> warnings = advisories();
+        List<String> warnings = advisories(isProd);
 
         if (!warnings.isEmpty()) {
             log.warn("This deployment will start, but with a feature turned off:\n  - {}",
@@ -124,14 +127,15 @@ public class SecretsCheck {
      *       worst time to discover it. A contest-only deployment does not need the key.</li>
      * </ul>
      */
-    private List<String> advisories() {
+    private List<String> advisories(boolean isProd) {
         List<String> warnings = new ArrayList<>();
 
         if (isBlank("spring.mail.host")) {
             warnings.add("SMTP_HOST is not set, so no email is sent — password reset links are "
                 + "written to this log instead. Set it to deliver them.");
         }
-        if (isBlank("cpintel.exams.password-key")) {
+        // In prod a missing key is a refusal instead (checkSealingKey).
+        if (!isProd && isBlank("cpintel.exams.password-key")) {
             warnings.add("CPINTEL_EXAM_PASSWORD_KEY is not set, so examination sign-in "
                 + "passwords cannot be issued and nobody can sit an examination. Set it before "
                 + "scheduling one.");
@@ -149,10 +153,24 @@ public class SecretsCheck {
      * passwords and DOMjudge logins open. Unset is allowed (the feature is then off, and
      * {@link #advisories} says so); set and short is refused, since it looks configured while
      * protecting little.
+     *
+     * <p>In prod, unset is refused too. Without the examination key nobody can sit an
+     * examination; without the DOMjudge key no judge login can be stored, so no contestant can
+     * submit. A production deployment exists for those, and a key added after the first
+     * examination passwords were issued cannot read them, so the time to find out is before
+     * the first start, not on the morning of the first paper.
      */
-    private void checkSealingKey(List<String> problems, String envVar, String property) {
+    private void checkSealingKey(List<String> problems, String envVar, String property,
+                                 boolean required) {
         String value = env.getProperty(property);
-        if (value == null || value.isBlank()) return;
+        if (value == null || value.isBlank()) {
+            if (required) {
+                problems.add(envVar + " is not set. A production deployment needs it: generate "
+                    + "one with openssl rand -base64 48, keep a copy off the server, and set it "
+                    + "before the first start.");
+            }
+            return;
+        }
         if (value.length() < MIN_SEALING_KEY_CHARS) {
             problems.add(envVar + " is " + value.length() + " characters; use a random one of at "
                 + "least " + MIN_SEALING_KEY_CHARS + " (openssl rand -base64 48). Changing it "

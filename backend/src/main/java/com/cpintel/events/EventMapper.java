@@ -48,6 +48,7 @@ public final class EventMapper {
             event.effectiveLifecycle(now).name(),
             event.getVisibility(),
             Boolean.TRUE.equals(event.getLockdownRequired()),
+            Boolean.TRUE.equals(event.getDesktopAppRequired()),
             event.getAwayThresholdSeconds() == null ? 10 : event.getAwayThresholdSeconds(),
             event.getGroup() == null ? null : event.getGroup().getGroupId(),
             event.getGroup() == null ? null : event.getGroup().getName(),

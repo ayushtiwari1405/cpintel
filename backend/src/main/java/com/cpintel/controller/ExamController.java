@@ -153,9 +153,11 @@ public class ExamController {
     public ResponseEntity<ApiResponse<Map<String, Integer>>> report(
         @AuthenticationPrincipal Long userId,
         @PathVariable Long examId,
-        @Valid @RequestBody EventsDto.EventReport report) {
+        @Valid @RequestBody EventsDto.EventReport report,
+        jakarta.servlet.http.HttpServletRequest httpReq) {
         examGuard.requireExamSession(examId);
-        int stored = examEvents.report(userId, examId, report);
+        int stored = examEvents.report(userId, examId, report,
+            com.cpintel.security.DesktopClient.version(httpReq));
         return ResponseEntity.ok(ApiResponse.ok(Map.of("stored", stored)));
     }
 

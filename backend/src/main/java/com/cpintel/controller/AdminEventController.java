@@ -107,6 +107,19 @@ public class AdminEventController {
             events.setLifecycle(adminId, eventId, req.lifecycle(), httpReq)));
     }
 
+    @PutMapping("/{eventId}/desktop-app")
+    @Operation(summary = "Require the desktop app for an examination, or stop requiring it",
+        description = "Allowed while the examination runs, unlike its other settings, so an "
+            + "invigilator can lift the requirement if the app fails on the lab's machines.")
+    public ResponseEntity<ApiResponse<EventsDto.EventDetail>> desktopApp(
+        @AuthenticationPrincipal Long adminId,
+        @PathVariable Long eventId,
+        @Valid @RequestBody EventsDto.DesktopAppRequest req,
+        HttpServletRequest httpReq) {
+        return ResponseEntity.ok(ApiResponse.ok(
+            events.setDesktopAppRequired(adminId, eventId, req.required(), httpReq)));
+    }
+
     @DeleteMapping("/{eventId}")
     @Operation(summary = "Delete an event that nobody has sat",
         description = "Refused once there is a session log: that log is the record of something "

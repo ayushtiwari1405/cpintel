@@ -59,6 +59,8 @@ public class AuditService {
     public static final String EXAM_UNLOCKED         = "EXAM_UNLOCKED";
     /** Signed in with an examination password, into examination mode. */
     public static final String EXAM_SIGN_IN          = "EXAM_SIGN_IN";
+    /** The right examination password, from outside the desktop app, for a paper that needs it. */
+    public static final String EXAM_SIGN_IN_NOT_DESKTOP = "EXAM_SIGN_IN_NOT_DESKTOP";
     public static final String EXAM_UNLOCK_REFUSED   = "EXAM_UNLOCK_REFUSED";
 
     // Admin actions on accounts

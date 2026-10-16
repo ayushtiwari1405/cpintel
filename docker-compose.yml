@@ -364,6 +364,37 @@ services:
         limits:
           memory: 384m
 
+  # Emails the alerts in monitoring/alerts.yml to CPINTEL_ALERT_EMAIL (by default the admin
+  # address) through the SMTP server password resets use. Without SMTP or an address it runs and
+  # sends nothing, and the alerts are on Prometheus's page as before.
+  alertmanager:
+    logging: *default-logging
+    image: prom/alertmanager:v0.27.0
+    container_name: cpintel-alertmanager
+    entrypoint: ["/bin/sh", "/etc/alertmanager/start.sh"]
+    environment:
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_AUTH: ${SMTP_AUTH:-true}
+      SMTP_STARTTLS: ${SMTP_STARTTLS:-true}
+      CPINTEL_MAIL_FROM: ${CPINTEL_MAIL_FROM:-CPIntel <no-reply@cpintel.local>}
+      CPINTEL_ALERT_EMAIL: ${CPINTEL_ALERT_EMAIL:-${CPINTEL_ADMIN_EMAIL:-}}
+    volumes:
+      - ./monitoring/alertmanager-start.sh:/etc/alertmanager/start.sh:ro
+      - alertmanager_data:/alertmanager
+    ports:
+      - "127.0.0.1:9093:9093"
+    networks:
+      - cpintel-net
+    restart: unless-stopped
+    profiles: ["monitoring"]
+    deploy:
+      resources:
+        limits:
+          memory: 64m
+
   # The server itself — CPU, memory, disk — which is what runs out first on exam day.
   node-exporter:
     logging: *default-logging
@@ -438,6 +469,7 @@ volumes:
   mongo_data:
   redis_data:
   prometheus_data:
+  alertmanager_data:
   grafana_data:
   loki_data:
 

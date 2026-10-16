@@ -38,7 +38,7 @@ the reasoning behind the harder decisions, and [`docs/SRS.md`](docs/SRS.md) for 
 | Document DB | MongoDB — raw submission history, personal files, contest snapshots |
 | Cache | Redis — sessions, JWT blacklist, per-user token revocation, analytics cache |
 | Integrations | Codeforces REST + scraping, DOMjudge REST v4 |
-| Migrations | Flyway — 26 versioned migrations (schema, indexes, materialized views, audit indexes, groups, super admin role, scheduler locks, node-level mastery, examinations, examination access, placement results, Codeforces-only cleanup, examination-mode sessions, several events per judge contest, examination leaderboards, classrooms, audit log by classroom, DOMjudge logins in PostgreSQL, marking an event done, rejudging a problem, TA marking, freezing TA marks, refresh-token digests and families, skill ratings, one sync at a time, examination grants kept in PostgreSQL) |
+| Migrations | Flyway — 27 versioned migrations (schema, indexes, materialized views, audit indexes, groups, super admin role, scheduler locks, node-level mastery, examinations, examination access, placement results, Codeforces-only cleanup, examination-mode sessions, several events per judge contest, examination leaderboards, classrooms, audit log by classroom, DOMjudge logins in PostgreSQL, marking an event done, rejudging a problem, TA marking, freezing TA marks, refresh-token digests and families, skill ratings, one sync at a time, examination grants kept in PostgreSQL, desktop-app-only examinations) |
 | Containerization | Docker Compose — 11 services: 3 behind the `monitoring` profile and certbot behind `letsencrypt`. `docker-compose.prod.yml` swaps the builds for CI images |
 | Editor | Monaco, bundled locally (no CDN) — shared by the Practice, Compete and examination workspaces |
 | Code runner | g++, gcc and CPython under bubblewrap + rlimits, in its own locked-down container on a server; judged against the statement's sample tests |
@@ -255,7 +255,12 @@ there. On the server, with `.env` filled in from `.env.example`:
 ```bash
 ./deploy.sh <commit-sha>         # backup → pull → restart → health check → roll back on failure
 ./deploy.sh --rollback           # back to the version before
+./deploy.sh --force <commit-sha> # even while an examination is running (refused otherwise)
 ```
+
+While the backend restarts (about half a minute) nginx answers API calls with `503
+SERVER_RESTARTING`; the page retries its reads and keeps everyone signed in, but a deploy still
+belongs outside examinations, which is why the script refuses one during a paper.
 
 - **HTTPS.** Set `CPINTEL_DOMAIN`. A server the internet can reach gets a Let's Encrypt
   certificate: set `CPINTEL_ACME_EMAIL` and run `docker compose --profile letsencrypt up -d`
@@ -318,10 +323,10 @@ Everything below has a working default; only the secrets in `.env` genuinely nee
 | `CPINTEL_DESKTOP_REPOSITORY` | *(unset)* | GitHub `owner/name` whose Releases carry the desktop installers; feeds `/download` and the update ribbon |
 | `CPINTEL_DESKTOP_GITHUB_TOKEN` | *(unset)* | Only for a private repository: read access to it; downloads are then streamed through the server |
 | `CPINTEL_RUNNER_EXAM_ONLY` | `true` | The server runner takes examination runs only; elsewhere code runs on the student's computer |
-| `CPINTEL_DOMJUDGE_CREDENTIAL_KEY` | *(unset)* | **Required to attach contestants' accounts.** AES-256-GCM key for the per-contestant, per-classroom DOMjudge logins and for classroom service-account passwords |
+| `CPINTEL_DOMJUDGE_CREDENTIAL_KEY` | *(unset)* | **Required; the prod profile refuses to start without it.** AES-256-GCM key for the per-contestant, per-classroom DOMjudge logins and for classroom service-account passwords |
 | `CPINTEL_PROCTOR_HEARTBEAT_TTL` | `45` | How long one monitoring heartbeat vouches for. Submissions into a monitored examination are refused without a fresh one |
 | `CPINTEL_PROCTOR_HEARTBEAT_INTERVAL` | `15` | How often the page sends one |
-| `CPINTEL_EXAM_PASSWORD_KEY` | *(unset)* | **Required for examinations.** AES-256-GCM key for each candidate's examination sign-in password and the optional room password. Without it no sign-in password can be issued, so no examination can be sat |
+| `CPINTEL_EXAM_PASSWORD_KEY` | *(unset)* | **Required for examinations; the prod profile refuses to start without it.** AES-256-GCM key for each candidate's examination sign-in password and the optional room password. Without it no sign-in password can be issued, so no examination can be sat |
 | `CPINTEL_EXAM_PASSWORD_LENGTH` | `8` | Characters per generated code, grouped in fours for reading off paper |
 | `CPINTEL_EXAM_RETENTION_DAYS` | `365` | How long an examination's session log is kept. `0` keeps everything. Swept daily, never at startup |
 | `CPINTEL_RUNNER_COMPILE_LIMIT_MS` | `20000` | Wall clock for the compile step |
@@ -333,6 +338,7 @@ Everything below has a working default; only the secrets in `.env` genuinely nee
 | `SMTP_PORT` / `_USER` / `_PASSWORD` | `587` / — / — | The rest of the SMTP connection |
 | `SMTP_AUTH` / `SMTP_STARTTLS` | `true` / `true` | Turn off for a relay that wants neither |
 | `CPINTEL_MAIL_FROM` | `CPIntel <no-reply@cpintel.local>` | The From address on anything sent |
+| `CPINTEL_ALERT_EMAIL` | `CPINTEL_ADMIN_EMAIL` | Where the monitoring profile's Alertmanager emails firing alerts, through the SMTP server above |
 | `CPINTEL_PUBLIC_URL` | `http://localhost:5173` | Where a link in an email points — the address people open CPIntel at, not the backend's own |
 | `CPINTEL_RESET_TOKEN_MINUTES` | `60` | How long a password reset link is worth |
 
@@ -626,7 +632,10 @@ DOMjudge-related is read from `.env`.
    named three languages meant three, and offering a fourth because a judge calls it something
    unfamiliar would quietly overrule them.
 5. **Monitoring** — whether it is watched, how long a candidate may be away before it is
-   recorded, and which desktop restrictions the examination asks for. Every restriction is a
+   recorded, and which desktop restrictions the examination asks for. Separately, at the top of
+   the examination's page, **Require the desktop app** makes the server refuse an examination
+   sign-in from a browser (see docs/ARCHITECTURE.md, "Desktop app only"); it can be switched
+   while the paper runs. Every restriction is a
    request: the desktop build applies what the operating system allows and reports what it
    could not, and a browser applies almost none of them — which is why an examination sat in a
    browser records that its monitoring was the weaker kind rather than showing a clean sheet.

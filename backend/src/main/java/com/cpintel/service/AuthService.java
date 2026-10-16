@@ -152,6 +152,7 @@ public class AuthService {
         var exam = examLogin.match(user.getUserId(), req.getPassword());
         if (exam.isPresent()) {
             rateLimiter.reset(ACCOUNT_BUCKET, identifier);
+            requireDesktopAppIfAsked(exam.get(), user, httpReq);
             examAccess.onExamSignIn(exam.get(), user.getUserId());
             auditService.record(user.getUserId(), AuditService.EXAM_SIGN_IN, "EXAM",
                 String.valueOf(exam.get().getContestId()), httpReq);
@@ -220,6 +221,9 @@ public class AuthService {
                 throw ApiException.unauthorized("The examination has ended. Sign in with your "
                     + "account password to see your submissions under Past examinations.");
             }
+            // Checked at every renewal as well as at sign-in: a session carried into a browser,
+            // or a paper switched over to desktop-only while it runs, ends here.
+            requireDesktopAppIfAsked(exam, user, httpReq);
             return buildAuthResponse(user, httpReq, exam, token.getFamilyId());
         }
         // An ordinary session does not renew while its holder's examination runs. The token was
@@ -287,6 +291,28 @@ public class AuthService {
             + "closed to you until it ends. Sign in with your username and the examination "
             + "password on your slip.";
     }
+
+    /**
+     * Refuses an examination session outside the desktop app when its paper requires the app.
+     *
+     * <p>Only reached with the right examination password, so saying why is safe: the person
+     * already holds the slip. See {@link com.cpintel.security.DesktopClient} for what the check
+     * can and cannot establish.
+     */
+    private void requireDesktopAppIfAsked(com.cpintel.entity.GroupContest exam, User user,
+                                          HttpServletRequest httpReq) {
+        if (!Boolean.TRUE.equals(exam.getDesktopAppRequired())) return;
+        if (com.cpintel.security.DesktopClient.isDesktop(httpReq)) return;
+        auditService.record(user.getUserId(), AuditService.EXAM_SIGN_IN_NOT_DESKTOP, "EXAM",
+            String.valueOf(exam.getContestId()), httpReq);
+        throw new ApiException(org.springframework.http.HttpStatus.FORBIDDEN, DESKTOP_APP_REQUIRED,
+            "\"" + exam.getName() + "\" can only be sat in the CPIntel desktop app. Open the app "
+                + "on this computer and sign in there with the same examination password. If you "
+                + "are already in the app, update it from the download page.");
+    }
+
+    /** The error code for an examination session refused outside the desktop app. */
+    public static final String DESKTOP_APP_REQUIRED = "DESKTOP_APP_REQUIRED";
 
     /** The error code for a sign-in or session refused because the holder's examination runs. */
     public static final String EXAM_IN_PROGRESS = "EXAM_IN_PROGRESS";

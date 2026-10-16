@@ -875,6 +875,8 @@ export interface EventSummary {
   lifecycle: EventLifecycle
   visibility: EventVisibility
   lockdownRequired: boolean
+  /** Only the desktop app may sign in for it; the server refuses a browser. */
+  desktopAppRequired: boolean
   awayThresholdSeconds: number
   teamId: number | null
   teamName: string | null

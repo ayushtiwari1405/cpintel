@@ -9,6 +9,7 @@
  */
 
 import { BITS_STDCXX } from './stdcxxShim'
+import { wasmInitialMemoryBytes } from './wasmImage'
 
 /** Also pinned in the site's Content-Security-Policy (nginx/templates); change both. */
 const CLANG_VERSION = '22.0.0-git20542-10'
@@ -34,7 +35,9 @@ const load = () => {
 export interface CompileRequest { source: string; language: 'cpp' | 'c' }
 export type CompileMessage =
   | { kind: 'progress'; done: number; total: number }
-  | { kind: 'done'; ok: true; module: WebAssembly.Module; output: string; ms: number }
+  | { kind: 'done'; ok: true; module: WebAssembly.Module; output: string; ms: number
+      /** Initial memory less the stack: the program's static size, or null if unreadable. */
+      staticBytes: number | null }
   | { kind: 'done'; ok: false; output: string; ms: number }
   | { kind: 'failed'; error: string }
 
@@ -83,8 +86,12 @@ self.onmessage = async (e: MessageEvent<CompileRequest>) => {
         post({ kind: 'progress', done: doneLength, total: totalLength }),
     })
     const ms = Math.round(performance.now() - started)
-    const module = await WebAssembly.compile(files.program as Uint8Array<ArrayBuffer>)
-    post({ kind: 'done', ok: true, module, output: output.split(`/${file}`).join(file), ms })
+    const program = files.program as Uint8Array<ArrayBuffer>
+    const memory = wasmInitialMemoryBytes(program)
+    const staticBytes = memory == null ? null : Math.max(0, memory - STACK_BYTES)
+    const module = await WebAssembly.compile(program)
+    post({ kind: 'done', ok: true, module, output: output.split(`/${file}`).join(file), ms,
+      staticBytes })
   } catch (err: any) {
     const ms = Math.round(performance.now() - started)
     // The YoWASP runtime reports a non-zero exit as an Exit error carrying the status.

@@ -130,7 +130,10 @@ export const adminEventsApi = {
     apiClient.put<ApiResponse<EventDetail>>(`/admin/events/${eventId}`, body).then(r => r.data),
 
   lifecycle: (eventId: number, lifecycle: EventLifecycle) =>
-    apiClient.put<ApiResponse<EventDetail>>(`/admin/events/${eventId}/lifecycle`, { lifecycle })
+    apiClient.put<ApiResponse<EventDetail>>(`/admin/events/${eventId}/lifecycle`, { lifecycle }),
+
+  desktopApp: (eventId: number, required: boolean) =>
+    apiClient.put<ApiResponse<EventDetail>>(`/admin/events/${eventId}/desktop-app`, { required })
       .then(r => r.data),
 
   remove: (eventId: number) =>

@@ -85,6 +85,34 @@ class ExamEventServiceTest {
     }
 
     @Nested
+    @DisplayName("A browser claiming to be the desktop app")
+    class ForgedDesktop {
+
+        @Test
+        @DisplayName("a browser report sent with the desktop header gets a second row saying so")
+        void flagged() {
+            service.report(USER, EXAM, new EventsDto.EventReport(List.of(
+                new EventsDto.ClientEvent("s1-browser", "SUSPICIOUS_ACTIVITY", null, null,
+                    "Sat in a browser", Instant.now()))), "1.4.0");
+
+            List<ExamEvent> rows = saved();
+            assertEquals(2, rows.size());
+            assertEquals("s1-browser-claim", rows.get(1).getEventId());
+            assertTrue(rows.get(1).getDetail().contains("desktop app (1.4.0)"));
+        }
+
+        @Test
+        @DisplayName("without the header, a browser report is just a browser report")
+        void plainBrowser() {
+            service.report(USER, EXAM, new EventsDto.EventReport(List.of(
+                new EventsDto.ClientEvent("s1-browser", "SUSPICIOUS_ACTIVITY", null, null,
+                    "Sat in a browser", Instant.now()))), null);
+
+            assertEquals(1, saved().size());
+        }
+    }
+
+    @Nested
     @DisplayName("Who may file an event")
     class Provenance {
 

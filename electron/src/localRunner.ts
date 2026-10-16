@@ -2,6 +2,7 @@ import { spawn } from 'child_process'
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
+import { staticImageKb } from './staticImage'
 
 /**
  * Compiles and runs a solution on this computer, with the toolchains the app ships with.
@@ -50,6 +51,8 @@ export interface RawRun {
   compileOutput: string
   compileMs: number
   runs: Exec[]
+  /** The program's static size in KB (staticImage.ts); null for Python or an unreadable one. */
+  staticKb?: number | null
   error?: string
 }
 
@@ -261,7 +264,11 @@ export async function run(request: RunRequest): Promise<RawRun> {
       runs.push(await exec(toolchain.run(dir), dir, input, request.timeLimitMs,
         request.outputLimitBytes))
     }
-    return { compiled: true, compileOutput, compileMs, runs }
+    // The program is the run command's first word when it is a file the build made here;
+    // for Python that word is the interpreter, which says nothing about the student's code.
+    const program = toolchain.run(dir)[0]
+    const staticKb = program.startsWith(dir) ? staticImageKb(program) : null
+    return { compiled: true, compileOutput, compileMs, runs, staticKb }
   } finally {
     fs.rm(dir, { recursive: true, force: true }, () => {})
   }

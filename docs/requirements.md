@@ -193,8 +193,16 @@ Decisions and routines the college owns rather than the software.
     exam sign-in passwords are new for every exam and work from one hour before the start until
     the end.
   - Optionally, generate a room password to read out at the start.
-- [ ] **No updates while an exam is running** — *Required.* A restart drops every live session
-  for about a minute.
+- [ ] **No updates while an exam is running** — *Required.* The backend is down for the half
+  minute it takes to start: nobody is signed out and nothing saved is lost, and pages retry their
+  reads, but submissions wait. `./deploy.sh` refuses while an examination is running or starts
+  within 30 minutes; `--force` overrides it for a fix that cannot wait.
+- [ ] **Desktop app only?** — *The college's decision, per examination.* An examination's page
+  has a **Require the desktop app** toggle: with it on, a browser cannot sign in with the
+  examination password. Every lab machine then needs the app at a current version (the download
+  page). For a lab that has to block other programs too, set the machines up in kiosk mode
+  (Windows assigned access, or a Linux kiosk session that starts only CPIntel). The toggle can be
+  turned off mid-paper if the app fails on the lab's machines.
 - [ ] **Monitoring on during exams** — *Recommended.* Start it for the day with
   `docker compose --profile monitoring up -d` (Prometheus, Grafana and node-exporter; about
   100 MB in use, capped at 700 MB, a week of history, at most 1 GB of disk) and stop it afterwards
@@ -203,8 +211,9 @@ Decisions and routines the college owns rather than the software.
   http://localhost:3000 (dashboard "CPIntel Backend": requests, errors, latency, heap, database
   pool, and the server's CPU, memory and disk) and http://localhost:9090/alerts (backend down,
   server errors, throttling, slow requests, pool exhausted, heap, host memory, disk, CPU, runs
-  failing in the runner, runner queue full). Nothing
-  is sent anywhere: somebody keeps it open during the sitting.
+  failing in the runner, runner queue full). Firing alerts are emailed to `CPINTEL_ALERT_EMAIL`
+  (by default `CPINTEL_ADMIN_EMAIL`) through the SMTP server password resets use; with no SMTP,
+  nothing is sent, and somebody keeps the alerts page open during the sitting.
 - [ ] **Tell users they will need to sign in again after the first deploy** — *Optional.*
 
 ---
@@ -226,7 +235,8 @@ and survived a page reload with no Content-Security-Policy violations.
   nginx is published on public interfaces.
 - [x] **Deploy script.** `./deploy.sh <version>` backs up both databases, pulls, restarts, waits
   for the health check and rolls back on failure; `./deploy.sh --rollback` returns to the
-  previous version.
+  previous version. It refuses while an examination is running or about to (`--force`
+  overrides), and reloads nginx so it finds the restarted backend.
 - [ ] Optional: enable the commented-out SSH deploy job in `ci.yml` for automatic deploys.
 - [x] **Backups.** Nightly `pg_dump` + `mongodump`, 14 days kept, copied to
   `CPINTEL_BACKUP_REMOTE`; `scripts/restore.sh` restores, and `--test` restores into a scratch

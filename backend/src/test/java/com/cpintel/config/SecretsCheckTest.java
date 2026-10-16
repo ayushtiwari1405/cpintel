@@ -29,7 +29,9 @@ class SecretsCheckTest {
             "spring.data.redis.password",    "realpassword",
             "spring.data.mongodb.uri",       GOOD_MONGO,
             "cpintel.runner.url",            "http://runner:8090",
-            "cpintel.runner.token",          "a-long-enough-runner-token"
+            "cpintel.runner.token",          "a-long-enough-runner-token",
+            "cpintel.exams.password-key",    "q3Xv0b8r9mZk2sYdP1aW7cLnE4tGhJ6uQ0iO5fR8yT2wB9xC",
+            "cpintel.domjudge.credential-key", "Lp7Hs2Kd9Fq4Wm1Zr8Tn3Vb6Xc0Yg5Ja2Ue7Io4Pl9Mk1Nh6"
         ).forEach(e::setProperty);
         return e;
     }
@@ -59,7 +61,20 @@ class SecretsCheckTest {
         }
 
         @Test
-        @DisplayName("a short encryption key is refused; an absent one only turns its feature off")
+        @DisplayName("a missing encryption key is refused in prod, naming which one")
+        void sealingKeysRequired() {
+            for (String[] key : new String[][] {
+                    {"cpintel.exams.password-key", "CPINTEL_EXAM_PASSWORD_KEY"},
+                    {"cpintel.domjudge.credential-key", "CPINTEL_DOMJUDGE_CREDENTIAL_KEY"}}) {
+                MockEnvironment e = env("prod");
+                e.setProperty(key[0], "");
+                var ex = assertThrows(IllegalStateException.class, () -> verify(e));
+                assertTrue(ex.getMessage().contains(key[1] + " is not set"), ex.getMessage());
+            }
+        }
+
+        @Test
+        @DisplayName("a short encryption key is refused")
         void sealingKeysMustBeLong() {
             MockEnvironment shortKey = env("prod");
             shortKey.setProperty("cpintel.exams.password-key", "exam2026");
@@ -163,6 +178,16 @@ class SecretsCheckTest {
             MockEnvironment e = env("dev");
             e.setProperty("jwt.secret", "");
             e.setProperty("spring.datasource.password", "");
+
+            assertDoesNotThrow(() -> verify(e));
+        }
+
+        @Test
+        @DisplayName("without the encryption keys, development still starts")
+        void devStartsWithoutKeys() {
+            MockEnvironment e = env("dev");
+            e.setProperty("cpintel.exams.password-key", "");
+            e.setProperty("cpintel.domjudge.credential-key", "");
 
             assertDoesNotThrow(() -> verify(e));
         }

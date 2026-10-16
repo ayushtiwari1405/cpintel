@@ -3,6 +3,7 @@
 #
 #   ./deploy.sh <version>      # a commit SHA that CI built and pushed to GHCR
 #   ./deploy.sh --rollback     # back to the version before the current one
+#   ./deploy.sh --force ...    # even while an examination is running or about to start
 #
 # In order:
 #   1. back up both databases (the backend applies schema migrations as it starts, so this is
@@ -17,8 +18,18 @@
 #      the schema, say so and name the backup to restore: an older backend on a newer schema is
 #      not something to leave running without a person deciding.
 #
-# Never while an examination is running: the restart drops every live session for a minute.
+# Refused while an examination is running or starts within 30 minutes: the backend is down for
+# the half minute or so it takes to start, and a room mid-paper sees requests fail for that long
+# (nobody is signed out, and nothing saved is lost, but submissions wait). --force overrides it,
+# for the fix that cannot wait.
 set -euo pipefail
+
+FORCE=0
+args=()
+for arg in "$@"; do
+  if [ "$arg" = "--force" ]; then FORCE=1; else args+=("$arg"); fi
+done
+set -- ${args[@]+"${args[@]}"}
 
 cd "$(dirname "${BASH_SOURCE[0]}")"
 COMPOSE=(docker compose -f docker-compose.yml -f docker-compose.prod.yml)
@@ -42,6 +53,17 @@ schema_version() {
   docker exec cpintel-postgres sh -c 'psql -U "$POSTGRES_USER" -d cpintel -At -c \
     "select version from flyway_schema_history where success
      order by installed_rank desc limit 1"' 2>/dev/null || true
+}
+
+# Examinations running now or starting within 30 minutes, one per line: "name (ends 14:30)".
+# Empty when there are none, or when the database is not up yet (a first deploy).
+live_exams() {
+  docker exec cpintel-postgres sh -c 'psql -U "$POSTGRES_USER" -d cpintel -At -c \
+    "select name || '"'"' (until '"'"' || to_char(ends_at at time zone '"'"'Asia/Kolkata'"'"', '"'"'HH24:MI'"'"') || '"'"' IST)'"'"'
+       from group_contests
+      where kind = '"'"'EXAM'"'"' and lifecycle = '"'"'SCHEDULED'"'"' and completed_at is null
+        and starts_at <= now() + interval '"'"'30 minutes'"'"' and ends_at > now()
+      order by starts_at"' 2>/dev/null || true
 }
 
 healthy() {
@@ -80,6 +102,16 @@ run_version() {
 
 echo "=== CPIntel deploy: ${current:-none} → $target ==="
 
+exams="$(live_exams)"
+if [ -n "$exams" ] && [ "$FORCE" != "1" ]; then
+  echo "!!! Not deploying: an examination is running or starts within 30 minutes:"
+  echo "$exams" | sed 's/^/!!!     /'
+  echo "!!! The backend restarts, and the room would see requests fail while it does."
+  echo "!!! Deploy after it ends, or pass --force if this cannot wait."
+  exit 1
+fi
+[ -n "$exams" ] && echo "--- --force: deploying during $(echo "$exams" | head -1)"
+
 # The databases have to be up to be backed up — and on a first deploy, to exist at all.
 CPINTEL_VERSION="$target" "${COMPOSE[@]}" up -d postgres mongodb redis
 
@@ -92,7 +124,14 @@ schema_before="$(schema_version)"
 CPINTEL_VERSION="$target" "${COMPOSE[@]}" pull "${APP[@]}"
 run_version "$target"
 
+# nginx looks the backend's address up when it starts; a recreated backend container can come
+# back on another one, and nginx would keep sending to the old address. A reload looks again.
+reload_nginx() {
+  docker exec cpintel-nginx nginx -s reload >/dev/null 2>&1 || true
+}
+
 if healthy; then
+  reload_nginx
   if [ "$target" != "$current" ]; then
     echo "$current" > "$STATE_DIR/previous"
     echo "$target" > "$STATE_DIR/current"
@@ -123,6 +162,7 @@ if [ "$schema_after" != "$schema_before" ]; then
 fi
 
 if healthy; then
+  reload_nginx
   echo "=== rolled back to $current ==="
 else
   echo "!!! $current is not healthy either. See: docker logs cpintel-backend"

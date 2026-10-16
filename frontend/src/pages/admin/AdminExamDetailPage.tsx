@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useParams } from 'react-router-dom'
 import {
   AlertTriangle, ArrowLeft, CheckCircle2, ClipboardCheck, Code2, Download, Eye, Flag, KeyRound, Loader2, Lock,
-  Monitor, Plus, Save, RefreshCw, ScrollText, Settings2, Trash2, Trophy, Users,
+  Monitor, Plus, Save, RefreshCw, ScrollText, Settings2, Trash2, Trophy, Users, Laptop,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 
@@ -16,8 +16,8 @@ import {
   useAdminEvent, useAssignToEvent, useCompleteEvent, useDeleteEvent, useDownloadEventFile,
   useEventLanguageCatalog, useExamFlags, useExamLeaderboard, useExamLeaderboardSettings,
   useExamLogs, useExamMonitor, useJudgeProblems, useRebuildExport, useRefreshExamLeaderboard,
-  useRejudgeProblem, useReopenEvent, useSetLifecycle, useSetProblems, useUnassignTeam, useUnassignUser,
-  useUpdateEvent,
+  useRejudgeProblem, useReopenEvent, useSetDesktopAppRequired, useSetLifecycle, useSetProblems,
+  useUnassignTeam, useUnassignUser, useUpdateEvent,
 } from '@/hooks/useExams'
 import { useAdminGroups } from '@/hooks/useGroups'
 import { useAdminUsers } from '@/hooks/useAdmin'
@@ -87,6 +87,11 @@ export default function AdminExamDetailPage() {
                 <Eye size={11} /> monitored
               </span>
             )}
+            {event.desktopAppRequired && (
+              <span className="inline-flex items-center gap-1 text-[11px] text-indigo-300">
+                <Laptop size={11} /> desktop app only
+              </span>
+            )}
           </div>
           <p className="mt-0.5 text-xs text-gray-500">
             {exam ? 'Examination' : 'Contest'} · {event.platform} {event.judgeContestId}
@@ -96,6 +101,8 @@ export default function AdminExamDetailPage() {
         </div>
         <LifecycleControls detail={detail} />
       </header>
+
+      {exam && !event.completedAt && <DesktopAppControl detail={detail} />}
 
       {event.completedAt && <DonePanel detail={detail} />}
 
@@ -143,6 +150,70 @@ export default function AdminExamDetailPage() {
  * five states are equivalent choices, and "back to draft" during a live paper is not a choice
  * anybody should be offered.
  */
+/**
+ * Whether the examination may only be sat in the desktop app.
+ *
+ * Its own control, outside the settings form, because unlike them it can be changed while the
+ * paper runs: whether to require the app is the college's decision, and if the app fails on the
+ * lab's machines the invigilator has to be able to let the room carry on in a browser.
+ */
+function DesktopAppControl({ detail }: { detail: EventDetail }) {
+  const set = useSetDesktopAppRequired()
+  const { event } = detail
+  const required = event.desktopAppRequired
+  const running = event.lifecycle === 'ACTIVE'
+
+  const toggle = () => {
+    const next = !required
+    const message = next
+      ? `Require the CPIntel desktop app for ${event.name}?\n\nSigning in with the examination `
+        + 'password from a browser will be refused. '
+        + (running
+          ? 'Candidates already signed in from a browser are signed out within 15 minutes, at '
+            + 'their next renewal.'
+          : 'Make sure every candidate\'s machine has the app, at a current version.')
+      : `Stop requiring the desktop app for ${event.name}?\n\nCandidates will be able to sign `
+        + 'in from a browser, where monitoring is weaker and the page can be closed. Browser '
+        + 'sittings are still recorded as such.'
+    if (confirm(message)) set.mutate({ eventId: event.eventId, required: next })
+  }
+
+  return (
+    <div className={clsx('flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3',
+      required ? 'border-indigo-900 bg-indigo-950/40' : 'border-gray-800 bg-gray-900/60')}>
+      <div className="flex items-start gap-2.5">
+        <Laptop size={16} className={clsx('mt-0.5', required ? 'text-indigo-300' : 'text-gray-500')} />
+        <div>
+          <p className="text-sm font-medium text-gray-200">
+            {required ? 'Desktop app required' : 'Desktop app not required'}
+          </p>
+          <p className="mt-0.5 max-w-2xl text-xs leading-relaxed text-gray-500">
+            {required
+              ? 'Only the CPIntel desktop app can sign in with this paper\'s examination '
+                + 'password, so its restrictions apply to everyone. A browser is refused, and a '
+                + 'browser that pretends to be the app is flagged for you. Kiosk mode on the '
+                + 'lab\'s machines is what stops other programs.'
+              : 'Candidates may sit it in a browser as well as the desktop app. A browser sitting '
+                + 'is recorded as such: there the window can be left and the page closed.'}
+            {' '}Can be changed while the paper runs.
+          </p>
+        </div>
+      </div>
+      <button
+        onClick={toggle}
+        disabled={set.isPending}
+        className={clsx('rounded-lg px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-40',
+          required
+            ? 'border border-gray-800 bg-gray-900 text-gray-300 hover:bg-gray-800'
+            : 'bg-indigo-600 text-white hover:bg-indigo-500')}
+      >
+        {set.isPending ? <Loader2 size={12} className="animate-spin" />
+          : required ? 'Allow browsers' : 'Require the desktop app'}
+      </button>
+    </div>
+  )
+}
+
 function LifecycleControls({ detail }: { detail: EventDetail }) {
   const setLifecycle = useSetLifecycle()
   const remove = useDeleteEvent()

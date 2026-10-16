@@ -111,6 +111,8 @@ public class EventsDto {
         /** PUBLIC, TEAMS or USERS. */
         String visibility,
         boolean lockdownRequired,
+        /** Whether it may only be sat in the desktop app; enforced at sign-in and renewal. */
+        boolean desktopAppRequired,
         int awayThresholdSeconds,
         /** The team that owns the event, when one does. */
         Long teamId,
@@ -239,6 +241,9 @@ public class EventsDto {
 
     /** DRAFT, SCHEDULED, ACTIVE, ENDED or ARCHIVED — see the service for which moves are legal. */
     public record LifecycleRequest(@NotNull String lifecycle) {}
+
+    /** Requiring, or no longer requiring, the desktop app for an examination. */
+    public record DesktopAppRequest(@NotNull Boolean required) {}
 
     // ------------------------------------------------- the candidate's view
 

@@ -94,6 +94,28 @@ public class ExamEventService {
      */
     @Transactional
     public int report(Long userId, Long eventId, EventsDto.EventReport report) {
+        return report(userId, eventId, report, null);
+    }
+
+    /**
+     * The id suffix the examination page gives the one event saying it is running in a browser
+     * (useExamSession.ts).
+     */
+    static final String BROWSER_EVENT_SUFFIX = "-browser";
+
+    /**
+     * As {@link #report(Long, Long, EventsDto.EventReport)}, from a request that said it came
+     * from the desktop app ({@code desktopClaim}, its version) or did not (null).
+     *
+     * <p>The page knows whether it is in the desktop app, and says it is not with one event. The
+     * header is added outside the page, by the app. A browser report that arrives with the
+     * header means something other than the app added it — the shape forging it takes — so a
+     * second row says so, next to the first, for the invigilator. Its id is derived from the
+     * report's, so a resent batch does not add it twice.
+     */
+    @Transactional
+    public int report(Long userId, Long eventId, EventsDto.EventReport report,
+                      String desktopClaim) {
         GroupContest event = requireParticipant(userId, eventId);
 
         if (report.events() == null || report.events().isEmpty()) return 0;
@@ -140,6 +162,22 @@ public class ExamEventService {
                 .occurredAt(occurredAt)
                 .recordedAt(now)
                 .build());
+
+            if (desktopClaim != null && ExamEvent.Type.SUSPICIOUS_ACTIVITY.name().equals(type)
+                    && reported.eventId() != null
+                    && reported.eventId().endsWith(BROWSER_EVENT_SUFFIX)) {
+                toSave.add(ExamEvent.builder()
+                    .contest(event)
+                    .user(user)
+                    .eventId(claimId(reported.eventId()))
+                    .type(ExamEvent.Type.SUSPICIOUS_ACTIVITY.name())
+                    .detail("The page reported a browser, but its requests said they came from "
+                        + "the desktop app (" + desktopClaim + "). The desktop header was added "
+                        + "by something other than the app.")
+                    .occurredAt(occurredAt)
+                    .recordedAt(now)
+                    .build());
+            }
         }
 
         if (toSave.isEmpty()) return 0;
@@ -152,6 +190,16 @@ public class ExamEventService {
             return 0;
         }
         return toSave.size();
+    }
+
+    /**
+     * The id of the row flagging a forged desktop header: the report's own id plus a suffix, so a
+     * resent batch is caught by the same unique index. Cut from the end to fit the
+     * 64-character column, keeping the session id the report's id starts with.
+     */
+    static String claimId(String reportedId) {
+        String id = reportedId + "-claim";
+        return id.length() <= 64 ? id : reportedId.substring(0, 64 - "-claim".length()) + "-claim";
     }
 
     /**

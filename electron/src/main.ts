@@ -1,5 +1,5 @@
 import {
-  app, BrowserWindow, ipcMain, shell, dialog,
+  app, BrowserWindow, ipcMain, shell, dialog, session,
   Menu, Tray, nativeImage, nativeTheme, type IpcMainInvokeEvent,
 } from 'electron'
 import fs from 'fs'
@@ -188,6 +188,25 @@ function createTray(): void {
   tray.on('click', () => mainWindow?.show())
 }
 
+/**
+ * Says, on every request to the CPIntel server, that it comes from the desktop app.
+ *
+ * <p>An examination can require the desktop app, and the server can only tell from the request.
+ * Added here, in the main process, so the page can neither set it nor take it off, and only for
+ * the server's own origin: no other site is told anything. It is a claim rather than proof —
+ * anybody can add the same header to a browser — and the server treats it as one
+ * (backend: security/DesktopClient.java).
+ */
+function identifyToServer(): void {
+  if (!APP_ORIGIN) return
+  session.defaultSession.webRequest.onBeforeSendHeaders(
+    { urls: [`${APP_ORIGIN}/*`] },
+    (details, callback) => {
+      details.requestHeaders['X-CPIntel-Desktop'] = app.getVersion()
+      callback({ requestHeaders: details.requestHeaders })
+    })
+}
+
 // ── App lifecycle ─────────────────────────────────────────────
 
 app.whenReady().then(() => {
@@ -200,6 +219,7 @@ app.whenReady().then(() => {
     app.quit()
     return
   }
+  identifyToServer()
   createWindow()
   if (process.platform !== 'linux') createTray()
   // In the background, once the window is up: the first C++ compile after installing is slow.

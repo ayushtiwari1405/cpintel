@@ -7,6 +7,8 @@ import type { RunResponse, RunTestCase, RunTestResult } from '@/types'
 export const TIME_LIMIT_MS = 5000
 export const COMPILE_TIME_LIMIT_MS = 60_000
 export const OUTPUT_LIMIT_BYTES = 65_536
+/** The server runner's memory cap (cpintel.runner.memory-limit-mb), and so the judge's. */
+export const MEMORY_LIMIT_MB = 512
 
 /** What happened when one test was run, before it is judged. */
 export interface RawExec {
@@ -25,8 +27,24 @@ export interface RawRun {
   compileOutput: string
   compileMs: number
   runs: RawExec[]
+  /**
+   * The compiled program's static size (code, data, global arrays) in KB, when the engine could
+   * read it. Runs here have no memory cap, so this is how a too-big global array is caught.
+   */
+  staticKb?: number | null
   /** Set when nothing could be attempted at all. */
   error?: string
+}
+
+/**
+ * Whether the program's static size alone is at nine-tenths of the judge's memory limit.
+ *
+ * Under the server's cap such a program cannot even be loaded, and the judge refuses it the
+ * same way; here, with no cap, it may well run and pass. Every test is then a memory limit, so
+ * the student finds out before submitting. The same threshold as the server's RunEngine.
+ */
+export function imageTooBig(staticKb: number | null | undefined): boolean {
+  return staticKb != null && staticKb >= MEMORY_LIMIT_MB * 1024 * 0.9
 }
 
 /**
@@ -61,10 +79,18 @@ export function judge(tests: RunTestCase[], raw: RawRun): RunResponse {
     }
   }
 
+  const tooBig = imageTooBig(raw.staticKb)
+  const tooBigNote = tooBig
+    ? `\nThe program's code and global data alone take ${Math.round(raw.staticKb! / 1024)} MB, `
+      + `over the ${MEMORY_LIMIT_MB} MB the judge allows. It ran here because this computer `
+      + 'sets no limit, but the judge cannot even start it. Make the global arrays smaller.'
+    : ''
+
   const results: RunTestResult[] = raw.runs.map((exec, i) => {
     const test = tests[i]
     const verdict: RunTestResult['verdict'] =
-      exec.timedOut ? 'TIME_LIMIT_EXCEEDED'
+      tooBig ? 'MEMORY_LIMIT_EXCEEDED'
+        : exec.timedOut ? 'TIME_LIMIT_EXCEEDED'
         : exec.exitCode !== 0 ? (outOfMemory(exec.stderr) ? 'MEMORY_LIMIT_EXCEEDED' : 'RUNTIME_ERROR')
           : test.expected == null ? 'NO_EXPECTED'
             : matches(exec.stdout, test.expected) ? 'OK' : 'WRONG_ANSWER'
@@ -74,7 +100,7 @@ export function judge(tests: RunTestCase[], raw: RawRun): RunResponse {
       input: test.input,
       expected: test.expected,
       actual: exec.stdout,
-      stderr: exec.stderr,
+      stderr: exec.stderr + tooBigNote,
       durationMs: exec.durationMs,
       exitCode: exec.exitCode === 0 ? null : exec.exitCode,
       truncated: exec.truncated,

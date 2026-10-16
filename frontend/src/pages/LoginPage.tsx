@@ -14,6 +14,11 @@ export default function LoginPage() {
   const examEnded = new URLSearchParams(window.location.search).has('exam-ended')
   // Set when an ordinary session was closed because the person's examination is running.
   const examRunning = new URLSearchParams(window.location.search).has('exam-in-progress')
+  // Set when an examination session was closed because its paper must be sat in the desktop app,
+  // and shown too when signing in here was refused for that reason.
+  const desktopRequired = new URLSearchParams(window.location.search).has('desktop-app-required')
+    || (login.error as { response?: { data?: { code?: string } } } | null)
+      ?.response?.data?.code === 'DESKTOP_APP_REQUIRED'
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -49,6 +54,21 @@ export default function LoginPage() {
               leading-relaxed text-gray-300">
               Your examination is running, so you have been signed out of your account until it
               ends. Sign in with your username and the examination password on your slip.
+            </p>
+          )}
+
+          {desktopRequired && (
+            <p className="mb-4 rounded-lg border border-amber-900 bg-amber-950/40 px-3 py-2 text-xs
+              leading-relaxed text-amber-200">
+              Your examination can only be sat in the CPIntel desktop app. Open the app on this
+              computer and sign in there with the same examination password.{' '}
+              {!isDesktop() && (
+                <Link to="/download" className="underline hover:text-amber-100">
+                  Get the desktop app.
+                </Link>
+              )}
+              {isDesktop() && 'This copy of the app is too old to be recognised: update it from '
+                + 'the download page.'}
             </p>
           )}
 

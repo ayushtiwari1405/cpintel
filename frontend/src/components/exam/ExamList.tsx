@@ -1,5 +1,7 @@
 import { formatDistanceToNow } from 'date-fns'
-import { ArrowRight, CalendarClock, Eye, FileText, Loader2, ShieldCheck } from 'lucide-react'
+import { ArrowRight, CalendarClock, Eye, FileText, Laptop, Loader2, ShieldCheck } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { isDesktop } from '@/utils/desktopBridge'
 import { clsx } from 'clsx'
 
 import type { EventSummary } from '@/types'
@@ -114,6 +116,12 @@ export function ExamList({ exams, isLoading, onEnter, entering }: Props) {
                       monitored · {exam.awayThresholdSeconds}s away allowed
                     </span>
                   )}
+                  {exam.desktopAppRequired && !over && (
+                    <span className="flex items-center gap-1.5 text-indigo-300">
+                      <Laptop size={12} />
+                      desktop app only
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -134,6 +142,21 @@ export function ExamList({ exams, isLoading, onEnter, entering }: Props) {
                 {label}
               </button>
             </div>
+
+            {exam.desktopAppRequired && !over && !isDesktop() && (
+              <p className="mt-3 flex items-start gap-2 rounded-lg border border-amber-900
+                bg-amber-950/40 px-3 py-2 text-xs leading-relaxed text-amber-200">
+                <Laptop size={13} className="mt-0.5 flex-shrink-0" />
+                <span>
+                  This paper can only be sat in the CPIntel desktop app. A browser will not be
+                  let in with the examination password.{' '}
+                  <Link to="/download" className="underline hover:text-amber-100">
+                    Get the desktop app
+                  </Link>{' '}
+                  before it starts.
+                </span>
+              </p>
+            )}
 
             {over && (
               <p className="mt-3 flex items-start gap-2 rounded-lg border border-gray-800

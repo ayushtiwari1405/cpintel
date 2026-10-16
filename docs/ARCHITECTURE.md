@@ -490,8 +490,13 @@ Python's `MemoryError` — is reported as a memory limit rather than a runtime e
 (`RunEngine`) two silent cases are caught as well: a crash after the run's peak memory, measured
 with GNU time, reached nine-tenths of the cap (a C program that carries on with a null `malloc`),
 and a crash of a program whose static image, read from its ELF load segments, is that large on
-its own (a global array too big for the cap, which dies at exec having used nothing). In the
-browser and the desktop app's local runs neither is measured, and those stay runtime errors. With `cpintel.runner.exam-only` on — the default — the server refuses a
+its own (a global array too big for the cap, which dies at exec having used nothing). Runs on the
+student's own machine have no memory cap at all, so there a too-big global array would simply run
+and pass; instead the program's static size is read after the build — ELF, PE or Mach-O headers in
+the desktop app (`electron/src/staticImage.ts`), the initial memory less the stack in the browser
+(`runner/browser/wasmImage.ts`) — and at nine-tenths of the server's 512 MB every test is a memory
+limit, with a line saying why (`judge.ts`). Peak memory is not measured locally, so the silent
+`malloc` crash stays a runtime error there. With `cpintel.runner.exam-only` on — the default — the server refuses a
 run from any session that is not an examination's, so an outdated page or a script cannot load
 the runner either; the language list stays open, since the page still asks it which languages an
 event allows.
@@ -996,6 +1001,30 @@ can be throttled or frozen, and anything running in the page can be closed outri
 numbers are a floor rather than a measurement. That is why an examination sat in a browser also
 reports `LOCKDOWN_UNAVAILABLE`: an admin sees that this is the weaker kind of monitoring rather
 than seeing a suspiciously clean record.
+
+### Desktop app only
+
+An examination can require the desktop app (`desktop_app_required`, off by default). Whether to
+is the college's decision, so it is a per-examination toggle on the examination's page, and,
+unlike the rest of its settings, it can be changed while the paper runs: if the app fails on the
+lab's machines, the invigilator lets the room carry on in a browser.
+
+The server enforces it, since the page cannot be trusted to. The desktop app's main process adds
+`X-CPIntel-Desktop: <version>` to every request to its own server (`identifyToServer` in
+`electron/src/main.ts`); the page can neither set nor remove it, and no other site is sent it.
+With the requirement on, the examination password signs a candidate in only on a request that
+carries it, and every renewal of the session is checked too (`AuthService`), so a session carried
+into a browser, or a paper switched to desktop-only mid-sitting, ends within the access token's
+fifteen minutes. The refusal is `403 DESKTOP_APP_REQUIRED` and the login page explains it, with
+the download link; an app too old to send the header is told to update.
+
+The header is a claim, not proof (`security/DesktopClient`): the app is open source and its
+installers unsigned, so anybody determined can add the same header to a browser. It stops the
+ordinary case, a candidate opening the paper in a browser, and forging it is not quiet: the page
+still knows it is in a browser and reports it, and that report arriving with the header gets a
+second row in the session log saying the header was added by something else (`ExamEventService`).
+What takes the browser away entirely is kiosk mode on the lab's machines (Windows assigned access,
+or a Linux kiosk session that starts only the app), which is a lab setup step rather than code.
 
 ### Where the heartbeat came from
 

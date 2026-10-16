@@ -109,6 +109,15 @@ public class GroupContest extends BaseEntity {
     @Builder.Default
     private Integer awayThresholdSeconds = 10;
 
+    /**
+     * Whether the examination may only be sat in the CPIntel desktop app. Unlike the desktop
+     * policy, which is what the app is asked to do, this is enforced by the server: at
+     * examination sign-in and at every renewal of the session. See {@code DesktopClient}.
+     */
+    @Column(name = "desktop_app_required", nullable = false)
+    @Builder.Default
+    private Boolean desktopAppRequired = false;
+
     /** The desktop restrictions this event asks the locked-down client to apply, as JSON. */
     @Column(name = "desktop_policy", columnDefinition = "TEXT")
     private String desktopPolicy;

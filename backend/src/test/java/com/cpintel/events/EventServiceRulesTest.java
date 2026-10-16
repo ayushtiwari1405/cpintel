@@ -122,6 +122,41 @@ class EventServiceRulesTest {
     class ExamRules {
 
         @Test
+        @DisplayName("the desktop-app requirement can be switched while the paper runs")
+        void desktopAppToggleWhileRunning() {
+            GroupContest running = GroupContest.builder().contestId(EVENT).classroomId(CLASSROOM)
+                .kind("EXAM").platform("DOMJUDGE").externalId(MIDSEM).name("Mid-semester")
+                .lifecycle("SCHEDULED")
+                .startsAt(Instant.now().minus(Duration.ofMinutes(10)))
+                .endsAt(Instant.now().plus(Duration.ofHours(1))).build();
+            stubDetailRead(running);
+
+            assertTrue(service.setDesktopAppRequired(ADMIN, EVENT, true, null)
+                .event().desktopAppRequired());
+            assertTrue(running.getDesktopAppRequired());
+
+            assertFalse(service.setDesktopAppRequired(ADMIN, EVENT, false, null)
+                .event().desktopAppRequired());
+        }
+
+        @Test
+        @DisplayName("only an examination can require the desktop app, and not once it is done")
+        void desktopAppToggleRefusals() {
+            GroupContest contest = GroupContest.builder().contestId(EVENT).classroomId(CLASSROOM)
+                .kind("CONTEST").platform("DOMJUDGE").externalId(MIDSEM).name("Weekly").build();
+            stubDetailRead(contest);
+            assertThrows(ApiException.class,
+                () -> service.setDesktopAppRequired(ADMIN, EVENT, true, null));
+
+            GroupContest done = GroupContest.builder().contestId(EVENT).classroomId(CLASSROOM)
+                .kind("EXAM").platform("DOMJUDGE").externalId(MIDSEM).name("Mid-semester")
+                .completedAt(Instant.now()).build();
+            stubDetailRead(done);
+            assertThrows(ApiException.class,
+                () -> service.setDesktopAppRequired(ADMIN, EVENT, true, null));
+        }
+
+        @Test
         @DisplayName("a bare DOMjudge contest id is stored qualified with the event's classroom")
         void bareIdQualified() {
             EventsDto.EventRequest base = request("EXAM", "DOMJUDGE", null);

@@ -1,6 +1,7 @@
 # What is worth noticing while a paper is running. Prometheus evaluates these every 15 s; they
 # show on its Alerts page (http://127.0.0.1:9090/alerts, over an SSH tunnel) and in Grafana.
-# There is no Alertmanager, so nothing is sent anywhere: somebody watches during a sitting.
+# Firing alerts also go to Alertmanager, which emails them to CPINTEL_ALERT_EMAIL when SMTP is
+# set up (monitoring/alertmanager-start.sh); without it, somebody watches during a sitting.
 groups:
   - name: cpintel
     rules:
