@@ -4,8 +4,10 @@ import {
   useSetPolicyDefault,
 } from '@/hooks/useAdmin'
 import { Ago, EmptyRow, Panel, Pill } from '@/components/admin/AdminUi'
-import { Info, Loader2, Plus, RotateCcw, Trash2 } from 'lucide-react'
+import { Info, Plus, RotateCcw, Trash2 } from 'lucide-react'
 import { clsx } from 'clsx'
+import { ErrorState, LoadingState } from '@/components/common/States'
+import { PageHeader } from '@/components/common/PageHeader'
 
 const PLATFORMS = ['CODEFORCES', 'DOMJUDGE']
 
@@ -21,7 +23,7 @@ const PLATFORMS = ['CODEFORCES', 'DOMJUDGE']
  * the library itself stays exactly where its owner left it.
  */
 export default function AdminContestFilesPage() {
-  const { data, isLoading } = useContestFilePolicy()
+  const { data, isLoading, isError, error, refetch } = useContestFilePolicy()
   const setDefault = useSetPolicyDefault()
   const clearDefault = useClearPolicyDefault()
   const setRule = useSetContestRule()
@@ -37,13 +39,8 @@ export default function AdminContestFilesPage() {
   const trimmedId = contestId.trim()
   const canAdd = trimmedId !== ''
 
-  if (isLoading || !data) {
-    return (
-      <div className="flex items-center justify-center gap-2 py-20 text-sm text-gray-500">
-        <Loader2 size={16} className="animate-spin" /> Loading the policy…
-      </div>
-    )
-  }
+  if (isError) return <ErrorState title="Could not load the contest file policy" error={error} onRetry={() => refetch()} />
+  if (isLoading || !data) return <LoadingState label="Loading the policy…" />
 
   const submitRule = () => {
     if (!canAdd) return
@@ -55,6 +52,8 @@ export default function AdminContestFilesPage() {
 
   return (
     <div className="space-y-4">
+      <PageHeader eyebrow="Console" title="Contest files"
+        description="Whether contestants may open their personal files during a contest." className="mb-2" />
       <Panel
         title="Default for every contest"
         description="What a contest does unless it has a rule of its own"
@@ -90,7 +89,7 @@ export default function AdminContestFilesPage() {
               'disabled:opacity-50',
               data.defaultEnabled
                 ? 'border border-gray-800 text-gray-300 hover:bg-red-900/30 hover:text-red-400'
-                : 'bg-indigo-600 text-white hover:bg-indigo-500'
+                : 'bg-accent-600 text-white hover:bg-accent-500'
             )}
           >
             {data.defaultEnabled ? 'Turn off everywhere' : 'Turn on everywhere'}
@@ -105,7 +104,7 @@ export default function AdminContestFilesPage() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-800 text-left text-xs text-gray-500">
+              <tr className="border-b border-gray-800 text-left text-[11px] uppercase tracking-wide text-gray-500">
                 <th className="px-4 py-2 font-medium">Contest</th>
                 <th className="px-4 py-2 font-medium">Personal files</th>
                 <th className="px-4 py-2 font-medium">Note</th>
@@ -121,7 +120,7 @@ export default function AdminContestFilesPage() {
               )}
               {data.rules.map(rule => (
                 <tr key={`${rule.platform}-${rule.contestId}`}
-                  className="transition-colors hover:bg-gray-800/40">
+                  className="transition-colors hover:bg-gray-850/60">
                   <td className="px-4 py-2.5 text-gray-200">
                     {rule.platform} · {rule.contestId}
                   </td>
@@ -165,7 +164,7 @@ export default function AdminContestFilesPage() {
               value={platform}
               onChange={e => setPlatform(e.target.value)}
               className="rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 text-sm
-                         text-gray-300 outline-none focus:border-indigo-600"
+                         text-gray-300 outline-none focus:border-accent-600"
             >
               {PLATFORMS.map(p => <option key={p} value={p}>{p}</option>)}
             </select>
@@ -179,7 +178,7 @@ export default function AdminContestFilesPage() {
               placeholder="2259"
               inputMode="numeric"
               className="w-28 rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 text-sm
-                         text-gray-200 placeholder-gray-600 outline-none focus:border-indigo-600"
+                         text-gray-200 placeholder-gray-400 outline-none focus:border-accent-600"
             />
           </label>
 
@@ -189,7 +188,7 @@ export default function AdminContestFilesPage() {
               value={enabled ? 'true' : 'false'}
               onChange={e => setEnabled(e.target.value === 'true')}
               className="rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 text-sm
-                         text-gray-300 outline-none focus:border-indigo-600"
+                         text-gray-300 outline-none focus:border-accent-600"
             >
               <option value="false">Blocked</option>
               <option value="true">Allowed</option>
@@ -204,15 +203,15 @@ export default function AdminContestFilesPage() {
               placeholder="Proctored round"
               maxLength={200}
               className="rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 text-sm
-                         text-gray-200 placeholder-gray-600 outline-none focus:border-indigo-600"
+                         text-gray-200 placeholder-gray-400 outline-none focus:border-accent-600"
             />
           </label>
 
           <button
             onClick={submitRule}
             disabled={!canAdd || setRule.isPending}
-            className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-sm
-              font-medium text-white transition-colors hover:bg-indigo-500
+            className="flex items-center gap-1.5 rounded-lg bg-accent-600 px-3 py-2 text-sm
+              font-medium text-white transition-colors hover:bg-accent-500
               disabled:cursor-not-allowed disabled:opacity-40"
           >
             <Plus size={14} /> Add rule

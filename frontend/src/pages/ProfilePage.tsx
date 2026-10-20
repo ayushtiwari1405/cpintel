@@ -5,6 +5,8 @@ import { userApi } from '@/api/userApi'
 import { useToast } from '@/components/common/Toaster'
 import { Save, Loader2 } from 'lucide-react'
 import { ChangePasswordCard } from '@/components/common/ChangePasswordCard'
+import { PageHeader } from '@/components/common/PageHeader'
+import { roleLabel } from '@/utils/roles'
 
 export default function ProfilePage() {
   const { user } = useAuth()
@@ -31,25 +33,22 @@ export default function ProfilePage() {
 
   return (
     <div className="space-y-6 max-w-xl">
-      <div>
-        <h1 className="text-2xl font-semibold text-gray-50">Profile</h1>
-        <p className="text-gray-400 text-sm mt-0.5">Manage your account details</p>
-      </div>
+      <PageHeader title="Profile" description="Your account details and password." className="mb-0" />
 
-      {/* Avatar */}
-      <div className="flex items-center gap-4">
-        <div className="w-16 h-16 rounded-2xl bg-indigo-600 flex items-center
-          justify-center text-2xl font-bold text-white flex-shrink-0">
+      <div className="flex items-center gap-4 rounded-xl border border-gray-800 bg-gray-900 p-4">
+        <span aria-hidden="true" className="flex h-14 w-14 flex-shrink-0 items-center justify-center
+          rounded-lg border border-accent-800/70 bg-accent-950/60 font-mono text-xl font-semibold
+          text-accent-300">
           {user?.username?.[0]?.toUpperCase()}
-        </div>
-        <div>
-          <p className="text-gray-50 font-medium">{user?.username}</p>
-          <p className="text-gray-400 text-sm">{user?.email}</p>
-          <div className="flex gap-2 mt-1">
-            <span className="badge badge-blue">{user?.role}</span>
+        </span>
+        <div className="min-w-0">
+          <p className="truncate font-mono font-medium text-gray-50">{user?.username}</p>
+          <p className="truncate text-sm text-gray-400">{user?.email}</p>
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {user?.role && <span className="badge-blue">{roleLabel(user.role)}</span>}
             {user?.isVerified
-              ? <span className="badge badge-green">Verified</span>
-              : <span className="badge badge-yellow">Unverified</span>
+              ? <span className="badge-green">Verified</span>
+              : <span className="badge-yellow">Unverified</span>
             }
           </div>
         </div>
@@ -62,8 +61,9 @@ export default function ProfilePage() {
           { key: 'avatarUrl',   label: 'Avatar URL',   placeholder: 'https://...' },
         ].map(({ key, label, placeholder }) => (
           <div key={key}>
-            <label className="block text-sm font-medium text-gray-300 mb-1.5">{label}</label>
+            <label htmlFor={`profile-${key}`} className="mb-1.5 block text-sm font-medium text-gray-300">{label}</label>
             <input
+              id={`profile-${key}`}
               className="input"
               placeholder={placeholder}
               value={form[key as keyof typeof form]}
@@ -94,17 +94,19 @@ export default function ProfilePage() {
       <ChangePasswordCard neverChanged={user?.passwordChangedAt == null} />
 
       {/* Account info */}
-      <div className="card space-y-3 text-sm">
-        <p className="text-gray-300 font-medium">Account info</p>
-        <div className="flex justify-between text-gray-400">
-          <span>Member since</span>
-          <span>{user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : '—'}</span>
-        </div>
-        <div className="flex justify-between text-gray-400">
-          <span>User ID</span>
-          <span className="font-mono text-xs">{user?.userId}</span>
-        </div>
-      </div>
+      <section className="card text-sm" aria-labelledby="account-info">
+        <h2 id="account-info" className="mb-3 font-medium text-gray-200">Account</h2>
+        <dl className="divide-y divide-gray-800">
+          <div className="flex justify-between gap-4 py-2">
+            <dt className="text-gray-400">Member since</dt>
+            <dd className="text-gray-200">{user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : '—'}</dd>
+          </div>
+          <div className="flex justify-between gap-4 py-2">
+            <dt className="text-gray-400">User ID</dt>
+            <dd className="font-mono text-xs text-gray-200">{user?.userId}</dd>
+          </div>
+        </dl>
+      </section>
     </div>
   )
 }

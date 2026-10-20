@@ -69,8 +69,8 @@ export class ErrorBoundary extends Component<Props, State> {
           <div className="mt-4 flex gap-2">
             <button
               onClick={this.reset}
-              className="flex items-center gap-2 rounded-lg bg-indigo-600 px-3 py-2 text-sm
-                         font-medium text-white transition-colors hover:bg-indigo-500"
+              className="flex items-center gap-2 rounded-lg bg-accent-600 px-3 py-2 text-sm
+                         font-medium text-white transition-colors hover:bg-accent-500"
             >
               <RotateCcw size={14} /> Try again
             </button>

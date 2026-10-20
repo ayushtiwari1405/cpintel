@@ -13,6 +13,7 @@ import {
 import type { IssuedPasscode } from '@/types'
 import { downloadSpreadsheet } from '@/utils/spreadsheet'
 import { copyText } from '@/utils/clipboard'
+import { ErrorState, LoadingState } from '@/components/common/States'
 
 /**
  * The passwords that open one examination, and the screen that prints them.
@@ -44,7 +45,7 @@ import { copyText } from '@/utils/clipboard'
  */
 export function ExamPasswordsTab({ eventId }: { eventId: number }) {
   const toast = useToast()
-  const { data: status, isLoading } = useExamPasswordStatus(eventId)
+  const { data: status, isLoading, isError, error, refetch } = useExamPasswordStatus(eventId)
 
   const [sharedPassword, setSharedPassword] = useState<string | null>(null)
   const [codes, setCodes] = useState<IssuedPasscode[] | null>(null)
@@ -79,13 +80,8 @@ export function ExamPasswordsTab({ eventId }: { eventId: number }) {
     }
   }
 
-  if (isLoading || !status) {
-    return (
-      <div className="flex items-center justify-center gap-2 py-16 text-sm text-gray-500">
-        <Loader2 size={14} className="animate-spin" /> Loading…
-      </div>
-    )
-  }
+  if (isError) return <ErrorState title="Could not load the examination passwords" error={error} onRetry={() => refetch()} />
+  if (isLoading || !status) return <LoadingState label="Loading…" />
 
   return (
     <div className="space-y-4">
@@ -124,8 +120,8 @@ export function ExamPasswordsTab({ eventId }: { eventId: number }) {
                 onSuccess: (res) => setSharedPassword(res.data.password),
               })}
               disabled={!status.keyConfigured || generate.isPending}
-              className="flex items-center gap-1.5 rounded-md bg-indigo-600 px-2.5 py-1.5
-                text-xs font-medium text-white transition-colors hover:bg-indigo-500
+              className="flex items-center gap-1.5 rounded-md bg-accent-600 px-2.5 py-1.5
+                text-xs font-medium text-white transition-colors hover:bg-accent-500
                 disabled:cursor-not-allowed disabled:opacity-40"
             >
               {generate.isPending
@@ -224,8 +220,8 @@ export function ExamPasswordsTab({ eventId }: { eventId: number }) {
                 onSuccess: (res) => setCodes(res.data),
               })}
               disabled={!status.keyConfigured || issue.isPending}
-              className="flex items-center gap-1.5 rounded-md bg-indigo-600 px-2.5 py-1.5
-                text-xs font-medium text-white transition-colors hover:bg-indigo-500
+              className="flex items-center gap-1.5 rounded-md bg-accent-600 px-2.5 py-1.5
+                text-xs font-medium text-white transition-colors hover:bg-accent-500
                 disabled:cursor-not-allowed disabled:opacity-40"
             >
               {issue.isPending
@@ -237,7 +233,7 @@ export function ExamPasswordsTab({ eventId }: { eventId: number }) {
         }
       >
         <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
-          <Pill tone={status.passcodesIssued > 0 ? 'indigo' : 'gray'}>
+          <Pill tone={status.passcodesIssued > 0 ? 'accent' : 'gray'}>
             {status.passcodesIssued} issued
           </Pill>
           <span>of {status.participantCount} assigned</span>

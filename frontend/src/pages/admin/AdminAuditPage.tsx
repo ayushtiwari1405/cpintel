@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useAdminAudit } from '@/hooks/useAdmin'
 import { Ago, EmptyRow, Pager, Panel, Pill, actionLabel, actionTone } from '@/components/admin/AdminUi'
 import { Loader2, Search } from 'lucide-react'
+import { PageHeader } from '@/components/common/PageHeader'
 
 const RANGES = [
   { label: 'Last 24 hours', hours: 24 },
@@ -48,12 +49,14 @@ export default function AdminAuditPage() {
 
   return (
     <div className="space-y-4">
+      <PageHeader eyebrow="Console" title="Audit trail"
+        description="Every sign-in and administrative change, newest first. Entries are never edited." className="mb-2" />
       <div className="flex flex-wrap items-center gap-2">
         <select
           value={action}
           onChange={e => { setAction(e.target.value); setPage(0) }}
           className="rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 text-sm text-gray-300
-                     outline-none focus:border-indigo-600"
+                     outline-none focus:border-accent-600"
         >
           <option value="">Every action</option>
           {(data?.actions ?? []).map(a => (
@@ -65,7 +68,7 @@ export default function AdminAuditPage() {
           value={range}
           onChange={e => setRange(Number(e.target.value))}
           className="rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 text-sm text-gray-300
-                     outline-none focus:border-indigo-600"
+                     outline-none focus:border-accent-600"
         >
           {RANGES.map(r => <option key={r.hours} value={r.hours}>{r.label}</option>)}
         </select>
@@ -78,7 +81,7 @@ export default function AdminAuditPage() {
             placeholder="User ID"
             inputMode="numeric"
             className="w-32 rounded-lg border border-gray-800 bg-gray-900 py-2 pl-9 pr-3 text-sm
-                       text-gray-200 placeholder-gray-600 outline-none focus:border-indigo-600"
+                       text-gray-200 placeholder-gray-400 outline-none focus:border-accent-600"
           />
         </div>
 
@@ -95,7 +98,7 @@ export default function AdminAuditPage() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-800 text-left text-xs text-gray-500">
+              <tr className="border-b border-gray-800 text-left text-[11px] uppercase tracking-wide text-gray-500">
                 <th className="px-4 py-2 font-medium">Action</th>
                 <th className="px-4 py-2 font-medium">Account</th>
                 <th className="px-4 py-2 font-medium">Detail</th>
@@ -111,7 +114,7 @@ export default function AdminAuditPage() {
                 </EmptyRow>
               )}
               {data?.entries.map(entry => (
-                <tr key={entry.logId} className="transition-colors hover:bg-gray-800/40">
+                <tr key={entry.logId} className="transition-colors hover:bg-gray-850/60">
                   <td className="px-4 py-2.5">
                     <Pill tone={actionTone(entry.action)}>{actionLabel(entry.action)}</Pill>
                   </td>

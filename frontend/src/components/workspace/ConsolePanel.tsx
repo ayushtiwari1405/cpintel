@@ -179,8 +179,8 @@ export function ConsolePanel({
                     rows={4}
                     placeholder="The stdin your program reads"
                     className="w-full rounded-lg border border-gray-800 bg-gray-900 px-3 py-2
-                               font-mono text-xs text-gray-200 placeholder-gray-700 resize-y
-                               outline-none focus:border-indigo-600 disabled:opacity-50"
+                               font-mono text-xs text-gray-200 placeholder-gray-400 resize-y
+                               outline-none focus:border-accent-600 disabled:opacity-50"
                   />
                 </Labelled>
 
@@ -196,8 +196,8 @@ export function ConsolePanel({
                     rows={3}
                     placeholder="Leave empty to print the output without judging it"
                     className="w-full rounded-lg border border-gray-800 bg-gray-900 px-3 py-2
-                               font-mono text-xs text-gray-200 placeholder-gray-700 resize-y
-                               outline-none focus:border-indigo-600 disabled:opacity-50"
+                               font-mono text-xs text-gray-200 placeholder-gray-400 resize-y
+                               outline-none focus:border-accent-600 disabled:opacity-50"
                   />
                 </Labelled>
               </>

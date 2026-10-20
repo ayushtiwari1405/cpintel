@@ -1,9 +1,10 @@
 import { Link } from 'react-router-dom'
-import { Loader2, Scale } from 'lucide-react'
+import { Scale } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useSetSkillBasis, useSkillBasis } from '@/hooks/useAnalytics'
 import type { SkillBasis } from '@/types'
 import { BASIS_LABEL } from './skill'
+import { ErrorState, LoadingState } from '@/components/common/States'
 
 const OPTIONS: { value: SkillBasis['requested']; label: string; hint: string }[] = [
   { value: 'AUTO', label: 'Automatic',
@@ -18,16 +19,11 @@ const OPTIONS: { value: SkillBasis['requested']; label: string; hint: string }[]
 
 /** What skill ratings are based on, and the switch between the two sources. */
 export function SkillBasisPanel() {
-  const { data, isLoading } = useSkillBasis()
+  const { data, isLoading, isError, error, refetch } = useSkillBasis()
   const set = useSetSkillBasis()
 
-  if (isLoading || !data) {
-    return (
-      <div className="card flex items-center justify-center h-24">
-        <Loader2 size={18} className="animate-spin text-indigo-400" />
-      </div>
-    )
-  }
+  if (isError) return <ErrorState title="Could not load what your ratings are based on" error={error} onRetry={() => refetch()} />
+  if (isLoading || !data) return <div className="card"><LoadingState className="py-6" /></div>
 
   const unavailable = (v: SkillBasis['requested']) =>
     (v === 'CODEFORCES' && !data.codeforcesAvailable)
@@ -38,7 +34,7 @@ export function SkillBasisPanel() {
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <p className="text-sm font-medium text-gray-300 flex items-center gap-1.5">
-            <Scale size={14} className="text-indigo-400" /> What your ratings are based on
+            <Scale size={14} className="text-accent-400" /> What your ratings are based on
           </p>
           <p className="text-xs text-gray-500 mt-1">
             {data.basis
@@ -61,7 +57,7 @@ export function SkillBasisPanel() {
               className={clsx(
                 'px-3 py-1 rounded-md text-xs font-medium transition-colors',
                 data.requested === o.value
-                  ? 'bg-indigo-600 text-white'
+                  ? 'bg-accent-600 text-white'
                   : 'text-gray-400 hover:text-gray-200',
                 unavailable(o.value) && data.requested !== o.value && 'opacity-50',
               )}>
@@ -72,7 +68,7 @@ export function SkillBasisPanel() {
       </div>
       {!data.gauntletAvailable && (
         <p className="text-xs text-gray-500">
-          The <Link to="/roadmap/gauntlet" className="text-indigo-400 hover:underline">placement
+          The <Link to="/roadmap/gauntlet" className="text-accent-400 hover:underline">placement
           gauntlet</Link> gives a rating per area that does not depend on Codeforces. Like any
           test taken alone it proves nothing, but it is your own work.
         </p>

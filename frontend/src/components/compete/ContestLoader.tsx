@@ -39,7 +39,7 @@ export function ContestLoader({ onLoad, loading }: Props) {
   return (
     <div className="card max-w-2xl mx-auto mt-10 flex flex-col gap-4">
       <div className="flex items-center gap-2">
-        <Swords size={18} className="text-indigo-400" />
+        <Swords size={18} className="text-accent-400" />
         <span className="text-base font-medium text-gray-100">Compete</span>
       </div>
 
@@ -53,15 +53,15 @@ export function ContestLoader({ onLoad, loading }: Props) {
             className={clsx(
               'flex items-start gap-3 rounded-xl border px-4 py-3 text-left transition-colors',
               platform === id
-                ? 'border-indigo-600 bg-indigo-600/10'
+                ? 'border-accent-600 bg-accent-600/10'
                 : 'border-gray-800 bg-gray-900 hover:border-gray-700 hover:bg-gray-800/60'
             )}
           >
             <Icon size={18} className={clsx('mt-0.5 flex-shrink-0',
-              platform === id ? 'text-indigo-400' : 'text-gray-500')} />
+              platform === id ? 'text-accent-400' : 'text-gray-500')} />
             <span className="min-w-0">
               <span className={clsx('block text-sm font-medium',
-                platform === id ? 'text-indigo-200' : 'text-gray-200')}>
+                platform === id ? 'text-accent-200' : 'text-gray-200')}>
                 {label}
               </span>
               <span className="block text-xs text-gray-500">{blurb}</span>

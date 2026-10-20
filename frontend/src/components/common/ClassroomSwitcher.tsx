@@ -30,7 +30,7 @@ export function ClassroomSwitcher({ value, onChange }: Props) {
           className={clsx(
             'rounded-md px-2.5 py-1 text-xs transition-colors',
             value === option.id
-              ? 'bg-indigo-600/20 text-indigo-300'
+              ? 'bg-accent-600/20 text-accent-300'
               : 'text-gray-500 hover:bg-gray-800/60 hover:text-gray-300'
           )}
         >

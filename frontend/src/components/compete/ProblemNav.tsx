@@ -43,13 +43,13 @@ export function ProblemNav({ problems, selected, onSelect, submissions }: Props)
             title={p.name ?? p.index}
             className={clsx(
               'flex items-center gap-2 px-2 py-2 rounded-lg text-left transition-colors',
-              active ? 'bg-indigo-600/20 border border-indigo-700'
+              active ? 'bg-accent-600/20 border border-accent-700'
                 : 'border border-transparent hover:bg-gray-800'
             )}
           >
             <span className={clsx(
               'font-mono text-sm w-5 flex-shrink-0',
-              active ? 'text-indigo-300' : 'text-gray-300'
+              active ? 'text-accent-300' : 'text-gray-300'
             )}>
               {p.index}
             </span>

@@ -12,7 +12,7 @@ import {
 import type { EvaluationCell } from '@/types'
 
 const field = `rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 text-sm text-gray-200
-               placeholder-gray-600 outline-none focus:border-indigo-600`
+               placeholder-gray-400 outline-none focus:border-accent-600`
 
 /** Marks as a person would write them: 30, 12.5 — never 30.0. */
 function marks(value: number): string {
@@ -173,7 +173,7 @@ export function EvaluationSheet({ source }: { source: EvaluationSource }) {
                           bg-gray-900">
             <table className="w-full text-sm">
               <thead className="sticky top-0 bg-gray-900">
-                <tr className="border-b border-gray-800 text-left text-xs text-gray-500">
+                <tr className="border-b border-gray-800 text-left text-[11px] uppercase tracking-wide text-gray-500">
                   <th className="px-3 py-2 font-medium">Student</th>
                   <th className="px-2 py-2 font-medium">Q</th>
                   <th className="px-2 py-2 font-medium">Judge</th>
@@ -189,7 +189,7 @@ export function EvaluationSheet({ source }: { source: EvaluationSource }) {
                 {shown.map(c => (
                   <tr key={keyOf(c)} onClick={() => setSelected(keyOf(c))}
                     className={clsx('cursor-pointer',
-                      keyOf(c) === selected ? 'bg-indigo-950/50' : 'hover:bg-gray-800/50')}>
+                      keyOf(c) === selected ? 'bg-accent-950/50' : 'hover:bg-gray-800/50')}>
                     <td className="px-3 py-2">
                       <span className="text-gray-200">{c.username}</span>
                       {c.fullName && (
@@ -205,7 +205,7 @@ export function EvaluationSheet({ source }: { source: EvaluationSource }) {
                     <td className="px-2 py-2"><Verdict cell={c} /></td>
                     <td className="px-3 py-2 text-right tabular-nums">
                       {c.marks != null
-                        ? <span className="text-indigo-300">{marks(c.marks)}</span>
+                        ? <span className="text-accent-300">{marks(c.marks)}</span>
                         : <span className="text-gray-600">{marks(c.autoMarks)}</span>}
                       <span className="text-gray-700">/{marks(c.maxMarks)}</span>
                     </td>
@@ -360,8 +360,8 @@ function Reader({ source, cell, editable, open, onSaved }: {
         {editable && (
           <div className="flex flex-wrap items-center gap-2">
             <button onClick={submit} disabled={save.isPending || parsed == null || invalid}
-              className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-sm
-                         font-medium text-white hover:bg-indigo-500 disabled:opacity-40">
+              className="flex items-center gap-1.5 rounded-lg bg-accent-600 px-3 py-2 text-sm
+                         font-medium text-white hover:bg-accent-500 disabled:opacity-40">
               {save.isPending ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
               Save and next
             </button>

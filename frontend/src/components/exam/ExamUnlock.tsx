@@ -67,8 +67,8 @@ export function ExamUnlock({ exam, onLeave }: Props) {
       <div className="rounded-2xl border border-gray-800 bg-gray-900 p-7">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl
-            bg-indigo-950 border border-indigo-900">
-            <Lock size={18} className="text-indigo-400" />
+            bg-accent-950 border border-accent-900">
+            <Lock size={18} className="text-accent-400" />
           </div>
           <div className="min-w-0">
             <h1 className="truncate text-lg font-semibold text-gray-50">{exam.event.name}</h1>

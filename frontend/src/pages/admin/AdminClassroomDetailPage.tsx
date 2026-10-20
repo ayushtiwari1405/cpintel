@@ -13,9 +13,11 @@ import { useClassroomTaActions, useClassroomTas } from '@/hooks/useEvaluation'
 import { Ago, EmptyRow, Panel, Pill } from '@/components/admin/AdminUi'
 import type { ClassroomSummary, TaAdded } from '@/types'
 import { copyText } from '@/utils/clipboard'
+import { ErrorState, LoadingState } from '@/components/common/States'
+import { PageHeader } from '@/components/common/PageHeader'
 
 const field = `rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 text-sm text-gray-200
-               placeholder-gray-600 outline-none focus:border-indigo-600`
+               placeholder-gray-400 outline-none focus:border-accent-600`
 
 /**
  * One classroom: its judge, who is enrolled, who runs it, and the teams inside it.
@@ -28,15 +30,11 @@ export default function AdminClassroomDetailPage() {
   const { classroomId } = useParams()
   const id = Number(classroomId)
   const valid = Number.isFinite(id)
-  const { data: room, isLoading } = useAdminClassroom(valid ? id : null)
+  const { data: room, isLoading, isError, error, refetch } = useAdminClassroom(valid ? id : null)
 
-  if (isLoading || !room) {
-    return (
-      <div className="flex items-center justify-center gap-2 py-20 text-sm text-gray-500">
-        <Loader2 size={16} className="animate-spin" /> Loading the classroom…
-      </div>
-    )
-  }
+  if (!valid) return <ErrorState title="Not found" error={new Error('That address does not name one.')} />
+  if (isError) return <ErrorState title="Could not load this classroom" error={error} onRetry={() => refetch()} />
+  if (isLoading || !room) return <LoadingState label="Loading the classroom…" />
 
   return (
     <div className="space-y-4">
@@ -44,6 +42,11 @@ export default function AdminClassroomDetailPage() {
         className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-gray-300">
         <ArrowLeft size={12} /> All classrooms
       </Link>
+      <PageHeader eyebrow="Classroom" title={room.name}
+        description={room.domjudgeUrl
+          ? <span className="font-mono text-xs">{room.domjudgeUrl}</span>
+          : 'No judge set for this classroom yet.'}
+        className="mb-2" />
       <Settings room={room} />
       <Teams classroomId={id} />
       <Members classroomId={id} />
@@ -155,8 +158,8 @@ function Settings({ room }: { room: ClassroomSummary }) {
           <button
             onClick={save}
             disabled={update.isPending || !name.trim() || !url.trim()}
-            className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-sm
-                       font-medium text-white hover:bg-indigo-500 disabled:opacity-40"
+            className="flex items-center gap-1.5 rounded-lg bg-accent-600 px-3 py-2 text-sm
+                       font-medium text-white hover:bg-accent-500 disabled:opacity-40"
           >
             {update.isPending ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
             Save
@@ -198,7 +201,7 @@ function Teams({ classroomId }: { classroomId: number }) {
         {mine.map(g => (
           <Link key={g.groupId} to={`/admin/teams/${g.groupId}`}
             className="rounded-md border border-gray-800 px-2 py-1 text-xs text-gray-300
-                       hover:border-indigo-700 hover:text-indigo-300">
+                       hover:border-accent-700 hover:text-accent-300">
             {g.name} <span className="text-gray-600">· {g.memberCount}</span>
           </Link>
         ))}
@@ -219,7 +222,7 @@ function Members({ classroomId }: { classroomId: number }) {
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-gray-800 text-left text-xs text-gray-500">
+            <tr className="border-b border-gray-800 text-left text-[11px] uppercase tracking-wide text-gray-500">
               <th className="px-4 py-2 font-medium">Student</th>
               <th className="px-4 py-2 font-medium">DOMjudge login</th>
               <th className="px-4 py-2 font-medium">Enrolled</th>
@@ -275,8 +278,8 @@ function Members({ classroomId }: { classroomId: number }) {
             {candidates?.users.filter(u => !enrolled.has(u.userId)).map(u => (
               <button key={u.userId} onClick={() => add.mutate(u.userId)}
                 className="flex items-center gap-1.5 rounded-md border border-gray-800
-                           bg-gray-900 px-2 py-1 text-xs text-gray-300 hover:border-indigo-700
-                           hover:text-indigo-300">
+                           bg-gray-900 px-2 py-1 text-xs text-gray-300 hover:border-accent-700
+                           hover:text-accent-300">
                 <UserPlus size={12} /> {u.username}
               </button>
             ))}
@@ -304,7 +307,7 @@ function Staff({ classroomId }: { classroomId: number }) {
                        text-xs text-gray-300">
             {s.username}
             {s.owner
-              ? <Pill tone="indigo">created it</Pill>
+              ? <Pill tone="accent">created it</Pill>
               : isSuper && (
                 <button onClick={() => remove.mutate(s.userId)} aria-label={`Remove ${s.username}`}
                   className="text-gray-600 hover:text-red-400">
@@ -323,8 +326,8 @@ function Staff({ classroomId }: { classroomId: number }) {
             {admins?.users.filter(u => !already.has(u.userId)).map(u => (
               <button key={u.userId} onClick={() => add.mutate(u.userId)}
                 className="flex items-center gap-1.5 rounded-md border border-gray-800
-                           bg-gray-900 px-2 py-1 text-xs text-gray-300 hover:border-indigo-700
-                           hover:text-indigo-300">
+                           bg-gray-900 px-2 py-1 text-xs text-gray-300 hover:border-accent-700
+                           hover:text-accent-300">
                 <UserPlus size={12} /> {u.username}
               </button>
             ))}
@@ -411,8 +414,8 @@ function TeachingAssistants({ classroomId }: { classroomId: number }) {
           <input value={fullName} onChange={e => setFullName(e.target.value)}
             placeholder="Full name (optional)" className={`${field} w-48`} />
           <button onClick={submit} disabled={add.isPending || (!email.trim() && !username.trim())}
-            className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-sm
-                       font-medium text-white hover:bg-indigo-500 disabled:opacity-40">
+            className="flex items-center gap-1.5 rounded-lg bg-accent-600 px-3 py-2 text-sm
+                       font-medium text-white hover:bg-accent-500 disabled:opacity-40">
             {add.isPending ? <Loader2 size={14} className="animate-spin" /> : <UserPlus size={14} />}
             Add TA
           </button>

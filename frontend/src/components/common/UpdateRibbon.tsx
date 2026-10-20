@@ -89,7 +89,7 @@ export function UpdateRibbon() {
     <div role="status" className={clsx(
       'fixed inset-x-0 top-0 z-50 flex items-center justify-center gap-3 px-4 py-2 text-xs',
       'shadow-lg',
-      required ? 'bg-red-700 text-white' : 'bg-indigo-600 text-white',
+      required ? 'bg-red-700 text-white' : 'bg-accent-600 text-white',
     )}>
       {required && <AlertTriangle size={14} className="flex-shrink-0" />}
       <span className="min-w-0 truncate">

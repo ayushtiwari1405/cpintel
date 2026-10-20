@@ -63,7 +63,7 @@ export function CfSessionCard({ variant = 'card' }: { variant?: 'card' | 'inline
         className="w-full flex items-center justify-between gap-2 text-left"
       >
         <span className="flex items-center gap-2 text-sm text-gray-200">
-          <Link2 size={14} className="text-indigo-400" />
+          <Link2 size={14} className="text-accent-400" />
           Connect your Codeforces session to submit
         </span>
         {open ? <ChevronUp size={14} className="text-gray-500" />
@@ -252,7 +252,7 @@ function ExtensionConnectForm() {
             <ShieldAlert size={12} className="flex-shrink-0 mt-0.5" /> {error.message}
           </p>
           <button onClick={openCodeforces}
-            className="flex items-center gap-1 text-[11px] text-indigo-300 hover:underline">
+            className="flex items-center gap-1 text-[11px] text-accent-300 hover:underline">
             <ExternalLink size={11} /> Open codeforces.com
           </button>
         </div>

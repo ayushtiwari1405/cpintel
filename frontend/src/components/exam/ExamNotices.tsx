@@ -28,7 +28,7 @@ export function ExamNotices({ notices, onDismiss }: Props) {
           className={clsx(
             'flex items-start gap-2 rounded-lg border px-3 py-2 text-xs leading-relaxed',
             {
-              'border-indigo-900 bg-indigo-950/40 text-indigo-200': notice.tone === 'info',
+              'border-accent-900 bg-accent-950/40 text-accent-200': notice.tone === 'info',
               'border-amber-900 bg-amber-950/40 text-amber-200':    notice.tone === 'warn',
               'border-red-900 bg-red-950/40 text-red-200':          notice.tone === 'danger',
             }

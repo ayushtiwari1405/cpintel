@@ -61,7 +61,7 @@ export function PastExamProblems({ exam }: { exam: MyExam }) {
             className={clsx(
               'rounded-lg border px-3 py-1.5 text-xs transition-colors',
               selected === problem.index
-                ? 'border-indigo-700 bg-indigo-950/40 text-indigo-200'
+                ? 'border-accent-700 bg-accent-950/40 text-accent-200'
                 : 'border-gray-800 bg-gray-900 text-gray-400 hover:bg-gray-800/60'
             )}
           >

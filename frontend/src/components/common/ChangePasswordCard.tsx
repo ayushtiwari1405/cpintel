@@ -66,10 +66,11 @@ export function ChangePasswordCard({ neverChanged }: { neverChanged?: boolean })
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-1.5">
+          <label htmlFor="pw-current" className="mb-1.5 block text-sm font-medium text-gray-300">
             Current password
           </label>
           <input
+            id="pw-current"
             type="password"
             className="input"
             value={current}
@@ -80,31 +81,37 @@ export function ChangePasswordCard({ neverChanged }: { neverChanged?: boolean })
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-1.5">New password</label>
+          <label htmlFor="pw-new" className="mb-1.5 block text-sm font-medium text-gray-300">New password</label>
           <input
+            id="pw-new"
             type="password"
             className="input"
+            aria-describedby="pw-new-hint"
+            aria-invalid={tooShort || undefined}
             value={next}
             onChange={e => setNext(e.target.value)}
             autoComplete="new-password"
             placeholder="••••••••"
           />
-          <p className={`mt-1 text-xs ${tooShort ? 'text-amber-400' : 'text-gray-600'}`}>
+          <p id="pw-new-hint" className={`mt-1 text-xs ${tooShort ? 'text-amber-400' : 'text-gray-500'}`}>
             At least {MIN_LENGTH} characters. Length is the only rule.
           </p>
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-1.5">Type it again</label>
+          <label htmlFor="pw-confirm" className="mb-1.5 block text-sm font-medium text-gray-300">Type it again</label>
           <input
+            id="pw-confirm"
             type="password"
             className="input"
+            aria-describedby={mismatch ? 'pw-confirm-error' : undefined}
+            aria-invalid={mismatch || undefined}
             value={confirm}
             onChange={e => setConfirm(e.target.value)}
             autoComplete="new-password"
             placeholder="••••••••"
           />
-          {mismatch && <p className="mt-1 text-xs text-amber-400">These two do not match.</p>}
+          {mismatch && <p id="pw-confirm-error" className="mt-1 text-xs text-amber-400">These two do not match.</p>}
         </div>
 
         <button

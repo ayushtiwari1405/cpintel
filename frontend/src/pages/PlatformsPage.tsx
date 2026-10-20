@@ -1,32 +1,31 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { CfSessionCard } from '@/components/practice/CfSessionCard'
 import { useLinkedAccounts, useLinkAccount, useUnlinkAccount, useSyncAccount } from '@/hooks/usePlatforms'
 import { RefreshCw, Link2, Unlink, CheckCircle, Clock, AlertCircle, Loader2 } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import { clsx } from 'clsx'
+import { PageHeader } from '@/components/common/PageHeader'
+import { ErrorState, LoadingState } from '@/components/common/States'
 
 const PLATFORMS = [
   {
     id: 'CODEFORCES',
     name: 'Codeforces',
-    color: 'text-blue-400',
-    bg: 'bg-blue-900/20 border-blue-800',
-    desc: 'Competitive programming contests, ratings, and problems',
+    desc: 'Contests, ratings and your full submission history.',
     placeholder: 'tourist',
   },
 ]
 
-const statusIcon = (status: string) => {
-  switch (status) {
-    case 'COMPLETED': return <CheckCircle size={14} className="text-green-400" />
-    case 'RUNNING':   return <Loader2 size={14} className="text-blue-400 animate-spin" />
-    case 'FAILED':    return <AlertCircle size={14} className="text-red-400" />
-    default:          return <Clock size={14} className="text-gray-400" />
-  }
+/** A sync status as words with an icon: the colour is never the only signal. */
+const SYNC: Record<string, { label: string; icon: ReactNode; className: string }> = {
+  COMPLETED: { label: 'Synced',         icon: <CheckCircle size={12} />, className: 'badge-green' },
+  RUNNING:   { label: 'Syncing',        icon: <Loader2 size={12} className="animate-spin" />, className: 'badge-blue' },
+  FAILED:    { label: 'Sync failed',    icon: <AlertCircle size={12} />, className: 'badge-red' },
+  PENDING:   { label: 'Waiting to sync', icon: <Clock size={12} />, className: 'badge-gray' },
 }
 
 export default function PlatformsPage() {
-  const { data: accounts = [], isLoading } = useLinkedAccounts()
+  const { data: accounts = [], isLoading, isError, error, refetch } = useLinkedAccounts()
   const linkMutation   = useLinkAccount()
   const unlinkMutation = useUnlinkAccount()
   const syncMutation   = useSyncAccount()
@@ -48,15 +47,13 @@ export default function PlatformsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-gray-50">Platforms</h1>
-        <p className="text-gray-400 text-sm mt-1">Link your competitive programming accounts to sync data</p>
-      </div>
+      <PageHeader title="Platforms"
+        description="Link your competitive programming accounts so CPIntel can read your history." />
 
       {isLoading ? (
-        <div className="flex items-center gap-2 text-gray-400 text-sm">
-          <Loader2 size={16} className="animate-spin" /> Loading accounts…
-        </div>
+        <LoadingState label="Loading your accounts…" />
+      ) : isError ? (
+        <ErrorState title="Could not load your linked accounts" error={error} onRetry={() => refetch()} />
       ) : (
         <div className="grid gap-4">
           {PLATFORMS.map(p => {
@@ -65,90 +62,98 @@ export default function PlatformsPage() {
             const isSyncing = syncMutation.isPending && syncMutation.variables === p.id
 
             return (
-              <div key={p.id} className={clsx(
-                'rounded-xl border p-5 transition-colors',
-                account ? p.bg : 'bg-gray-900 border-gray-800'
+              <section key={p.id} aria-labelledby={`platform-${p.id}`} className={clsx(
+                'rounded-xl border bg-gray-900 p-5 transition-colors',
+                account ? 'border-gray-700' : 'border-gray-800'
               )}>
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h2 className={clsx('font-semibold text-base', account ? p.color : 'text-gray-50')}>
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0 flex-1">
+                    <div className="mb-1 flex flex-wrap items-center gap-2">
+                      <h2 id={`platform-${p.id}`} className="text-base font-semibold text-gray-50">
                         {p.name}
                       </h2>
-                      {account && (
-                        <span className="flex items-center gap-1 text-xs text-gray-400">
-                          {statusIcon(account.syncStatus)}
-                          {account.syncStatus}
-                        </span>
-                      )}
+                      {account && (() => {
+                        const st = SYNC[account.syncStatus] ?? SYNC.PENDING
+                        return <span className={st.className}>{st.icon}{st.label}</span>
+                      })()}
                     </div>
-                    <p className="text-gray-400 text-sm">{p.desc}</p>
+                    <p className="text-sm text-gray-400">{p.desc}</p>
 
                     {account ? (
-                      <div className="mt-3 flex flex-wrap gap-4">
+                      <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 sm:flex sm:flex-wrap">
                         <div>
-                          <p className="text-xs text-gray-500">Handle</p>
-                          <p className="text-sm font-mono text-gray-200">{account.handle}</p>
+                          <dt className="text-[11px] uppercase tracking-wide text-gray-500">Handle</dt>
+                          <dd className="font-mono text-sm text-gray-100">{account.handle}</dd>
                         </div>
                         {account.currentRating != null && (
                           <div>
-                            <p className="text-xs text-gray-500">Rating</p>
-                            <p className="text-sm font-semibold text-gray-50">{account.currentRating}</p>
+                            <dt className="text-[11px] uppercase tracking-wide text-gray-500">Rating</dt>
+                            <dd className="font-mono text-sm font-semibold tabular-nums text-gray-50">{account.currentRating}</dd>
                           </div>
                         )}
                         {account.maxRating != null && (
                           <div>
-                            <p className="text-xs text-gray-500">Max rating</p>
-                            <p className="text-sm text-gray-300">{account.maxRating}</p>
+                            <dt className="text-[11px] uppercase tracking-wide text-gray-500">Peak</dt>
+                            <dd className="font-mono text-sm tabular-nums text-gray-300">{account.maxRating}</dd>
                           </div>
                         )}
                         {account.lastSyncedAt && (
                           <div>
-                            <p className="text-xs text-gray-500">Last synced</p>
-                            <p className="text-sm text-gray-400">
+                            <dt className="text-[11px] uppercase tracking-wide text-gray-500">Last synced</dt>
+                            <dd className="text-sm text-gray-400">
                               {formatDistanceToNow(new Date(account.lastSyncedAt), { addSuffix: true })}
-                            </p>
+                            </dd>
                           </div>
                         )}
-                      </div>
+                      </dl>
                     ) : (
-                      <div className="mt-3 flex gap-2">
+                      <div className="mt-4">
+                        <label htmlFor={`handle-${p.id}`} className="field-label">
+                          Your {p.name} handle
+                        </label>
+                        <div className="flex max-w-md gap-2">
                         <input
-                          className="input max-w-xs text-sm"
-                          placeholder={`Handle, e.g. ${p.placeholder}`}
+                          id={`handle-${p.id}`}
+                          className="input font-mono"
+                          autoComplete="off"
+                          spellCheck={false}
+                          placeholder={`e.g. ${p.placeholder}`}
                           value={handles[p.id] ?? ''}
                           onChange={e => setHandles(h => ({ ...h, [p.id]: e.target.value }))}
                           onKeyDown={e => e.key === 'Enter' && handleLink(p.id)}
                         />
                         <button
-                          className="btn-primary flex items-center gap-1.5 text-sm whitespace-nowrap"
+                          type="button"
+                          className="btn-primary whitespace-nowrap"
                           onClick={() => handleLink(p.id)}
                           disabled={isLinking || !handles[p.id]?.trim()}
                         >
-                          {isLinking ? <Loader2 size={14} className="animate-spin" /> : <Link2 size={14} />}
-                          Link
+                          {isLinking ? <Loader2 size={14} className="animate-spin" aria-hidden="true" /> : <Link2 size={14} aria-hidden="true" />}
+                          {isLinking ? 'Linking…' : 'Link'}
                         </button>
+                        </div>
                       </div>
                     )}
                   </div>
 
                   {account && (
-                    <div className="flex gap-2 flex-shrink-0">
+                    <div className="flex flex-shrink-0 gap-2">
                       <button
-                        className="btn-secondary flex items-center gap-1.5 text-xs"
+                        type="button"
+                        className="btn-secondary btn-sm"
                         onClick={() => syncMutation.mutate(p.id)}
                         disabled={isSyncing || account.syncStatus === 'RUNNING'}
                       >
-                        <RefreshCw size={13} className={isSyncing ? 'animate-spin' : ''} />
-                        Sync
+                        <RefreshCw size={13} className={isSyncing ? 'animate-spin' : ''} aria-hidden="true" />
+                        {isSyncing ? 'Syncing…' : 'Sync now'}
                       </button>
                       <button
-                        className="flex items-center gap-1.5 px-3 py-2 text-xs rounded-lg
-                                   text-red-400 hover:bg-red-900/20 border border-red-900/30 transition-colors"
+                        type="button"
+                        className="btn btn-sm border border-red-900/60 text-red-300 hover:bg-red-950/50"
                         onClick={() => unlinkMutation.mutate(p.id)}
                         disabled={unlinkMutation.isPending}
                       >
-                        <Unlink size={13} />
+                        <Unlink size={13} aria-hidden="true" />
                         Unlink
                       </button>
                     </div>
@@ -161,23 +166,23 @@ export default function PlatformsPage() {
                     practice workspace hides this once it is connected, which left no way to
                     see who you are submitting as, or to drop the session. */}
                 {p.id === 'CODEFORCES' && <CfSessionCard variant="inline" />}
-              </div>
+              </section>
             )
           })}
         </div>
       )}
 
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 text-sm text-gray-400">
-        <p className="font-medium text-gray-300 mb-1">How sync works</p>
-        <ul className="space-y-1 text-xs">
-          <li>• Initial sync fetches your full history (may take a minute)</li>
-          <li>• Incremental syncs run nightly at 02:00 UTC automatically</li>
-          <li>• Manual sync fetches submissions since the last sync</li>
-          <li>• Analytics update after each sync completes</li>
-          <li>• Linking a handle is what reads your history — submitting from Practice needs
-              the Codeforces session connected above, which is separate</li>
+      <aside className="rounded-xl border border-gray-800 p-4 text-sm text-gray-400">
+        <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">How sync works</h2>
+        <ul className="list-disc space-y-1 pl-4 text-xs marker:text-gray-600">
+          <li>The first sync fetches your full history, which may take a minute.</li>
+          <li>Incremental syncs run automatically every night at 02:00 UTC.</li>
+          <li>Sync now fetches submissions since the last sync.</li>
+          <li>Analytics update after each sync completes.</li>
+          <li>Linking a handle is what reads your history. Submitting from Practice needs the
+            Codeforces session connected above, which is separate.</li>
         </ul>
-      </div>
+      </aside>
     </div>
   )
 }

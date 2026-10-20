@@ -58,7 +58,7 @@ export function PastExamCode({ exam }: { exam: MyExam }) {
             className={clsx(
               'w-full rounded-lg border px-3 py-2.5 text-left transition-colors',
               openId === attempt.id
-                ? 'border-indigo-700 bg-indigo-950/40'
+                ? 'border-accent-700 bg-accent-950/40'
                 : 'border-gray-800 bg-gray-900 hover:bg-gray-800/60'
             )}
           >

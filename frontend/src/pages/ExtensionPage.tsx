@@ -36,7 +36,7 @@ function Step({ n, title, children }: { n: number; title: string; children: Reac
   return (
     <li className="flex gap-3">
       <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full
-        bg-indigo-600/20 text-xs font-medium text-indigo-300">{n}</span>
+        bg-accent-600/20 text-xs font-medium text-accent-300">{n}</span>
       <div className="min-w-0 space-y-2">
         <p className="text-sm font-medium text-gray-200">{title}</p>
         <div className="space-y-2 text-xs leading-relaxed text-gray-400">{children}</div>
@@ -74,7 +74,7 @@ export default function ExtensionPage() {
   const header = (
     <div>
       <h1 className="flex items-center gap-2 text-2xl font-semibold text-gray-50">
-        <Puzzle size={22} className="text-indigo-400" /> CPIntel Codeforces Connector
+        <Puzzle size={22} className="text-accent-400" /> CPIntel Codeforces Connector
       </h1>
       <p className="mt-1 text-sm text-gray-400">
         A small browser extension that lets CPIntel open Codeforces problems and submit your
@@ -91,7 +91,7 @@ export default function ExtensionPage() {
           <CheckCircle2 size={16} className="mt-0.5 flex-shrink-0 text-green-400" />
           <p>
             The desktop app talks to Codeforces itself and needs no extension. Connect your
-            account from <Link to="/platforms" className="text-indigo-300 underline">Platforms</Link>.
+            account from <Link to="/platforms" className="text-accent-300 underline">Platforms</Link>.
           </p>
         </div>
       </div>
@@ -191,7 +191,7 @@ export default function ExtensionPage() {
                 {extensionsPage}
               </code>
               <button onClick={copy}
-                className="flex items-center gap-1 text-[11px] text-indigo-300 hover:underline">
+                className="flex items-center gap-1 text-[11px] text-accent-300 hover:underline">
                 <Copy size={11} /> {copied ? 'Copied' : 'Copy'}
               </button>
             </div>

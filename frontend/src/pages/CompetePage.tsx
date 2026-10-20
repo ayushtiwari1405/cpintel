@@ -493,7 +493,7 @@ export default function CompetePage({ examOnly, section }: {
             'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium',
             'transition-colors',
             mode === id
-              ? 'bg-indigo-600/20 text-indigo-300'
+              ? 'bg-accent-600/20 text-accent-300'
               : 'text-gray-500 hover:text-gray-300'
           )}
         >
@@ -522,7 +522,7 @@ export default function CompetePage({ examOnly, section }: {
     return (
       <div className="flex flex-1 items-center justify-center p-6">
         <div className="max-w-md rounded-2xl border border-gray-800 bg-gray-900 p-7 text-center">
-          <CheckCircle2 size={26} className="mx-auto text-indigo-400" />
+          <CheckCircle2 size={26} className="mx-auto text-accent-400" />
           <h1 className="mt-3 text-lg font-semibold text-gray-50">{exam.event.name} has ended</h1>
           <p className="mt-2 text-sm leading-relaxed text-gray-400">
             Your submissions are saved. Sign out, then sign in with your own password to read
@@ -702,7 +702,7 @@ export default function CompetePage({ examOnly, section }: {
           <button
             onClick={() => setFilesOpen(true)}
             className="mx-auto flex items-center gap-1.5 text-xs text-gray-600
-                       hover:text-indigo-300 transition-colors"
+                       hover:text-accent-300 transition-colors"
           >
             <FolderOpen size={13} /> Your files
           </button>
@@ -832,7 +832,7 @@ export default function CompetePage({ examOnly, section }: {
       {inExam && examSession.fullscreenRequired && !examSession.fullscreen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-gray-950 p-6">
           <div className="flex max-w-md flex-col items-center gap-3 text-center">
-            <Maximize size={28} className="text-indigo-400" />
+            <Maximize size={28} className="text-accent-400" />
             <p className="text-base font-medium text-gray-100">
               This examination is sat in full screen
             </p>
@@ -842,8 +842,8 @@ export default function CompetePage({ examOnly, section }: {
             </p>
             <button
               onClick={examSession.enterFullscreen}
-              className="mt-1 flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2
-                         text-sm font-medium text-white transition-colors hover:bg-indigo-500"
+              className="mt-1 flex items-center gap-1.5 rounded-lg bg-accent-600 px-4 py-2
+                         text-sm font-medium text-white transition-colors hover:bg-accent-500"
             >
               <Maximize size={14} /> Enter full screen
             </button>
@@ -898,9 +898,9 @@ export default function CompetePage({ examOnly, section }: {
                     logout.mutate()
                   }}
                   disabled={finishing}
-                  className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5
+                  className="flex items-center gap-1.5 rounded-lg bg-accent-600 px-3 py-1.5
                              text-xs font-medium text-white transition-colors
-                             hover:bg-indigo-500 disabled:opacity-60"
+                             hover:bg-accent-500 disabled:opacity-60"
                 >
                   {finishing
                     ? <Loader2 size={13} className="animate-spin" />
@@ -932,8 +932,8 @@ export default function CompetePage({ examOnly, section }: {
       {/* Someone being watched is told so, on the screen where it is happening. A lock that
           reports on a contestant without saying so is a different and much worse product. */}
       {!inExam && contest.running && groupContest?.lockdownRequired && (
-        <div className="mx-4 mt-3 flex items-start gap-2 rounded-lg border border-indigo-900
-          bg-indigo-950/40 px-3 py-2 text-xs text-indigo-200 flex-shrink-0">
+        <div className="mx-4 mt-3 flex items-start gap-2 rounded-lg border border-accent-900
+          bg-accent-950/40 px-3 py-2 text-xs text-accent-200 flex-shrink-0">
           <Eye size={13} className="mt-0.5 flex-shrink-0" />
           <span>
             This round counts for <span className="font-medium">{groupContest.groupName}</span>.
@@ -975,7 +975,7 @@ export default function CompetePage({ examOnly, section }: {
       {!started ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-3 border-t
           border-gray-800 text-center">
-          <Clock size={28} className="text-indigo-400" />
+          <Clock size={28} className="text-accent-400" />
           <div className="text-sm text-gray-300">
             {inExam ? 'This examination has not started yet.' : 'This contest has not started yet.'}
           </div>

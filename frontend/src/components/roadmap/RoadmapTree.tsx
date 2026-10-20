@@ -22,7 +22,7 @@ import { progress } from './rules'
 
 const STATUS_STYLE: Record<string, { dot: string; text: string; ring: string; icon: any }> = {
   COMPLETED:   { dot: 'bg-green-500',  text: 'text-green-300',  ring: 'border-green-800 bg-green-950/30',   icon: CheckCircle2 },
-  IN_PROGRESS: { dot: 'bg-indigo-400', text: 'text-indigo-200', ring: 'border-indigo-700 bg-indigo-950/30', icon: CircleDot },
+  IN_PROGRESS: { dot: 'bg-accent-400', text: 'text-accent-200', ring: 'border-accent-700 bg-accent-950/30', icon: CircleDot },
   UNLOCKED:    { dot: 'bg-gray-500',   text: 'text-gray-200',   ring: 'border-gray-700 bg-gray-900',        icon: Circle },
   LOCKED:      { dot: 'bg-gray-800',   text: 'text-gray-600',   ring: 'border-gray-850 bg-gray-950',        icon: Lock },
 }
@@ -136,7 +136,7 @@ export function RoadmapTree({ nodes, selectedKey, onSelect }: Props) {
               </span>
               <div className="w-16 h-1 rounded-full bg-gray-800 flex-shrink-0 overflow-hidden">
                 <div
-                  className="h-full bg-indigo-500"
+                  className="h-full bg-accent-500"
                   style={{ width: `${(completed / members.length) * 100}%` }}
                 />
               </div>
@@ -188,8 +188,8 @@ function NodeChip({ node, selected, onSelect }: {
       className={clsx(
         'rounded-md border px-2.5 py-2 text-left transition-colors min-w-0',
         style.ring,
-        locked ? 'opacity-60 hover:opacity-80' : 'hover:border-indigo-600',
-        selected && 'ring-1 ring-indigo-400 border-indigo-500'
+        locked ? 'opacity-60 hover:opacity-80' : 'hover:border-accent-600',
+        selected && 'ring-1 ring-accent-400 border-accent-500'
       )}
       // Locked nodes stay clickable: the panel is where the user finds out *what* is blocking
       // them. A disabled tile that does nothing when pressed answers no question at all.

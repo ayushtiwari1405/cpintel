@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useLogin } from '@/hooks/useAuth'
-import { Eye, EyeOff, Zap } from 'lucide-react'
+import { Eye, EyeOff } from 'lucide-react'
+import { BrandLockup } from '@/components/common/BrandMark'
 import { ThemeToggle } from '@/components/common/ThemeToggle'
 import { isDesktop } from '@/utils/desktopBridge'
 
@@ -30,12 +31,9 @@ export default function LoginPage() {
       <ThemeToggle className="absolute top-4 right-4" />
       <div className="w-full max-w-md">
 
-        {/* Logo */}
-        <div className="flex items-center gap-3 mb-8 justify-center">
-          <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center">
-            <Zap size={20} className="text-white" />
-          </div>
-          <span className="text-xl font-semibold text-gray-50">CPIntel</span>
+        {/* Brand */}
+        <div className="mb-8 flex justify-center">
+          <BrandLockup className="scale-110" />
         </div>
 
         {/* Card */}
@@ -117,7 +115,7 @@ export default function LoginPage() {
                 </button>
               </div>
               <div className="flex justify-end mt-1">
-                <Link to="/forgot-password" className="text-xs text-indigo-400 hover:text-indigo-300">
+                <Link to="/forgot-password" className="text-xs text-accent-400 hover:text-accent-300">
                   Forgot password?
                 </Link>
               </div>
@@ -136,7 +134,7 @@ export default function LoginPage() {
           {!isDesktop() && (
             <p className="mt-4 text-center text-xs text-gray-500">
               Sitting an examination on your own computer?{' '}
-              <Link to="/download" className="text-indigo-400 hover:text-indigo-300">
+              <Link to="/download" className="text-accent-400 hover:text-accent-300">
                 Get the desktop app
               </Link>
             </p>
@@ -153,8 +151,8 @@ export default function LoginPage() {
           </p>
           {/* The same form signs in to an examination: the password on the slip opens that
               paper, in examination mode, instead of the account. */}
-          <p className="mt-3 rounded-lg border border-indigo-900 bg-indigo-950/30 px-3 py-2
-            text-center text-xs leading-relaxed text-indigo-200">
+          <p className="mt-3 rounded-lg border border-accent-900 bg-accent-950/30 px-3 py-2
+            text-center text-xs leading-relaxed text-accent-200">
             Sitting an examination? Sign in with your username and the examination password
             on your slip instead of your own.
           </p>

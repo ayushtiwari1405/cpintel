@@ -12,6 +12,11 @@ module.exports = {
     'plugin:react-hooks/recommended',
   ],
   ignorePatterns: ['dist', 'node_modules', 'public', 'scripts', '*.cjs', 'vite.config.ts'],
+  overrides: [
+    // The connector is a Chrome extension rather than SPA code; expose its extension API globals
+    // without weakening the browser rules used by the rest of the frontend.
+    { files: ['extension-src/**/*.js'], env: { webextensions: true } },
+  ],
   rules: {
     // API payloads are typed loosely in places on purpose (see types/index.ts); `any` there is a
     // decision, not an accident.

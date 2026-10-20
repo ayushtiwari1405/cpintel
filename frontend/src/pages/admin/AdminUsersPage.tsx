@@ -16,6 +16,7 @@ import {
 import { clsx } from 'clsx'
 import type { AdminUserRow, AssignableRole, Role } from '@/types'
 import { copyText } from '@/utils/clipboard'
+import { PageHeader } from '@/components/common/PageHeader'
 
 /**
  * Accounts, and what an admin can do to one.
@@ -73,6 +74,8 @@ export default function AdminUsersPage() {
 
   return (
     <div className="space-y-4">
+      <PageHeader eyebrow="Console" title="Users"
+        description="Find accounts, create them, and manage roles, access and sessions." className="mb-2" />
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative min-w-[16rem] flex-1">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600" />
@@ -81,15 +84,15 @@ export default function AdminUsersPage() {
             onChange={e => setSearch(e.target.value)}
             placeholder="Search by username, email or name"
             className="w-full rounded-lg border border-gray-800 bg-gray-900 py-2 pl-9 pr-3
-                       text-sm text-gray-200 placeholder-gray-600 outline-none
-                       focus:border-indigo-600"
+                       text-sm text-gray-200 placeholder-gray-400 outline-none
+                       focus:border-accent-600"
           />
         </div>
         <select
           value={role}
           onChange={e => { setRole(e.target.value as typeof role); setPage(0) }}
           className="rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 text-sm text-gray-300
-                     outline-none focus:border-indigo-600"
+                     outline-none focus:border-accent-600"
         >
           <option value="">Any role</option>
           <option value="USER">Users</option>
@@ -100,7 +103,7 @@ export default function AdminUsersPage() {
           value={active}
           onChange={e => { setActive(e.target.value as typeof active); setPage(0) }}
           className="rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 text-sm text-gray-300
-                     outline-none focus:border-indigo-600"
+                     outline-none focus:border-accent-600"
         >
           <option value="">Any status</option>
           <option value="true">Active</option>
@@ -111,8 +114,8 @@ export default function AdminUsersPage() {
             Only the role picker inside the dialog is restricted. */}
         <button
           onClick={() => setCreating(true)}
-          className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-sm
-                     font-medium text-white transition-colors hover:bg-indigo-500"
+          className="flex items-center gap-1.5 rounded-lg bg-accent-600 px-3 py-2 text-sm
+                     font-medium text-white transition-colors hover:bg-accent-500"
         >
           <Plus size={14} /> New account
         </button>
@@ -122,7 +125,7 @@ export default function AdminUsersPage() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-800 text-left text-xs text-gray-500">
+              <tr className="border-b border-gray-800 text-left text-[11px] uppercase tracking-wide text-gray-500">
                 <th className="px-4 py-2 font-medium">User</th>
                 <th className="px-4 py-2 font-medium">Role</th>
                 <th className="px-4 py-2 font-medium">Status</th>
@@ -231,10 +234,10 @@ function UserRow({
   const selfBlock = isSelf ? 'You cannot do this to your own account' : undefined
 
   return (
-    <tr className="transition-colors hover:bg-gray-800/40">
+    <tr className="transition-colors hover:bg-gray-850/60">
       <td className="px-4 py-2.5">
         <button onClick={onOpen} className="text-left">
-          <span className="block font-medium text-gray-200 hover:text-indigo-400">
+          <span className="block font-medium text-gray-200 hover:text-accent-400">
             {row.username}
             {isSelf && <span className="ml-1.5 text-xs text-gray-600">(you)</span>}
           </span>
@@ -242,7 +245,7 @@ function UserRow({
         </button>
       </td>
       <td className="px-4 py-2.5">
-        <Pill tone={isSuper ? 'green' : isAdmin ? 'indigo' : 'gray'}>
+        <Pill tone={isSuper ? 'green' : isAdmin ? 'accent' : 'gray'}>
           {roleLabel(row.role)}
         </Pill>
       </td>
@@ -380,7 +383,7 @@ function ParticipationSection({ userId }: { userId: number }) {
               className="rounded-lg border border-gray-800 bg-gray-900 px-3 py-2">
               <div className="flex items-center justify-between gap-2">
                 <span className="truncate text-sm text-gray-300">{row.name}</span>
-                <Pill tone={row.kind === 'EXAM' ? 'indigo' : 'gray'}>
+                <Pill tone={row.kind === 'EXAM' ? 'accent' : 'gray'}>
                   {row.kind === 'EXAM' ? 'exam' : 'contest'}
                 </Pill>
               </div>
@@ -604,7 +607,7 @@ function CreateUserDialog(
               value={form.role}
               onChange={set('role')}
               className="w-full rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 text-sm
-                         text-gray-200 outline-none focus:border-indigo-600"
+                         text-gray-200 outline-none focus:border-accent-600"
             >
               <option value="USER">User — the normal product</option>
               {canCreateAdmins && (
@@ -628,8 +631,8 @@ function CreateUserDialog(
           <button
             type="submit"
             disabled={!valid || create.isPending}
-            className="flex items-center gap-2 rounded-lg bg-indigo-600 px-3 py-2 text-sm
-                       font-medium text-white hover:bg-indigo-500 disabled:opacity-40"
+            className="flex items-center gap-2 rounded-lg bg-accent-600 px-3 py-2 text-sm
+                       font-medium text-white hover:bg-accent-500 disabled:opacity-40"
           >
             {create.isPending && <Loader2 size={14} className="animate-spin" />}
             Create account
@@ -648,7 +651,7 @@ function TextField({ label, ...props }: { label: string }
       <input
         {...props}
         className="w-full rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 text-sm
-                   text-gray-200 placeholder-gray-600 outline-none focus:border-indigo-600"
+                   text-gray-200 placeholder-gray-400 outline-none focus:border-accent-600"
       />
     </label>
   )

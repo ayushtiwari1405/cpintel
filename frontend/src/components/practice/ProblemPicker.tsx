@@ -80,7 +80,7 @@ export function ProblemPicker({
             className={clsx(
               'px-2.5 rounded-lg border transition-colors',
               hasFilters || showFilters
-                ? 'border-indigo-700 bg-indigo-600/20 text-indigo-400'
+                ? 'border-accent-700 bg-accent-600/20 text-accent-400'
                 : 'border-gray-700 bg-gray-800 text-gray-400 hover:text-gray-200'
             )}
           >
@@ -143,7 +143,7 @@ export function ProblemPicker({
                     'w-full flex items-baseline gap-3 px-3 py-2 text-left transition-colors',
                     'disabled:opacity-40 disabled:cursor-not-allowed',
                     isActive
-                      ? 'bg-indigo-600/15 border-l-2 border-l-indigo-500 pl-[10px]'
+                      ? 'bg-accent-600/15 border-l-2 border-l-accent-500 pl-[10px]'
                       : 'border-l-2 border-l-transparent hover:bg-gray-900'
                   )}
                 >
@@ -154,7 +154,7 @@ export function ProblemPicker({
                   <span className="min-w-0 flex-1">
                     <span className={clsx(
                       'block truncate text-sm',
-                      isActive ? 'text-indigo-200' : 'text-gray-200'
+                      isActive ? 'text-accent-200' : 'text-gray-200'
                     )}>
                       {p.name}
                     </span>

@@ -9,6 +9,7 @@ import { roadmapApi } from '@/api/roadmapApi'
 import type {
   GauntletAnswers, GauntletChecked, GauntletQuestion, GauntletResult, GauntletSection,
 } from '@/api/roadmapApi'
+import { ErrorState, LoadingState } from '@/components/common/States'
 import { useGauntlet, useSubmitGauntlet } from '@/hooks/useRoadmap'
 import { useToast } from '@/components/common/Toaster'
 
@@ -49,7 +50,7 @@ function ratingTone(rating: number): string {
  * what to ask next, never where anybody lands.
  */
 export default function GauntletPage() {
-  const { data: paper, isLoading } = useGauntlet()
+  const { data: paper, isLoading, isError, error, refetch } = useGauntlet()
   const submit = useSubmitGauntlet()
   const toast = useToast(s => s.push)
 
@@ -120,12 +121,19 @@ export default function GauntletPage() {
     finish()
   }
 
-  if (isLoading || !paper) {
+  // Checked first: on a failed request there is no paper, and the branch below would spin
+  // for ever instead of saying so.
+  if (isError) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 size={24} className="animate-spin text-indigo-400" />
+      <div className="mx-auto max-w-2xl">
+        <h1 className="mb-4 text-xl font-semibold text-gray-50">The gauntlet</h1>
+        <ErrorState title="Could not load the gauntlet" error={error} onRetry={() => refetch()} />
       </div>
     )
+  }
+
+  if (isLoading || !paper) {
+    return <LoadingState label="Loading the gauntlet…" />
   }
 
   // ── intro ────────────────────────────────────────────────────────────────
@@ -135,7 +143,7 @@ export default function GauntletPage() {
         <div className="card space-y-4 p-6">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl
-                            bg-indigo-600/15 text-indigo-300">
+                            bg-accent-600/15 text-accent-300">
               <Swords size={20} />
             </div>
             <div>
@@ -197,6 +205,7 @@ export default function GauntletPage() {
   if (phase === 'done' && result) {
     return (
       <div className="mx-auto max-w-2xl space-y-4">
+        <h1 className="sr-only">The gauntlet: your result</h1>
         <ResultCard result={result} />
         <div className="flex flex-wrap gap-2">
           <Link to="/roadmap" className="btn-primary inline-flex items-center gap-2">
@@ -210,13 +219,14 @@ export default function GauntletPage() {
   // ── running ──────────────────────────────────────────────────────────────
   return (
     <div className="mx-auto max-w-2xl space-y-4">
+      <h1 className="sr-only">The gauntlet</h1>
       {/* Where in the gauntlet: one step per area, with the tier inside the current one. */}
       <div className="flex items-center gap-1.5">
         {sections.map((s, i) => (
           <div key={s.id} className="flex-1">
             <div className={clsx('h-1.5 rounded-full',
-              i < sectionIndex ? 'bg-indigo-500'
-                : i === sectionIndex ? 'bg-indigo-500/40' : 'bg-gray-800')} />
+              i < sectionIndex ? 'bg-accent-500'
+                : i === sectionIndex ? 'bg-accent-500/40' : 'bg-gray-800')} />
             <p className={clsx('mt-1.5 truncate text-[11px]',
               i === sectionIndex ? 'text-gray-300' : 'text-gray-600')}>
               {s.title}
@@ -237,7 +247,7 @@ export default function GauntletPage() {
           <div className="flex gap-1">
             {Array.from({ length: TIERS }, (_, i) => (
               <span key={i} className={clsx('h-2 w-6 rounded-full',
-                i + 1 < tier ? 'bg-green-500/70' : i + 1 === tier ? 'bg-indigo-500' : 'bg-gray-800')} />
+                i + 1 < tier ? 'bg-green-500/70' : i + 1 === tier ? 'bg-accent-500' : 'bg-gray-800')} />
             ))}
           </div>
         </div>
@@ -333,7 +343,7 @@ function QuestionBlock({ number, question, picked, checked, onPick }: {
                 'transition-colors disabled:cursor-default',
                 right ? 'border-green-800 bg-green-950/40 text-green-200'
                   : wrong ? 'border-red-900 bg-red-950/40 text-red-200'
-                    : chosen ? 'border-indigo-700 bg-indigo-600/15 text-indigo-200'
+                    : chosen ? 'border-accent-700 bg-accent-600/15 text-accent-200'
                       : 'border-gray-800 text-gray-300 hover:border-gray-700 hover:bg-gray-850',
                 index === -1 && !chosen && !right && 'text-gray-500',
               )}
@@ -391,7 +401,7 @@ function ResultCard({ result, compact }: { result: GauntletResult; compact?: boo
             <div className="flex gap-1">
               {Array.from({ length: TIERS }, (_, i) => (
                 <span key={i} className={clsx('h-1.5 flex-1 rounded-full',
-                  i < s.tiersPassed ? 'bg-indigo-500' : 'bg-gray-800')} />
+                  i < s.tiersPassed ? 'bg-accent-500' : 'bg-gray-800')} />
               ))}
             </div>
           </div>

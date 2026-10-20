@@ -58,16 +58,21 @@ monaco.editor.defineTheme(CPINTEL_DARK, {
   inherit: true,
   rules: [],
   colors: {
-    'editor.background': '#030712',          // gray-950, matching the cards
-    'editorGutter.background': '#030712',
-    'editorLineNumber.foreground': '#374151',
-    'editorLineNumber.activeForeground': '#9ca3af',
-    'editor.lineHighlightBackground': '#111827',
-    'editor.selectionBackground': '#312e81',
-    'editorIndentGuide.background1': '#1f2937',
-    'editorWidget.background': '#111827',
-    'editorWidget.border': '#1f2937',
-    'editorSuggestWidget.background': '#111827',
+    // Hex, because Monaco cannot read the palette variables; these are the dark tokens in
+    // tailwind.config.ts (gray-950 page, 900 panel, 800 border, accent for the selection).
+    'editor.background': '#0b0e10',          // gray-950, matching the panes
+    'editorGutter.background': '#0b0e10',
+    'editorLineNumber.foreground': '#4a5359',
+    'editorLineNumber.activeForeground': '#b2bac0',
+    'editor.lineHighlightBackground': '#121618',
+    'editor.selectionBackground': '#0e8d8259',
+    'editor.inactiveSelectionBackground': '#0e8d8233',
+    'editorCursor.foreground': '#2fd6c3',
+    'editorIndentGuide.background1': '#21272b',
+    'editorWidget.background': '#121618',
+    'editorWidget.border': '#30383d',
+    'editorSuggestWidget.background': '#121618',
+    'editorSuggestWidget.selectedBackground': '#21272b',
   },
 })
 
@@ -76,16 +81,19 @@ monaco.editor.defineTheme(CPINTEL_LIGHT, {
   inherit: true,
   rules: [],
   colors: {
-    'editor.background': '#ffffff',          // light-mode card surface
+    'editor.background': '#ffffff',          // light-mode panel surface
     'editorGutter.background': '#ffffff',
-    'editorLineNumber.foreground': '#aeb4bd',
-    'editorLineNumber.activeForeground': '#4b5563',
-    'editor.lineHighlightBackground': '#f4f5f7',
-    'editor.selectionBackground': '#c7d2fe',
-    'editorIndentGuide.background1': '#e5e7eb',
+    'editorLineNumber.foreground': '#9aa3a8',
+    'editorLineNumber.activeForeground': '#343c41',
+    'editor.lineHighlightBackground': '#f4f6f7',
+    'editor.selectionBackground': '#a0f6ea99',
+    'editor.inactiveSelectionBackground': '#a0f6ea55',
+    'editorCursor.foreground': '#0a665e',
+    'editorIndentGuide.background1': '#e1e6e8',
     'editorWidget.background': '#ffffff',
-    'editorWidget.border': '#e5e7eb',
+    'editorWidget.border': '#e1e6e8',
     'editorSuggestWidget.background': '#ffffff',
+    'editorSuggestWidget.selectedBackground': '#edf0f1',
   },
 })
 

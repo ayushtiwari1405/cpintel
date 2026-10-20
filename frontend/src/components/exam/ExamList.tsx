@@ -111,13 +111,13 @@ export function ExamList({ exams, isLoading, onEnter, entering }: Props) {
                     <span>{exam.problemCount} problem{exam.problemCount === 1 ? '' : 's'}</span>
                   )}
                   {exam.lockdownRequired && !over && (
-                    <span className="flex items-center gap-1.5 text-indigo-300">
+                    <span className="flex items-center gap-1.5 text-accent-300">
                       <Eye size={12} />
                       monitored · {exam.awayThresholdSeconds}s away allowed
                     </span>
                   )}
                   {exam.desktopAppRequired && !over && (
-                    <span className="flex items-center gap-1.5 text-indigo-300">
+                    <span className="flex items-center gap-1.5 text-accent-300">
                       <Laptop size={12} />
                       desktop app only
                     </span>
@@ -132,7 +132,7 @@ export function ExamList({ exams, isLoading, onEnter, entering }: Props) {
                   'flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium',
                   'transition-colors disabled:cursor-not-allowed disabled:opacity-40',
                   exam.lifecycle === 'ACTIVE'
-                    ? 'bg-indigo-600 text-white hover:bg-indigo-500'
+                    ? 'bg-accent-600 text-white hover:bg-accent-500'
                     : 'border border-gray-800 bg-gray-900 text-gray-300 hover:bg-gray-800'
                 )}
               >
@@ -170,8 +170,8 @@ export function ExamList({ exams, isLoading, onEnter, entering }: Props) {
             )}
 
             {exam.lockdownRequired && !over && (
-              <p className="mt-3 flex items-start gap-2 rounded-lg border border-indigo-900
-                bg-indigo-950/40 px-3 py-2 text-xs leading-relaxed text-indigo-200">
+              <p className="mt-3 flex items-start gap-2 rounded-lg border border-accent-900
+                bg-accent-950/40 px-3 py-2 text-xs leading-relaxed text-accent-200">
                 <ShieldCheck size={13} className="mt-0.5 flex-shrink-0" />
                 <span>
                   While this paper is open, the examination watches whether its window has

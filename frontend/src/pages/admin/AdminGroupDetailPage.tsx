@@ -15,6 +15,7 @@ import { RosterImportPanel } from '@/components/admin/RosterImportPanel'
 import { DomjudgePasswordPanel } from '@/components/admin/DomjudgePasswordPanel'
 import type { GroupContestStatus } from '@/types'
 import { judgeIdOf } from '@/utils/contestRef'
+import { ErrorState, LoadingState } from '@/components/common/States'
 
 /**
  * How this team has done, across everything it was given.
@@ -51,7 +52,7 @@ function TeamAnalyticsPanel({ teamId }: { teamId: number }) {
               px-4 py-2 text-sm">
               <span className="text-gray-300">
                 {row.name}
-                <Pill tone={row.kind === 'EXAM' ? 'indigo' : 'gray'}>
+                <Pill tone={row.kind === 'EXAM' ? 'accent' : 'gray'}>
                   {row.kind === 'EXAM' ? 'exam' : 'contest'}
                 </Pill>
               </span>
@@ -70,8 +71,8 @@ function TeamAnalyticsPanel({ teamId }: { teamId: number }) {
   )
 }
 
-const STATUS_TONE: Record<GroupContestStatus, 'gray' | 'green' | 'indigo'> = {
-  SCHEDULED: 'indigo',
+const STATUS_TONE: Record<GroupContestStatus, 'gray' | 'green' | 'accent'> = {
+  SCHEDULED: 'accent',
   LIVE: 'green',
   FINISHED: 'gray',
 }
@@ -87,7 +88,7 @@ const STATUS_TONE: Record<GroupContestStatus, 'gray' | 'green' | 'indigo'> = {
 export default function AdminGroupDetailPage() {
   const { groupId } = useParams()
   const id = Number(groupId)
-  const { data, isLoading } = useAdminGroup(Number.isFinite(id) ? id : null)
+  const { data, isLoading, isError, error, refetch } = useAdminGroup(Number.isFinite(id) ? id : null)
 
   const addMember = useAddMember()
   const updateMember = useUpdateMember()
@@ -110,13 +111,9 @@ export default function AdminGroupDetailPage() {
     lockdownRequired: true,
   })
 
-  if (isLoading || !data) {
-    return (
-      <div className="flex items-center justify-center gap-2 py-20 text-sm text-gray-500">
-        <Loader2 size={16} className="animate-spin" /> Loading the team…
-      </div>
-    )
-  }
+  if (!Number.isFinite(id)) return <ErrorState title="Not found" error={new Error('That address does not name one.')} />
+  if (isError) return <ErrorState title="Could not load this team" error={error} onRetry={() => refetch()} />
+  if (isLoading || !data) return <LoadingState label="Loading the team…" />
 
   const memberIds = new Set(data.members.map(m => m.userId))
   const canAddContest = contest.externalId.trim() !== '' && contest.name.trim() !== ''
@@ -143,7 +140,7 @@ export default function AdminGroupDetailPage() {
         <Link to="/admin/teams" className="text-xs text-gray-500 hover:text-gray-300">
           ← All teams
         </Link>
-        <h1 className="text-lg font-semibold text-gray-100">{data.group.name}</h1>
+        <h1 className="break-words text-xl font-semibold tracking-tight text-gray-50 sm:text-2xl">{data.group.name}</h1>
         {!data.group.active && <Pill tone="gray">retired</Pill>}
       </div>
       {data.group.description && (
@@ -157,7 +154,7 @@ export default function AdminGroupDetailPage() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-800 text-left text-xs text-gray-500">
+              <tr className="border-b border-gray-800 text-left text-[11px] uppercase tracking-wide text-gray-500">
                 <th className="px-4 py-2 font-medium">User</th>
                 <th className="px-4 py-2 font-medium">Codeforces</th>
                 <th className="px-4 py-2 font-medium">Handle on the judge</th>
@@ -172,7 +169,7 @@ export default function AdminGroupDetailPage() {
                 <EmptyRow colSpan={7}>Nobody yet. Add people below.</EmptyRow>
               )}
               {data.members.map(member => (
-                <tr key={member.userId} className="transition-colors hover:bg-gray-800/40">
+                <tr key={member.userId} className="transition-colors hover:bg-gray-850/60">
                   <td className="px-4 py-2.5">
                     <span className="block font-medium text-gray-200">{member.username}</span>
                     <span className="block text-xs text-gray-600">{member.email}</span>
@@ -194,8 +191,8 @@ export default function AdminGroupDetailPage() {
                       }}
                       placeholder={member.codeforcesHandle ? 'override' : 'team name'}
                       className="w-40 rounded-md border border-gray-800 bg-gray-900 px-2 py-1
-                                 font-mono text-xs text-gray-300 placeholder-gray-700
-                                 outline-none focus:border-indigo-600"
+                                 font-mono text-xs text-gray-300 placeholder-gray-400
+                                 outline-none focus:border-accent-600"
                     />
                   </td>
                   <td className="px-4 py-2.5">
@@ -222,7 +219,7 @@ export default function AdminGroupDetailPage() {
                         })
                       }}
                       className="w-36 rounded-md border border-gray-800 bg-gray-900 px-2 py-1
-                                 text-xs text-gray-400 outline-none focus:border-indigo-600"
+                                 text-xs text-gray-400 outline-none focus:border-accent-600"
                     >
                       <option value="">Move…</option>
                       {allTeams?.filter(team => team.groupId !== id
@@ -255,8 +252,8 @@ export default function AdminGroupDetailPage() {
             onChange={e => setSearch(e.target.value)}
             placeholder="Search by username or email"
             className="w-full max-w-md rounded-lg border border-gray-800 bg-gray-900 px-3 py-2
-                       text-sm text-gray-200 placeholder-gray-600 outline-none
-                       focus:border-indigo-600"
+                       text-sm text-gray-200 placeholder-gray-400 outline-none
+                       focus:border-accent-600"
           />
           {search.trim() !== '' && (
             <div className="flex flex-wrap gap-1.5">
@@ -268,7 +265,7 @@ export default function AdminGroupDetailPage() {
                     onClick={() => addMember.mutate({ groupId: id, userId: u.userId })}
                     className="flex items-center gap-1.5 rounded-md border border-gray-800
                                bg-gray-900 px-2 py-1 text-xs text-gray-300 transition-colors
-                               hover:border-indigo-700 hover:text-indigo-300"
+                               hover:border-accent-700 hover:text-accent-300"
                   >
                     <UserPlus size={12} /> {u.username}
                   </button>
@@ -293,7 +290,7 @@ export default function AdminGroupDetailPage() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-800 text-left text-xs text-gray-500">
+              <tr className="border-b border-gray-800 text-left text-[11px] uppercase tracking-wide text-gray-500">
                 <th className="px-4 py-2 font-medium">Contest</th>
                 <th className="px-4 py-2 font-medium">Where</th>
                 <th className="px-4 py-2 font-medium">When</th>
@@ -308,11 +305,11 @@ export default function AdminGroupDetailPage() {
                 </EmptyRow>
               )}
               {data.contests.map(c => (
-                <tr key={c.contestId} className="transition-colors hover:bg-gray-800/40">
+                <tr key={c.contestId} className="transition-colors hover:bg-gray-850/60">
                   <td className="px-4 py-2.5">
                     <Link
                       to={`/admin/groups/contests/${c.contestId}`}
-                      className="font-medium text-gray-200 hover:text-indigo-400"
+                      className="font-medium text-gray-200 hover:text-accent-400"
                     >
                       {c.name}
                     </Link>
@@ -329,15 +326,15 @@ export default function AdminGroupDetailPage() {
                   </td>
                   <td className="px-4 py-2.5">
                     {c.lockdownRequired
-                      ? <Pill tone="indigo">required</Pill>
+                      ? <Pill tone="accent">required</Pill>
                       : <Pill tone="gray">off</Pill>}
                   </td>
                   <td className="px-4 py-2.5 text-right">
                     <div className="flex items-center justify-end gap-2">
                       <Link
                         to={`/admin/groups/contests/${c.contestId}`}
-                        className="inline-flex items-center gap-1 text-xs text-indigo-400
-                                   hover:text-indigo-300"
+                        className="inline-flex items-center gap-1 text-xs text-accent-400
+                                   hover:text-accent-300"
                       >
                         Board <ArrowRight size={12} />
                       </Link>
@@ -371,7 +368,7 @@ export default function AdminGroupDetailPage() {
               value={contest.platform}
               onChange={e => setContest(c => ({ ...c, platform: e.target.value }))}
               className="rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 text-sm
-                         text-gray-300 outline-none focus:border-indigo-600"
+                         text-gray-300 outline-none focus:border-accent-600"
             >
               <option value="CODEFORCES">Codeforces</option>
               <option value="DOMJUDGE">DOMjudge</option>
@@ -384,8 +381,8 @@ export default function AdminGroupDetailPage() {
               onChange={e => setContest(c => ({ ...c, externalId: e.target.value }))}
               placeholder={contest.platform === 'CODEFORCES' ? '2258' : 'nwerc2024'}
               className="w-32 rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 font-mono
-                         text-sm text-gray-200 placeholder-gray-600 outline-none
-                         focus:border-indigo-600"
+                         text-sm text-gray-200 placeholder-gray-400 outline-none
+                         focus:border-accent-600"
             />
           </label>
           <label className="flex min-w-[12rem] flex-1 flex-col gap-1">
@@ -395,7 +392,7 @@ export default function AdminGroupDetailPage() {
               onChange={e => setContest(c => ({ ...c, name: e.target.value }))}
               placeholder="Week 3 practice round"
               className="rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 text-sm
-                         text-gray-200 placeholder-gray-600 outline-none focus:border-indigo-600"
+                         text-gray-200 placeholder-gray-400 outline-none focus:border-accent-600"
             />
           </label>
           <label className="flex flex-col gap-1">
@@ -405,7 +402,7 @@ export default function AdminGroupDetailPage() {
               value={contest.startsAt}
               onChange={e => setContest(c => ({ ...c, startsAt: e.target.value }))}
               className="rounded-lg border border-gray-800 bg-gray-900 px-2 py-2 text-xs
-                         text-gray-300 outline-none focus:border-indigo-600"
+                         text-gray-300 outline-none focus:border-accent-600"
             />
           </label>
           <label className="flex flex-col gap-1">
@@ -415,7 +412,7 @@ export default function AdminGroupDetailPage() {
               value={contest.endsAt}
               onChange={e => setContest(c => ({ ...c, endsAt: e.target.value }))}
               className="rounded-lg border border-gray-800 bg-gray-900 px-2 py-2 text-xs
-                         text-gray-300 outline-none focus:border-indigo-600"
+                         text-gray-300 outline-none focus:border-accent-600"
             />
           </label>
           <label className="flex items-center gap-1.5 pb-2 text-xs text-gray-400">
@@ -423,15 +420,15 @@ export default function AdminGroupDetailPage() {
               type="checkbox"
               checked={contest.lockdownRequired}
               onChange={e => setContest(c => ({ ...c, lockdownRequired: e.target.checked }))}
-              className="accent-indigo-600"
+              className="accent-accent-600"
             />
             Require the desktop lock
           </label>
           <button
             onClick={submitContest}
             disabled={!canAddContest || addContest.isPending}
-            className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-sm
-                       font-medium text-white transition-colors hover:bg-indigo-500
+            className="flex items-center gap-1.5 rounded-lg bg-accent-600 px-3 py-2 text-sm
+                       font-medium text-white transition-colors hover:bg-accent-500
                        disabled:cursor-not-allowed disabled:opacity-40"
           >
             {addContest.isPending

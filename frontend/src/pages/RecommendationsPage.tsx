@@ -68,7 +68,7 @@ export default function RecommendationsPage() {
           <button key={t} onClick={() => setTab(t)}
             className={clsx(
               'px-4 py-1.5 rounded-lg text-sm font-medium transition-colors',
-              tab === t ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:text-gray-200'
+              tab === t ? 'bg-accent-600 text-white' : 'text-gray-400 hover:text-gray-200'
             )}>
             {t}
           </button>
@@ -127,14 +127,14 @@ function WeeklyTab() {
   return (
     <div className="space-y-4">
       <p className="text-sm text-gray-400 flex items-center gap-1.5">
-        <BookOpen size={13} className="text-indigo-400" />
+        <BookOpen size={13} className="text-accent-400" />
         This week's plan — ranked by what you have retained, so a strong skill gone stale
         surfaces alongside a weak one
       </p>
 
       {items.length === 0 ? (
         <EmptyState
-          icon={<BookOpen size={24} className="text-indigo-400" />}
+          icon={<BookOpen size={24} className="text-accent-400" />}
           title="Weekly plan not generated yet"
           desc="Trigger a refresh in Analytics to build your first weekly plan"
         />
@@ -195,8 +195,8 @@ function RevisionTab() {
                   <Link
                     to={item.practicePath}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs
-                               bg-indigo-900/30 text-indigo-300 border border-indigo-800
-                               hover:bg-indigo-900/50 transition-colors"
+                               bg-accent-900/30 text-accent-300 border border-accent-800
+                               hover:bg-accent-900/50 transition-colors"
                   >
                     <Code2 size={12} /> Practise
                   </Link>
@@ -239,8 +239,8 @@ function SkillCard({ item, index }: { item: SheetItem; index: number }) {
   return (
     <div className="card">
       <div className="flex items-start gap-3">
-        <div className="w-7 h-7 rounded-lg bg-indigo-900/50 border border-indigo-800
-          flex items-center justify-center text-xs font-medium text-indigo-400
+        <div className="w-7 h-7 rounded-lg bg-accent-900/50 border border-accent-800
+          flex items-center justify-center text-xs font-medium text-accent-400
           flex-shrink-0 mt-0.5">
           {index}
         </div>
@@ -266,7 +266,7 @@ function SkillCard({ item, index }: { item: SheetItem; index: number }) {
           <Link
             to={`/practice?node=${encodeURIComponent(item.nodeKey)}`}
             className="flex-shrink-0 flex items-center gap-1 text-xs text-gray-500
-                       hover:text-indigo-300"
+                       hover:text-accent-300"
           >
             <Target size={11} /> Open skill
           </Link>
@@ -289,7 +289,7 @@ function SkillCard({ item, index }: { item: SheetItem; index: number }) {
                 {p.solved
                   ? <Check size={11} className="flex-shrink-0 text-green-500" />
                   : <Code2 size={11} className="flex-shrink-0 text-gray-600
-                                                group-hover:text-indigo-400" />}
+                                                group-hover:text-accent-400" />}
                 <span className={clsx(
                   'truncate text-xs',
                   p.solved ? 'text-gray-500 line-through' : 'text-gray-300'
@@ -341,7 +341,7 @@ function EmptyState({ icon, title, desc }: {
 function Spinner() {
   return (
     <div className="flex items-center justify-center h-48">
-      <Loader2 size={24} className="animate-spin text-indigo-400" />
+      <Loader2 size={24} className="animate-spin text-accent-400" />
     </div>
   )
 }

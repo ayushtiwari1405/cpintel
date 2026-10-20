@@ -62,7 +62,7 @@ export function ContestHeader({
             href={contest.url}
             target="_blank"
             rel="noreferrer"
-            className="text-sm font-medium text-gray-100 hover:text-indigo-300
+            className="text-sm font-medium text-gray-100 hover:text-accent-300
                        transition-colors truncate flex items-center gap-1.5"
           >
             {contest.name}
@@ -106,11 +106,11 @@ export function ContestHeader({
       {/* Countdown before the start, remaining time once running. */}
       {!exam && (before || contest.running) && (
         <div className="flex items-center gap-2 flex-shrink-0">
-          <Timer size={15} className={contest.running ? 'text-green-400' : 'text-indigo-400'} />
+          <Timer size={15} className={contest.running ? 'text-green-400' : 'text-accent-400'} />
           <div className="leading-tight">
             <div className={clsx(
               'font-mono text-lg tabular-nums',
-              contest.running ? 'text-green-300' : 'text-indigo-300'
+              contest.running ? 'text-green-300' : 'text-accent-300'
             )}>
               {starting ? 'starting…' : clock(before ? untilStart : remaining)}
             </div>
@@ -140,7 +140,7 @@ export function ContestHeader({
         <button
           onClick={onOpenFiles}
           title="Your own templates and notes"
-          className="text-gray-500 hover:text-indigo-300 transition-colors flex-shrink-0
+          className="text-gray-500 hover:text-accent-300 transition-colors flex-shrink-0
                      flex items-center gap-1.5 text-xs"
         >
           <FolderOpen size={15} /> Files

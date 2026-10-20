@@ -8,12 +8,15 @@ import {
   Tooltip, ResponsiveContainer, BarChart, Bar,
   Cell, ReferenceLine
 } from 'recharts'
-import { RefreshCw, Loader2, TrendingUp, Target} from 'lucide-react'
-import { tooltipStyle, axisStyle, CHROME, PLATFORM_COLORS } from '@/charts/ChartTheme'
+import { RefreshCw, TrendingUp, Target, Lightbulb, BarChart2 } from 'lucide-react'
+import { tooltipStyle, axisStyle, CHROME, ACCENT, ANIMATE } from '@/charts/ChartTheme'
+import { PageHeader, Section } from '@/components/common/PageHeader'
+import { Tabs, panelProps } from '@/components/common/Tabs'
+import { Stat, Stats } from '@/components/common/Stat'
+import { EmptyState, ErrorState, LoadingState } from '@/components/common/States'
 import { SkillBasisPanel } from '@/components/analytics/SkillBasisPanel'
 import { fmtRating, readSkill, type SkillReading } from '@/components/analytics/skill'
 import type { TopicMastery } from '@/types'
-import { clsx } from 'clsx'
 
 const TABS = ['Overview', 'Topics', 'Contests'] as const
 type Tab = typeof TABS[number]
@@ -23,121 +26,89 @@ export default function AnalyticsPage() {
   const refresh = useRefreshAnalytics()
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-gray-50">Analytics</h1>
-          <p className="text-gray-400 text-sm mt-0.5">Deep dive into your CP performance</p>
-        </div>
-        <button
-          onClick={() => refresh.mutate()}
-          disabled={refresh.isPending}
-          className="btn-secondary flex items-center gap-2 text-sm"
-        >
-          <RefreshCw size={14} className={refresh.isPending ? 'animate-spin' : ''} />
-          Recompute
-        </button>
-      </div>
-
-      {/* Tabs */}
-      <div className="flex gap-1 bg-gray-900 border border-gray-800 rounded-xl p-1 w-fit">
-        {TABS.map(t => (
-          <button key={t} onClick={() => setTab(t)}
-            className={clsx(
-              'px-4 py-1.5 rounded-lg text-sm font-medium transition-colors',
-              tab === t
-                ? 'bg-indigo-600 text-white'
-                : 'text-gray-400 hover:text-gray-200'
-            )}>
-            {t}
+    <div>
+      <PageHeader
+        title="Analytics"
+        description="Your ratings, topic by topic, and how your contests have gone."
+        actions={
+          <button
+            type="button"
+            onClick={() => refresh.mutate()}
+            disabled={refresh.isPending}
+            className="btn-secondary"
+          >
+            <RefreshCw size={14} className={refresh.isPending ? 'animate-spin' : ''} aria-hidden="true" />
+            {refresh.isPending ? 'Recomputing…' : 'Recompute'}
           </button>
-        ))}
-      </div>
+        }
+      />
 
-      {tab === 'Overview' && <OverviewTab />}
-      {tab === 'Topics'   && <TopicsTab />}
-      {tab === 'Contests' && <ContestsTab />}
+      <Tabs id="analytics" label="Analytics views" value={tab} onChange={setTab}
+        tabs={TABS.map(t => ({ key: t, label: t }))} className="mb-6" />
+
+      <div {...panelProps('analytics', tab)} className="focus:outline-none">
+        {tab === 'Overview' && <OverviewTab />}
+        {tab === 'Topics'   && <TopicsTab />}
+        {tab === 'Contests' && <ContestsTab />}
+      </div>
     </div>
   )
 }
 
+const PLATFORM_NAME: Record<string, string> = { CODEFORCES: 'Codeforces' }
+const signed = (v: number, digits = 1) => `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v).toFixed(digits)}`
+
 function OverviewTab() {
-  const { data: overview, isLoading } = useOverview()
-  if (isLoading) return <LoadingCard />
+  const { data: overview, isLoading, isError, error, refetch } = useOverview()
+  if (isLoading) return <LoadingState label="Loading your overview…" />
+  // Shown rather than zeros: "0 solved" and "could not load" are different facts.
+  if (isError) return <ErrorState title="Could not load your overview" error={error} onRetry={() => refetch()} />
 
   const platforms = overview?.platformStats ?? []
 
   return (
     <div className="space-y-6">
-      {/* Platform stats */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {platforms.map((p: any) => (
-          <div key={p.platform} className="card">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-sm font-medium" style={{ color: PLATFORM_COLORS[p.platform] }}>
-                {p.platform}
-              </span>
-              <span className="badge badge-gray">
-                {p.totalContests} contests
-              </span>
-            </div>
-            <p className="text-2xl font-bold text-gray-50">{p.currentRating ?? '—'}</p>
-            <p className="text-xs text-gray-500 mt-1">Peak: {p.maxRating ?? '—'}</p>
-            <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-              <div>
-                <p className="text-gray-500">Avg Δ rating</p>
-                <p className={`font-medium ${
-                  (p.avgRatingChange ?? 0) >= 0 ? 'text-green-400' : 'text-red-400'
-                }`}>
-                  {p.avgRatingChange >= 0 ? '+' : ''}{(p.avgRatingChange ?? 0).toFixed(1)}
-                </p>
-              </div>
-              <div>
-                <p className="text-gray-500">Accuracy</p>
-                <p className="font-medium text-gray-200">{(p.accuracy ?? 0).toFixed(1)}%</p>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
+      <Stats>
+        <Stat label="Unified score" tone="accent" value={(overview?.unifiedScore ?? 0).toFixed(0)}
+          hint="Codeforces rating on a 0–1000 scale" />
+        <Stat label="Problems solved" value={overview?.totalSolved ?? 0} />
+        <Stat label="Contests" value={overview?.totalContests ?? 0} />
+        <Stat label="Consistency" value={`${(overview?.overallConsistency ?? 0).toFixed(0)}%`} />
+      </Stats>
 
-      {/* Summary numbers */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="card">
-          <p className="card-header">Unified score</p>
-          <p className="text-3xl font-bold text-indigo-400">
-            {(overview?.unifiedScore ?? 0).toFixed(0)}
-          </p>
-        </div>
-        <div className="card">
-          <p className="card-header">Total solved</p>
-          <p className="text-3xl font-bold text-gray-50">{overview?.totalSolved ?? 0}</p>
-        </div>
-        <div className="card">
-          <p className="card-header">Total contests</p>
-          <p className="text-3xl font-bold text-gray-50">{overview?.totalContests ?? 0}</p>
-        </div>
-        <div className="card">
-          <p className="card-header">Consistency</p>
-          <p className="text-3xl font-bold text-teal-400">
-            {(overview?.overallConsistency ?? 0).toFixed(0)}%
-          </p>
-        </div>
-      </div>
+      {platforms.length === 0 ? (
+        <Section title="Platforms" icon={<BarChart2 size={14} />}>
+          <EmptyState compact title="No platform statistics yet">Link and sync a platform first.</EmptyState>
+        </Section>
+      ) : platforms.map((p: any) => (
+        <Section key={p.platform} title={PLATFORM_NAME[p.platform] ?? p.platform}
+          icon={<BarChart2 size={14} />} bodyClassName="p-0"
+          actions={<span className="badge-gray font-mono tabular-nums">{p.totalContests} contests</span>}>
+          <div className="grid grid-cols-2 gap-px bg-gray-800 lg:grid-cols-4">
+            <Stat label="Rating" value={p.currentRating ?? '—'} />
+            <Stat label="Peak" value={p.maxRating ?? '—'} />
+            <Stat label="Average change" value={signed(p.avgRatingChange ?? 0)}
+              tone={(p.avgRatingChange ?? 0) > 0 ? 'good' : (p.avgRatingChange ?? 0) < 0 ? 'danger' : 'default'}
+              hint="per rated round" />
+            <Stat label="Accuracy" value={`${(p.accuracy ?? 0).toFixed(1)}%`} hint="accepted submissions" />
+          </div>
+        </Section>
+      ))}
     </div>
   )
 }
 
 function TopicsTab() {
-  const { data: topics, isLoading } = useTopicAnalytics()
+  const { data: topics, isLoading, isError, error, refetch } = useTopicAnalytics()
   const { data: basis } = useSkillBasis()
-  if (isLoading) return <LoadingCard />
+  if (isLoading) return <LoadingState label="Loading topic ratings…" />
+  if (isError) return <ErrorState title="Could not load topic ratings" error={error} onRetry={() => refetch()} />
 
   return (
     <div className="space-y-6">
       <SkillBasisPanel />
       {!topics?.length
-        ? <EmptyCard text="No topic data yet — sync a platform first" />
+        ? <div className="card"><EmptyState title="No topic data yet">Sync a platform first.</EmptyState></div>
         : basis?.basis
           ? <RatedTopics topics={topics} base={basis.rating} fromRounds={basis.basis === 'CODEFORCES'} />
           : <CoverageTopics topics={topics} />}
@@ -159,10 +130,7 @@ function RatedTopics({ topics, base, fromRounds }:
 
   return (
     <>
-      <div className="card">
-        <p className="text-sm font-medium text-gray-300 mb-1 flex items-center gap-1.5">
-          <Target size={14} className="text-indigo-400" /> Rating by topic
-        </p>
+      <Section title="Rating by topic" icon={<Target size={14} />}>
         <p className="text-xs text-gray-500 mb-4">
           In Codeforces points. A topic is marked a strength or a weak spot only when it sits
           further from {base ?? 'your rating'} than its own uncertainty; most topics sit close to
@@ -182,59 +150,61 @@ function RatedTopics({ topics, base, fromRounds }:
                 [`${item.payload.value} ± ${Math.round(item.payload.skillSd ?? 0)}`, 'Rating']}
             />
             {base != null && <ReferenceLine x={base - lo} stroke={CHROME.label} strokeDasharray="4 4" />}
-            <Bar dataKey="span" radius={[0, 4, 4, 0]}>
+            <Bar dataKey="span" radius={[0, 3, 3, 0]} barSize={14} isAnimationActive={ANIMATE}>
               {chart.map((t, i) => (
                 <Cell key={i} fill={READING_COLOR[readSkill(t, base).kind]} />
               ))}
             </Bar>
           </BarChart>
         </ResponsiveContainer>
-      </div>
+      </Section>
 
-      <div className="card overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left text-xs text-gray-500 border-b border-gray-800">
-              <th className="pb-2 font-medium">Topic</th>
-              <th className="pb-2 font-medium">Rating</th>
-              <th className="pb-2 font-medium">Reading</th>
-              {fromRounds && (
-                <th className="pb-2 font-medium" title="Problems from your rated rounds behind the rating">
-                  Round problems
-                </th>
-              )}
-              <th className="pb-2 font-medium">Solved</th>
-              <th className="pb-2 font-medium">Hardest solved</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map(t => {
-              const r = readSkill(t, base)
-              return (
-                <tr key={t.topic} className="border-b border-gray-800/50 last:border-0">
-                  <td className="py-2.5 text-gray-200 font-medium">{t.topic}</td>
-                  <td className="py-2.5 tabular-nums text-gray-200">
-                    {fmtRating(t.skillRating)}
-                    <span className="text-gray-500 text-xs"> ± {Math.round(t.skillSd ?? 0)}</span>
-                  </td>
-                  <td className="py-2.5 text-xs">
-                    {r.kind === 'strength' && <span className="badge badge-green">
-                      Strength +{Math.round(r.offset)}</span>}
-                    {r.kind === 'weak' && <span className="badge badge-red">
-                      Weak spot {Math.round(r.offset)}</span>}
-                    {r.kind === 'in-line' && <span className="text-gray-500">In line with your rating</span>}
-                  </td>
-                  {fromRounds && (
-                    <td className="py-2.5 text-gray-400 text-xs tabular-nums">{t.skillProblems ?? 0}</td>
-                  )}
-                  <td className="py-2.5 text-gray-400 text-xs tabular-nums">{t.problemsSolved ?? 0}</td>
-                  <td className="py-2.5 text-gray-400 text-xs tabular-nums">{fmtRating(t.maxSolvedRating)}</td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
+      <Section title="All topics" bodyClassName="p-0">
+        <div className="table-scroll">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th scope="col">Topic</th>
+                <th scope="col">Rating</th>
+                <th scope="col">Reading</th>
+                {fromRounds && (
+                  <th scope="col" title="Problems from your rated rounds behind the rating">
+                    Round problems
+                  </th>
+                )}
+                <th scope="col" className="text-right">Solved</th>
+                <th scope="col" className="text-right">Hardest solved</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(t => {
+                const r = readSkill(t, base)
+                return (
+                  <tr key={t.topic}>
+                    <td className="font-medium text-gray-100">{t.topic}</td>
+                    <td className="whitespace-nowrap font-mono text-gray-100">
+                      {fmtRating(t.skillRating)}
+                      <span className="text-xs text-gray-500"> ± {Math.round(t.skillSd ?? 0)}</span>
+                    </td>
+                    <td className="whitespace-nowrap text-xs">
+                      {r.kind === 'strength' && <span className="badge-green">
+                        Strength +{Math.round(r.offset)}</span>}
+                      {r.kind === 'weak' && <span className="badge-red">
+                        Weak spot {Math.round(r.offset)}</span>}
+                      {r.kind === 'in-line' && <span className="text-gray-500">In line with your rating</span>}
+                    </td>
+                    {fromRounds && (
+                      <td className="font-mono text-xs text-gray-400">{t.skillProblems ?? 0}</td>
+                    )}
+                    <td className="text-right font-mono text-xs text-gray-400">{t.problemsSolved ?? 0}</td>
+                    <td className="text-right font-mono text-xs text-gray-400">{fmtRating(t.maxSolvedRating)}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      </Section>
     </>
   )
 }
@@ -247,14 +217,11 @@ function CoverageTopics({ topics }: { topics: TopicMastery[] }) {
   const rows = [...topics]
     .filter(t => (t.problemsAttempted ?? 0) > 0)
     .sort((a, b) => (b.problemsSolved ?? 0) - (a.problemsSolved ?? 0))
-  if (!rows.length) return <EmptyCard text="Nothing practised yet — sync a platform first" />
+  if (!rows.length) return <div className="card"><EmptyState title="Nothing practised yet">Sync a platform first.</EmptyState></div>
 
   return (
     <>
-      <div className="card">
-        <p className="text-sm font-medium text-gray-300 mb-1 flex items-center gap-1.5">
-          <Target size={14} className="text-indigo-400" /> What you have practised
-        </p>
+      <Section title="What you have practised" icon={<Target size={14} />}>
         <p className="text-xs text-gray-500 mb-4">
           Problems solved per topic. Practice says how much you have done, not how strong you
           are: nearly everything anybody submits in practice ends accepted. Take part in rated
@@ -269,55 +236,58 @@ function CoverageTopics({ topics }: { topics: TopicMastery[] }) {
               tick={{ fill: CHROME.label, fontSize: 11 }} />
             <Tooltip contentStyle={tooltipStyle}
               formatter={(v: any) => [v, 'Solved']} />
-            <Bar dataKey="problemsSolved" fill="#6366f1" radius={[0, 4, 4, 0]} />
+            <Bar dataKey="problemsSolved" fill={ACCENT} radius={[0, 3, 3, 0]} barSize={14} isAnimationActive={ANIMATE} />
           </BarChart>
         </ResponsiveContainer>
-      </div>
+      </Section>
 
-      <div className="card overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left text-xs text-gray-500 border-b border-gray-800">
-              <th className="pb-2 font-medium">Topic</th>
-              <th className="pb-2 font-medium">Solved</th>
-              <th className="pb-2 font-medium">Tried, not solved</th>
-              <th className="pb-2 font-medium">Hardest solved</th>
-              <th className="pb-2 font-medium">Last practised</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map(t => (
-              <tr key={t.topic} className="border-b border-gray-800/50 last:border-0">
-                <td className="py-2.5 text-gray-200 font-medium">{t.topic}</td>
-                <td className="py-2.5 text-gray-200 tabular-nums">{t.problemsSolved ?? 0}</td>
-                <td className="py-2.5 text-gray-400 text-xs tabular-nums">
-                  {(t.problemsAttempted ?? 0) - (t.problemsSolved ?? 0)}
-                </td>
-                <td className="py-2.5 text-gray-400 text-xs tabular-nums">{fmtRating(t.maxSolvedRating)}</td>
-                <td className="py-2.5 text-gray-500 text-xs">
-                  {t.lastPracticedAt ? new Date(t.lastPracticedAt).toLocaleDateString() : '—'}
-                </td>
+      <Section title="All topics" bodyClassName="p-0">
+        <div className="table-scroll">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th scope="col">Topic</th>
+                <th scope="col" className="text-right">Solved</th>
+                <th scope="col" className="text-right">Tried, not solved</th>
+                <th scope="col" className="text-right">Hardest solved</th>
+                <th scope="col">Last practised</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {rows.map(t => (
+                <tr key={t.topic}>
+                  <td className="font-medium text-gray-100">{t.topic}</td>
+                  <td className="text-right font-mono text-gray-100">{t.problemsSolved ?? 0}</td>
+                  <td className="text-right font-mono text-xs text-gray-400">
+                    {(t.problemsAttempted ?? 0) - (t.problemsSolved ?? 0)}
+                  </td>
+                  <td className="text-right font-mono text-xs text-gray-400">{fmtRating(t.maxSolvedRating)}</td>
+                  <td className="whitespace-nowrap text-xs text-gray-500">
+                    {t.lastPracticedAt ? new Date(t.lastPracticedAt).toLocaleDateString() : '—'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Section>
     </>
   )
 }
 
 const READING_COLOR: Record<SkillReading['kind'], string> = {
-  strength: '#22c55e',
-  weak: '#ef4444',
-  'in-line': '#6366f1',
-  none: '#6b7280',
+  strength: 'rgb(var(--c-green-500))',
+  weak: 'rgb(var(--c-red-500))',
+  'in-line': ACCENT,
+  none: 'rgb(var(--c-gray-600))',
 }
 
 function ContestsTab() {
-  const { data: contests, isLoading } = useContestAnalytics()
-  if (isLoading) return <LoadingCard />
+  const { data: contests, isLoading, isError, error, refetch } = useContestAnalytics()
+  if (isLoading) return <LoadingState label="Loading contest history…" />
+  if (isError) return <ErrorState title="Could not load contest history" error={error} onRetry={() => refetch()} />
   if (!contests?.ratingHistory?.length)
-    return <EmptyCard text="No contest history — sync a platform to see data" />
+    return <div className="card"><EmptyState title="No contest history yet">Sync a platform to see your rounds.</EmptyState></div>
 
   const chartData = contests.ratingHistory.map((c: any) => ({
     name: c.date ?? '',
@@ -328,88 +298,48 @@ function ContestsTab() {
 
   return (
     <div className="space-y-6">
-      {/* Stats row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="card">
-          <p className="card-header">Peak rating</p>
-          <p className="text-2xl font-bold text-gray-50">{contests.peakRating ?? '—'}</p>
-        </div>
-        <div className="card">
-          <p className="card-header">Avg Δ rating</p>
-          <p className={`text-2xl font-bold ${
-            (contests.avgRatingChange ?? 0) >= 0 ? 'text-green-400' : 'text-red-400'
-          }`}>
-            {(contests.avgRatingChange ?? 0) >= 0 ? '+' : ''}
-            {(contests.avgRatingChange ?? 0).toFixed(1)}
-          </p>
-        </div>
-        <div className="card">
-          <p className="card-header">Avg wrong subs</p>
-          <p className="text-2xl font-bold text-amber-400">
-            {(contests.avgWrongSubmissions ?? 0).toFixed(1)}
-          </p>
-        </div>
-        <div className="card">
-          <p className="card-header">Consistency</p>
-          <p className="text-2xl font-bold text-teal-400">
-            {(contests.consistencyScore ?? 0).toFixed(0)}%
-          </p>
-        </div>
-      </div>
+      <Stats>
+        <Stat label="Peak rating" value={contests.peakRating ?? '—'} />
+        <Stat label="Average change" value={signed(contests.avgRatingChange ?? 0)}
+          tone={(contests.avgRatingChange ?? 0) > 0 ? 'good' : (contests.avgRatingChange ?? 0) < 0 ? 'danger' : 'default'}
+          hint="per rated round" />
+        <Stat label="Wrong submissions" value={(contests.avgWrongSubmissions ?? 0).toFixed(1)}
+          hint="average per round" />
+        <Stat label="Consistency" value={`${(contests.consistencyScore ?? 0).toFixed(0)}%`} />
+      </Stats>
 
-      {/* Rating history chart */}
-      <div className="card">
-        <p className="text-sm font-medium text-gray-300 mb-4 flex items-center gap-1.5">
-          <TrendingUp size={14} className="text-indigo-400" /> Rating over time
-        </p>
+      <Section title="Rating over time" icon={<TrendingUp size={14} />}>
         <ResponsiveContainer width="100%" height={280}>
           <LineChart data={chartData} margin={{ top: 5, right: 10, bottom: 5, left: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke={CHROME.grid} />
             <XAxis dataKey="name" {...axisStyle} tick={{ fill: CHROME.mutedTick, fontSize: 10 }} />
-            <YAxis {...axisStyle} />
+            {/* The range of the ratings themselves: from zero, a 1200-1750 career is a flat line. */}
+            <YAxis {...axisStyle} domain={['dataMin - 50', 'dataMax + 50']} allowDecimals={false} />
             <Tooltip
               contentStyle={tooltipStyle}
               formatter={(v: any, name: string) => [v, name === 'rating' ? 'Rating' : 'Change']}
             />
             <Line
               type="monotone" dataKey="rating"
-              stroke="#6366f1" strokeWidth={2}
-              dot={false} activeDot={{ r: 4 }}
+              stroke={ACCENT} strokeWidth={2}
+              dot={false} activeDot={{ r: 4 }} isAnimationActive={ANIMATE}
             />
           </LineChart>
         </ResponsiveContainer>
-      </div>
+      </Section>
 
-      {/* Insights */}
       {contests.insights?.length > 0 && (
-        <div className="card">
-          <p className="text-sm font-medium text-gray-300 mb-3">Insights</p>
+        <Section title="Insights" icon={<Lightbulb size={14} />}>
           <ul className="space-y-2">
             {contests.insights.map((insight: string, i: number) => (
-              <li key={i} className="flex items-start gap-2 text-sm text-gray-400">
-                <span className="text-indigo-400 mt-0.5 flex-shrink-0">→</span>
+              <li key={i} className="flex items-start gap-2 text-sm text-gray-300">
+                <span className="mt-0.5 flex-shrink-0 text-accent-400" aria-hidden="true">→</span>
                 {insight}
               </li>
             ))}
           </ul>
-        </div>
+        </Section>
       )}
-    </div>
-  )
-}
-
-function LoadingCard() {
-  return (
-    <div className="flex items-center justify-center h-48">
-      <Loader2 size={24} className="animate-spin text-indigo-400" />
-    </div>
-  )
-}
-
-function EmptyCard({ text }: { text: string }) {
-  return (
-    <div className="card text-center py-12">
-      <p className="text-gray-500 text-sm">{text}</p>
     </div>
   )
 }

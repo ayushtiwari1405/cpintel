@@ -25,6 +25,7 @@ import type {
   DesktopPolicy, EventDetail, EventProblem, ExamEventType, ExamFlag, ExamFlagKind, ExamFlagReport,
   ExamLeaderboardSettings, ExamMonitorRow, JudgeProblem,
 } from '@/types'
+import { ErrorState, LoadingState } from '@/components/common/States'
 
 type Tab = 'settings' | 'people' | 'problems' | 'passwords' | 'monitor' | 'logs' | 'leaderboard'
   | 'evaluation'
@@ -43,16 +44,12 @@ export default function AdminExamDetailPage() {
   const id = Number(examId)
   const valid = Number.isFinite(id)
 
-  const { data: detail, isLoading } = useAdminEvent(valid ? id : null)
+  const { data: detail, isLoading, isError, error, refetch } = useAdminEvent(valid ? id : null)
   const [tab, setTab] = useState<Tab>('settings')
 
-  if (isLoading || !detail) {
-    return (
-      <div className="flex items-center justify-center gap-2 py-20 text-sm text-gray-500">
-        <Loader2 size={16} className="animate-spin" /> Loading…
-      </div>
-    )
-  }
+  if (!valid) return <ErrorState title="Not found" error={new Error('That address does not name one.')} />
+  if (isError) return <ErrorState title="Could not load this event" error={error} onRetry={() => refetch()} />
+  if (isLoading || !detail) return <LoadingState label="Loading…" />
 
   const { event } = detail
   const exam = event.kind === 'EXAM'
@@ -79,16 +76,16 @@ export default function AdminExamDetailPage() {
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-lg font-semibold text-gray-100">{event.name}</h1>
+            <h1 className="break-words text-xl font-semibold tracking-tight text-gray-50 sm:text-2xl">{event.name}</h1>
             <LifecyclePill lifecycle={event.lifecycle} />
             {event.completedAt && <Pill tone="green">done</Pill>}
             {event.lockdownRequired && (
-              <span className="inline-flex items-center gap-1 text-[11px] text-indigo-300">
+              <span className="inline-flex items-center gap-1 text-[11px] text-accent-300">
                 <Eye size={11} /> monitored
               </span>
             )}
             {event.desktopAppRequired && (
-              <span className="inline-flex items-center gap-1 text-[11px] text-indigo-300">
+              <span className="inline-flex items-center gap-1 text-[11px] text-accent-300">
                 <Laptop size={11} /> desktop app only
               </span>
             )}
@@ -116,7 +113,7 @@ export default function AdminExamDetailPage() {
               'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium',
               'transition-colors',
               tab === tabId
-                ? 'bg-indigo-600/20 text-indigo-300'
+                ? 'bg-accent-600/20 text-accent-300'
                 : 'text-gray-500 hover:text-gray-300'
             )}
           >
@@ -180,9 +177,9 @@ function DesktopAppControl({ detail }: { detail: EventDetail }) {
 
   return (
     <div className={clsx('flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3',
-      required ? 'border-indigo-900 bg-indigo-950/40' : 'border-gray-800 bg-gray-900/60')}>
+      required ? 'border-accent-900 bg-accent-950/40' : 'border-gray-800 bg-gray-900/60')}>
       <div className="flex items-start gap-2.5">
-        <Laptop size={16} className={clsx('mt-0.5', required ? 'text-indigo-300' : 'text-gray-500')} />
+        <Laptop size={16} className={clsx('mt-0.5', required ? 'text-accent-300' : 'text-gray-500')} />
         <div>
           <p className="text-sm font-medium text-gray-200">
             {required ? 'Desktop app required' : 'Desktop app not required'}
@@ -205,7 +202,7 @@ function DesktopAppControl({ detail }: { detail: EventDetail }) {
         className={clsx('rounded-lg px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-40',
           required
             ? 'border border-gray-800 bg-gray-900 text-gray-300 hover:bg-gray-800'
-            : 'bg-indigo-600 text-white hover:bg-indigo-500')}
+            : 'bg-accent-600 text-white hover:bg-accent-500')}
       >
         {set.isPending ? <Loader2 size={12} className="animate-spin" />
           : required ? 'Allow browsers' : 'Require the desktop app'}
@@ -236,8 +233,8 @@ function LifecycleControls({ detail }: { detail: EventDetail }) {
           }}
           disabled={complete.isPending}
           title="Once it is over and all re-evaluation is finished"
-          className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs
-                     font-medium text-white transition-colors hover:bg-indigo-500
+          className="flex items-center gap-1.5 rounded-lg bg-accent-600 px-3 py-1.5 text-xs
+                     font-medium text-white transition-colors hover:bg-accent-500
                      disabled:opacity-40"
         >
           <CheckCircle2 size={12} /> Mark as done
@@ -250,8 +247,8 @@ function LifecycleControls({ detail }: { detail: EventDetail }) {
           title={!event.startsAt || !event.endsAt
             ? 'Give it a start and an end first'
             : 'Everyone assigned will see it'}
-          className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white
-                     transition-colors hover:bg-indigo-500 disabled:opacity-40"
+          className="rounded-lg bg-accent-600 px-3 py-1.5 text-xs font-medium text-white
+                     transition-colors hover:bg-accent-500 disabled:opacity-40"
         >
           Publish
         </button>
@@ -366,8 +363,8 @@ function DonePanel({ detail }: { detail: EventDetail }) {
           <button
             onClick={() => download.mutate({ eventId: id, name: event.name, file: 'export' })}
             disabled={download.isPending}
-            className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs
-                       font-medium text-white transition-colors hover:bg-indigo-500
+            className="flex items-center gap-1.5 rounded-lg bg-accent-600 px-3 py-1.5 text-xs
+                       font-medium text-white transition-colors hover:bg-accent-500
                        disabled:opacity-40"
           >
             {download.isPending
@@ -403,7 +400,7 @@ function DonePanel({ detail }: { detail: EventDetail }) {
 // ------------------------------------------------------------------ settings
 
 const INPUT = 'w-full rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 text-sm '
-  + 'text-gray-200 placeholder-gray-600 outline-none focus:border-indigo-600'
+  + 'text-gray-200 placeholder-gray-400 outline-none focus:border-accent-600'
 
 function toLocalInput(iso: string | null): string {
   if (!iso) return ''
@@ -609,8 +606,8 @@ function SettingsTab({ detail }: { detail: EventDetail }) {
               Nothing ticked: candidates may use any language the judge offers for this contest.
             </p>
           ) : (
-            <p className="flex items-start gap-2 rounded-lg border border-indigo-900
-              bg-indigo-950/40 px-3 py-2 text-xs leading-relaxed text-indigo-200">
+            <p className="flex items-start gap-2 rounded-lg border border-accent-900
+              bg-accent-950/40 px-3 py-2 text-xs leading-relaxed text-accent-200">
               <Code2 size={13} className="mt-0.5 flex-shrink-0" />
               <span>
                 Candidates will see only these in the editor, and a submission in anything else
@@ -712,8 +709,8 @@ function SettingsTab({ detail }: { detail: EventDetail }) {
       <button
         onClick={save}
         disabled={update.isPending}
-        className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-sm
-                   font-medium text-white transition-colors hover:bg-indigo-500
+        className="flex items-center gap-1.5 rounded-lg bg-accent-600 px-3 py-2 text-sm
+                   font-medium text-white transition-colors hover:bg-accent-500
                    disabled:opacity-40"
       >
         {update.isPending ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
@@ -789,8 +786,8 @@ function PeopleTab({ detail }: { detail: EventDetail }) {
                 { onSuccess: () => setTeamId('') })
             }}
             disabled={teamId === ''}
-            className="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white
-                       transition-colors hover:bg-indigo-500 disabled:opacity-40"
+            className="rounded-lg bg-accent-600 px-3 py-2 text-sm font-medium text-white
+                       transition-colors hover:bg-accent-500 disabled:opacity-40"
           >
             Assign
           </button>
@@ -846,8 +843,8 @@ function PeopleTab({ detail }: { detail: EventDetail }) {
                 { onSuccess: () => setUserId('') })
             }}
             disabled={userId === ''}
-            className="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white
-                       transition-colors hover:bg-indigo-500 disabled:opacity-40"
+            className="rounded-lg bg-accent-600 px-3 py-2 text-sm font-medium text-white
+                       transition-colors hover:bg-accent-500 disabled:opacity-40"
           >
             Assign
           </button>
@@ -962,8 +959,8 @@ function ProblemsTab({ detail }: { detail: EventDetail }) {
             })}
             disabled={save.isPending || locked}
             title={locked ? 'It has started, so its problems are fixed' : undefined}
-            className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs
-                       font-medium text-white transition-colors hover:bg-indigo-500
+            className="flex items-center gap-1.5 rounded-lg bg-accent-600 px-3 py-1.5 text-xs
+                       font-medium text-white transition-colors hover:bg-accent-500
                        disabled:opacity-40"
           >
             {save.isPending ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
@@ -1053,7 +1050,7 @@ function ProblemsTab({ detail }: { detail: EventDetail }) {
                 title: '', externalId: '', ordering: current.length, points: null,
               }])}
               disabled={locked}
-              className="flex items-center gap-1.5 text-xs text-indigo-400 hover:text-indigo-300
+              className="flex items-center gap-1.5 text-xs text-accent-400 hover:text-accent-300
                          disabled:opacity-40"
             >
               <Plus size={12} /> Add a problem
@@ -1092,24 +1089,19 @@ function duration(ms: number): string {
   return total % 60 === 0 ? `${minutes}m` : `${minutes}m ${total % 60}s`
 }
 
-const STATUS_TONE: Record<string, 'gray' | 'green' | 'amber' | 'red' | 'indigo'> = {
+const STATUS_TONE: Record<string, 'gray' | 'green' | 'amber' | 'red' | 'accent'> = {
   NOT_STARTED: 'gray',
   ACTIVE:      'green',
   AWAY:        'amber',
-  SUBMITTED:   'indigo',
+  SUBMITTED:   'accent',
   LEFT:        'red',
 }
 
 function MonitorTab({ eventId, live }: { eventId: number; live: boolean }) {
-  const { data: snapshot, isLoading } = useExamMonitor(eventId, live)
+  const { data: snapshot, isLoading, isError, error, refetch } = useExamMonitor(eventId, live)
 
-  if (isLoading || !snapshot) {
-    return (
-      <div className="flex items-center justify-center gap-2 py-16 text-sm text-gray-500">
-        <Loader2 size={14} className="animate-spin" /> Reading the room…
-      </div>
-    )
-  }
+  if (isError) return <ErrorState title="Could not read the room" error={error} onRetry={() => refetch()} />
+  if (isLoading || !snapshot) return <LoadingState label="Reading the room…" />
 
   return (
     <div className="space-y-4">
@@ -1130,7 +1122,7 @@ function MonitorTab({ eventId, live }: { eventId: number; live: boolean }) {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-800 text-left text-xs text-gray-500">
+              <tr className="border-b border-gray-800 text-left text-[11px] uppercase tracking-wide text-gray-500">
                 <th className="px-4 py-2 font-medium">Candidate</th>
                 <th className="px-4 py-2 font-medium">Status</th>
                 <th className="px-4 py-2 font-medium">Focus</th>
@@ -1146,7 +1138,7 @@ function MonitorTab({ eventId, live }: { eventId: number; live: boolean }) {
                 <EmptyRow colSpan={8}>Nobody is assigned to this examination yet.</EmptyRow>
               )}
               {snapshot.rows.map(row => (
-                <tr key={row.userId} className="transition-colors hover:bg-gray-800/40">
+                <tr key={row.userId} className="transition-colors hover:bg-gray-850/60">
                   <td className="px-4 py-2.5">
                     <span className="text-gray-200">{row.username}</span>
                     {row.fullName && (
@@ -1196,9 +1188,9 @@ function MonitorTab({ eventId, live }: { eventId: number; live: boolean }) {
 
 // --------------------------------------------------------------------- logs
 
-const TYPE_TONE: Record<string, 'gray' | 'green' | 'amber' | 'red' | 'indigo'> = {
-  EXAM_ENTERED: 'indigo',
-  EXAM_STARTED: 'indigo',
+const TYPE_TONE: Record<string, 'gray' | 'green' | 'amber' | 'red' | 'accent'> = {
+  EXAM_ENTERED: 'accent',
+  EXAM_STARTED: 'accent',
   PROBLEM_OPENED: 'gray',
   PROBLEM_SUBMITTED: 'green',
   SUBMISSION_RESULT: 'green',
@@ -1206,7 +1198,7 @@ const TYPE_TONE: Record<string, 'gray' | 'green' | 'amber' | 'red' | 'indigo'> =
   FOCUS_REGAINED: 'gray',
   AWAY_THRESHOLD_EXCEEDED: 'red',
   EXAM_EXITED: 'red',
-  EXAM_COMPLETED: 'indigo',
+  EXAM_COMPLETED: 'accent',
   SESSION_TERMINATED: 'red',
   LOCKDOWN_TRIGGERED: 'amber',
   SUSPICIOUS_ACTIVITY: 'amber',
@@ -1271,7 +1263,7 @@ function LogsTab({ eventId, live }: { eventId: number; live: boolean }) {
               'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium',
               'transition-colors',
               view === id
-                ? 'bg-indigo-600/20 text-indigo-300'
+                ? 'bg-accent-600/20 text-accent-300'
                 : 'text-gray-500 hover:text-gray-300'
             )}
           >
@@ -1332,7 +1324,7 @@ function StudentList({ rows, loading, flagCounts, onOpen }: {
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-gray-800 text-left text-xs text-gray-500">
+            <tr className="border-b border-gray-800 text-left text-[11px] uppercase tracking-wide text-gray-500">
               <th className="px-4 py-2 font-medium">Candidate</th>
               <th className="px-4 py-2 font-medium">Status</th>
               <th className="px-4 py-2 font-medium">Events</th>
@@ -1356,7 +1348,7 @@ function StudentList({ rows, loading, flagCounts, onOpen }: {
                 <tr
                   key={row.userId}
                   onClick={() => onOpen(row.userId, row.username)}
-                  className="cursor-pointer transition-colors hover:bg-gray-800/40"
+                  className="cursor-pointer transition-colors hover:bg-gray-850/60"
                 >
                   <td className="px-4 py-2.5">
                     <span className="text-gray-200">{row.username}</span>
@@ -1454,7 +1446,7 @@ function FlagTable({ flags, loading, onOpen }: {
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-gray-800 text-left text-xs text-gray-500">
+          <tr className="border-b border-gray-800 text-left text-[11px] uppercase tracking-wide text-gray-500">
             <th className="px-4 py-2 font-medium">When</th>
             {onOpen && <th className="px-4 py-2 font-medium">Candidate</th>}
             <th className="px-4 py-2 font-medium">What</th>
@@ -1469,7 +1461,7 @@ function FlagTable({ flags, loading, onOpen }: {
           )}
           {flags.map((flag, index) => (
             <tr key={`${flag.userId}-${flag.kind}-${flag.occurredAt}-${index}`}
-              className="transition-colors hover:bg-gray-800/40">
+              className="transition-colors hover:bg-gray-850/60">
               <td className="px-4 py-2 text-xs text-gray-500"
                 title={flag.occurredAt ? new Date(flag.occurredAt).toLocaleString() : undefined}>
                 {flag.occurredAt ? new Date(flag.occurredAt).toLocaleTimeString() : '—'}
@@ -1478,7 +1470,7 @@ function FlagTable({ flags, loading, onOpen }: {
                 <td className="px-4 py-2">
                   <button
                     onClick={() => onOpen(flag.userId, flag.username)}
-                    className="text-gray-300 hover:text-indigo-400"
+                    className="text-gray-300 hover:text-accent-400"
                     title="Read this candidate's log"
                   >
                     {flag.username}
@@ -1562,7 +1554,7 @@ function CandidateLog({ eventId, userId, username, flags, onBack }: {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-800 text-left text-xs text-gray-500">
+              <tr className="border-b border-gray-800 text-left text-[11px] uppercase tracking-wide text-gray-500">
                 <th className="px-4 py-2 font-medium">When</th>
                 <th className="px-4 py-2 font-medium">Event</th>
                 <th className="px-4 py-2 font-medium">Problem</th>
@@ -1578,7 +1570,7 @@ function CandidateLog({ eventId, userId, username, flags, onBack }: {
                 </EmptyRow>
               )}
               {logs?.entries.map(entry => (
-                <tr key={entry.id} className="transition-colors hover:bg-gray-800/40">
+                <tr key={entry.id} className="transition-colors hover:bg-gray-850/60">
                   <td className="px-4 py-2 text-xs text-gray-500"
                     title={new Date(entry.occurredAt).toLocaleString()}>
                     {new Date(entry.occurredAt).toLocaleTimeString()}
@@ -1655,7 +1647,7 @@ function RejudgePanel({ event, problems }: {
             <select value={chosen} onChange={e => setLabel(e.target.value)}
               disabled={running || problems.length === 0}
               className="rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 text-sm
-                text-gray-200 outline-none focus:border-indigo-600 disabled:opacity-40">
+                text-gray-200 outline-none focus:border-accent-600 disabled:opacity-40">
               {problems.length === 0 && <option value="">—</option>}
               {problems.map(p => <option key={p} value={p}>{p}</option>)}
             </select>
@@ -1805,8 +1797,8 @@ function LeaderboardTab({ eventId, live, exam, name, done, event }: {
               onClick={() => save.mutate({ eventId, settings },
                 { onSuccess: () => setDraft(null) })}
               disabled={!dirty || save.isPending}
-              className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-sm
-                font-medium text-white hover:bg-indigo-500 disabled:opacity-40"
+              className="flex items-center gap-1.5 rounded-lg bg-accent-600 px-3 py-2 text-sm
+                font-medium text-white hover:bg-accent-500 disabled:opacity-40"
             >
               {save.isPending ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
               Save leaderboard settings

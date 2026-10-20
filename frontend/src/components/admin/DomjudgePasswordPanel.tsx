@@ -21,9 +21,9 @@ import { useToast } from '@/components/common/Toaster'
 
 const STATUS_META: Record<DomjudgePasswordRowStatus, { label: string; cls: string }> = {
   WILL_CHANGE: { label: 'Will update', cls: 'text-green-300 bg-green-950/40' },
-  WILL_ATTACH: { label: 'Will attach', cls: 'text-indigo-300 bg-indigo-950/40' },
+  WILL_ATTACH: { label: 'Will attach', cls: 'text-accent-300 bg-accent-950/40' },
   CHANGED:     { label: 'Updated',     cls: 'text-green-300 bg-green-950/40' },
-  ATTACHED:    { label: 'Attached',    cls: 'text-indigo-300 bg-indigo-950/40' },
+  ATTACHED:    { label: 'Attached',    cls: 'text-accent-300 bg-accent-950/40' },
   NOT_FOUND:   { label: 'Not in group', cls: 'text-amber-300 bg-amber-950/40' },
   DUPLICATE:   { label: 'Duplicate',   cls: 'text-amber-300 bg-amber-950/40' },
   FAILED:      { label: 'Failed',      cls: 'text-red-300 bg-red-950/40' },
@@ -81,8 +81,8 @@ export function DomjudgePasswordPanel({ groupId }: { groupId: number }) {
           spellCheck={false}
           placeholder={EXAMPLE}
           className="w-full rounded-lg border border-gray-800 bg-gray-900 px-3 py-2
-                     font-mono text-xs text-gray-200 placeholder-gray-700 outline-none
-                     focus:border-indigo-600"
+                     font-mono text-xs text-gray-200 placeholder-gray-400 outline-none
+                     focus:border-accent-600"
         />
 
         <p className="text-xs text-gray-600">
@@ -99,7 +99,7 @@ export function DomjudgePasswordPanel({ groupId }: { groupId: number }) {
             disabled={!text.trim() || update.isPending}
             className="flex items-center gap-1.5 rounded-lg border border-gray-700 bg-gray-800
                        px-3 py-1.5 text-xs text-gray-200 transition-colors
-                       hover:border-indigo-600 disabled:opacity-40"
+                       hover:border-accent-600 disabled:opacity-40"
           >
             {update.isPending ? <Loader2 size={13} className="animate-spin" /> : <Eye size={13} />}
             Preview
@@ -109,9 +109,9 @@ export function DomjudgePasswordPanel({ groupId }: { groupId: number }) {
             <button
               onClick={() => run(false)}
               disabled={update.isPending}
-              className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5
+              className="flex items-center gap-1.5 rounded-lg bg-accent-600 px-3 py-1.5
                          text-xs font-medium text-white transition-colors
-                         hover:bg-indigo-500 disabled:opacity-40"
+                         hover:bg-accent-500 disabled:opacity-40"
             >
               <KeyRound size={13} /> Update {result.ok}
             </button>
@@ -157,7 +157,7 @@ function RowTable({ rows }: { rows: DomjudgePasswordRow[] }) {
     <div className="max-h-72 overflow-auto rounded-lg border border-gray-800">
       <table className="w-full text-xs">
         <thead className="sticky top-0 bg-gray-900">
-          <tr className="border-b border-gray-800 text-left text-gray-500">
+          <tr className="border-b border-gray-800 text-left text-[11px] uppercase tracking-wide text-gray-500">
             <th className="px-3 py-1.5 font-medium">Line</th>
             <th className="px-3 py-1.5 font-medium">DOMjudge login</th>
             <th className="px-3 py-1.5 font-medium">Member</th>
@@ -170,7 +170,7 @@ function RowTable({ rows }: { rows: DomjudgePasswordRow[] }) {
             const bad = row.status === 'FAILED'
             const warn = row.status === 'NOT_FOUND' || row.status === 'DUPLICATE'
             return (
-              <tr key={row.line} className="hover:bg-gray-800/40">
+              <tr key={row.line} className="hover:bg-gray-850/60">
                 <td className="px-3 py-1.5 tabular-nums text-gray-600">{row.line}</td>
                 <td className="px-3 py-1.5 font-mono text-gray-300">{row.djUsername ?? '—'}</td>
                 <td className="px-3 py-1.5 text-gray-400">{row.username ?? '—'}</td>

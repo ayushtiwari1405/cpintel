@@ -74,7 +74,7 @@ export function NodeDetailPanel({ node, allNodes }: Props) {
           node.skillBasis === 'GAUNTLET' ? 'grid-cols-2' : 'grid-cols-3')}>
           <Stat label="Rating here"
             value={`${Math.round(node.skillRating ?? 0)} ± ${Math.round(node.skillSd ?? 0)}`}
-            tone="text-indigo-300"
+            tone="text-accent-300"
             hint={node.skillBasis === 'GAUNTLET' ? 'From your gauntlet placement for this area'
               : node.skillProblems === 0 ? 'No round problems here yet: your overall rating' : undefined} />
           {node.skillBasis !== 'GAUNTLET' && (
@@ -85,7 +85,7 @@ export function NodeDetailPanel({ node, allNodes }: Props) {
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-2 text-center">
-          <Stat label="Solved" value={`${node.problemsSolved}`} tone="text-indigo-300" />
+          <Stat label="Solved" value={`${node.problemsSolved}`} tone="text-accent-300" />
           <Stat label="Hardest solved" value={node.maxSolvedRating ? `${node.maxSolvedRating}` : '—'}
             tone="text-gray-300" />
         </div>
@@ -153,7 +153,7 @@ export function NodeDetailPanel({ node, allNodes }: Props) {
                 >
                   <Code2
                     size={12}
-                    className="flex-shrink-0 text-gray-600 group-hover:text-indigo-400"
+                    className="flex-shrink-0 text-gray-600 group-hover:text-accent-400"
                   />
                   <span className={clsx(
                     'truncate',

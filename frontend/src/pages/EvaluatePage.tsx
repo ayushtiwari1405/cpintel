@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { ArrowLeft, ClipboardCheck, Loader2 } from 'lucide-react'
+import { ArrowLeft, ClipboardCheck, ChevronRight } from 'lucide-react'
 import { format } from 'date-fns'
 import { clsx } from 'clsx'
 
@@ -7,11 +7,13 @@ import { evaluationApi } from '@/api/evaluationApi'
 import { EvaluationSheet } from '@/components/evaluation/EvaluationSheet'
 import { useMyEvaluationExams } from '@/hooks/useEvaluation'
 import type { EvaluationState, TaExam } from '@/types'
+import { PageHeader } from '@/components/common/PageHeader'
+import { EmptyState, ErrorState, LoadingState } from '@/components/common/States'
 
 const STATE: Record<EvaluationState, { label: string; tone: string }> = {
-  NOT_ENDED: { label: 'not over yet', tone: 'bg-gray-800 text-gray-400' },
-  OPEN:      { label: 'open for marking', tone: 'bg-indigo-900/40 text-indigo-300' },
-  DONE:      { label: 'final', tone: 'bg-green-900/40 text-green-400' },
+  NOT_ENDED: { label: 'Not over yet',     tone: 'badge-gray' },
+  OPEN:      { label: 'Open for marking', tone: 'badge-blue' },
+  DONE:      { label: 'Final',            tone: 'badge-green' },
 }
 
 /**
@@ -19,35 +21,36 @@ const STATE: Record<EvaluationState, { label: string; tone: string }> = {
  * one of them. Marking opens when the paper ends and closes when an admin marks it done.
  */
 export default function EvaluatePage() {
-  const { data: exams, isLoading } = useMyEvaluationExams()
+  const { data: exams, isLoading, isError, error, refetch } = useMyEvaluationExams()
   const [openId, setOpenId] = useState<number | null>(null)
   const open = exams?.find(e => e.eventId === openId) ?? null
   const openEventId = open?.eventId ?? null
   const source = useMemo(
     () => openEventId != null ? evaluationApi.source(openEventId) : null, [openEventId])
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center gap-2 py-20 text-sm text-gray-500">
-        <Loader2 size={16} className="animate-spin" /> Loading…
-      </div>
-    )
-  }
+  const header = <PageHeader title="Evaluate"
+    description="Examinations you have been given marking for. Marking opens when a paper ends and closes when an admin marks it done." />
+
+  if (isLoading) return <>{header}<LoadingState label="Loading your marking…" /></>
+  if (isError) return <>{header}<ErrorState title="Could not load your marking" error={error} onRetry={() => refetch()} /></>
 
   if (open && source) {
     return (
       <div className="space-y-4">
-        <button onClick={() => setOpenId(null)}
-          className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-gray-300">
-          <ArrowLeft size={12} /> All examinations
+        <button type="button" onClick={() => setOpenId(null)}
+          className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs text-gray-400
+                     hover:bg-gray-850 hover:text-gray-200">
+          <ArrowLeft size={12} aria-hidden="true" /> All examinations
         </button>
-        <div>
-          <h1 className="text-lg font-semibold text-gray-100">{open.name}</h1>
-          <p className="text-xs text-gray-500">
+        <PageHeader
+          eyebrow="Marking"
+          title={open.name}
+          description={<>
             {open.classroomName}
             {open.endsAt && <> · ended {format(new Date(open.endsAt), 'd MMM yyyy, HH:mm')}</>}
-          </p>
-        </div>
+          </>}
+          className="mb-2"
+        />
         <EvaluationSheet source={source} />
       </div>
     )
@@ -55,40 +58,40 @@ export default function EvaluatePage() {
 
   if (!exams || exams.length === 0) {
     return (
-      <div className="rounded-xl border border-gray-800 bg-gray-900 px-5 py-12 text-center">
-        <ClipboardCheck size={22} className="mx-auto text-gray-700" />
-        <p className="mt-3 text-sm text-gray-400">Nothing to mark.</p>
-        <p className="mt-1 text-xs text-gray-600">
-          Examinations appear here once an admin gives you questions or students to mark.
-        </p>
-      </div>
+      <>
+        {header}
+        <div className="rounded-xl border border-gray-800 bg-gray-900">
+          <EmptyState icon={<ClipboardCheck size={18} />} title="Nothing to mark">
+            Examinations appear here once an admin gives you questions or students to mark.
+          </EmptyState>
+        </div>
+      </>
     )
   }
 
   return (
-    <div className="space-y-2">
-      {exams.map(exam => <ExamRow key={exam.eventId} exam={exam}
-        onOpen={() => setOpenId(exam.eventId)} />)}
-    </div>
+    <>
+      {header}
+      <ul className="divide-y divide-gray-800 overflow-hidden rounded-xl border border-gray-800 bg-gray-900">
+        {exams.map(exam => <li key={exam.eventId}><ExamRow exam={exam}
+          onOpen={() => setOpenId(exam.eventId)} /></li>)}
+      </ul>
+    </>
   )
 }
 
 function ExamRow({ exam, onOpen }: { exam: TaExam; onOpen: () => void }) {
   const state = STATE[exam.state]
   return (
-    <button onClick={onOpen}
-      className="flex w-full flex-wrap items-center justify-between gap-3 rounded-xl border
-                 border-gray-800 bg-gray-900 px-4 py-3 text-left hover:border-gray-700">
+    <button type="button" onClick={onOpen}
+      className="group flex w-full flex-wrap items-center justify-between gap-3 px-4 py-3 text-left
+                 transition-colors hover:bg-gray-850/60">
       <div className="min-w-0">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-gray-200">{exam.name}</span>
-          <span className={clsx('rounded-full px-2 py-0.5 text-[11px] font-medium', state.tone)}>
-            {state.label}
-          </span>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm font-medium text-gray-100">{exam.name}</span>
+          <span className={state.tone}>{state.label}</span>
           {exam.frozenAt && exam.state === 'OPEN' && (
-            <span className="rounded-full bg-sky-900/40 px-2 py-0.5 text-[11px] font-medium text-sky-300">
-              frozen
-            </span>
+            <span className="badge-gray">Frozen</span>
           )}
         </div>
         <p className="mt-0.5 text-xs text-gray-500">
@@ -96,8 +99,12 @@ function ExamRow({ exam, onOpen }: { exam: TaExam; onOpen: () => void }) {
           {exam.endsAt && <> · ends {format(new Date(exam.endsAt), 'd MMM yyyy, HH:mm')}</>}
         </p>
       </div>
-      <span className="text-xs tabular-nums text-gray-400">
-        {exam.marked} of {exam.cells} marked
+      <span className="flex items-center gap-3">
+        <span className={clsx('font-mono text-xs tabular-nums',
+          exam.cells > 0 && exam.marked >= exam.cells ? 'text-green-300' : 'text-gray-400')}>
+          {exam.marked}/{exam.cells} marked
+        </span>
+        <ChevronRight size={15} className="text-gray-600 group-hover:text-gray-300" aria-hidden="true" />
       </span>
     </button>
   )

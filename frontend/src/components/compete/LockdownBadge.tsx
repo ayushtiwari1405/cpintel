@@ -48,7 +48,7 @@ export function LockdownBadge({ state }: { state: LockdownState | null }) {
           ? 'border-red-800 bg-red-950/60 text-red-300'
           : state.longAbsences > 0
             ? 'border-amber-800 bg-amber-950/50 text-amber-300'
-            : 'border-indigo-800 bg-indigo-950/50 text-indigo-300'
+            : 'border-accent-800 bg-accent-950/50 text-accent-300'
       )}
     >
       {state.away ? <EyeOff size={12} /> : <Eye size={12} />}

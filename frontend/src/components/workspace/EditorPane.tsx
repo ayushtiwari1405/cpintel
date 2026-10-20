@@ -359,7 +359,7 @@ export function EditorPane({
               title="The language you write in: Run compiles it as this, and Submit sends it as this"
               className="min-w-0 max-w-[13rem] flex-shrink rounded-md border border-gray-800
                          bg-gray-900 px-2 py-1 text-xs text-gray-300 outline-none
-                         focus:border-indigo-600"
+                         focus:border-accent-600"
             >
               {shownLanguages.length === 0 && <option value="">No languages loaded</option>}
               {shownLanguages.map(l => (
@@ -396,7 +396,7 @@ export function EditorPane({
       {/* Drop target wraps the editor rather than living on it: Monaco owns its own DOM
           and swallows drag events, so the handlers have to sit on an element outside it. */}
       <div
-        className={clsx('relative flex-1 min-h-0', dragging && 'ring-2 ring-indigo-500 ring-inset')}
+        className={clsx('relative flex-1 min-h-0', dragging && 'ring-2 ring-accent-500 ring-inset')}
         onDragOver={e => {
           if (!problemSelected) return
           e.preventDefault()
@@ -429,7 +429,7 @@ export function EditorPane({
         {dragging && (
           <div className="absolute inset-0 flex items-center justify-center
                           bg-gray-950/80 pointer-events-none">
-            <span className="flex items-center gap-2 text-sm text-indigo-300">
+            <span className="flex items-center gap-2 text-sm text-accent-300">
               <Upload size={16} /> Drop to load
             </span>
           </div>

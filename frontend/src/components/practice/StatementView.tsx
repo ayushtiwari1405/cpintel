@@ -225,8 +225,8 @@ export function StatementView({
         <header className="pb-5 mb-5 border-b border-gray-800">
           <div className="flex items-start gap-3">
             <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl
-                            border border-indigo-900 bg-indigo-600/10 font-mono text-base
-                            font-semibold text-indigo-300">
+                            border border-accent-900 bg-accent-600/10 font-mono text-base
+                            font-semibold text-accent-300">
               {problem.index}
             </div>
 
@@ -246,7 +246,7 @@ export function StatementView({
               data-lockdown-allow
               className="flex-shrink-0 flex items-center gap-1.5 rounded-lg border border-gray-800
                          px-2.5 py-1.5 text-xs text-gray-500 transition-colors
-                         hover:border-indigo-900 hover:text-indigo-400"
+                         hover:border-accent-900 hover:text-accent-400"
             >
               <ExternalLink size={12} /> {isDocument ? 'Judge' : 'Codeforces'}
             </button>
@@ -330,7 +330,7 @@ export function StatementView({
         )}
 
         {!isDocument && problem.noteHtml && (
-          <div className="mt-7 rounded-xl border border-gray-800 border-l-2 border-l-indigo-500/60
+          <div className="mt-7 rounded-xl border border-gray-800 border-l-2 border-l-accent-500/60
                           bg-gray-900/40 px-4 py-3">
             <Section title="Note" html={problem.noteHtml} flush />
           </div>
@@ -356,7 +356,7 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
     <h3 className="mb-2.5 flex items-center gap-2 text-[11px] font-semibold uppercase
                    tracking-wider text-gray-500">
-      <span className="h-3 w-0.5 rounded-full bg-indigo-500/70" />
+      <span className="h-3 w-0.5 rounded-full bg-accent-500/70" />
       {children}
     </h3>
   )

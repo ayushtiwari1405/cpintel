@@ -1,5 +1,16 @@
+// The series colour that means "you" or "this metric": CPIntel's accent, through the same
+// palette variable the rest of the UI uses, so it follows the light/dark theme.
+export const ACCENT = 'rgb(var(--c-accent-400))'
+
+/**
+ * Recharts animates in script, so the stylesheet's reduced-motion rule cannot reach it. Charts
+ * pass this as isAnimationActive: drawn at once for anyone who has asked for less motion.
+ */
+export const ANIMATE = typeof window === 'undefined'
+  || !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+
 export const CHART_COLORS = {
-  indigo:  '#6366f1',
+  accent:  ACCENT,
   teal:    '#14b8a6',
   amber:   '#f59e0b',
   rose:    '#f43f5e',
@@ -33,7 +44,7 @@ export const CHROME = {
 export const tooltipStyle = {
   backgroundColor: gray(900),
   border: `1px solid ${gray(800)}`,
-  borderRadius: '8px',
+  borderRadius: '6px',
   color: gray(50),
   fontSize: 12,
 }

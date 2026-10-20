@@ -21,7 +21,7 @@ import { Panel } from '@/components/admin/AdminUi'
  */
 
 const STATUS_META: Record<RosterRowStatus, { label: string; cls: string }> = {
-  ADD_EXISTING:   { label: 'Add',            cls: 'text-indigo-300 bg-indigo-950/40' },
+  ADD_EXISTING:   { label: 'Add',            cls: 'text-accent-300 bg-accent-950/40' },
   CREATE_AND_ADD: { label: 'Create',         cls: 'text-green-300 bg-green-950/40' },
   ALREADY_MEMBER: { label: 'Already in',     cls: 'text-gray-400 bg-gray-800/60' },
   DUPLICATE:      { label: 'Duplicate',      cls: 'text-amber-300 bg-amber-950/40' },
@@ -100,8 +100,8 @@ export function RosterImportPanel({ groupId }: Props) {
           spellCheck={false}
           placeholder={EXAMPLE}
           className="w-full rounded-lg border border-gray-800 bg-gray-900 px-3 py-2
-                     font-mono text-xs text-gray-200 placeholder-gray-700 outline-none
-                     focus:border-indigo-600"
+                     font-mono text-xs text-gray-200 placeholder-gray-400 outline-none
+                     focus:border-accent-600"
         />
 
         <p className="text-xs text-gray-600">
@@ -132,7 +132,7 @@ export function RosterImportPanel({ groupId }: Props) {
             onChange={e => { setTeamName(e.target.value); setPreview(null); setCommitted(null) }}
             placeholder="optional"
             className="w-44 rounded-md border border-gray-800 bg-gray-900 px-2 py-1 text-xs
-                       text-gray-200 placeholder-gray-700 outline-none focus:border-indigo-600"
+                       text-gray-200 placeholder-gray-400 outline-none focus:border-accent-600"
           />
           <span className="text-[11px] text-gray-600">
             a <span className="text-gray-500">teamName</span> on a row still wins
@@ -145,7 +145,7 @@ export function RosterImportPanel({ groupId }: Props) {
             disabled={!text.trim() || importRoster.isPending}
             className="flex items-center gap-1.5 rounded-lg border border-gray-700 bg-gray-800
                        px-3 py-1.5 text-xs text-gray-200 transition-colors
-                       hover:border-indigo-600 disabled:opacity-40"
+                       hover:border-accent-600 disabled:opacity-40"
           >
             {importRoster.isPending
               ? <Loader2 size={13} className="animate-spin" />
@@ -176,9 +176,9 @@ export function RosterImportPanel({ groupId }: Props) {
             <button
               onClick={() => run(false)}
               disabled={importRoster.isPending}
-              className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5
+              className="flex items-center gap-1.5 rounded-lg bg-accent-600 px-3 py-1.5
                          text-xs font-medium text-white transition-colors
-                         hover:bg-indigo-500 disabled:opacity-40"
+                         hover:bg-accent-500 disabled:opacity-40"
             >
               <UserPlus size={13} />
               Import {preview.toAdd + preview.toCreate} {preview.toCreate > 0 && '· creates ' + preview.toCreate}
@@ -236,7 +236,7 @@ export function RosterImportPanel({ groupId }: Props) {
 
 function Summary({ result }: { result: RosterImportResult }) {
   const stats: Array<[string, number, string]> = [
-    [result.dryRun ? 'To add' : 'Added', result.toAdd, 'text-indigo-300'],
+    [result.dryRun ? 'To add' : 'Added', result.toAdd, 'text-accent-300'],
     [result.dryRun ? 'To create' : 'Created', result.toCreate, 'text-green-300'],
     ['Already in', result.alreadyMembers, 'text-gray-400'],
     ['Duplicates', result.duplicates, 'text-amber-300'],
@@ -265,7 +265,7 @@ function RowTable({ rows }: { rows: RosterRowOutcome[] }) {
     <div className="max-h-72 overflow-auto rounded-lg border border-gray-800">
       <table className="w-full text-xs">
         <thead className="sticky top-0 bg-gray-900">
-          <tr className="border-b border-gray-800 text-left text-gray-500">
+          <tr className="border-b border-gray-800 text-left text-[11px] uppercase tracking-wide text-gray-500">
             <th className="px-3 py-1.5 font-medium">Line</th>
             <th className="px-3 py-1.5 font-medium">Who</th>
             <th className="px-3 py-1.5 font-medium">Handle</th>
@@ -276,7 +276,7 @@ function RowTable({ rows }: { rows: RosterRowOutcome[] }) {
           {rows.map(row => {
             const meta = STATUS_META[row.status]
             return (
-              <tr key={row.line} className="hover:bg-gray-800/40">
+              <tr key={row.line} className="hover:bg-gray-850/60">
                 <td className="px-3 py-1.5 tabular-nums text-gray-600">{row.line}</td>
                 <td className="px-3 py-1.5">
                   <span className="block truncate text-gray-300">

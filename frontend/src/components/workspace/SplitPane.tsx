@@ -111,9 +111,9 @@ export function SplitPane({
         title="Drag to resize · double-click to reset"
         className={clsx(
           'group relative flex-shrink-0 z-10 transition-colors',
-          'focus:outline-none focus-visible:bg-indigo-500',
+          'focus:outline-none focus-visible:bg-accent-500',
           horizontal ? 'w-1.5 cursor-col-resize' : 'h-1.5 cursor-row-resize',
-          dragging ? 'bg-indigo-500' : 'bg-gray-900 hover:bg-indigo-600/60'
+          dragging ? 'bg-accent-500' : 'bg-gray-900 hover:bg-accent-600/60'
         )}
       >
         {/* A 6px target is hard to hit; this widens the grab area without widening the line. */}

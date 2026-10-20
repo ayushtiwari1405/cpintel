@@ -8,6 +8,7 @@ import { useAdminClassrooms } from '@/hooks/useClassrooms'
 import { ClassroomSelect } from '@/components/admin/ClassroomSelect'
 import { useAdminGroups } from '@/hooks/useGroups'
 import type { EventKind, EventLifecycle, EventSummary } from '@/types'
+import { PageHeader } from '@/components/common/PageHeader'
 
 /**
  * Examinations and contests, listed side by side.
@@ -72,15 +73,18 @@ export default function AdminExamsPage() {
 
   return (
     <div className="space-y-4">
+      <PageHeader eyebrow="Console" title="Examinations and contests"
+        description="Create, schedule and run events on each classroom’s judge." className="mb-2" />
       <div className="flex items-center gap-1 rounded-lg border border-gray-800 bg-gray-900 p-1
         w-fit">
         {(['EXAM', 'CONTEST'] as const).map(value => (
           <button
             key={value}
             onClick={() => setKind(value)}
+            aria-pressed={kind === value}
             className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
               kind === value
-                ? 'bg-indigo-600/20 text-indigo-300'
+                ? 'bg-accent-600/20 text-accent-300'
                 : 'text-gray-500 hover:text-gray-300'
             }`}
           >
@@ -101,7 +105,7 @@ export default function AdminExamsPage() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-800 text-left text-xs text-gray-500">
+              <tr className="border-b border-gray-800 text-left text-[11px] uppercase tracking-wide text-gray-500">
                 <th className="px-4 py-2 font-medium">Name</th>
                 <th className="px-4 py-2 font-medium">State</th>
                 <th className="px-4 py-2 font-medium">Window</th>
@@ -121,11 +125,11 @@ export default function AdminExamsPage() {
                 </EmptyRow>
               )}
               {events?.map(event => (
-                <tr key={event.eventId} className="transition-colors hover:bg-gray-800/40">
+                <tr key={event.eventId} className="transition-colors hover:bg-gray-850/60">
                   <td className="px-4 py-2.5">
                     <Link
                       to={`/admin/exams/${event.eventId}`}
-                      className="font-medium text-gray-200 hover:text-indigo-400"
+                      className="font-medium text-gray-200 hover:text-accent-400"
                     >
                       {event.name}
                     </Link>
@@ -139,7 +143,7 @@ export default function AdminExamsPage() {
                     {event.completedAt && <span className="ml-2"><Pill tone="green">done</Pill></span>}
                     {event.lockdownRequired && (
                       <span className="ml-2 inline-flex items-center gap-1 text-[11px]
-                        text-indigo-300">
+                        text-accent-300">
                         <Eye size={11} /> monitored
                       </span>
                     )}
@@ -158,8 +162,8 @@ export default function AdminExamsPage() {
                   <td className="px-4 py-2.5 text-right">
                     <Link
                       to={`/admin/exams/${event.eventId}`}
-                      className="inline-flex items-center gap-1 text-xs text-indigo-400
-                                 hover:text-indigo-300"
+                      className="inline-flex items-center gap-1 text-xs text-accent-400
+                                 hover:text-accent-300"
                     >
                       Open <ArrowRight size={12} />
                     </Link>
@@ -231,8 +235,8 @@ export default function AdminExamsPage() {
             onClick={submit}
             disabled={!name.trim() || !externalId.trim() || classroomId == null
               || create.isPending}
-            className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-sm
-                       font-medium text-white transition-colors hover:bg-indigo-500
+            className="flex items-center gap-1.5 rounded-lg bg-accent-600 px-3 py-2 text-sm
+                       font-medium text-white transition-colors hover:bg-accent-500
                        disabled:cursor-not-allowed disabled:opacity-40"
           >
             {create.isPending ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
@@ -253,7 +257,7 @@ export default function AdminExamsPage() {
 }
 
 const INPUT = 'rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 text-sm text-gray-200 '
-  + 'placeholder-gray-600 outline-none focus:border-indigo-600'
+  + 'placeholder-gray-400 outline-none focus:border-accent-600'
 
 function Field({ label, className, children }: {
   label: string

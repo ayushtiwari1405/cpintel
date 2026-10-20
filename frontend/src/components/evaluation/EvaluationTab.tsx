@@ -7,9 +7,10 @@ import { EmptyRow, Panel, Pill } from '@/components/admin/AdminUi'
 import { EvaluationSheet } from '@/components/evaluation/EvaluationSheet'
 import { useAssignmentActions, useAssignmentBoard } from '@/hooks/useEvaluation'
 import type { AssignmentBoard } from '@/types'
+import { ErrorState, LoadingState } from '@/components/common/States'
 
 const field = `rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 text-sm text-gray-200
-               placeholder-gray-600 outline-none focus:border-indigo-600`
+               placeholder-gray-400 outline-none focus:border-accent-600`
 
 /**
  * An examination's marking, from the admin's side: who marks what, and every mark.
@@ -19,15 +20,15 @@ const field = `rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 text-sm t
  * listed in here, and "Split the roster" cuts it into equal consecutive ranges, one per TA.
  */
 export function EvaluationTab({ eventId, done }: { eventId: number; done: boolean }) {
-  const { data: board, isLoading, refetch, isFetching } = useAssignmentBoard(eventId)
+  const { data: board, isLoading, isError, error, refetch, isFetching } = useAssignmentBoard(eventId)
   const source = useMemo(() => adminEvaluationApi.source(eventId), [eventId])
 
   return (
     <div className="space-y-4">
-      {isLoading || !board ? (
-        <div className="flex items-center justify-center gap-2 py-10 text-sm text-gray-500">
-          <Loader2 size={14} className="animate-spin" /> Loading…
-        </div>
+      {isError ? (
+        <ErrorState title="Could not load the marking assignments" error={error} onRetry={() => refetch()} />
+      ) : isLoading || !board ? (
+        <LoadingState label="Loading the marking assignments…" className="py-10" />
       ) : (
         <>
           <Progress eventId={eventId} board={board} onRefresh={() => refetch()}
@@ -73,7 +74,7 @@ function Assignments({ eventId, board, done }: {
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-gray-800 text-left text-xs text-gray-500">
+            <tr className="border-b border-gray-800 text-left text-[11px] uppercase tracking-wide text-gray-500">
               <th className="px-4 py-2 font-medium">TA</th>
               <th className="px-4 py-2 font-medium">Question</th>
               <th className="px-4 py-2 font-medium">Students</th>
@@ -131,8 +132,8 @@ function Assignments({ eventId, board, done }: {
               {board.students.map(s => <option key={s} value={s} />)}
             </datalist>
             <button onClick={add} disabled={!ta || assign.isPending}
-              className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-sm
-                         font-medium text-white hover:bg-indigo-500 disabled:opacity-40">
+              className="flex items-center gap-1.5 rounded-lg bg-accent-600 px-3 py-2 text-sm
+                         font-medium text-white hover:bg-accent-500 disabled:opacity-40">
               <Plus size={14} /> Assign
             </button>
             <button onClick={() => setSplitting(v => !v)}
@@ -221,8 +222,8 @@ function SplitRoster({ eventId, board, onDone }: {
         </ul>
       )}
       <button onClick={apply} disabled={plan.length === 0 || busy}
-        className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-sm
-                   font-medium text-white hover:bg-indigo-500 disabled:opacity-40">
+        className="flex items-center gap-1.5 rounded-lg bg-accent-600 px-3 py-2 text-sm
+                   font-medium text-white hover:bg-accent-500 disabled:opacity-40">
         {busy && <Loader2 size={14} className="animate-spin" />}
         Assign these ranges
       </button>
@@ -259,7 +260,7 @@ function Progress({ eventId, board, onRefresh, refreshing }: {
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-gray-800 text-left text-xs text-gray-500">
+            <tr className="border-b border-gray-800 text-left text-[11px] uppercase tracking-wide text-gray-500">
               <th className="px-4 py-2 font-medium">TA</th>
               <th className="px-4 py-2 font-medium">Marked by hand</th>
               <th className="px-4 py-2 font-medium">Status</th>

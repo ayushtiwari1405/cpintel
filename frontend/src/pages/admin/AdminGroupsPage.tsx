@@ -5,6 +5,7 @@ import { useAdminGroups, useCreateGroup } from '@/hooks/useGroups'
 import { useAdminClassrooms } from '@/hooks/useClassrooms'
 import { ClassroomSelect } from '@/components/admin/ClassroomSelect'
 import { Ago, EmptyRow, Panel, Pill } from '@/components/admin/AdminUi'
+import { PageHeader } from '@/components/common/PageHeader'
 
 /**
  * The groups an admin runs contests for.
@@ -36,6 +37,8 @@ export default function AdminGroupsPage() {
 
   return (
     <div className="space-y-4">
+      <PageHeader eyebrow="Console" title="Teams"
+        description="Named sets of people, measured against each other." className="mb-2" />
       <Panel
         title="Teams"
         description="A named set of people, measured against each other"
@@ -46,7 +49,7 @@ export default function AdminGroupsPage() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-800 text-left text-xs text-gray-500">
+              <tr className="border-b border-gray-800 text-left text-[11px] uppercase tracking-wide text-gray-500">
                 <th className="px-4 py-2 font-medium">Team</th>
                 <th className="px-4 py-2 font-medium">Classroom</th>
                 <th className="px-4 py-2 font-medium">Members</th>
@@ -64,11 +67,11 @@ export default function AdminGroupsPage() {
                 </EmptyRow>
               )}
               {groups?.map(group => (
-                <tr key={group.groupId} className="transition-colors hover:bg-gray-800/40">
+                <tr key={group.groupId} className="transition-colors hover:bg-gray-850/60">
                   <td className="px-4 py-2.5">
                     <Link
                       to={`/admin/teams/${group.groupId}`}
-                      className="font-medium text-gray-200 hover:text-indigo-400"
+                      className="font-medium text-gray-200 hover:text-accent-400"
                     >
                       {group.name}
                     </Link>
@@ -88,8 +91,8 @@ export default function AdminGroupsPage() {
                   <td className="px-4 py-2.5 text-right">
                     <Link
                       to={`/admin/teams/${group.groupId}`}
-                      className="inline-flex items-center gap-1 text-xs text-indigo-400
-                                 hover:text-indigo-300"
+                      className="inline-flex items-center gap-1 text-xs text-accent-400
+                                 hover:text-accent-300"
                     >
                       Open <ArrowRight size={12} />
                     </Link>
@@ -116,7 +119,7 @@ export default function AdminGroupsPage() {
               placeholder="Autumn training squad"
               maxLength={120}
               className="rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 text-sm
-                         text-gray-200 placeholder-gray-600 outline-none focus:border-indigo-600"
+                         text-gray-200 placeholder-gray-400 outline-none focus:border-accent-600"
             />
           </label>
           <label className="flex min-w-[16rem] flex-[2] flex-col gap-1">
@@ -128,14 +131,14 @@ export default function AdminGroupsPage() {
               placeholder="Second years, Tuesday sessions"
               maxLength={500}
               className="rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 text-sm
-                         text-gray-200 placeholder-gray-600 outline-none focus:border-indigo-600"
+                         text-gray-200 placeholder-gray-400 outline-none focus:border-accent-600"
             />
           </label>
           <button
             onClick={submit}
             disabled={!name.trim() || classroomId == null || create.isPending}
-            className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-sm
-                       font-medium text-white transition-colors hover:bg-indigo-500
+            className="flex items-center gap-1.5 rounded-lg bg-accent-600 px-3 py-2 text-sm
+                       font-medium text-white transition-colors hover:bg-accent-500
                        disabled:cursor-not-allowed disabled:opacity-40"
           >
             {create.isPending ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}

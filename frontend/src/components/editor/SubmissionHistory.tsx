@@ -188,7 +188,7 @@ export function SubmissionHistory({
                       border-gray-800 bg-gray-900 shadow-2xl overflow-hidden">
 
         <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-800">
-          <History size={15} className="text-indigo-400" />
+          <History size={15} className="text-accent-400" />
           <span className="text-sm font-medium text-gray-200">Your previous code</span>
 
           <div className="flex rounded-lg border border-gray-800 overflow-hidden ml-2">
@@ -200,7 +200,7 @@ export function SubmissionHistory({
                 className={clsx(
                   'px-2.5 py-1 text-[11px] transition-colors disabled:opacity-40',
                   scope === s
-                    ? 'bg-indigo-600/20 text-indigo-300'
+                    ? 'bg-accent-600/20 text-accent-300'
                     : 'text-gray-500 hover:text-gray-300'
                 )}
               >
@@ -257,7 +257,7 @@ export function SubmissionHistory({
                     onClick={() => setSelected(a)}
                     className={clsx(
                       'w-full text-left px-3 py-2 border-b border-gray-850 transition-colors',
-                      active ? 'bg-indigo-600/10' : 'hover:bg-gray-850/60'
+                      active ? 'bg-accent-600/10' : 'hover:bg-gray-850/60'
                     )}
                   >
                     <div className="flex items-center gap-2">
@@ -356,7 +356,7 @@ export function SubmissionHistory({
                       onClick={handleLoad}
                       title="Replace the editor's contents with this"
                       className="flex items-center gap-1 text-[11px] px-2 py-1 rounded-lg
-                                 bg-indigo-600 text-white hover:bg-indigo-500
+                                 bg-accent-600 text-white hover:bg-accent-500
                                  transition-colors"
                     >
                       <Download size={11} /> Load into editor
@@ -383,7 +383,7 @@ export function SubmissionHistory({
                       className={clsx(
                         'px-3 py-1.5 text-[11px] rounded-t-lg border-b-2 -mb-px transition-colors',
                         tab === t
-                          ? 'border-indigo-500 text-indigo-300'
+                          ? 'border-accent-500 text-accent-300'
                           : 'border-transparent text-gray-500 hover:text-gray-300'
                       )}
                     >

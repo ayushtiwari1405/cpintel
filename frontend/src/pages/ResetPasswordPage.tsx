@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { AlertTriangle, ArrowLeft, Eye, EyeOff, Zap } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, Eye, EyeOff } from 'lucide-react'
 
+import { BrandLockup } from '@/components/common/BrandMark'
 import { useResetPassword } from '@/hooks/useAuth'
 import { ThemeToggle } from '@/components/common/ThemeToggle'
 
@@ -43,11 +44,8 @@ export default function ResetPasswordPage() {
       <ThemeToggle className="absolute top-4 right-4" />
       <div className="w-full max-w-md">
 
-        <div className="flex items-center gap-3 mb-8 justify-center">
-          <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center">
-            <Zap size={20} className="text-white" />
-          </div>
-          <span className="text-xl font-semibold text-gray-50">CPIntel</span>
+        <div className="mb-8 flex justify-center">
+          <BrandLockup className="scale-110" />
         </div>
 
         <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8">

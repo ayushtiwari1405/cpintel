@@ -49,7 +49,7 @@ export function DomjudgeAccountCell({ classroomId, userId, username }: Props) {
         >
           <span className="min-w-0">
             <span className="block truncate font-mono text-gray-300
-                             group-hover:text-indigo-300">
+                             group-hover:text-accent-300">
               {account.username}
             </span>
             {account.name && (
@@ -76,9 +76,9 @@ export function DomjudgeAccountCell({ classroomId, userId, username }: Props) {
         // account, so it has to look like something you can press.
         <button
           onClick={() => setOpen(true)}
-          className="flex items-center gap-1.5 rounded-md border border-indigo-900/80
-                     bg-indigo-950/40 px-2 py-1 text-xs text-indigo-300 transition-colors
-                     hover:border-indigo-700 hover:bg-indigo-900/40 hover:text-indigo-200"
+          className="flex items-center gap-1.5 rounded-md border border-accent-900/80
+                     bg-accent-950/40 px-2 py-1 text-xs text-accent-300 transition-colors
+                     hover:border-accent-700 hover:bg-accent-900/40 hover:text-accent-200"
         >
           <Link2 size={12} /> Attach
         </button>
@@ -197,7 +197,7 @@ function AttachDialog(
   }
 
   const field = `w-full rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 text-sm
-                 text-gray-200 placeholder-gray-700 outline-none focus:border-indigo-600`
+                 text-gray-200 placeholder-gray-400 outline-none focus:border-accent-600`
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -208,7 +208,7 @@ function AttachDialog(
       >
         <header className="mb-4 flex items-center justify-between">
           <h2 className="text-sm font-medium text-gray-200">
-            DOMjudge account for <span className="text-indigo-300">{username}</span>
+            DOMjudge account for <span className="text-accent-300">{username}</span>
           </h2>
           <button type="button" onClick={onClose} aria-label="Close"
             className="rounded-md p-1 text-gray-500 hover:bg-gray-800 hover:text-gray-300">
@@ -285,15 +285,15 @@ function AttachDialog(
             </button>
             {mode === 'password' ? (
               <button type="submit" disabled={!djPass || changePassword.isPending}
-                className="flex items-center gap-2 rounded-lg bg-indigo-600 px-3 py-2 text-sm
-                           font-medium text-white hover:bg-indigo-500 disabled:opacity-40">
+                className="flex items-center gap-2 rounded-lg bg-accent-600 px-3 py-2 text-sm
+                           font-medium text-white hover:bg-accent-500 disabled:opacity-40">
                 {changePassword.isPending && <Loader2 size={14} className="animate-spin" />}
                 Update password
               </button>
             ) : (
               <button type="submit" disabled={!valid || attach.isPending}
-                className="flex items-center gap-2 rounded-lg bg-indigo-600 px-3 py-2 text-sm
-                           font-medium text-white hover:bg-indigo-500 disabled:opacity-40">
+                className="flex items-center gap-2 rounded-lg bg-accent-600 px-3 py-2 text-sm
+                           font-medium text-white hover:bg-accent-500 disabled:opacity-40">
                 {attach.isPending && <Loader2 size={14} className="animate-spin" />}
                 {linked ? 'Replace account' : 'Attach account'}
               </button>
@@ -335,7 +335,7 @@ function PasswordForm(
         Use this after the password was changed on DOMjudge. The login, name and team stay as
         they are. If the new password is rejected, the old one is kept.{' '}
         <button type="button" onClick={onReplace}
-          className="text-indigo-400 hover:text-indigo-300">
+          className="text-accent-400 hover:text-accent-300">
           Attach a different login instead
         </button>
       </p>

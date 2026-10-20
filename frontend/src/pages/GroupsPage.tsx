@@ -1,9 +1,11 @@
 import { Link } from 'react-router-dom'
-import { Clock, ExternalLink, Loader2, Lock, Trophy, Users } from 'lucide-react'
+import { Clock, ExternalLink, Lock, Trophy, Users, ArrowRight } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useMyGroupContests, useMyGroups } from '@/hooks/useGroups'
 import { formatDistanceToNow } from 'date-fns'
 import { judgeIdOf } from '@/utils/contestRef'
+import { PageHeader } from '@/components/common/PageHeader'
+import { EmptyState, ErrorState, LoadingState } from '@/components/common/States'
 
 /**
  * A participant's own view of the teams they are on.
@@ -16,27 +18,34 @@ import { judgeIdOf } from '@/utils/contestRef'
  * someone without telling them is a different and much worse product than saying so up front.
  */
 export default function GroupsPage() {
-  const { data: groups, isLoading: groupsLoading } = useMyGroups()
-  const { data: contests, isLoading: contestsLoading } = useMyGroupContests()
+  const groupsQ = useMyGroups()
+  const contestsQ = useMyGroupContests()
+  const groups = groupsQ.data
+  const contests = contestsQ.data
 
-  if (groupsLoading || contestsLoading) {
-    return (
-      <div className="flex items-center justify-center gap-2 py-20 text-sm text-gray-500">
-        <Loader2 size={16} className="animate-spin" /> Loading your teams…
-      </div>
-    )
+  const header = <PageHeader title="Teams"
+    description="The teams you are on, the contests they sit, and where you placed among your teammates." />
+
+  if (groupsQ.isLoading || contestsQ.isLoading) {
+    return <>{header}<LoadingState label="Loading your teams…" /></>
+  }
+  if (groupsQ.isError || contestsQ.isError) {
+    return <>{header}<ErrorState title="Could not load your teams"
+      error={groupsQ.error ?? contestsQ.error}
+      onRetry={() => { groupsQ.refetch(); contestsQ.refetch() }} /></>
   }
 
   if (!groups?.length) {
     return (
-      <div className="mx-auto max-w-lg py-20 text-center">
-        <Users size={28} className="mx-auto text-gray-700" />
-        <p className="mt-3 text-sm text-gray-400">You are not on any teams yet.</p>
-        <p className="mt-1 text-xs leading-relaxed text-gray-600">
-          Teams are set up by an admin. When you are added to one, the contests it sits appear
-          here along with where you placed among its members.
-        </p>
-      </div>
+      <>
+        {header}
+        <div className="rounded-xl border border-gray-800">
+          <EmptyState icon={<Users size={18} />} title="You are not on any teams yet">
+            Teams are set up by an admin. When you are added to one, the contests it sits appear
+            here along with where you placed among its members.
+          </EmptyState>
+        </div>
+      </>
     )
   }
 
@@ -45,23 +54,23 @@ export default function GroupsPage() {
   const past = contests?.filter(c => c.contest.status === 'FINISHED') ?? []
 
   return (
-    <div className="space-y-6">
-      <section>
-        <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
+    <div className="space-y-8">
+      {header}
+
+      <section aria-labelledby="your-teams">
+        <h2 id="your-teams" className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-500">
           Your teams
         </h2>
-        <div className="flex flex-wrap gap-2">
+        <ul className="flex flex-wrap gap-2">
           {groups.map(group => (
-            <span
-              key={group.groupId}
-              className="rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 text-sm
-                         text-gray-300"
-            >
-              {group.name}
-              <span className="ml-2 text-xs text-gray-600">{group.memberCount} members</span>
-            </span>
+            <li key={group.groupId}
+              className="flex items-center gap-2 rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 text-sm">
+              <Users size={14} className="text-gray-500" aria-hidden="true" />
+              <span className="text-gray-100">{group.name}</span>
+              <span className="font-mono text-xs tabular-nums text-gray-500">{group.memberCount} members</span>
+            </li>
           ))}
-        </div>
+        </ul>
       </section>
 
       {live.length > 0 && <ContestSection title="Running now" contests={live} />}
@@ -69,93 +78,119 @@ export default function GroupsPage() {
       {past.length > 0 && <ContestSection title="Finished" contests={past} />}
 
       {contests?.length === 0 && (
-        <p className="py-10 text-center text-sm text-gray-600">
-          No contests have been set for your teams yet.
-        </p>
+        <div className="rounded-xl border border-gray-800">
+          <EmptyState compact title="No contests yet">
+            No contests have been set for your teams yet.
+          </EmptyState>
+        </div>
       )}
     </div>
   )
+}
+
+const STATUS: Record<string, { label: string; className: string }> = {
+  LIVE:      { label: 'Live',     className: 'badge-green' },
+  SCHEDULED: { label: 'Upcoming', className: 'badge-blue' },
+  FINISHED:  { label: 'Finished', className: 'badge-gray' },
 }
 
 function ContestSection({ title, contests }: {
   title: string
   contests: NonNullable<ReturnType<typeof useMyGroupContests>['data']>
 }) {
+  const id = `teams-${title.toLowerCase().replace(/\s+/g, '-')}`
   return (
-    <section>
-      <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
+    <section aria-labelledby={id}>
+      <h2 id={id} className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-500">
         {title}
       </h2>
-      <div className="space-y-2">
-        {contests.map(({ contest, myRank, groupSize, mySolved }) => (
-          <div
-            key={contest.contestId}
-            className="rounded-xl border border-gray-800 bg-gray-900 p-4"
-          >
-            <div className="flex flex-wrap items-baseline gap-2">
-              <span className="font-medium text-gray-100">{contest.name}</span>
-              <span className="text-xs text-gray-600">{contest.groupName}</span>
-              {contest.lockdownRequired && (
-                <span
-                  title="Leaving the contest window is noticed while this round is running.
-                         You are warned after ten seconds away, and longer absences are
-                         reported to whoever runs the team."
-                  className="flex items-center gap-1 rounded bg-indigo-950/60 px-1.5 py-0.5
-                             text-[11px] text-indigo-300"
-                >
-                  <Lock size={10} /> monitored
-                </span>
-              )}
-            </div>
+      <ul className="divide-y divide-gray-800 overflow-hidden rounded-xl border border-gray-800 bg-gray-900">
+        {contests.map(({ contest, myRank, groupSize, mySolved }) => {
+          const st = STATUS[contest.status]
+          return (
+            <li key={contest.contestId} className="p-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-medium text-gray-50">{contest.name}</span>
+                {st && (
+                  <span className={st.className}>
+                    {contest.status === 'LIVE' && (
+                      <span className="h-1.5 w-1.5 rounded-full bg-green-400 motion-safe:animate-pulse" aria-hidden="true" />
+                    )}
+                    {st.label}
+                  </span>
+                )}
+                <span className="text-xs text-gray-500">{contest.groupName}</span>
+              </div>
 
-            <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
-              <span className="flex items-center gap-1">
-                <Clock size={11} />
-                {contest.startsAt
-                  ? formatDistanceToNow(new Date(contest.startsAt), { addSuffix: true })
-                  : 'no start time set'}
-              </span>
-              <span>{contest.platform} · {judgeIdOf(contest.externalId)}</span>
-              {contest.url && (
-                <a
-                  href={contest.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex items-center gap-1 text-indigo-400 hover:text-indigo-300"
-                >
-                  Open <ExternalLink size={10} />
-                </a>
-              )}
-              {contest.status === 'LIVE' && (
-                <Link to="/compete" className="text-indigo-400 hover:text-indigo-300">
-                  Go to Compete →
-                </Link>
-              )}
-            </div>
-
-            {myRank != null && (
-              <div className={clsx(
-                'mt-2 flex items-center gap-2 text-sm',
-                myRank === 1 ? 'text-yellow-400' : 'text-gray-300'
-              )}>
-                <Trophy size={14} />
-                <span className="font-medium">
-                  {myRank}
-                  {groupSize ? ` of ${groupSize}` : ''} in your team
+              <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
+                <span className="flex items-center gap-1">
+                  <Clock size={11} aria-hidden="true" />
+                  {contest.startsAt
+                    ? formatDistanceToNow(new Date(contest.startsAt), { addSuffix: true })
+                    : 'No start time set'}
                 </span>
-                {mySolved != null && (
-                  <span className="text-xs text-gray-600">{mySolved} solved</span>
+                <span>
+                  {contest.platform === 'CODEFORCES' ? 'Codeforces' : contest.platform}
+                  {' · '}<span className="font-mono text-gray-400">{judgeIdOf(contest.externalId)}</span>
+                </span>
+                {contest.url && (
+                  <a
+                    href={contest.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center gap-1 text-accent-400 hover:text-accent-300"
+                  >
+                    Open on the judge <ExternalLink size={10} aria-hidden="true" />
+                    <span className="sr-only">(opens in a new tab)</span>
+                  </a>
+                )}
+                {contest.status === 'LIVE' && (
+                  <Link to="/compete" className="flex items-center gap-1 font-medium text-accent-400 hover:text-accent-300">
+                    Go to Compete <ArrowRight size={11} aria-hidden="true" />
+                  </Link>
                 )}
               </div>
-            )}
-            {myRank == null && contest.status !== 'SCHEDULED' && (
-              <p className="mt-2 text-xs text-gray-600">
-                No placing yet — the board is built from the judge a few minutes behind live.
-              </p>
-            )}
-          </div>
-        ))}
-      </div>
+
+              {/* Said in words on the contest itself, not hidden in a hover: being watched is
+                  something to be told plainly. */}
+              {contest.lockdownRequired && (
+                <p className="mt-2 flex items-start gap-1.5 rounded-md border border-amber-900/50
+                              bg-amber-950/20 px-2.5 py-1.5 text-xs text-amber-200/90">
+                  <Lock size={12} className="mt-0.5 flex-shrink-0 text-amber-400" aria-hidden="true" />
+                  <span>
+                    <span className="font-medium text-amber-200">Monitored.</span> Leaving the
+                    contest window is noticed while this round runs: you are warned after ten
+                    seconds away, and longer absences are reported to whoever runs the team.
+                  </span>
+                </p>
+              )}
+
+              {myRank != null && (
+                <div className={clsx(
+                  'mt-2.5 flex items-center gap-2 text-sm',
+                  myRank === 1 ? 'text-yellow-300' : 'text-gray-200'
+                )}>
+                  <Trophy size={14} aria-hidden="true" />
+                  <span>
+                    <span className="font-mono font-semibold tabular-nums">{myRank}</span>
+                    {groupSize ? <> of <span className="font-mono tabular-nums">{groupSize}</span></> : ''} in your team
+                  </span>
+                  {mySolved != null && (
+                    <span className="text-xs text-gray-500">
+                      · <span className="font-mono tabular-nums">{mySolved}</span> solved
+                    </span>
+                  )}
+                </div>
+              )}
+              {myRank == null && contest.status !== 'SCHEDULED' && (
+                <p className="mt-2 text-xs text-gray-500">
+                  No placing yet. The board is built from the judge a few minutes behind live.
+                </p>
+              )}
+            </li>
+          )
+        })}
+      </ul>
     </section>
   )
 }

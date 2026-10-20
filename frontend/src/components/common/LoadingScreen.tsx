@@ -1,19 +1,16 @@
+import { BrandMark } from './BrandMark'
+
+/** While a page's code is fetched. The mark, a quiet bar, and a label for screen readers. */
 export function LoadingScreen() {
   return (
-    <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+    <div className="flex min-h-screen items-center justify-center bg-gray-950" role="status">
       <div className="flex flex-col items-center gap-4">
-        <div className="w-12 h-12 rounded-xl bg-indigo-600 flex items-center justify-center animate-pulse-slow">
-          <span className="text-white font-bold text-lg">CP</span>
+        <BrandMark className="h-10 w-10" />
+        <div className="h-0.5 w-24 overflow-hidden rounded-full bg-gray-800" aria-hidden="true">
+          <div className="h-full w-1/3 animate-[loadbar_1.1s_ease-in-out_infinite] rounded-full
+                          bg-accent-400" />
         </div>
-        <div className="flex gap-1.5">
-          {[0, 1, 2].map((i) => (
-            <div
-              key={i}
-              className="w-2 h-2 bg-indigo-500 rounded-full animate-bounce"
-              style={{ animationDelay: `${i * 0.15}s` }}
-            />
-          ))}
-        </div>
+        <span className="sr-only">Loading CPIntel</span>
       </div>
     </div>
   )

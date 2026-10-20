@@ -1,4 +1,5 @@
 import { clsx } from 'clsx'
+import { Stat } from '@/components/common/Stat'
 import { formatDistanceToNow } from 'date-fns'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import type { ReactNode } from 'react'
@@ -11,26 +12,15 @@ import type { ReactNode } from 'react'
  * are reading.
  */
 
+/** A headline number in the console; the same component as everywhere else in the app. */
 export function StatCard({ label, value, hint, tone = 'default' }: {
   label: string
   value: ReactNode
   hint?: string
   tone?: 'default' | 'warn' | 'danger' | 'good'
 }) {
-  return (
-    <div className="rounded-xl border border-gray-800 bg-gray-900 p-4">
-      <p className="text-xs text-gray-500">{label}</p>
-      <p className={clsx('mt-1 text-2xl font-semibold tabular-nums', {
-        'text-gray-100':  tone === 'default',
-        'text-amber-400': tone === 'warn',
-        'text-red-400':   tone === 'danger',
-        'text-green-400': tone === 'good',
-      })}>
-        {value}
-      </p>
-      {hint && <p className="mt-1 text-xs text-gray-600">{hint}</p>}
-    </div>
-  )
+  return <Stat label={label} value={value} hint={hint} tone={tone}
+    className="rounded-xl border border-gray-800" />
 }
 
 export function Panel({ title, description, actions, children }: {
@@ -41,12 +31,13 @@ export function Panel({ title, description, actions, children }: {
 }) {
   return (
     <section className="rounded-xl border border-gray-800 bg-gray-900">
-      <header className="flex items-start justify-between gap-4 border-b border-gray-800 px-4 py-3">
-        <div>
-          <h2 className="text-sm font-medium text-gray-200">{title}</h2>
+      <header className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 border-b
+                         border-gray-800 px-4 py-3">
+        <div className="min-w-0">
+          <h2 className="text-sm font-medium text-gray-100">{title}</h2>
           {description && <p className="mt-0.5 text-xs text-gray-500">{description}</p>}
         </div>
-        {actions}
+        {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
       </header>
       {children}
     </section>
@@ -55,17 +46,19 @@ export function Panel({ title, description, actions, children }: {
 
 export function Pill({ children, tone = 'gray' }: {
   children: ReactNode
-  tone?: 'gray' | 'green' | 'red' | 'indigo' | 'amber'
+  tone?: 'gray' | 'green' | 'red' | 'accent' | 'amber'
 }) {
   return (
+    // The same shape as the .badge-* classes elsewhere: one vocabulary for status app-wide.
     <span className={clsx(
-      'inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium',
+      'inline-flex items-center gap-1 whitespace-nowrap rounded border px-1.5 py-0.5 text-[11px]',
+      'font-medium leading-4',
       {
-        'bg-gray-800 text-gray-400':        tone === 'gray',
-        'bg-green-900/40 text-green-400':   tone === 'green',
-        'bg-red-900/40 text-red-400':       tone === 'red',
-        'bg-indigo-900/40 text-indigo-300': tone === 'indigo',
-        'bg-amber-900/40 text-amber-400':   tone === 'amber',
+        'border-gray-700 bg-gray-850 text-gray-300':              tone === 'gray',
+        'border-green-800/70 bg-green-950/60 text-green-300':     tone === 'green',
+        'border-red-800/70 bg-red-950/60 text-red-300':           tone === 'red',
+        'border-accent-800/70 bg-accent-950/60 text-accent-300':  tone === 'accent',
+        'border-amber-800/70 bg-amber-950/60 text-amber-300':     tone === 'amber',
       }
     )}>
       {children}
@@ -79,22 +72,22 @@ export function actionLabel(action: string) {
   return words.charAt(0).toUpperCase() + words.slice(1)
 }
 
-export function actionTone(action: string): 'gray' | 'green' | 'red' | 'indigo' | 'amber' {
+export function actionTone(action: string): 'gray' | 'green' | 'red' | 'accent' | 'amber' {
   if (action === 'LOGIN_FAILED') return 'red'
   if (action === 'LOGIN' || action === 'REGISTER') return 'green'
-  if (action.startsWith('ADMIN_')) return 'indigo'
+  if (action.startsWith('ADMIN_')) return 'accent'
   return 'gray'
 }
 
 /** Timestamps as "3 hours ago", with the exact value one hover away. */
 export function Ago({ at, fallback = '—' }: { at: string | null; fallback?: string }) {
-  if (!at) return <span className="text-gray-600">{fallback}</span>
+  if (!at) return <span className="text-gray-500">{fallback}</span>
   const date = new Date(at)
-  if (Number.isNaN(date.getTime())) return <span className="text-gray-600">{fallback}</span>
+  if (Number.isNaN(date.getTime())) return <span className="text-gray-500">{fallback}</span>
   return (
-    <span title={date.toLocaleString()}>
+    <time dateTime={date.toISOString()} title={date.toLocaleString()} className="whitespace-nowrap">
       {formatDistanceToNow(date, { addSuffix: true })}
-    </span>
+    </time>
   )
 }
 
@@ -112,41 +105,47 @@ export function Pager({ page, totalPages, total, onPage }: {
 }) {
   if (total === 0) return null
   return (
-    <div className="flex items-center justify-between border-t border-gray-800 px-4 py-2.5">
+    <nav aria-label="Pages" className="flex items-center justify-between gap-3 border-t border-gray-800 px-4 py-2.5">
       <p className="text-xs text-gray-500">
-        {total.toLocaleString()} {total === 1 ? 'entry' : 'entries'}
-        {totalPages > 1 && ` · page ${page + 1} of ${totalPages}`}
+        <span className="font-mono tabular-nums text-gray-300">{total.toLocaleString()}</span>
+        {' '}{total === 1 ? 'entry' : 'entries'}
+        {totalPages > 1 && <> · page <span className="font-mono tabular-nums text-gray-300">{page + 1}</span>
+          {' '}of <span className="font-mono tabular-nums">{totalPages}</span></>}
       </p>
       {totalPages > 1 && (
         <div className="flex gap-1">
           <button
+            type="button"
             onClick={() => onPage(page - 1)}
             disabled={page <= 0}
-            className="rounded-md border border-gray-800 p-1.5 text-gray-400 hover:bg-gray-800
-                       hover:text-gray-200 disabled:opacity-30 disabled:hover:bg-transparent"
+            className="flex h-8 w-8 items-center justify-center rounded-md border border-gray-700
+                       text-gray-300 hover:bg-gray-800 hover:text-gray-50 disabled:cursor-not-allowed
+                       disabled:opacity-30 disabled:hover:bg-transparent"
             aria-label="Previous page"
           >
             <ChevronLeft size={14} />
           </button>
           <button
+            type="button"
             onClick={() => onPage(page + 1)}
             disabled={page >= totalPages - 1}
-            className="rounded-md border border-gray-800 p-1.5 text-gray-400 hover:bg-gray-800
-                       hover:text-gray-200 disabled:opacity-30 disabled:hover:bg-transparent"
+            className="flex h-8 w-8 items-center justify-center rounded-md border border-gray-700
+                       text-gray-300 hover:bg-gray-800 hover:text-gray-50 disabled:cursor-not-allowed
+                       disabled:opacity-30 disabled:hover:bg-transparent"
             aria-label="Next page"
           >
             <ChevronRight size={14} />
           </button>
         </div>
       )}
-    </div>
+    </nav>
   )
 }
 
 export function EmptyRow({ children, colSpan }: { children: ReactNode; colSpan: number }) {
   return (
     <tr>
-      <td colSpan={colSpan} className="px-4 py-10 text-center text-sm text-gray-600">
+      <td colSpan={colSpan} className="px-4 py-10 text-center text-sm text-gray-500">
         {children}
       </td>
     </tr>

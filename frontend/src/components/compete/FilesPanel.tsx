@@ -89,7 +89,7 @@ export function FilesPanel({ open, onClose, contest, onUseInEditor }: Props) {
         className={clsx(
           'w-[30rem] max-w-full h-full bg-gray-900 border-l border-gray-800',
           'flex flex-col shadow-2xl',
-          dragging && 'ring-2 ring-inset ring-indigo-500'
+          dragging && 'ring-2 ring-inset ring-accent-500'
         )}
         onDragOver={e => { e.preventDefault(); setDragging(true) }}
         onDragLeave={() => setDragging(false)}
@@ -97,7 +97,7 @@ export function FilesPanel({ open, onClose, contest, onUseInEditor }: Props) {
       >
         <header className="flex items-center gap-2 px-4 h-14 border-b border-gray-800
                            flex-shrink-0">
-          <FolderOpen size={16} className="text-indigo-400" />
+          <FolderOpen size={16} className="text-accent-400" />
           <span className="text-sm font-medium text-gray-100">Your files</span>
           {vault && (
             <span className="text-[11px] text-gray-600">
@@ -138,7 +138,7 @@ export function FilesPanel({ open, onClose, contest, onUseInEditor }: Props) {
                     type="checkbox"
                     checked={replace}
                     onChange={e => setReplace(e.target.checked)}
-                    className="accent-indigo-500"
+                    className="accent-accent-500"
                   />
                   Replace if the name exists
                 </label>
@@ -219,7 +219,7 @@ export function FilesPanel({ open, onClose, contest, onUseInEditor }: Props) {
                               onUseInEditor(content.text ?? '')
                               onClose()
                             }}
-                            className="text-[11px] text-indigo-400 hover:text-indigo-300
+                            className="text-[11px] text-accent-400 hover:text-accent-300
                                        transition-colors"
                           >
                             Insert into editor
@@ -269,13 +269,13 @@ function FileRow({ file, active, onOpen, onDownload, onDelete }: RowProps) {
     <div
       className={clsx(
         'flex items-center gap-2 px-4 py-2 cursor-pointer transition-colors group',
-        active ? 'bg-indigo-600/15' : 'hover:bg-gray-800/60'
+        active ? 'bg-accent-600/15' : 'hover:bg-gray-800/60'
       )}
       onClick={onOpen}
     >
       <FileText
         size={13}
-        className={clsx('flex-shrink-0', active ? 'text-indigo-400' : 'text-gray-600')}
+        className={clsx('flex-shrink-0', active ? 'text-accent-400' : 'text-gray-600')}
       />
       <div className="min-w-0 flex-1">
         <div className="text-xs text-gray-200 truncate">{file.name}</div>
@@ -345,7 +345,7 @@ function BinaryPreview({ file, contest, onDownload }: {
         <span className="text-[11px] text-gray-500 truncate">{file.name}</span>
         <button
           onClick={onDownload}
-          className="ml-auto text-[11px] text-indigo-400 hover:text-indigo-300
+          className="ml-auto text-[11px] text-accent-400 hover:text-accent-300
                      flex items-center gap-1 transition-colors"
         >
           <Download size={11} /> Download

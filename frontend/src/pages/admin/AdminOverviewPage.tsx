@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { useAdminOverview } from '@/hooks/useAdmin'
 import { Ago, Panel, Pill, StatCard, actionLabel, actionTone, bytes } from '@/components/admin/AdminUi'
 import { AlertTriangle, ArrowRight, FolderCog, Loader2, Users } from 'lucide-react'
+import { PageHeader } from '@/components/common/PageHeader'
 
 /**
  * Where an admin lands, and usually the only screen they need.
@@ -52,6 +53,8 @@ export default function AdminOverviewPage() {
 
   return (
     <div className="space-y-6">
+      <PageHeader eyebrow="Console" title="Overview"
+        description="Accounts, sign-ins and examinations across the classrooms you run." className="mb-2" />
       <section>
         <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
           Accounts
@@ -117,7 +120,7 @@ export default function AdminOverviewPage() {
         description="Sign-ins and administrative changes, newest first"
         actions={
           <Link to="/admin/audit"
-            className="flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300">
+            className="flex items-center gap-1 text-xs text-accent-400 hover:text-accent-300">
             Full trail <ArrowRight size={12} />
           </Link>
         }
@@ -147,14 +150,14 @@ export default function AdminOverviewPage() {
         <Link to="/admin/users"
           className="flex items-center gap-3 rounded-xl border border-gray-800 bg-gray-900 p-4
                      text-sm text-gray-300 transition-colors hover:border-gray-700 hover:bg-gray-800/60">
-          <Users size={18} className="text-indigo-400" />
+          <Users size={18} className="text-accent-400" />
           <span className="flex-1">Manage accounts, roles and access</span>
           <ArrowRight size={14} className="text-gray-600" />
         </Link>
         <Link to="/admin/contest-files"
           className="flex items-center gap-3 rounded-xl border border-gray-800 bg-gray-900 p-4
                      text-sm text-gray-300 transition-colors hover:border-gray-700 hover:bg-gray-800/60">
-          <FolderCog size={18} className="text-indigo-400" />
+          <FolderCog size={18} className="text-accent-400" />
           <span className="flex-1">Decide which contests allow personal files</span>
           <ArrowRight size={14} className="text-gray-600" />
         </Link>

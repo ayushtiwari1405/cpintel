@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowLeft, MailCheck, Zap } from 'lucide-react'
+import { ArrowLeft, MailCheck } from 'lucide-react'
 
+import { BrandLockup } from '@/components/common/BrandMark'
 import { useForgotPassword } from '@/hooks/useAuth'
 import { ThemeToggle } from '@/components/common/ThemeToggle'
 
@@ -34,19 +35,16 @@ export default function ForgotPasswordPage() {
       <ThemeToggle className="absolute top-4 right-4" />
       <div className="w-full max-w-md">
 
-        <div className="flex items-center gap-3 mb-8 justify-center">
-          <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center">
-            <Zap size={20} className="text-white" />
-          </div>
-          <span className="text-xl font-semibold text-gray-50">CPIntel</span>
+        <div className="mb-8 flex justify-center">
+          <BrandLockup className="scale-110" />
         </div>
 
         <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8">
           {sent ? (
             <div className="text-center">
-              <div className="mx-auto w-11 h-11 rounded-xl bg-indigo-950 border border-indigo-900
+              <div className="mx-auto w-11 h-11 rounded-xl bg-accent-950 border border-accent-900
                 flex items-center justify-center">
-                <MailCheck size={20} className="text-indigo-400" />
+                <MailCheck size={20} className="text-accent-400" />
               </div>
               <h1 className="text-xl font-semibold text-gray-50 mt-4">Check your email</h1>
               <p className="text-sm leading-relaxed text-gray-400 mt-2">

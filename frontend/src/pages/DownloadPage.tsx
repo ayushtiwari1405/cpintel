@@ -27,7 +27,7 @@ function Step({ n, title, children }: { n: number; title: string; children: Reac
   return (
     <li className="flex gap-3">
       <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full
-        bg-indigo-600/20 text-xs font-medium text-indigo-300">{n}</span>
+        bg-accent-600/20 text-xs font-medium text-accent-300">{n}</span>
       <div className="min-w-0 space-y-2">
         <p className="text-sm font-medium text-gray-200">{title}</p>
         <div className="space-y-2 text-xs leading-relaxed text-gray-400">{children}</div>
@@ -51,7 +51,7 @@ function Command({ text }: { text: string }) {
             setTimeout(() => setCopied(false), 2000)
           } catch { /* it is on screen to be typed */ }
         }}
-        className="flex flex-shrink-0 items-center gap-1 text-[11px] text-indigo-300 hover:underline"
+        className="flex flex-shrink-0 items-center gap-1 text-[11px] text-accent-300 hover:underline"
       >
         <Copy size={11} /> {copied ? 'Copied' : 'Copy'}
       </button>
@@ -312,7 +312,7 @@ export default function DownloadPage() {
   const header = (
     <div>
       <h1 className="flex items-center gap-2 text-2xl font-semibold text-gray-50">
-        <Monitor size={22} className="text-indigo-400" /> CPIntel desktop app
+        <Monitor size={22} className="text-accent-400" /> CPIntel desktop app
       </h1>
       <p className="mt-1 text-sm leading-relaxed text-gray-400">
         The same CPIntel, in a window of its own. Supervised examinations are sat in it; it runs
@@ -382,7 +382,7 @@ export default function DownloadPage() {
             {(['windows', 'mac', 'linux'] as Os[]).map(o => (
               <button key={o} onClick={() => setOs(o)}
                 className={clsx('flex items-center gap-1 rounded-md px-2.5 py-1 text-xs',
-                  os === o ? 'bg-indigo-600/20 text-indigo-300' : 'text-gray-400 hover:text-gray-200')}>
+                  os === o ? 'bg-accent-600/20 text-accent-300' : 'text-gray-400 hover:text-gray-200')}>
                 {o === 'mac' ? <Apple size={12} /> : o === 'linux' ? <Terminal size={12} /> : <Monitor size={12} />}
                 {OS_NAMES[o]}
               </button>

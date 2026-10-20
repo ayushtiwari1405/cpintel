@@ -36,13 +36,13 @@ function Cell({ cell }: { cell: ExamLeaderboardCell | undefined }) {
     return (
       <td className="px-2 py-2 text-center">
         <span
-          className="inline-flex flex-col items-center rounded bg-indigo-500/15 px-1.5 py-0.5
-                     text-[11px] tabular-nums text-indigo-300"
+          className="inline-flex flex-col items-center rounded bg-accent-500/15 px-1.5 py-0.5
+                     text-[11px] tabular-nums text-accent-300"
           title={`Marked by hand: ${marks(cell.marks)}`
             + (cell.solved ? ' (accepted by the judge)' : ' (not accepted by the judge)')}
         >
           {marks(cell.marks)}
-          <span className="text-[10px] text-indigo-500">
+          <span className="text-[10px] text-accent-500">
             {cell.solved ? clock(cell.solvedAtSeconds ?? 0) : 'marked'}
           </span>
         </span>
@@ -201,11 +201,11 @@ export function ExamLeaderboardView({ board, isLoading, meId, admin, contest }: 
               return (
                 <tr key={row.userId} className={clsx(
                   'transition-colors hover:bg-gray-800/30',
-                  row.userId === meId && 'bg-indigo-600/10'
+                  row.userId === meId && 'bg-accent-600/10'
                 )}>
                   <td className="px-3 py-2 tabular-nums text-gray-400">{row.rank}</td>
                   <td className="px-3 py-2">
-                    <span className={row.userId === meId ? 'text-indigo-300' : 'text-gray-200'}>
+                    <span className={row.userId === meId ? 'text-accent-300' : 'text-gray-200'}>
                       {row.username}
                     </span>
                     {row.fullName && (

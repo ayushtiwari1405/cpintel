@@ -4,9 +4,10 @@ import { ArrowRight, Loader2, Plus, School } from 'lucide-react'
 import { useAdminClassrooms, useCreateClassroom } from '@/hooks/useClassrooms'
 import { useIsSuperAdmin } from '@/hooks/useAdmin'
 import { Ago, EmptyRow, Panel, Pill } from '@/components/admin/AdminUi'
+import { PageHeader } from '@/components/common/PageHeader'
 
 const field = `rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 text-sm text-gray-200
-               placeholder-gray-600 outline-none focus:border-indigo-600`
+               placeholder-gray-400 outline-none focus:border-accent-600`
 
 /**
  * The classrooms an admin runs. Each is one DOMjudge instance, and the teams and examinations
@@ -47,11 +48,13 @@ export default function AdminClassroomsPage() {
 
   return (
     <div className="space-y-4">
+      <PageHeader eyebrow="Console" title="Classrooms"
+        description="Each classroom has its own DOMjudge, with the students, teams and examinations on it." className="mb-2" />
       <Panel title="Classrooms" description="One DOMjudge each, with the students, teams and examinations on it">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-800 text-left text-xs text-gray-500">
+              <tr className="border-b border-gray-800 text-left text-[11px] uppercase tracking-wide text-gray-500">
                 <th className="px-4 py-2 font-medium">Classroom</th>
                 <th className="px-4 py-2 font-medium">Judge</th>
                 <th className="px-4 py-2 font-medium">Students</th>
@@ -71,11 +74,11 @@ export default function AdminClassroomsPage() {
                 </EmptyRow>
               )}
               {classrooms?.map(room => (
-                <tr key={room.classroomId} className="transition-colors hover:bg-gray-800/40">
+                <tr key={room.classroomId} className="transition-colors hover:bg-gray-850/60">
                   <td className="px-4 py-2.5">
                     <Link
                       to={`/admin/classrooms/${room.classroomId}`}
-                      className="font-medium text-gray-200 hover:text-indigo-400"
+                      className="font-medium text-gray-200 hover:text-accent-400"
                     >
                       {room.name}
                     </Link>
@@ -87,7 +90,7 @@ export default function AdminClassroomsPage() {
                   <td className="px-4 py-2.5 font-mono text-xs text-gray-400">
                     {room.domjudgeUrl ?? <Pill tone="amber">not set</Pill>}
                     {room.hasServiceAccount && (
-                      <span className="ml-2"><Pill tone="indigo">service account</Pill></span>
+                      <span className="ml-2"><Pill tone="accent">service account</Pill></span>
                     )}
                   </td>
                   <td className="px-4 py-2.5 tabular-nums text-gray-400">{room.memberCount}</td>
@@ -97,8 +100,8 @@ export default function AdminClassroomsPage() {
                   <td className="px-4 py-2.5 text-right">
                     <Link
                       to={`/admin/classrooms/${room.classroomId}`}
-                      className="inline-flex items-center gap-1 text-xs text-indigo-400
-                                 hover:text-indigo-300"
+                      className="inline-flex items-center gap-1 text-xs text-accent-400
+                                 hover:text-accent-300"
                     >
                       Open <ArrowRight size={12} />
                     </Link>
@@ -150,8 +153,8 @@ export default function AdminClassroomsPage() {
             <button
               onClick={submit}
               disabled={!valid || create.isPending}
-              className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-sm
-                         font-medium text-white transition-colors hover:bg-indigo-500
+              className="flex items-center gap-1.5 rounded-lg bg-accent-600 px-3 py-2 text-sm
+                         font-medium text-white transition-colors hover:bg-accent-500
                          disabled:cursor-not-allowed disabled:opacity-40"
             >
               {create.isPending

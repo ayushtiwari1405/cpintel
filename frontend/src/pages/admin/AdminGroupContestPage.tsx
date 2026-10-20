@@ -8,6 +8,7 @@ import { useGroupStandings, useGroupViolations, useRefreshStandings } from '@/ho
 import { Ago, EmptyRow, Panel, Pill, actionLabel } from '@/components/admin/AdminUi'
 import type { StandingRow, ViolationSummary } from '@/types'
 import { judgeIdOf } from '@/utils/contestRef'
+import { ErrorState, LoadingState } from '@/components/common/States'
 
 function duration(ms: number): string {
   const total = Math.round(ms / 1000)
@@ -22,7 +23,7 @@ function penalty(minutes: number): string {
   return `${minutes}`
 }
 
-const VIOLATION_TONE: Record<string, 'gray' | 'red' | 'amber' | 'indigo'> = {
+const VIOLATION_TONE: Record<string, 'gray' | 'red' | 'amber' | 'accent'> = {
   FOCUS_LOST: 'amber',
   CLIPBOARD_FOREIGN: 'red',
   BLOCKED_ACTION: 'gray',
@@ -43,19 +44,15 @@ export default function AdminGroupContestPage() {
   const id = Number(contestId)
   const valid = Number.isFinite(id)
 
-  const { data: standings, isLoading } = useGroupStandings(valid ? id : null)
+  const { data: standings, isLoading, isError, error, refetch } = useGroupStandings(valid ? id : null)
   const { data: violations } = useGroupViolations(valid ? id : null)
   const refresh = useRefreshStandings()
 
   const [tab, setTab] = useState<'standings' | 'conduct'>('standings')
 
-  if (isLoading || !standings) {
-    return (
-      <div className="flex items-center justify-center gap-2 py-20 text-sm text-gray-500">
-        <Loader2 size={16} className="animate-spin" /> Loading the board…
-      </div>
-    )
-  }
+  if (!valid) return <ErrorState title="Not found" error={new Error('That address does not name one.')} />
+  if (isError) return <ErrorState title="Could not load this team contest" error={error} onRetry={() => refetch()} />
+  if (isLoading || !standings) return <LoadingState label="Loading the board…" />
 
   const { contest } = standings
   const computed = contest.platform === 'CODEFORCES'
@@ -69,7 +66,7 @@ export default function AdminGroupContestPage() {
         >
           ← {contest.groupName}
         </Link>
-        <h1 className="text-lg font-semibold text-gray-100">{contest.name}</h1>
+        <h1 className="break-words text-xl font-semibold tracking-tight text-gray-50 sm:text-2xl">{contest.name}</h1>
         <Pill tone={contest.status === 'LIVE' ? 'green' : 'gray'}>
           {contest.status.toLowerCase()}
         </Pill>
@@ -81,7 +78,7 @@ export default function AdminGroupContestPage() {
             href={contest.url}
             target="_blank"
             rel="noreferrer"
-            className="flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300"
+            className="flex items-center gap-1 text-xs text-accent-400 hover:text-accent-300"
           >
             Open on the judge <ExternalLink size={11} />
           </a>
@@ -172,7 +169,7 @@ export default function AdminGroupContestPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-gray-800 text-left text-xs text-gray-500">
+                <tr className="border-b border-gray-800 text-left text-[11px] uppercase tracking-wide text-gray-500">
                   <th className="w-12 px-4 py-2 font-medium">#</th>
                   <th className="px-4 py-2 font-medium">Member</th>
                   <th className="px-4 py-2 font-medium">Handle</th>
@@ -213,7 +210,7 @@ export default function AdminGroupContestPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-gray-800 text-left text-xs text-gray-500">
+                <tr className="border-b border-gray-800 text-left text-[11px] uppercase tracking-wide text-gray-500">
                   <th className="px-4 py-2 font-medium">Member</th>
                   <th className="px-4 py-2 font-medium">What</th>
                   <th className="px-4 py-2 font-medium">Detail</th>
@@ -232,7 +229,7 @@ export default function AdminGroupContestPage() {
                   </EmptyRow>
                 )}
                 {violations?.entries.map(entry => (
-                  <tr key={entry.violationId} className="transition-colors hover:bg-gray-800/40">
+                  <tr key={entry.violationId} className="transition-colors hover:bg-gray-850/60">
                     <td className="px-4 py-2.5 text-gray-300">{entry.username}</td>
                     <td className="px-4 py-2.5">
                       <Pill tone={VIOLATION_TONE[entry.type] ?? 'gray'}>
@@ -272,7 +269,7 @@ export default function AdminGroupContestPage() {
 function StandingsRow({ row }: { row: StandingRow }) {
   return (
     <tr className={clsx(
-      'transition-colors hover:bg-gray-800/40',
+      'transition-colors hover:bg-gray-850/60',
       !row.found && 'opacity-60'
     )}>
       <td className="px-4 py-2.5 font-mono text-sm text-gray-400">
