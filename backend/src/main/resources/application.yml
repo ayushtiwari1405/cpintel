@@ -143,6 +143,11 @@ logging:
     console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} [%X{requestId:-}] - %msg%n"
 
 cpintel:
+  cors:
+    # Other origins a browser may call the API from with credentials: exact
+    # scheme://host[:port] entries, comma-separated. Empty when the frontend and the API share
+    # an origin, which they do behind nginx and through the Vite dev proxy. See CorsConfig.
+    allowed-origins: ${CPINTEL_CORS_ALLOWED_ORIGINS:}
   mail:
     # Who the mail comes from, and where a link in it points — the address people actually
     # open CPIntel at, which is not the backend's own.
@@ -202,11 +207,6 @@ cpintel:
     # super admin already exists.
     bootstrap-password: ${CPINTEL_ADMIN_PASSWORD:}
     bootstrap-username: ${CPINTEL_ADMIN_USERNAME:superadmin}
-  cors:
-    allowed-origins:
-      - http://localhost:5173
-      - http://localhost:4173
-      - app://cpintel-desktop
   platforms:
     codeforces:
       base-url: https://codeforces.com/api

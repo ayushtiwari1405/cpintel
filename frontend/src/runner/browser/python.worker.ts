@@ -8,7 +8,7 @@
  * interrupted from outside, and starts a new one for the next test.
  */
 
-/** Also pinned in the site's Content-Security-Policy (nginx/templates); change both. */
+/** Also pinned in the site's Content-Security-Policy (nginx/security-headers.conf); change both. */
 const PYODIDE_VERSION = '314.0.7'
 const PYODIDE_BASE = `https://cdn.jsdelivr.net/npm/pyodide@${PYODIDE_VERSION}/`
 

@@ -42,6 +42,7 @@ import sqlite3
 import sys
 import tempfile
 import urllib.error
+import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -54,6 +55,10 @@ DEFAULT_ORIGINS = [
     "http://localhost:5173", "http://127.0.0.1:5173",
     "http://localhost:4173", "http://127.0.0.1:4173",
 ]
+# Where the session may be posted besides the page origins above (and any --origin): the
+# backend itself on its default port, for a developer calling it without the Vite proxy.
+DEFAULT_API_ORIGINS = ["http://localhost:8080", "http://127.0.0.1:8080"]
+DEFAULT_API_BASE = "http://localhost:8080/api/v1"
 
 
 # Mirrors CfSessionStore.isRelevant() — keep the two in step.
@@ -432,6 +437,63 @@ def _header_block(html):
     return html[start:end]
 
 
+def url_origin(url):
+    """
+    scheme://host[:port] of an absolute http(s) URL, normalised so that two spellings of one
+    origin compare equal; None for anything else.
+
+    A URL with a username or password in it is refused rather than parsed around: it is the
+    usual way to make an address read as one host and connect to another.
+    """
+    if not isinstance(url, str) or "\\" in url or any(ord(c) < 0x21 for c in url):
+        return None
+    try:
+        parts = urllib.parse.urlsplit(url)
+        port = parts.port  # ValueError on a port that is not a number in range
+    except ValueError:
+        return None
+    scheme = parts.scheme.lower()
+    if scheme not in ("http", "https") or not parts.hostname:
+        return None
+    if parts.username is not None or parts.password is not None:
+        return None
+    host = parts.hostname
+    if ":" in host:
+        host = f"[{host}]"
+    default = 80 if scheme == "http" else 443
+    return f"{scheme}://{host}" + (f":{port}" if port is not None and port != default else "")
+
+
+def trusted_api_base(api_base, trusted_origins):
+    """
+    api_base if the session may be posted there, else None.
+
+    The page names where its API lives, and this sends a live Codeforces credential and the
+    user's CPIntel token to that address. So it has to be one of the origins this helper
+    already answers (or the backend's own default address): any page allowed to call the
+    helper could otherwise have the session delivered to a server of its choosing.
+    """
+    origin = url_origin(api_base)
+    if origin is None:
+        return None
+    parts = urllib.parse.urlsplit(api_base)
+    if parts.query or parts.fragment:
+        return None
+    trusted = {url_origin(o) for o in trusted_origins} - {None}
+    return api_base if origin in trusted else None
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Fails on a redirect instead of following it, which would carry the token elsewhere."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise urllib.error.HTTPError(req.full_url, code,
+                                     f"CPIntel redirected the request ({code})", headers, fp)
+
+
+_opener = urllib.request.build_opener(_NoRedirect)
+
+
 def push_to_backend(api_base, token, header, expected_handle=None, user_agent=None):
     """
     Hand the session to CPIntel and let the server verify it.
@@ -459,7 +521,7 @@ def push_to_backend(api_base, token, header, expected_handle=None, user_agent=No
         "Authorization": f"Bearer {token}",
     })
     try:
-        with urllib.request.urlopen(req, timeout=40) as resp:
+        with _opener.open(req, timeout=40) as resp:
             return json.loads(resp.read().decode("utf-8", "ignore"))
     except urllib.error.HTTPError as e:
         raw = e.read().decode("utf-8", "ignore")
@@ -538,10 +600,17 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(400, {"error": "malformed request"})
 
         token = payload.get("token")
-        api_base = payload.get("apiBase") or "http://localhost:8080/api"
         wanted = (payload.get("handle") or "").strip()
         if not token:
             return self._send(400, {"error": "missing CPIntel token"})
+        # Checked before a single cookie is read: an address this helper does not trust gets
+        # nothing, not even a look at the browser's cookie store.
+        api_base = trusted_api_base(payload.get("apiBase") or DEFAULT_API_BASE,
+                                    self.allowed_origins | set(DEFAULT_API_ORIGINS))
+        if api_base is None:
+            return self._send(400, {
+                "error": "apiBase is not a CPIntel address this helper trusts. Start the "
+                         "helper with --origin <the CPIntel address> to allow it."})
 
         try:
             header, flavour, profile, names, browser_ua = collect(self.browser)

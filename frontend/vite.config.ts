@@ -20,7 +20,11 @@ export default defineConfig({
       // after it, so the dev proxy does not need touching every time the API is versioned.
       '/api': {
         target: 'http://localhost:8080',
-        changeOrigin: true,
+        // Host is passed through as the browser sent it (localhost:5173), so to the backend
+        // the page and the API are one origin, as they are behind nginx, and no CORS entry is
+        // needed in any profile. Rewritten to localhost:8080 it made every POST from the page
+        // look cross-origin, which an empty allowlist answers with 403.
+        changeOrigin: false,
       },
     },
   },

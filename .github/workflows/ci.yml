@@ -88,10 +88,43 @@ jobs:
           name: frontend-dist
           path: frontend/dist
 
+  desktop-and-scripts:
+    name: Desktop and script tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: electron/package-lock.json
+
+      # The tests compile and run plain modules (away-time accounting, external-link schemes,
+      # executable sizes); none of them starts Electron, so its binary is not downloaded.
+      - name: Install desktop dependencies
+        working-directory: electron
+        run: npm ci
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+
+      - name: Desktop tests
+        working-directory: electron
+        run: npm test
+
+      # Standard library only. The nginx test also starts two throwaway containers (the image
+      # nginx/Dockerfile names, and a stub backend) to check the headers and restart answers.
+      - name: Codeforces helper tests
+        run: python3 -I scripts/test_grab_cf_cookie.py
+
+      - name: Edge nginx tests
+        run: python3 -I scripts/test_nginx_edge.py
+
   docker-build:
     name: Build Docker images
     runs-on: ubuntu-latest
-    needs: [backend-test, frontend-build]
+    needs: [backend-test, frontend-build, desktop-and-scripts]
     if: github.ref == 'refs/heads/main'
     permissions:
       contents: read

@@ -9,6 +9,7 @@ import { Lockdown, disposeOnQuit, type LockdownPolicy, type LockdownState } from
 import {
   connectCodeforces, fetchCodeforces, forgetCodeforces, openCodeforces, signInCodeforces,
 } from './cfSession'
+import { isOpenableExternal } from './externalUrl'
 import * as localRunner from './localRunner'
 import { installUpdate, type UpdateProgress } from './updater'
 
@@ -122,13 +123,13 @@ function createWindow(): void {
     mainWindow?.loadURL(offlinePage(description))
   })
 
-  // This window shows the CPIntel server and nothing else. A link elsewhere opens in the
+  // This window shows the CPIntel server and nothing else. A web link elsewhere opens in the
   // system browser (when no examination forbids it); the lockdown counts the attempt when one
-  // is engaged.
+  // is engaged. Any other scheme is dropped, as it is for new windows below.
   mainWindow.webContents.on('will-navigate', (event, url) => {
     if (isAppUrl(url) || url.startsWith('data:')) return
     event.preventDefault()
-    if (!lockdown.isEngaged()) shell.openExternal(url)
+    if (!lockdown.isEngaged() && isOpenableExternal(url)) shell.openExternal(url)
   })
   mainWindow.webContents.on('will-redirect', (event, url) => {
     if (!isAppUrl(url)) event.preventDefault()
@@ -150,7 +151,7 @@ function createWindow(): void {
       lockdown.countBlocked()
       return { action: 'deny' }
     }
-    if (/^https?:\/\//i.test(url)) shell.openExternal(url)
+    if (isOpenableExternal(url)) shell.openExternal(url)
     return { action: 'deny' }
   })
 
@@ -255,7 +256,7 @@ handle('shell:openExternal', (_e, url: string, allowedInLockdown = false) => {
     lockdown.countBlocked()
     return
   }
-  if (/^https?:\/\//i.test(url)) shell.openExternal(url)
+  if (isOpenableExternal(url)) shell.openExternal(url)
 })
 
 // ── Codeforces ────────────────────────────────────────────────

@@ -24,12 +24,27 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,metrics,prometheus
+        # health for Docker, deploy.sh and nginx; prometheus for the monitoring profile, which
+        # scrapes it on the compose network. metrics is left out: everything it says is in
+        # prometheus already, and it answered any signed-in user.
+        include: health,prometheus
   endpoint:
     health:
       show-details: never
 
+# The API description and its UI are for development (README, "API documentation"). In prod
+# they only map the attack surface for whoever reaches the backend; nginx does not route them.
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
 cpintel:
+  cors:
+    # Stated again so prod can never inherit a list from another profile: empty unless the
+    # environment names an origin, and CorsConfig refuses to start on anything but exact ones.
+    allowed-origins: ${CPINTEL_CORS_ALLOWED_ORIGINS:}
   runner:
     # On, but never in this process: every run goes to the isolated runner container, which
     # holds none of this backend's secrets and sandboxes each run. SecretsCheck refuses to

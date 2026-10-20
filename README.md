@@ -282,6 +282,20 @@ belongs outside examinations, which is why the script refuses one during a paper
   extension/build.mjs` makes `extension/cpintel-codeforces.zip`) and set `VITE_CF_EXTENSION_URL`
   to the listing; the page then offers the store first. See `extension/README.md`. The desktop
   app needs no extension.
+- **Cross-origin access: none to configure.** The page and the API come from the same nginx, so
+  `CPINTEL_CORS_ALLOWED_ORIGINS` stays empty whatever address the server ends up on — a LAN
+  host or IP, an internet name, port 443 or another. nginx passes the host and port the browser
+  used (`X-Forwarded-Host`), which is how the backend recognises its own page on a non-standard
+  port. If another proxy, firewall or port-forward sits in front of this nginx, it must keep the
+  `Host` header the browser sent. Once the address is final, check it from a machine on that
+  network (`<origin>` is exactly what people type, e.g. `https://host:port`):
+
+  ```bash
+  # same origin: expect 401 (no session), not 403
+  curl -sk -o /dev/null -w '%{http_code}\n' -X POST -H "Origin: <origin>" <origin>/api/v1/auth/refresh
+  # any other origin: expect 403 and no Access-Control-Allow-Origin header
+  curl -sk -D - -o /dev/null -X POST -H 'Origin: https://not-cpintel.example' <origin>/api/v1/auth/refresh
+  ```
 
 See `docs/requirements.md` for the full checklist.
 
@@ -334,6 +348,7 @@ Everything below has a working default; only the secrets in `.env` genuinely nee
 | `CPINTEL_SESSION_TTL_DAYS` | `14` | How long a stored Codeforces session is kept |
 | `CPINTEL_GAUNTLET_RETAKE_DAYS` | `7` | How soon the placement gauntlet may be retaken |
 | `CPINTEL_LAB_NETWORKS` | *(unset)* | Comma-separated CIDRs of labs behind one NAT address; inside them the per-address sign-in limit is raised to a shared one (the per-account limit is unchanged) |
+| `CPINTEL_CORS_ALLOWED_ORIGINS` | *(empty)* | **Leave empty when the frontend and API share nginx**, as every CPIntel deployment does: the page, the desktop app and the API are then one origin, on any host or port, and CORS never applies. Only for a page served from a different origin that must call the API: exact `scheme://host[:port]` origins, comma-separated. Wildcards, `null`, paths (even a trailing `/`) and non-http(s) schemes make the `prod` profile refuse to start; elsewhere they are dropped with a warning. Nothing is ever allowed by default |
 | `SMTP_HOST` | *(unset)* | Mail server for password resets. **Blank is supported** — the message is logged instead, which is what a closed exam-lab network needs |
 | `SMTP_PORT` / `_USER` / `_PASSWORD` | `587` / — / — | The rest of the SMTP connection |
 | `SMTP_AUTH` / `SMTP_STARTTLS` | `true` / `true` | Turn off for a relay that wants neither |
@@ -498,6 +513,11 @@ It reads Codeforces cookies from whichever browser you are signed in with, posts
 to the CPIntel backend, and answers the page with nothing but the handle it connected. A manual
 route — paste the `Cookie` request header from DevTools — is behind the same card if the helper
 cannot run.
+
+The helper answers only the development origins (`localhost:5173` and `:4173`) and posts the
+session only to one of those origins or to the backend on `localhost:8080`. For a CPIntel
+served anywhere else, name it: `--origin https://cpintel.example.edu` allows both the page and
+its API. A request naming any other API address is refused before a cookie is read.
 
 **Sessions go stale, and sooner than they look.** The cookie recording that you passed the
 browser check lives hours; the session CPIntel stores lives a fortnight. When it expires, the
@@ -786,7 +806,8 @@ Three things are worth checking by hand as well:
 
 ## API documentation
 
-Swagger UI: `http://localhost:8080/swagger-ui.html`
+Swagger UI: `http://localhost:8080/swagger-ui.html` (development; the `prod` profile serves
+neither it nor `/v3/api-docs`).
 
 ### API versioning
 
@@ -805,23 +826,31 @@ as well as on each controller.
 ## Tests
 
 ```bash
-cd backend  && ./mvnw test      # ~600 tests
-cd electron && npm test         # away-time accounting
+cd backend  && ./mvnw verify    # unit and web-slice tests, then the JaCoCo coverage gate
+cd electron && npm test         # away-time accounting, external-link schemes, executable sizes
+python3 -I scripts/test_grab_cf_cookie.py   # where the Codeforces helper will send a session
+python3 -I scripts/test_nginx_edge.py       # edge headers and the restarting answer (uses Docker)
 cd frontend && npm run type-check && npm run lint
 ```
+
+All of these run in CI (`.github/workflows/ci.yml`) and in `scripts/ci-local.sh`. The backend
+suite is the large one, several hundred tests; Maven prints the exact count at the end of a run.
+The backend tests need no database, Redis or network. The nginx test skips its container half
+when Docker is unavailable or `CPINTEL_NO_DOCKER=1` is set.
 
 The frontend has no test runner yet; that is a known gap rather than an oversight.
 
 ### Running CI before pushing
 
 `scripts/ci-local.sh` runs the same stages as `.github/workflows/ci.yml` — workflow lint, backend
-tests with the coverage gate, frontend type check and build, and both Docker images — against a
+tests with the coverage gate, frontend type check and build, the desktop and script tests, and
+the Docker images — against a
 clean snapshot of the repo, so local `node_modules`, `target/` or `public/mathjax` cannot hide a
 failure the CI runner would hit. It takes about two minutes warm.
 
 ```bash
 ./scripts/ci-local.sh               # working tree, uncommitted changes included
-./scripts/ci-local.sh --no-docker   # skip the image builds
+./scripts/ci-local.sh --no-docker   # skip the image builds and the nginx container test
 ./scripts/ci-local.sh --no-cache    # cold Docker build, as a fresh runner does
 ./scripts/ci-local.sh --audit       # add the dependency audits (backend needs NVD_API_KEY)
 

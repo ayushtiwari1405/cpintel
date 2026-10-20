@@ -67,6 +67,11 @@ public class SecurityConfig {
                     "/swagger-ui/**",
                     "/swagger-ui.html"
                 ).permitAll()
+                // Every other actuator endpoint (metrics, and whatever a profile exposes later)
+                // describes the deployment rather than anyone's data: the operator's business,
+                // not every signed-in student's. The prod profile does not expose metrics at
+                // all; this is what holds wherever it is exposed, nginx or not.
+                .requestMatchers("/actuator/**").hasRole("SUPER_ADMIN")
                 // Admin surface, guarded here as well as by @PreAuthorize so a new admin
                 // controller cannot land authenticated-but-open by forgetting the annotation.
                 // Both console roles are named explicitly rather than leaning on the hierarchy

@@ -6,6 +6,7 @@
 FROM nginx:1.27-alpine
 RUN apk add --no-cache openssl && rm -f /etc/nginx/conf.d/default.conf
 COPY nginx.conf /etc/nginx/nginx.conf
+COPY security-headers.conf /etc/nginx/security-headers.conf
 COPY templates/ /etc/nginx/templates/
 COPY docker-entrypoint.d/ /docker-entrypoint.d/
 COPY cpintel-cert.sh /usr/local/bin/cpintel-cert

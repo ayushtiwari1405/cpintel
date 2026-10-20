@@ -8,12 +8,13 @@
 #
 #   ./scripts/ci-local.sh                 # working tree as it is now, uncommitted changes included
 #   ./scripts/ci-local.sh --ref HEAD      # exactly what a commit contains (what the pre-push hook uses)
-#   ./scripts/ci-local.sh --no-docker     # skip the image builds (the slow part)
+#   ./scripts/ci-local.sh --no-docker     # skip the image builds (the slow part) and the nginx container test
 #   ./scripts/ci-local.sh --no-cache      # build images without the layer cache, as a cold CI runner does
 #   ./scripts/ci-local.sh --audit         # also run the dependency audits (needs NVD_API_KEY for the backend)
 #
 # Stages mirror the CI jobs: workflow lint, backend tests + coverage gate, frontend type check
-# + build, backend and frontend Docker images. Each stage logs to a file; a failure prints the
+# + build, desktop tests, the helper and edge nginx script tests, backend and frontend Docker
+# images. Each stage logs to a file; a failure prints the
 # end of its log and the run carries on, so one push attempt reports every broken stage.
 set -uo pipefail
 
@@ -99,6 +100,19 @@ frontend_build() (
   cd "$SRC/frontend" && npm ci --no-audit --no-fund && npm run type-check && npm run lint && npm run build
 )
 
+desktop_tests() (
+  # The tests never start Electron, so its ~100 MB binary is not downloaded (as in CI).
+  cd "$SRC/electron" && ELECTRON_SKIP_BINARY_DOWNLOAD=1 npm ci --no-audit --no-fund && npm test
+)
+
+script_tests() (
+  # The edge test's runtime half starts two throwaway containers; --no-docker leaves only its
+  # static checks.
+  cd "$SRC" && python3 -I scripts/test_grab_cf_cookie.py \
+    && if [[ $DOCKER -eq 0 ]]; then CPINTEL_NO_DOCKER=1 python3 -I scripts/test_nginx_edge.py;
+       else python3 -I scripts/test_nginx_edge.py; fi
+)
+
 docker_backend()  { docker build "${NO_CACHE[@]}" -t "$TAG-backend"  "$SRC/backend"; }
 docker_frontend() { docker build "${NO_CACHE[@]}" -t "$TAG-frontend" "$SRC/frontend"; }
 docker_runner()   { docker build "${NO_CACHE[@]}" --target runner -t "$TAG-runner" "$SRC/backend"; }
@@ -126,6 +140,8 @@ fi
 
 stage "backend tests + coverage" backend_tests
 stage "frontend type-check + build" frontend_build
+stage "desktop tests" desktop_tests
+stage "script tests" script_tests
 
 if [[ $DOCKER -eq 0 ]]; then
   skip "docker: backend image" "--no-docker"
