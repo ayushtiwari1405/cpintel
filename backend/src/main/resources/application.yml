@@ -95,6 +95,10 @@ spring:
 
 server:
   port: 8080
+  # Boot's default since 3.4, stated so the choice is visible. On SIGTERM the listening socket
+  # closes at once, so nginx still answers new requests from @restarting, while requests already
+  # running (a submission, a login) finish inside Docker's 10 s stop window instead of being cut.
+  shutdown: graceful
   servlet:
     context-path: /
   compression:
