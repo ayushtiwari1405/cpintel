@@ -240,9 +240,8 @@ export function SubmissionHistory({
               {!loading && attempts.length === 0 && (
                 <p className="p-3 text-xs text-gray-600 leading-relaxed">
                   {scope === 'problem'
-                    ? 'Nothing submitted to this problem yet. Everything you send from here '
-                      + 'is kept, so it will be readable without opening Codeforces.'
-                    : 'Nothing archived yet. Anything you submit through CPIntel lands here.'}
+                    ? 'No submissions to this problem yet.'
+                    : 'No archived submissions yet.'}
                 </p>
               )}
 
@@ -416,8 +415,7 @@ export function SubmissionHistory({
                                 flex items-center gap-2">
                   {source.data.retrievedFrom === 'ARCHIVE'
                     ? <><HardDrive size={10} /> Read from CPIntel's archive</>
-                    : <><Cloud size={10} /> Fetched from Codeforces and archived — the next
-                        time you open it, it will be local</>}
+                    : <><Cloud size={10} /> Fetched from Codeforces and archived</>}
                   <span className="ml-auto">{ago(source.data.submittedAt)}</span>
                 </div>
               </>

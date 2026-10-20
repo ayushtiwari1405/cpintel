@@ -31,7 +31,7 @@ export function ClassroomSelect({ value, onChange, allowAll, className }: Props)
       <span className="text-xs text-amber-400">
         {isSuper
           ? <>No classroom yet — <Link to="/admin/classrooms" className="underline">create one</Link> first.</>
-          : 'You are not in a classroom yet. Ask a superadmin to add you to one.'}
+          : 'You are not in a classroom yet. A superadmin can add you.'}
       </span>
     )
   }

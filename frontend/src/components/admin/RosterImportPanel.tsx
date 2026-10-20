@@ -90,7 +90,7 @@ export function RosterImportPanel({ groupId }: Props) {
   return (
     <Panel
       title="Import a roster"
-      description="Paste from a spreadsheet or a CSV — accounts are created for anyone who does not have one"
+      description="Paste from a spreadsheet or CSV; missing accounts are created"
     >
       <div className="space-y-3 p-4">
         <textarea
@@ -109,15 +109,13 @@ export function RosterImportPanel({ groupId }: Props) {
           <span className="text-gray-500">username</span> is required;{' '}
           <span className="text-gray-500">fullName</span>,{' '}
           <span className="text-gray-500">cfHandle</span> and{' '}
-          <span className="text-gray-500">teamName</span> are optional. Commas or tabs both
-          work, so copying cells straight out of Excel or Sheets is fine.
+          <span className="text-gray-500">teamName</span> are optional. Comma- or tab-separated.
         </p>
         <p className="text-xs text-gray-600">
           Add <span className="text-gray-500">djUsername</span> and{' '}
-          <span className="text-gray-500">djPassword</span> to attach each person's DOMjudge team
-          login too. The preview checks every login against the judge, new accounts take the
-          DOMjudge username as their username, and a paste of just those two columns re-attaches
-          logins to existing accounts after they expire.
+          <span className="text-gray-500">djPassword</span> to attach DOMjudge logins (verified
+          in the preview). New accounts use the DOMjudge username; those two columns alone
+          re-attach expired logins.
         </p>
 
         {/* The common roster has no team column at all and everybody on one team. Typing that

@@ -38,35 +38,33 @@ export default function LoginPage() {
 
         {/* Card */}
         <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8">
-          <h1 className="text-2xl font-semibold text-gray-50 mb-1">Welcome back</h1>
-          <p className="text-gray-400 text-sm mb-6">Sign in to your account</p>
+          <h1 className="text-2xl font-semibold text-gray-50 mb-6">Sign in</h1>
           {examEnded && (
             <p className="mb-4 rounded-lg border border-gray-700 bg-gray-800/60 px-3 py-2 text-xs
               leading-relaxed text-gray-300">
-              The examination has ended and its session is closed. Sign in with your own
-              password to read your code under Past examinations.
+              The examination has ended. Sign in with your own password to see your code under
+              Past examinations.
             </p>
           )}
           {examRunning && (
             <p className="mb-4 rounded-lg border border-gray-700 bg-gray-800/60 px-3 py-2 text-xs
               leading-relaxed text-gray-300">
-              Your examination is running, so you have been signed out of your account until it
-              ends. Sign in with your username and the examination password on your slip.
+              Your examination is running; your account is signed out until it ends. Sign in
+              with your username and the examination password on your slip.
             </p>
           )}
 
           {desktopRequired && (
             <p className="mb-4 rounded-lg border border-amber-900 bg-amber-950/40 px-3 py-2 text-xs
               leading-relaxed text-amber-200">
-              Your examination can only be sat in the CPIntel desktop app. Open the app on this
-              computer and sign in there with the same examination password.{' '}
+              This examination requires the CPIntel desktop app. Sign in there with the same
+              examination password.{' '}
               {!isDesktop() && (
                 <Link to="/download" className="underline hover:text-amber-100">
                   Get the desktop app.
                 </Link>
               )}
-              {isDesktop() && 'This copy of the app is too old to be recognised: update it from '
-                + 'the download page.'}
+              {isDesktop() && 'This version of the app is too old; update it from the download page.'}
             </p>
           )}
 
@@ -130,15 +128,6 @@ export default function LoginPage() {
             </button>
           </form>
 
-          {/* Not inside the desktop app, which is what the link offers. */}
-          {!isDesktop() && (
-            <p className="mt-4 text-center text-xs text-gray-500">
-              Sitting an examination on your own computer?{' '}
-              <Link to="/download" className="text-accent-400 hover:text-accent-300">
-                Get the desktop app
-              </Link>
-            </p>
-          )}
 
           {/*
             No sign-up link, because there is no sign-up. Accounts are created by a super
@@ -146,15 +135,20 @@ export default function LoginPage() {
             a button that would answer 403.
           */}
           <p className="text-center text-sm text-gray-500 mt-6">
-            Accounts are created by an administrator, who gives you your username and first
-            password. You can change it once you are in.
+            No account? Ask your administrator.
           </p>
           {/* The same form signs in to an examination: the password on the slip opens that
               paper, in examination mode, instead of the account. */}
           <p className="mt-3 rounded-lg border border-accent-900 bg-accent-950/30 px-3 py-2
             text-center text-xs leading-relaxed text-accent-200">
-            Sitting an examination? Sign in with your username and the examination password
-            on your slip instead of your own.
+            Sitting an examination? Use the examination password on your slip.
+            {/* Not inside the desktop app, which is what the link offers. */}
+            {!isDesktop() && (
+              <>
+                {' '}On your own computer,{' '}
+                <Link to="/download" className="underline hover:text-accent-100">get the desktop app</Link>.
+              </>
+            )}
           </p>
         </div>
 

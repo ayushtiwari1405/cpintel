@@ -112,9 +112,8 @@ function WindowsSteps({ release }: { release: DesktopRelease }) {
       </Step>
       <Step n={3} title="It installs and opens by itself">
         <p>
-          It installs for your Windows account only, so it never asks for an administrator
-          password, and opens when it is done. You will find CPIntel in the Start menu afterwards.
-          Sign in with the same username and password as on this website.
+          It installs for your account only — no administrator password — and opens when done.
+          Sign in with your CPIntel username and password.
         </p>
       </Step>
     </ol>
@@ -231,10 +230,9 @@ function Checksums({ release, os }: { release: DesktopRelease; os: Os }) {
         <ShieldCheck size={15} className="text-green-400" /> Make sure it is the real file
       </p>
       <p className="text-xs leading-relaxed text-gray-400">
-        Optional, but worth a minute. Every file has a fingerprint (SHA-256); a file that was
-        changed or swapped by anyone has a different one. In
-        {os === 'windows' ? ' PowerShell' : ' a terminal'}, in the folder you downloaded to, run
-        this with the file's name in place of FILE:
+        Optional. A tampered file has a different SHA-256 fingerprint. In
+        {os === 'windows' ? ' PowerShell' : ' a terminal'}, in the download folder, run this with
+        the file's name in place of FILE:
       </p>
       <Command text={command} />
       <p className="text-xs text-gray-400">The result must match exactly:</p>
@@ -315,9 +313,8 @@ export default function DownloadPage() {
         <Monitor size={22} className="text-accent-400" /> CPIntel desktop app
       </h1>
       <p className="mt-1 text-sm leading-relaxed text-gray-400">
-        The same CPIntel, in a window of its own. Supervised examinations are sat in it; it runs
-        your code with compilers built into it, so nothing else needs installing; and it
-        connects to Codeforces without a browser extension.
+        Required for supervised examinations. Includes built-in compilers and connects to
+        Codeforces without a browser extension.
       </p>
     </div>
   )
@@ -329,8 +326,8 @@ export default function DownloadPage() {
         <div className="card flex items-start gap-2 text-sm text-gray-300">
           <CheckCircle2 size={16} className="mt-0.5 flex-shrink-0 text-green-400" />
           <p>
-            You are using it{version ? ` (version ${version})` : ''}. When a new version comes
-            out, a ribbon at the top of the window offers to update it.
+            You are using the desktop app{version ? ` (version ${version})` : ''}. Updates are
+            offered in a ribbon at the top of the window.
           </p>
         </div>
       </div>
@@ -356,9 +353,8 @@ export default function DownloadPage() {
           {isError
             ? 'The download list could not be loaded. Try again in a minute.'
             : !release?.configured
-              ? 'The desktop app has not been set up on this CPIntel yet. Ask your administrator; '
-                + 'the website does everything except supervised examinations meanwhile.'
-              : 'No version of the desktop app has been published yet. Check back later.'}
+              ? 'The desktop app is not set up on this server yet. Ask your administrator.'
+              : 'No version of the desktop app has been published yet.'}
         </div>
       </div>
     )
@@ -400,10 +396,9 @@ export default function DownloadPage() {
       <div className="flex items-start gap-2 text-xs leading-relaxed text-gray-500">
         <ShieldCheck size={14} className="mt-0.5 flex-shrink-0 text-gray-600" />
         <p>
-          What the app does on your computer: it shows this CPIntel site, compiles and runs your
-          code in a temporary folder when you press Run, and — only while you are in a contest
-          or examination — notes when you leave its window, which your instructor can see. It
-          never updates itself without you pressing Update.
+          The app shows this site, compiles and runs your code in a temporary folder when you
+          press Run, and — only during a contest or examination — records when you leave its
+          window, which your instructor can see. It never updates without your consent.
         </p>
       </div>
     </div>

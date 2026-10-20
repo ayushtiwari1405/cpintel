@@ -77,8 +77,8 @@ export default function ExtensionPage() {
         <Puzzle size={22} className="text-accent-400" /> CPIntel Codeforces Connector
       </h1>
       <p className="mt-1 text-sm text-gray-400">
-        A small browser extension that lets CPIntel open Codeforces problems and submit your
-        solutions through this browser, where your Codeforces sign-in lives.
+        Lets CPIntel open Codeforces problems and submit solutions using this browser's
+        Codeforces sign-in.
       </p>
     </div>
   )
@@ -90,8 +90,8 @@ export default function ExtensionPage() {
         <div className="card flex items-start gap-2 text-sm text-gray-300">
           <CheckCircle2 size={16} className="mt-0.5 flex-shrink-0 text-green-400" />
           <p>
-            The desktop app talks to Codeforces itself and needs no extension. Connect your
-            account from <Link to="/platforms" className="text-accent-300 underline">Platforms</Link>.
+            The desktop app needs no extension. Connect your account from{' '}
+            <Link to="/platforms" className="text-accent-300 underline">Platforms</Link>.
           </p>
         </div>
       </div>
@@ -151,7 +151,7 @@ export default function ExtensionPage() {
         <div className="card space-y-3">
           <p className="text-sm font-medium text-gray-200">Install it from the store</p>
           <p className="text-xs text-gray-400">
-            One click, and it updates itself. Come back and reload this page afterwards.
+            Updates automatically. Reload this page after installing.
           </p>
           <a href={STORE_URL} target="_blank" rel="noreferrer"
             className="btn-primary inline-flex items-center gap-1.5 px-4 py-1.5 text-xs">
@@ -175,16 +175,14 @@ export default function ExtensionPage() {
             <p>
               {downloaded ? 'Downloaded. ' : ''}Unzip <span className="font-mono text-gray-300">
               {EXTENSION_FOLDER}.zip</span> and keep the <span className="font-mono
-              text-gray-300">{EXTENSION_FOLDER}</span> folder somewhere it will stay, such as
-              your Documents — the browser runs the extension from that folder, so deleting it
-              removes the extension.
+              text-gray-300">{EXTENSION_FOLDER}</span> folder somewhere permanent, such as
+              Documents — deleting it removes the extension.
             </p>
           </Step>
 
           <Step n={2} title="Open your browser's extensions page">
             <p>
-              A website is not allowed to open that page for you. Paste this into the address
-              bar of a new tab:
+              Paste this into the address bar of a new tab:
             </p>
             <div className="flex items-center gap-2">
               <code className="select-all rounded bg-black/40 px-2 py-1 font-mono text-gray-200">
@@ -221,10 +219,9 @@ export default function ExtensionPage() {
       <div className="flex items-start gap-2 text-xs leading-relaxed text-gray-500">
         <ShieldCheck size={14} className="mt-0.5 flex-shrink-0 text-gray-600" />
         <p>
-          What it can do: fetch pages from codeforces.com when this CPIntel site asks, and
-          nothing else. It runs on this site only, keeps nothing, and CPIntel never receives
-          your Codeforces password or cookies. Your browser may remind you that it is running
-          an extension in developer mode; that is expected for one installed this way.
+          It only fetches codeforces.com pages when this site asks, stores nothing, and never
+          sends your Codeforces password or cookies to CPIntel. A developer-mode reminder from
+          your browser is expected.
         </p>
       </div>
     </div>

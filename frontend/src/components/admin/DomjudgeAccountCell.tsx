@@ -262,8 +262,8 @@ function AttachDialog(
         </div>
 
         <p className="mt-3 text-xs leading-relaxed text-gray-600">
-          The team only decides how CPIntel groups them for its own standings. Submissions are
-          always attributed by DOMjudge to the team behind the login, whatever is chosen here.
+          Affects CPIntel's standings only; DOMjudge always attributes submissions to the
+          login's own team.
         </p>
         </>
         )}
@@ -332,8 +332,7 @@ function PasswordForm(
       </label>
 
       <p className="text-xs leading-relaxed text-gray-600">
-        Use this after the password was changed on DOMjudge. The login, name and team stay as
-        they are. If the new password is rejected, the old one is kept.{' '}
+        For a password changed on DOMjudge. A rejected password keeps the old one.{' '}
         <button type="button" onClick={onReplace}
           className="text-accent-400 hover:text-accent-300">
           Attach a different login instead

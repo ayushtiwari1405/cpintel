@@ -57,8 +57,7 @@ export class ErrorBoundary extends Component<Props, State> {
           </div>
 
           <p className="text-sm text-gray-400">
-            The rest of the app is still working. Try again, and if it keeps happening the
-            message below is the useful part to report.
+            The rest of the app still works. If retrying fails, report the message below.
           </p>
 
           <pre className="mt-3 max-h-32 overflow-auto rounded-lg border border-gray-800

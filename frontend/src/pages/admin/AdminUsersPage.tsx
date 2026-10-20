@@ -74,8 +74,7 @@ export default function AdminUsersPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader eyebrow="Console" title="Users"
-        description="Find accounts, create them, and manage roles, access and sessions." className="mb-2" />
+      <PageHeader title="Users" className="mb-2" />
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative min-w-[16rem] flex-1">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600" />
@@ -121,7 +120,7 @@ export default function AdminUsersPage() {
         </button>
       </div>
 
-      <Panel title="Accounts" description="Click a row to see the full record">
+      <Panel title="Accounts">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -476,7 +475,7 @@ function UserDetailDrawer({ userId, onClose }: { userId: number; onClose: () => 
                     : `${data.fileCount} file${data.fileCount === 1 ? '' : 's'}, ${bytes(data.fileBytes)}.`}
                 </p>
                 <p className="mt-1 text-xs text-gray-600">
-                  Sizes only — an admin cannot see the names or open them.
+                  Sizes only — admins cannot see file names or contents.
                 </p>
               </section>
 
@@ -618,8 +617,7 @@ function CreateUserDialog(
         </div>
 
         <p className="mt-3 text-xs text-gray-600">
-          The password is shown as you type it because you have to pass it on. Ask them to
-          change it from their profile once they are in.
+          Shown in plain text so you can pass it on. Ask them to change it after signing in.
         </p>
 
         <div className="mt-4 flex justify-end gap-2">
@@ -717,9 +715,8 @@ function SetPasswordDialog({ user, onClose }: { user: AdminUserRow; onClose: () 
               <Copy size={14} /> Copy it
             </button>
             <p className="text-xs leading-relaxed text-amber-300">
-              This is the only time it is shown, and it has not been emailed. Give it to them
-              directly — they have been signed out everywhere and can change it from their
-              profile once they are back in.
+              Shown only once and not emailed. Give it to them directly; they have been signed
+              out everywhere.
             </p>
             <button onClick={onClose} className="btn-primary w-full">Done</button>
           </div>
@@ -740,15 +737,13 @@ function SetPasswordDialog({ user, onClose }: { user: AdminUserRow; onClose: () 
                 autoFocus
               />
               <p className={`mt-1 text-xs ${tooShort ? 'text-amber-400' : 'text-gray-600'}`}>
-                At least 8 characters. A generated one is better — it is not one you were
-                already thinking of.
+                At least 8 characters.
               </p>
             </div>
 
             <p className="rounded-lg border border-gray-800 bg-gray-950/60 px-3 py-2 text-xs
               leading-relaxed text-gray-500">
-              They will be signed out of every device, and told by email that an administrator
-              did this — with no password and no link in it.
+              They will be signed out everywhere and notified by email (without the password).
             </p>
 
             <div className="flex gap-2">

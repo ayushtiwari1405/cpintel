@@ -166,7 +166,7 @@ export function ConsolePanel({
 
             {!active ? (
               <p className="text-xs text-gray-600">
-                No test cases yet. Add one to run your code against it.
+                No test cases yet.
               </p>
             ) : (
               <>

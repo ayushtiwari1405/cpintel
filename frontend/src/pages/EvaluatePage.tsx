@@ -29,7 +29,7 @@ export default function EvaluatePage() {
     () => openEventId != null ? evaluationApi.source(openEventId) : null, [openEventId])
 
   const header = <PageHeader title="Evaluate"
-    description="Examinations you have been given marking for. Marking opens when a paper ends and closes when an admin marks it done." />
+    description="Marking opens when a paper ends and closes when an admin marks it done." />
 
   if (isLoading) return <>{header}<LoadingState label="Loading your marking…" /></>
   if (isError) return <>{header}<ErrorState title="Could not load your marking" error={error} onRetry={() => refetch()} /></>
@@ -62,7 +62,7 @@ export default function EvaluatePage() {
         {header}
         <div className="rounded-xl border border-gray-800 bg-gray-900">
           <EmptyState icon={<ClipboardCheck size={18} />} title="Nothing to mark">
-            Examinations appear here once an admin gives you questions or students to mark.
+            Examinations appear here when an admin assigns you marking.
           </EmptyState>
         </div>
       </>

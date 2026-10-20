@@ -37,7 +37,7 @@ export function EvaluationTab({ eventId, done }: { eventId: number; done: boolea
         </>
       )}
       <Panel title="Marks"
-        description="Every answer, with the submission to read: the latest accepted one, else the latest. A mark set here replaces the judge's on the leaderboard">
+        description="Shows the latest accepted submission, else the latest. Marks set here replace the judge's on the leaderboard">
         <div className="p-4"><EvaluationSheet source={source} /></div>
       </Panel>
     </div>
@@ -70,7 +70,7 @@ function Assignments({ eventId, board, done }: {
 
   return (
     <Panel title="Who marks what"
-      description="A question, a range of usernames, or that question for that range. Empty means all">
+      description="A question, a username range, or both. Empty means all">
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>

@@ -92,18 +92,16 @@ export function ExamPasswordsTab({ eventId }: { eventId: number }) {
           bg-amber-950/40 px-3 py-2.5 text-xs leading-relaxed text-amber-200">
           <AlertTriangle size={14} className="mt-0.5 flex-shrink-0" />
           <span>
-            <span className="font-medium">CPINTEL_EXAM_PASSWORD_KEY is not set</span>, so no
-            passwords can be generated and this examination will open for anyone assigned to
-            it. Set it in the environment and restart before running a paper that needs one.
+            <span className="font-medium">CPINTEL_EXAM_PASSWORD_KEY is not set</span>: no
+            passwords can be generated, and this examination opens for anyone assigned. Set it
+            and restart before running a paper that needs one.
           </span>
         </p>
       )}
 
       <Panel
         title="Examination password"
-        description="One string for the whole paper, read out when you start it. Rotating it
-          ends every session opened with the previous one, which is what makes it worth
-          rotating if it reaches the wrong room."
+        description="Shared by the whole room. Rotating it ends every session opened with the old one."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             {status.examPasswordSet && (
@@ -169,19 +167,15 @@ export function ExamPasswordsTab({ eventId }: { eventId: number }) {
           </div>
         ) : (
           <p className="text-sm text-gray-500">
-            No shared password. This examination will not ask the room for one — which is a
-            reasonable choice for a take-home paper, and the wrong one for an invigilated hall.
+            No shared password — suitable for take-home papers, not invigilated halls.
           </p>
         )}
       </Panel>
 
       <Panel
         title="Examination sign-in passwords"
-        description="One per candidate, for this paper only. On the day the candidate signs in
-          with their username and this password instead of their own, which opens this paper in
-          examination mode and nothing else. Without one a candidate cannot sit the paper. Issue
-          is additive — somebody added the morning of the paper gets one without invalidating
-          the ones already handed out."
+        description="One per candidate; required to sit the paper. Candidates sign in with their
+          username and this password. Issuing more never invalidates ones already handed out."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             {status.passcodesIssued > 0 && (
@@ -325,9 +319,8 @@ export function ExamPasswordsTab({ eventId }: { eventId: number }) {
             </div>
 
             <p className="text-xs leading-relaxed text-gray-600">
-              These are the only copies you will be handed on screen. They stay readable here —
-              a candidate whose slip goes missing mid-paper can be given theirs again, or a new
-              one — but nothing is emailed, and nothing reaches a candidate except from you.
+              Nothing is emailed; candidates get passwords only from you. They stay readable
+              here if a slip goes missing.
             </p>
           </div>
         )}

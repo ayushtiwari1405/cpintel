@@ -37,11 +37,9 @@ export default function AdminGroupsPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader eyebrow="Console" title="Teams"
-        description="Named sets of people, measured against each other." className="mb-2" />
+      <PageHeader title="Teams" className="mb-2" />
       <Panel
-        title="Teams"
-        description="A named set of people, measured against each other"
+        title="All teams"
         actions={<ClassroomSelect value={filter} onChange={setFilter} allowAll
           className="rounded-md border border-gray-800 bg-gray-900 px-2 py-1 text-xs
                      text-gray-300 outline-none" />}

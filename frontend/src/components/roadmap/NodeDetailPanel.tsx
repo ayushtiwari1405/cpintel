@@ -191,8 +191,7 @@ export function NodeDetailPanel({ node, allNodes }: Props) {
         </p>
       ) : (
         <p className="text-sm text-gray-500 text-center py-4">
-          No problems matched this skill's tags and rating band. The Codeforces problemset cache
-          may still be warming up.
+          No matching problems yet — the problemset cache may still be loading.
         </p>
       )}
     </div>

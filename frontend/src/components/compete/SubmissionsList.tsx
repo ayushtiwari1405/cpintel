@@ -47,8 +47,7 @@ export function SubmissionsList({ submissions, isLoading, onOpen, opening }: Pro
           <Loader2 size={16} className="animate-spin text-gray-600" />
         ) : (
           <p className="max-w-xs text-xs leading-relaxed text-gray-600">
-            Nothing submitted yet. Anything you send from here goes to the judge as a real
-            contest submission.
+            No submissions yet. Submissions here are real contest submissions.
           </p>
         )}
       </div>

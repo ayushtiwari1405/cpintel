@@ -38,8 +38,7 @@ export function CfSessionCard({ variant = 'card' }: { variant?: 'card' | 'inline
       <div className={clsx(shell, 'flex gap-2 text-xs text-gray-400')}>
         <ShieldAlert size={14} className="flex-shrink-0 mt-0.5 text-gray-500" />
         <p>
-          Submitting is turned off on this deployment. You can still read problems here and
-          submit on Codeforces directly.
+          Submitting is disabled on this server. Submit on Codeforces directly.
         </p>
       </div>
     )
@@ -92,12 +91,12 @@ function ConnectedRow(
           </p>
           {viaBrowser ? (
             <p className="text-[11px] text-gray-500">
-              Through this browser — problems and submissions use your Codeforces sign-in here
+              Uses this browser's Codeforces sign-in
             </p>
           ) : expiresAt && (
             <p className="text-[11px] text-gray-500">
               Session stored until {formatDistanceToNowStrict(new Date(expiresAt),
-                { addSuffix: true })} — reconnect if submits start failing
+                { addSuffix: true })} — reconnect if submitting fails
             </p>
           )}
         </div>
@@ -169,8 +168,7 @@ function DesktopConnectForm() {
   return (
     <div className="space-y-3">
       <p className="text-xs text-gray-400">
-        Opens Codeforces in a CPIntel window. Sign in there as you normally would — your
-        password goes to Codeforces and never passes through CPIntel.
+        Opens Codeforces in a CPIntel window. Your password goes only to Codeforces.
       </p>
 
       {error && (
@@ -192,15 +190,13 @@ function DesktopConnectForm() {
         <ShieldAlert size={12} className="flex-shrink-0 mt-0.5" />
         {window.cpintelDesktop?.cf?.signIn ? (
           <p>
-            Your Codeforces sign-in stays in this app on this computer; CPIntel's server only
-            learns your handle. Sign out of it any time from Codeforces → Settings → Sessions.
+            Your sign-in stays in this app; the server learns only your handle. Revoke it from
+            Codeforces → Settings → Sessions.
           </p>
         ) : (
           <p>
-            The session that window creates is a key to your account while it lives. It is sent
-            straight to the CPIntel server — it never reaches this page — and stored encrypted,
-            never shown back to you. Revoke it any time from Codeforces → Settings → Sessions, or
-            with Disconnect here.
+            The session grants access to your account. It goes straight to the server and is
+            stored encrypted. Revoke it from Codeforces → Settings → Sessions, or with Disconnect.
           </p>
         )}
       </div>
@@ -243,8 +239,7 @@ function ExtensionConnectForm() {
   return (
     <div className="space-y-3">
       <p className="text-xs text-gray-400">
-        Uses the Codeforces account signed in on this browser. Sign in at codeforces.com first if
-        you have not. CPIntel stores only your handle.
+        Uses the Codeforces account signed in on this browser. CPIntel stores only your handle.
       </p>
       {error && (
         <div className="space-y-1.5">
@@ -282,8 +277,7 @@ function NoExtensionForm() {
     <div className="space-y-3">
       <p className="text-xs text-gray-400">
         This browser needs the <span className="text-gray-200">CPIntel Codeforces Connector</span>{' '}
-        extension (Chrome, Edge or Brave) first. It lets CPIntel open problems and submit
-        through this browser, where your Codeforces sign-in lives.
+        extension (Chrome, Edge or Brave) to open problems and submit.
       </p>
       {/* A new tab, so whatever was open here — a problem, half-written code — stays open. */}
       <Link to="/extension" target="_blank" rel="noreferrer"
@@ -352,8 +346,7 @@ function ConnectForm() {
   return (
     <div className="space-y-3">
       <p className="text-xs text-gray-400">
-        Codeforces has no login or submission API, so CPIntel reuses a session you create
-        yourself in your own browser. Nothing here ever asks for your password.
+        CPIntel reuses a session you create in your own browser and never asks for your password.
       </p>
 
       {/* 1 — who */}
@@ -378,8 +371,8 @@ function ConnectForm() {
         {opened ? 'Reopen Codeforces sign-in' : 'Open Codeforces and sign in'}
       </button>
       <p className="text-[11px] text-gray-600 -mt-1">
-        Tick <span className="text-gray-400">Remember me</span> there — without it the session
-        dies the moment you close the browser.
+        Tick <span className="text-gray-400">Remember me</span>, or the session ends when the
+        browser closes.
       </p>
 
       {/* 3 — the helper */}
@@ -427,10 +420,9 @@ function ConnectForm() {
       <div className="flex items-start gap-2 text-[11px] text-amber-300/80">
         <ShieldAlert size={12} className="flex-shrink-0 mt-0.5" />
         <p>
-          A session cookie is a key to your account while it lives. The helper hands it
-          straight to the CPIntel server — it never passes through this page — and it is
-          stored encrypted, never shown back to you. Revoke it any time from Codeforces →
-          Settings → Sessions, or with Disconnect here.
+          The session cookie grants access to your account. The helper sends it straight to the
+          server, where it is stored encrypted. Revoke it from Codeforces → Settings → Sessions,
+          or with Disconnect.
         </p>
       </div>
 

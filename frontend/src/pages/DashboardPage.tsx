@@ -1,6 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
 import { userApi } from '@/api/userApi'
-import { useAuth } from '@/contexts/AuthContext'
 import { useRefreshAnalytics } from '@/hooks/useAnalytics'
 import { Target, Award, RefreshCw, Link2, ChevronRight, Gauge } from 'lucide-react'
 import { Link } from 'react-router-dom'
@@ -15,7 +14,6 @@ import { EmptyState, ErrorState, LoadingState } from '@/components/common/States
 import { clsx } from 'clsx'
 
 export default function DashboardPage() {
-  const { user } = useAuth()
   const refresh = useRefreshAnalytics()
 
   const { data: dashboard, isLoading, isError, error, refetch } = useQuery({
@@ -52,8 +50,6 @@ export default function DashboardPage() {
   const header = (
     <PageHeader
       title="Dashboard"
-      description={<>Signed in as <span className="font-mono text-gray-200">{user?.username}</span>. Your
-        ratings, strongest topics and latest contests.</>}
       actions={
         <button
           type="button"
@@ -86,11 +82,9 @@ export default function DashboardPage() {
             {score?.unifiedScore != null ? score.unifiedScore.toFixed(0) : '—'}
             <span className="ml-1 text-sm font-normal text-gray-500">/ 1000</span>
           </p>
-          <p className="mt-1 text-xs text-gray-500">
-            {platforms.length === 0
-              ? 'Link Codeforces to compute it.'
-              : 'Your Codeforces rating on a 0–1000 scale (rating 4000 = 1000).'}
-          </p>
+          {platforms.length > 0 && (
+            <p className="mt-1 text-xs text-gray-500">Codeforces rating scaled to 0–1000.</p>
+          )}
         </div>
         <div className="p-4">
           <p className="card-header">Codeforces</p>
@@ -112,7 +106,7 @@ export default function DashboardPage() {
               <p className="font-mono text-3xl font-semibold text-gray-600">—</p>
               <Link to="/platforms"
                 className="mt-1 inline-flex items-center gap-1 text-xs text-accent-400 hover:underline">
-                <Link2 size={11} aria-hidden="true" /> Link your Codeforces account
+                <Link2 size={11} aria-hidden="true" /> Not linked
               </Link>
             </>
           )}
@@ -123,10 +117,10 @@ export default function DashboardPage() {
         <div className="mb-6 rounded-xl border border-dashed border-accent-800/70 bg-accent-950/20">
           <EmptyState
             icon={<Link2 size={18} />}
-            title="Connect Codeforces to get started"
+            title="Connect Codeforces"
             action={<Link to="/platforms" className="btn-primary"><Link2 size={14} aria-hidden="true" /> Link a platform</Link>}
           >
-            CPIntel reads your submission history to rate each topic and plan what to practise next.
+            Topic ratings and practice plans are built from your submission history.
           </EmptyState>
         </div>
       )}

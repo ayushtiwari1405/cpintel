@@ -36,8 +36,7 @@ export function ExamList({ exams, isLoading, onEnter, entering }: Props) {
         <FileText size={22} className="mx-auto text-gray-700" />
         <p className="mt-3 text-sm text-gray-400">No examinations are assigned to you.</p>
         <p className="mx-auto mt-1 max-w-md text-xs leading-relaxed text-gray-600">
-          One appears here as soon as it is set for you or for a team you are on. This page
-          checks by itself, so it is safe to leave open while you wait.
+          This page updates automatically when one is assigned.
         </p>
       </div>
     )
@@ -57,8 +56,7 @@ export function ExamList({ exams, isLoading, onEnter, entering }: Props) {
             Upcoming and running
           </h2>
           <p className="px-1 text-xs leading-relaxed text-gray-500">
-            Sat in examination mode: sign in with your username and the examination password on
-            your slip. This session can see a paper's details but cannot open or change it.
+            To sit a paper, sign in with your username and the examination password on your slip.
           </p>
           {renderList(current)}
         </section>
@@ -148,8 +146,7 @@ export function ExamList({ exams, isLoading, onEnter, entering }: Props) {
                 bg-amber-950/40 px-3 py-2 text-xs leading-relaxed text-amber-200">
                 <Laptop size={13} className="mt-0.5 flex-shrink-0" />
                 <span>
-                  This paper can only be sat in the CPIntel desktop app. A browser will not be
-                  let in with the examination password.{' '}
+                  Requires the CPIntel desktop app; browsers are refused.{' '}
                   <Link to="/download" className="underline hover:text-amber-100">
                     Get the desktop app
                   </Link>{' '}
@@ -163,8 +160,7 @@ export function ExamList({ exams, isLoading, onEnter, entering }: Props) {
                 bg-gray-950/60 px-3 py-2 text-xs leading-relaxed text-gray-400">
                 <FileText size={13} className="mt-0.5 flex-shrink-0" />
                 <span>
-                  This paper is over. Opening it shows the code you submitted and, if your
-                  examiner has released them, the final standings.
+                  Ended. Open it to see your code and, if released, the final standings.
                 </span>
               </p>
             )}
@@ -174,10 +170,9 @@ export function ExamList({ exams, isLoading, onEnter, entering }: Props) {
                 bg-accent-950/40 px-3 py-2 text-xs leading-relaxed text-accent-200">
                 <ShieldCheck size={13} className="mt-0.5 flex-shrink-0" />
                 <span>
-                  While this paper is open, the examination watches whether its window has
-                  focus. You are warned after {exam.awayThresholdSeconds} seconds away, and
-                  absences past that are recorded. Nothing here decides anything on its own —
-                  an invigilator reads what happened.
+                  Monitored: leaving the window gives a warning after{' '}
+                  {exam.awayThresholdSeconds} seconds, and longer absences are recorded for the
+                  invigilator to review.
                 </span>
               </p>
             )}

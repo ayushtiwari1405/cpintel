@@ -74,8 +74,8 @@ export function DomjudgeContestPicker({ onPick, loading, classroomId = null }: P
         bg-yellow-950/20 px-3 py-3 text-xs leading-relaxed text-yellow-200/90">
         <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
         <span>
-          No DOMjudge account is attached to you yet, so there are no contests to show. Whoever
-          is running the round attaches one — ask them, and this list fills in by itself.
+          No DOMjudge account is attached to you yet. Ask the round's organiser; this list
+          updates automatically.
         </span>
       </div>
     )
@@ -95,8 +95,7 @@ export function DomjudgeContestPicker({ onPick, loading, classroomId = null }: P
         bg-red-950/20 px-3 py-3 text-xs leading-relaxed text-red-200/90">
         <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
         <span>
-          Could not reach DOMjudge to list your contests. The judge may be down, or the
-          attached account may no longer be valid.
+          Could not reach DOMjudge. The judge may be down, or your account may be invalid.
         </span>
       </div>
     )

@@ -525,8 +525,8 @@ export default function CompetePage({ examOnly, section }: {
           <CheckCircle2 size={26} className="mx-auto text-accent-400" />
           <h1 className="mt-3 text-lg font-semibold text-gray-50">{exam.event.name} has ended</h1>
           <p className="mt-2 text-sm leading-relaxed text-gray-400">
-            Your submissions are saved. Sign out, then sign in with your own password to read
-            the code you submitted under Exams → Past examinations.
+            Your submissions are saved. Sign out and sign in with your own password to see your
+            code under Exams → Past examinations.
           </p>
           <button onClick={() => logout.mutate()} className="btn-primary mt-5">Sign out</button>
         </div>
@@ -544,8 +544,7 @@ export default function CompetePage({ examOnly, section }: {
             <div className="min-w-0">
               <h1 className="truncate text-lg font-semibold text-gray-50">{exam.event.name}</h1>
               <p className="text-xs text-gray-500">
-                This examination has ended. Below are its questions and the code you
-                submitted.
+                Ended — questions and your submitted code.
               </p>
             </div>
             <button
@@ -595,13 +594,12 @@ export default function CompetePage({ examOnly, section }: {
           <div className="rounded-2xl border border-gray-800 bg-gray-900 p-7">
             <h1 className="text-lg font-semibold text-gray-50">{exam.event.name}</h1>
             <p className="mt-2 text-sm leading-relaxed text-gray-400">
-              Examinations are sat in examination mode. When your invigilator says so, sign out
-              and sign in again with your username and the examination password on your slip —
-              not your own password. That opens this paper and nothing else.
+              When your invigilator says so, sign out and sign in with your username and the
+              examination password on your slip (not your own password).
             </p>
             <p className="mt-2 text-xs text-gray-500">
-              Your ordinary session cannot open, submit to, or change anything in the paper.
-              Once it ends, your code appears here under Past examinations.
+              This session cannot open or submit to the paper. Afterwards, your code appears
+              under Past examinations.
             </p>
             <button onClick={() => setExamId(null)}
               className="mt-5 rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 text-sm
@@ -666,8 +664,7 @@ export default function CompetePage({ examOnly, section }: {
               <p className="mt-0.5">
                 {(contestError as any)?.response?.data?.message
                   ?? 'The contest could not be read from DOMjudge.'}
-                {' '}Tell your invigilator — this usually means the account attached to you is
-                not registered for it.
+                {' '}Tell your invigilator — your judge account is probably not registered for it.
               </p>
               {examOnly == null && (
                 <button
@@ -837,8 +834,7 @@ export default function CompetePage({ examOnly, section }: {
               This examination is sat in full screen
             </p>
             <p className="text-sm leading-relaxed text-gray-500">
-              The paper appears once the window is full screen. Leaving full screen covers it
-              again and is recorded, the same way leaving the window is.
+              The paper appears in full screen. Leaving full screen hides it and is recorded.
             </p>
             <button
               onClick={examSession.enterFullscreen}
@@ -937,9 +933,9 @@ export default function CompetePage({ examOnly, section }: {
           <Eye size={13} className="mt-0.5 flex-shrink-0" />
           <span>
             This round counts for <span className="font-medium">{groupContest.groupName}</span>.
-            Leaving this window is noticed: you are warned after
-            {' '}{Math.round((lockdown?.warnAfterMs ?? 10_000) / 1000)} seconds away, and
-            absences past that are reported to whoever is running the group.
+            Leaving this window gives a warning after
+            {' '}{Math.round((lockdown?.warnAfterMs ?? 10_000) / 1000)} seconds; longer absences
+            are reported to the group's organiser.
           </span>
         </div>
       )}
@@ -980,13 +976,12 @@ export default function CompetePage({ examOnly, section }: {
             {inExam ? 'This examination has not started yet.' : 'This contest has not started yet.'}
           </div>
           <p className="max-w-md text-xs leading-relaxed text-gray-600">
-            The statements, editor and submissions all appear here the moment the judge moves
-            it to running — this page is watching for that, so leave it open.
+            This page opens automatically when it starts — keep it open.
             {inExam
-              ? ' Nothing else is needed from you; you are already registered for it.'
+              ? ' You are already registered.'
               : needsCfSession
-                ? ' Make sure you are registered on Codeforces before then.'
-                : ' Your team is already registered on the judge; nothing else to do.'}
+                ? ' Make sure you are registered on Codeforces.'
+                : ' Your team is already registered.'}
           </p>
         </div>
       ) : (

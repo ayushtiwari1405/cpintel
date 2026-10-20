@@ -48,7 +48,7 @@ export default function PlatformsPage() {
   return (
     <div className="space-y-6">
       <PageHeader title="Platforms"
-        description="Link your competitive programming accounts so CPIntel can read your history." />
+        description="Linked accounts let CPIntel read your submission history." />
 
       {isLoading ? (
         <LoadingState label="Loading your accounts…" />
@@ -175,12 +175,10 @@ export default function PlatformsPage() {
       <aside className="rounded-xl border border-gray-800 p-4 text-sm text-gray-400">
         <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">How sync works</h2>
         <ul className="list-disc space-y-1 pl-4 text-xs marker:text-gray-600">
-          <li>The first sync fetches your full history, which may take a minute.</li>
-          <li>Incremental syncs run automatically every night at 02:00 UTC.</li>
-          <li>Sync now fetches submissions since the last sync.</li>
-          <li>Analytics update after each sync completes.</li>
-          <li>Linking a handle is what reads your history. Submitting from Practice needs the
-            Codeforces session connected above, which is separate.</li>
+          <li>The first sync fetches your full history and may take a minute.</li>
+          <li>Accounts sync automatically every night at 02:00 UTC.</li>
+          <li>Submitting from Practice needs the Codeforces session above; linking a handle alone
+            does not enable it.</li>
         </ul>
       </aside>
     </div>

@@ -23,8 +23,7 @@ export default function GroupsPage() {
   const groups = groupsQ.data
   const contests = contestsQ.data
 
-  const header = <PageHeader title="Teams"
-    description="The teams you are on, the contests they sit, and where you placed among your teammates." />
+  const header = <PageHeader title="Teams" />
 
   if (groupsQ.isLoading || contestsQ.isLoading) {
     return <>{header}<LoadingState label="Loading your teams…" /></>
@@ -41,8 +40,7 @@ export default function GroupsPage() {
         {header}
         <div className="rounded-xl border border-gray-800">
           <EmptyState icon={<Users size={18} />} title="You are not on any teams yet">
-            Teams are set up by an admin. When you are added to one, the contests it sits appear
-            here along with where you placed among its members.
+            An admin adds you to teams.
           </EmptyState>
         </div>
       </>
@@ -79,9 +77,7 @@ export default function GroupsPage() {
 
       {contests?.length === 0 && (
         <div className="rounded-xl border border-gray-800">
-          <EmptyState compact title="No contests yet">
-            No contests have been set for your teams yet.
-          </EmptyState>
+          <EmptyState compact title="No contests yet" />
         </div>
       )}
     </div>
@@ -159,8 +155,8 @@ function ContestSection({ title, contests }: {
                   <Lock size={12} className="mt-0.5 flex-shrink-0 text-amber-400" aria-hidden="true" />
                   <span>
                     <span className="font-medium text-amber-200">Monitored.</span> Leaving the
-                    contest window is noticed while this round runs: you are warned after ten
-                    seconds away, and longer absences are reported to whoever runs the team.
+                    contest window gives a warning after ten seconds; longer absences are reported
+                    to the team's organiser.
                   </span>
                 </p>
               )}
@@ -184,7 +180,7 @@ function ContestSection({ title, contests }: {
               )}
               {myRank == null && contest.status !== 'SCHEDULED' && (
                 <p className="mt-2 text-xs text-gray-500">
-                  No placing yet. The board is built from the judge a few minutes behind live.
+                  No placing yet — the board lags the judge by a few minutes.
                 </p>
               )}
             </li>

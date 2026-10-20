@@ -12,9 +12,8 @@ const OPTIONS: { value: SkillBasis['requested']; label: string; hint: string }[]
   { value: 'CODEFORCES', label: 'Codeforces',
     hint: 'Your rating, moved per topic by how you did on its problems in rated rounds.' },
   { value: 'GAUNTLET', label: 'Gauntlet',
-    hint: 'Your placement test. Choose this if your Codeforces rating does not reflect you — '
-      + 'rounds sat with an AI\'s or someone else\'s help, or an old account. Rated rounds are '
-      + 'then ignored entirely.' },
+    hint: 'Your placement test, for when your Codeforces rating does not reflect you (e.g. an '
+      + 'old or shared account). Rated rounds are then ignored.' },
 ]
 
 /** What skill ratings are based on, and the switch between the two sources. */
@@ -69,8 +68,7 @@ export function SkillBasisPanel() {
       {!data.gauntletAvailable && (
         <p className="text-xs text-gray-500">
           The <Link to="/roadmap/gauntlet" className="text-accent-400 hover:underline">placement
-          gauntlet</Link> gives a rating per area that does not depend on Codeforces. Like any
-          test taken alone it proves nothing, but it is your own work.
+          gauntlet</Link> gives a rating per area independent of Codeforces.
         </p>
       )}
     </div>

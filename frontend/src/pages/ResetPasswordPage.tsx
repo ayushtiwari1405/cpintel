@@ -51,7 +51,7 @@ export default function ResetPasswordPage() {
         <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8">
           <h1 className="text-2xl font-semibold text-gray-50 mb-1">Set a new password</h1>
           <p className="text-gray-400 text-sm mb-6">
-            Choose something only you know. Every device that is signed in will be signed out.
+            All signed-in devices will be signed out.
           </p>
 
           {!token ? (
@@ -61,8 +61,8 @@ export default function ResetPasswordPage() {
               bg-amber-950/40 px-3 py-2.5 text-xs leading-relaxed text-amber-200">
               <AlertTriangle size={14} className="mt-0.5 flex-shrink-0" />
               <span>
-                This link is missing its token. Some mail clients break long links across two
-                lines — try copying the whole thing into the address bar, or ask for a new one.
+                This link is incomplete. Copy the whole link from the email into the address
+                bar, or request a new one.
               </span>
             </div>
           ) : (
@@ -92,8 +92,7 @@ export default function ResetPasswordPage() {
                   </button>
                 </div>
                 <p className={`mt-1 text-xs ${tooShort ? 'text-amber-400' : 'text-gray-600'}`}>
-                  At least {MIN_LENGTH} characters. Length is the only rule — a long thing you
-                  will remember beats a short one with a symbol in it.
+                  At least {MIN_LENGTH} characters.
                 </p>
               </div>
 

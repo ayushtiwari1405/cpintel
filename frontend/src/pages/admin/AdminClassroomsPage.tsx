@@ -48,9 +48,9 @@ export default function AdminClassroomsPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader eyebrow="Console" title="Classrooms"
-        description="Each classroom has its own DOMjudge, with the students, teams and examinations on it." className="mb-2" />
-      <Panel title="Classrooms" description="One DOMjudge each, with the students, teams and examinations on it">
+      <PageHeader title="Classrooms"
+        description="Each classroom runs on its own DOMjudge." className="mb-2" />
+      <Panel title="All classrooms">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -69,8 +69,8 @@ export default function AdminClassroomsPage() {
               {!isLoading && classrooms?.length === 0 && (
                 <EmptyRow colSpan={7}>
                   {isSuper
-                    ? 'No classrooms yet. Create one below for each DOMjudge instance.'
-                    : 'You have not been added to a classroom yet. A superadmin adds you.'}
+                    ? 'No classrooms yet.'
+                    : 'You are not in a classroom yet. A superadmin can add you.'}
                 </EmptyRow>
               )}
               {classrooms?.map(room => (
@@ -114,7 +114,7 @@ export default function AdminClassroomsPage() {
       </Panel>
 
       {isSuper && (
-      <Panel title="New classroom" description="Point it at the DOMjudge this class runs on">
+      <Panel title="New classroom">
         <div className="grid gap-3 p-4 sm:grid-cols-2">
           <label className="flex flex-col gap-1">
             <span className="text-xs text-gray-500">Name</span>
@@ -145,9 +145,8 @@ export default function AdminClassroomsPage() {
               className={`${field} disabled:opacity-40`} />
           </label>
           <p className="text-xs leading-relaxed text-gray-600 sm:col-span-2">
-            The service account lets one read of the judge serve the whole room. Without it,
-            each student's page reads DOMjudge under their own login, which works but costs
-            one set of calls per person.
+            Optional. With a service account, one judge read serves the whole classroom;
+            without it, each student's page queries DOMjudge separately.
           </p>
           <div className="sm:col-span-2">
             <button
@@ -169,9 +168,8 @@ export default function AdminClassroomsPage() {
 
       <p className="flex items-start gap-2 px-1 text-xs text-gray-600">
         <School size={13} className="mt-0.5 flex-shrink-0" />
-        A student in two classrooms has a DOMjudge login in each, kept side by side. Import them
-        into a team in the second classroom with the same username and their existing account
-        is matched; the new login is attached next to the old one.
+        To enrol a student in a second classroom, import them with the same username; their
+        existing account gains the new DOMjudge login.
       </p>
     </div>
   )

@@ -73,16 +73,12 @@ export function ContestLoader({ onLoad, loading }: Props) {
       <p className="text-sm text-gray-500 leading-relaxed">
         {platform === 'DOMJUDGE' ? (
           <>
-            Pick the contest you are sitting. Your DOMjudge account is attached by whoever set
-            the round up, so there is nothing to connect — the statements, an editor, your
-            submissions, your live rank and the board all appear here once it starts.
+            Pick the contest you are sitting. Your DOMjudge account is already attached.
           </>
         ) : (
           <>
-            Register for the contest on the platform itself, then paste its link here. Once the
-            contest starts you get the statements, an editor, your submissions and your live
-            rank on this one page. Nothing here registers you or affects your rating — that
-            stays entirely between you and the platform.
+            Register on the platform, then paste the contest link. CPIntel does not register you
+            or affect your rating.
           </>
         )}
       </p>

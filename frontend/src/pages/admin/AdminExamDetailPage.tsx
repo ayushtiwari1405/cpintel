@@ -507,14 +507,13 @@ function SettingsTab({ detail }: { detail: EventDetail }) {
           px-3 py-2 text-xs leading-relaxed text-amber-200">
           <Lock size={13} className="mt-0.5 flex-shrink-0" />
           <span>
-            This has started, so its settings are fixed — candidates are sitting it under them.
-            Only the end time and the name can still change. Candidates can still be added on
-            the People tab.
+            Started — settings are locked. The name and end time can still change, and
+            candidates can still be added on the People tab.
           </span>
         </p>
       )}
 
-      <Panel title="The paper" description="What it is called, when it runs, and what it says">
+      <Panel title="The paper">
         <div className="grid gap-3 p-4 sm:grid-cols-2">
           <label className="flex flex-col gap-1">
             <span className="text-xs text-gray-500">Name</span>
@@ -558,7 +557,7 @@ function SettingsTab({ detail }: { detail: EventDetail }) {
       <fieldset disabled={locked} className="space-y-4 disabled:opacity-60">
       <Panel
         title="Private files"
-        description="Whether candidates may open their own uploaded notes and templates during it"
+        description="Candidates' own uploaded notes and templates"
       >
         <div className="space-y-2 p-4">
           {([
@@ -584,8 +583,7 @@ function SettingsTab({ detail }: { detail: EventDetail }) {
 
       <Panel
         title="Languages"
-        description="Which languages this paper accepts. Leave everything unticked to take
-          whatever the judge takes, which is the default."
+        description="Leave all unticked to accept every language the judge offers."
       >
         <div className="space-y-3 p-4">
           <div className="grid gap-x-4 gap-y-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -603,24 +601,22 @@ function SettingsTab({ detail }: { detail: EventDetail }) {
 
           {form.allowedLanguages.length === 0 ? (
             <p className="text-xs leading-relaxed text-gray-600">
-              Nothing ticked: candidates may use any language the judge offers for this contest.
+              Any language the judge offers is accepted.
             </p>
           ) : (
             <p className="flex items-start gap-2 rounded-lg border border-accent-900
               bg-accent-950/40 px-3 py-2 text-xs leading-relaxed text-accent-200">
               <Code2 size={13} className="mt-0.5 flex-shrink-0" />
               <span>
-                Candidates will see only these in the editor, and a submission in anything else
-                is refused by the server — as is running one locally, so the rule holds at the
-                Run button too and not only at Submit.
+                Only these appear in the editor; the server refuses other languages for both
+                Run and Submit.
                 {' '}
                 {/*
                   Said plainly because it is the one way this setting bites unexpectedly: the
                   restriction is applied to whatever the judge offers, so a language the judge
                   does not have does not appear however it is ticked here.
                 */}
-                A language the judge does not offer for this contest stays unavailable whether
-                or not it is ticked here.
+                Languages the judge does not offer stay unavailable even if ticked.
               </span>
             </p>
           )}
@@ -629,7 +625,7 @@ function SettingsTab({ detail }: { detail: EventDetail }) {
 
       <Panel
         title="Monitoring"
-        description="What is watched, and how long someone may be away before it is recorded"
+
       >
         <div className="space-y-3 p-4">
           <label className="flex items-start gap-2">
@@ -638,8 +634,7 @@ function SettingsTab({ detail }: { detail: EventDetail }) {
             <span className="text-sm text-gray-300">
               Monitor this examination
               <span className="block text-xs text-gray-500">
-                Candidates are told they are being watched, on the screen where it happens.
-                With this off, nothing is recorded and submissions are not gated on a monitor.
+                Candidates are told they are monitored. When off, nothing is recorded.
               </span>
             </span>
           </label>
@@ -652,7 +647,7 @@ function SettingsTab({ detail }: { detail: EventDetail }) {
               onChange={e => setForm({
                 ...form, awayThresholdSeconds: Number(e.target.value) || 1 })} />
             <span className="text-xs text-gray-600">
-              How long someone may be away before they are warned and the absence is recorded.
+              Time away before a warning and a recorded absence.
             </span>
           </label>
 
@@ -675,11 +670,9 @@ function SettingsTab({ detail }: { detail: EventDetail }) {
             ))}
             <p className="flex items-start gap-2 pt-1 text-xs leading-relaxed text-gray-600">
               <AlertTriangle size={12} className="mt-0.5 flex-shrink-0" />
-              These are requests to the examination client. The desktop build applies what the
-              operating system allows and reports what it could not; a browser applies almost
-              none of them, and an examination sat in one records that its monitoring was the
-              weaker kind rather than showing a clean sheet. Full screen is the exception: both
-              enforce it.
+              The desktop app applies what the operating system allows and reports the rest. A
+              browser applies almost none (full screen is the exception), and browser sittings
+              are recorded as weaker monitoring.
             </p>
           </div>
 
@@ -744,7 +737,7 @@ function PeopleTab({ detail }: { detail: EventDetail }) {
     <div className="space-y-4">
       <Panel
         title="Teams"
-        description="Everyone on an assigned team may sit this — membership is read when they open it"
+        description="Membership is checked when a candidate opens the paper"
       >
         <ul className="divide-y divide-gray-800">
           {detail.teams.length === 0 && (
@@ -796,7 +789,7 @@ function PeopleTab({ detail }: { detail: EventDetail }) {
 
       <Panel
         title="Individuals"
-        description="Named people, whatever team they are on — for a resit, or a candidate on no team"
+        description="For resits or candidates on no team"
       >
         <ul className="divide-y divide-gray-800">
           {detail.users.length === 0 && (
@@ -852,8 +845,8 @@ function PeopleTab({ detail }: { detail: EventDetail }) {
       </Panel>
 
       <p className="px-1 text-xs text-gray-600">
-        {event.participantCount} distinct {event.participantCount === 1 ? 'person' : 'people'} may
-        sit this. Somebody named both directly and through a team counts once.
+        {event.participantCount} {event.participantCount === 1 ? 'person' : 'people'} may sit
+        this (counted once each).
       </p>
     </div>
   )
@@ -930,9 +923,8 @@ function ProblemsTab({ detail }: { detail: EventDetail }) {
     <Panel
       title="Problems"
       description={onJudge
-        ? 'Read from the linked DOMjudge contest — give each problem its marks. The leaderboard '
-          + 'ranks by total marks, then time'
-        : 'Order and marks live here; statements, tests and verdicts stay on the judge'}
+        ? 'From the linked DOMjudge contest. Ranked by total marks, then time'
+        : 'Statements, tests and verdicts stay on the judge'}
       actions={
         <div className="flex items-center gap-2">
           {onJudge && (
@@ -981,9 +973,8 @@ function ProblemsTab({ detail }: { detail: EventDetail }) {
             bg-amber-500/5 px-3 py-2 text-xs text-amber-300">
             <AlertTriangle size={13} className="mt-0.5 shrink-0" />
             <span>
-              {judgeError ?? 'Could not read the problems from DOMjudge.'} You can still enter
-              them by hand; use the judge's labels (A, B, C…), since submissions are recorded
-              under those.
+              {judgeError ?? 'Could not read the problems from DOMjudge.'} Enter them by hand
+              using the judge's labels (A, B, C…).
             </span>
           </p>
         )}
@@ -1116,8 +1107,8 @@ function MonitorTab({ eventId, live }: { eventId: number; live: boolean }) {
       <Panel
         title="Candidates"
         description={live
-          ? 'Refreshed every few seconds — every figure is an observation, not a finding'
-          : 'This examination is not running; these are its final figures'}
+          ? 'Live — figures are observations, not findings'
+          : 'Final figures'}
       >
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -1178,9 +1169,8 @@ function MonitorTab({ eventId, live }: { eventId: number; live: boolean }) {
 
       <p className="flex items-start gap-2 px-1 text-xs leading-relaxed text-gray-600">
         <AlertTriangle size={12} className="mt-0.5 flex-shrink-0" />
-        A focus loss is a focus loss. Whether it was a second screen, a notification or somebody
-        answering the door is not something this can know, which is why there is no single score
-        here to read as a verdict.
+        A focus loss shows that the window was left, not why — there is deliberately no single
+        score to read as a verdict.
       </p>
     </div>
   )
@@ -1430,8 +1420,7 @@ function FlagList({ report, loading, onOpen }: {
 
       <p className="flex items-start gap-2 px-1 text-xs leading-relaxed text-gray-600">
         <AlertTriangle size={12} className="mt-0.5 flex-shrink-0" />
-        Each row is something worth a look, not a finding. Click a name to read the whole session
-        around it before drawing any conclusion.
+        Flags are prompts, not findings. Read the whole session before drawing conclusions.
       </p>
     </div>
   )
@@ -1636,10 +1625,8 @@ function RejudgePanel({ event, problems }: {
       description="After its tests or limits were corrected on the judge">
       <div className="space-y-3 p-4">
         <p className="max-w-2xl text-xs leading-relaxed text-gray-500">
-          Sends every submission made to the problem during this {event.kind === 'EXAM'
-            ? 'examination' : 'contest'} to the judge again, as the person who wrote it and in
-          the order they were first sent, then re-ranks the leaderboard on the new verdicts.
-          Each attempt keeps its original time. On DOMjudge these appear as new submissions.
+          Resubmits every submission for the problem in original order, keeping original times,
+          then re-ranks the leaderboard. They appear on DOMjudge as new submissions.
         </p>
         <div className="flex flex-wrap items-end gap-2">
           <label className="flex flex-col gap-1">
@@ -1775,8 +1762,7 @@ function LeaderboardTab({ eventId, live, exam, name, done, event }: {
               </label>
             </div>
             <p className="text-xs text-gray-600">
-              0 means no penalty. A penalty is added to a problem&apos;s time for each wrong
-              attempt before it was solved; compilation errors do not count.
+              Added per wrong attempt on a solved problem; compilation errors do not count.
             </p>
 
             <label className="flex items-start gap-2">

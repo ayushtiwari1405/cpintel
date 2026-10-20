@@ -49,8 +49,8 @@ export default function AdminAuditPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader eyebrow="Console" title="Audit trail"
-        description="Every sign-in and administrative change, newest first. Entries are never edited." className="mb-2" />
+      <PageHeader title="Audit trail"
+        description="Sign-ins and administrative changes, newest first." className="mb-2" />
       <div className="flex flex-wrap items-center gap-2">
         <select
           value={action}
@@ -92,8 +92,8 @@ export default function AdminAuditPage() {
       </div>
 
       <Panel
-        title="Audit trail"
-        description="Append-only. Nothing in this console can edit or remove an entry."
+        title="Entries"
+        description="Append-only: entries cannot be edited or removed."
       >
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -110,7 +110,7 @@ export default function AdminAuditPage() {
               {isLoading && <EmptyRow colSpan={5}>Loading the trail…</EmptyRow>}
               {!isLoading && data?.entries.length === 0 && (
                 <EmptyRow colSpan={5}>
-                  Nothing recorded in this window. Try a wider range.
+                  Nothing recorded in this range.
                 </EmptyRow>
               )}
               {data?.entries.map(entry => (

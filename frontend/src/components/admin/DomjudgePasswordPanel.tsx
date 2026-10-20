@@ -71,7 +71,7 @@ export function DomjudgePasswordPanel({ groupId }: { groupId: number }) {
   return (
     <Panel
       title="Update DOMjudge passwords"
-      description="After passwords are changed on the judge, paste the new ones here"
+      description="Paste new passwords after changing them on the judge"
     >
       <div className="space-y-3 p-4">
         <textarea
@@ -88,9 +88,8 @@ export function DomjudgePasswordPanel({ groupId }: { groupId: number }) {
         <p className="text-xs text-gray-600">
           Needs <span className="text-gray-500">djUsername</span> and{' '}
           <span className="text-gray-500">djPassword</span> columns. Each row updates the member
-          of this group that login is attached to. A member with nothing attached whose CPIntel
-          username is the login has it attached. Every new password is checked against the judge
-          first, and a rejected one leaves the old password in place.
+          with that login (or the member whose username matches it). Passwords are verified
+          against the judge; a rejected one keeps the old password.
         </p>
 
         <div className="flex flex-wrap items-center gap-2">

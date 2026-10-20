@@ -29,7 +29,6 @@ export default function AnalyticsPage() {
     <div>
       <PageHeader
         title="Analytics"
-        description="Your ratings, topic by topic, and how your contests have gone."
         actions={
           <button
             type="button"
@@ -132,9 +131,8 @@ function RatedTopics({ topics, base, fromRounds }:
     <>
       <Section title="Rating by topic" icon={<Target size={14} />}>
         <p className="text-xs text-gray-500 mb-4">
-          In Codeforces points. A topic is marked a strength or a weak spot only when it sits
-          further from {base ?? 'your rating'} than its own uncertainty; most topics sit close to
-          your overall rating, and saying otherwise would be inventing a difference.
+          In Codeforces points. A topic counts as a strength or weak spot only when it differs
+          from {base ?? 'your rating'} by more than its uncertainty.
         </p>
         <ResponsiveContainer width="100%" height={Math.max(240, rows.length * 30)}>
           <BarChart data={chart} layout="vertical"
@@ -223,9 +221,8 @@ function CoverageTopics({ topics }: { topics: TopicMastery[] }) {
     <>
       <Section title="What you have practised" icon={<Target size={14} />}>
         <p className="text-xs text-gray-500 mb-4">
-          Problems solved per topic. Practice says how much you have done, not how strong you
-          are: nearly everything anybody submits in practice ends accepted. Take part in rated
-          rounds or the gauntlet to get a rating per topic.
+          Problems solved per topic — volume, not strength. Rated rounds or the gauntlet give a
+          rating per topic.
         </p>
         <ResponsiveContainer width="100%" height={Math.max(240, rows.length * 30)}>
           <BarChart data={rows} layout="vertical"

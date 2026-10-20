@@ -45,8 +45,7 @@ export function ChangePasswordCard({ neverChanged }: { neverChanged?: boolean })
         <div>
           <p className="text-gray-300 font-medium">Password</p>
           <p className="mt-0.5 text-xs leading-relaxed text-gray-500">
-            Signing in is the only thing this changes — your examination passwords are handed
-            out by your invigilator and are not affected.
+            Examination passwords come from your invigilator and are not affected.
           </p>
         </div>
       </div>
@@ -58,8 +57,7 @@ export function ChangePasswordCard({ neverChanged }: { neverChanged?: boolean })
           px-3 py-2 text-xs leading-relaxed text-amber-200">
           <ShieldCheck size={13} className="mt-0.5 flex-shrink-0" />
           <span>
-            You are still using the password you were given. Whoever set up your account chose
-            it and knows it — changing it here makes the account yours alone.
+            You are still using the password an admin set. Change it so only you know it.
           </span>
         </p>
       )}
@@ -94,7 +92,7 @@ export function ChangePasswordCard({ neverChanged }: { neverChanged?: boolean })
             placeholder="••••••••"
           />
           <p id="pw-new-hint" className={`mt-1 text-xs ${tooShort ? 'text-amber-400' : 'text-gray-500'}`}>
-            At least {MIN_LENGTH} characters. Length is the only rule.
+            At least {MIN_LENGTH} characters.
           </p>
         </div>
 

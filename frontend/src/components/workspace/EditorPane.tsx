@@ -306,18 +306,17 @@ export function EditorPane({
       )}
       {problemSelected && runnerOn && !runtime && selectedLabel && availableRuntimes.length > 0 && (
         <p className="text-[11px] text-gray-600">
-          {selectedLabel} can be submitted but not run here — pick a toolchain under “Run with”,
-          or submit it as-is.
+          {selectedLabel} cannot run here — pick a toolchain under “Run with”, or just submit.
         </p>
       )}
       {runnerStatus && !runnerStatus.enabled && (
         <p className="text-[11px] text-gray-600">
-          Running locally is turned off on this deployment. Submitting still works.
+          Running is disabled on this server. Submitting still works.
         </p>
       )}
       {runnerStatus?.enabled && availableRuntimes.length === 0 && runtimes && (
         <p className="text-[11px] text-gray-600">
-          No local toolchain was found, so code cannot be run here.
+          No local toolchain found.
           {runtimes[0]?.unavailableReason ? ` ${runtimes[0].unavailableReason}` : ''}
         </p>
       )}

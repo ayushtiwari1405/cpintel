@@ -33,8 +33,8 @@ export default function RoadmapPage() {
   const header = (
     <PageHeader
       title="Learning roadmap"
-      description={<>{stats.total > 0 && <><span className="font-mono tabular-nums">{stats.total}</span> sub-skills, </>}unlocked
-        by what you have actually solved.</>}
+      description={stats.total > 0
+        ? <><span className="font-mono tabular-nums">{stats.total}</span> sub-skills</> : undefined}
       actions={
         <button
           type="button"
@@ -75,8 +75,7 @@ export default function RoadmapPage() {
                 Placed at <span className="font-mono tabular-nums text-accent-300">~{placement.overallRating}</span> by the gauntlet
               </p>
               <p className="text-xs text-gray-500">
-                {new Date(placement.takenAt).toLocaleDateString()} · retake it any time — it
-                only ever moves your roadmap forward
+                Taken {new Date(placement.takenAt).toLocaleDateString()} · a retake only moves you forward
               </p>
             </>
           ) : (
@@ -85,8 +84,7 @@ export default function RoadmapPage() {
                 Not a beginner? Take the gauntlet
               </p>
               <p className="text-xs text-gray-500">
-                Ten minutes across six areas, and your roadmap starts at your level instead of
-                at Input &amp; Output
+                Ten minutes, six areas — start the roadmap at your level
               </p>
             </>
           )}
@@ -123,7 +121,7 @@ export default function RoadmapPage() {
                 Generate roadmap
               </button>
             }>
-            It is built from what you have solved; generating it takes a moment.
+            Built from the problems you have solved.
           </EmptyState>
         </div>
       ) : (
@@ -144,9 +142,7 @@ export default function RoadmapPage() {
       )}
 
       <p className="text-center text-xs text-gray-500">
-        Pick any skill to see its problems and open them in the practice workspace ·
-        a skill unlocks once its prerequisites reach 35% mastery, and completes at 75% with
-        enough attempts behind it to trust the number
+        Skills unlock when their prerequisites reach 35% mastery and complete at 75% with enough attempts.
       </p>
     </div>
   )

@@ -30,8 +30,8 @@ function TeamAnalyticsPanel({ teamId }: { teamId: number }) {
 
   return (
     <Panel
-      title="How this team has done"
-      description="Across every contest and examination it was assigned"
+      title="Performance"
+      description="Across all assigned contests and examinations"
     >
       <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-4">
         <StatCard label="Events" value={data.events}
@@ -272,7 +272,7 @@ export default function AdminGroupDetailPage() {
                 ))}
               {candidates?.users.filter(u => !memberIds.has(u.userId)).length === 0 && (
                 <span className="text-xs text-gray-600">
-                  Nobody new matches that — everyone found is already in the group.
+                  Everyone matching is already in the group.
                 </span>
               )}
             </div>
@@ -286,7 +286,7 @@ export default function AdminGroupDetailPage() {
 
       <TeamAnalyticsPanel teamId={id} />
 
-      <Panel title="Contests" description="Rounds this team has sat, on Codeforces or DOMjudge">
+      <Panel title="Contests">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -301,7 +301,7 @@ export default function AdminGroupDetailPage() {
             <tbody className="divide-y divide-gray-800">
               {data.contests.length === 0 && (
                 <EmptyRow colSpan={5}>
-                  No contests yet. Point this group at one below.
+                  No contests yet.
                 </EmptyRow>
               )}
               {data.contests.map(c => (
@@ -440,9 +440,8 @@ export default function AdminGroupDetailPage() {
 
         <p className="flex items-start gap-2 border-t border-gray-800 px-4 py-3 text-xs text-gray-500">
           <AlertTriangle size={13} className="mt-0.5 flex-shrink-0" />
-          The start and end times decide when the lock is expected and which reports are
-          accepted, so they should match the judge's own window rather than when you happen to
-          add the contest here.
+          Match the start and end to the judge's window: they set when the lock applies and
+          which reports are accepted.
         </p>
       </Panel>
     </div>

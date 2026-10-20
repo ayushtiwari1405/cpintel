@@ -178,8 +178,7 @@ export const Sidebar = forwardRef<HTMLElement, Props>(function Sidebar(
           {expanded ? (
             <p className="rounded-lg border border-accent-800/60 bg-accent-950/40 px-3 py-2.5
                           text-xs leading-relaxed text-accent-200">
-              Examination mode. Only this paper is available; sign out when you are done, and
-              sign in with your own password for everything else.
+              Examination mode — only this paper is available. Sign out when you are done.
             </p>
           ) : (
             <span className="sr-only">Examination mode: only this paper is available.</span>

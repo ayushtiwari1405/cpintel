@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import { useAdminOverview } from '@/hooks/useAdmin'
 import { Ago, Panel, Pill, StatCard, actionLabel, actionTone, bytes } from '@/components/admin/AdminUi'
-import { AlertTriangle, ArrowRight, FolderCog, Loader2, Users } from 'lucide-react'
+import { AlertTriangle, ArrowRight, Loader2 } from 'lucide-react'
 import { PageHeader } from '@/components/common/PageHeader'
 
 /**
@@ -35,14 +35,12 @@ export default function AdminOverviewPage() {
       <div className="rounded-xl border border-red-900 bg-red-950/30 p-6 text-sm text-red-300">
         {denied ? (
           <>
-            This account is not an administrator, so the console has nothing to show it. If you
-            were an admin until recently, your role has changed — sign out and back in.
+            This account is not an administrator. If your role changed recently, sign out and
+            back in.
           </>
         ) : (
           <>
-            Could not load the overview. You are signed in and allowed to see this, so the
-            failure is behind the API rather than in front of it — check the backend and the
-            database.
+            Could not load the overview. Check the backend and the database.
           </>
         )}
       </div>
@@ -53,8 +51,7 @@ export default function AdminOverviewPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader eyebrow="Console" title="Overview"
-        description="Accounts, sign-ins and examinations across the classrooms you run." className="mb-2" />
+      <PageHeader title="Overview" className="mb-2" />
       <section>
         <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
           Accounts
@@ -106,18 +103,18 @@ export default function AdminOverviewPage() {
           <div className="flex items-center gap-2 rounded-xl border border-amber-900 bg-amber-950/30
             p-4 text-sm text-amber-300">
             <AlertTriangle size={16} className="flex-shrink-0" />
-            The file store could not be reached, so these figures are unavailable. Contest access
-            still follows the {policy.contestFilesEnabledByDefault ? 'enabled' : 'disabled'} default.
+            File store unreachable; figures unavailable. Contest access still follows the{' '}
+            {policy.contestFilesEnabledByDefault ? 'enabled' : 'disabled'} default.
           </div>
         )}
         <p className="mt-2 text-xs text-gray-600">
-          Sizes only. Nothing in this console shows whose file is whose, or opens one.
+          Sizes only — admins cannot see file names or contents.
         </p>
       </section>
 
       <Panel
         title="Recent activity"
-        description="Sign-ins and administrative changes, newest first"
+
         actions={
           <Link to="/admin/audit"
             className="flex items-center gap-1 text-xs text-accent-400 hover:text-accent-300">
@@ -127,7 +124,7 @@ export default function AdminOverviewPage() {
       >
         {recentActivity.length === 0 ? (
           <p className="px-4 py-8 text-center text-sm text-gray-600">
-            Nothing recorded yet. Activity appears here as people sign in and admins make changes.
+            No activity yet.
           </p>
         ) : (
           <ul className="divide-y divide-gray-800">
@@ -145,23 +142,6 @@ export default function AdminOverviewPage() {
           </ul>
         )}
       </Panel>
-
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Link to="/admin/users"
-          className="flex items-center gap-3 rounded-xl border border-gray-800 bg-gray-900 p-4
-                     text-sm text-gray-300 transition-colors hover:border-gray-700 hover:bg-gray-800/60">
-          <Users size={18} className="text-accent-400" />
-          <span className="flex-1">Manage accounts, roles and access</span>
-          <ArrowRight size={14} className="text-gray-600" />
-        </Link>
-        <Link to="/admin/contest-files"
-          className="flex items-center gap-3 rounded-xl border border-gray-800 bg-gray-900 p-4
-                     text-sm text-gray-300 transition-colors hover:border-gray-700 hover:bg-gray-800/60">
-          <FolderCog size={18} className="text-accent-400" />
-          <span className="flex-1">Decide which contests allow personal files</span>
-          <ArrowRight size={14} className="text-gray-600" />
-        </Link>
-      </div>
     </div>
   )
 }

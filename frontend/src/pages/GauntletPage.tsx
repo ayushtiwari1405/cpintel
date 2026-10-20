@@ -148,15 +148,14 @@ export default function GauntletPage() {
             </div>
             <div>
               <h1 className="text-xl font-semibold text-gray-50">The gauntlet</h1>
-              <p className="text-sm text-gray-500">Find out where you stand — about ten minutes</p>
+              <p className="text-sm text-gray-500">About ten minutes</p>
             </div>
           </div>
 
           <p className="text-sm leading-relaxed text-gray-300">
-            Six areas, each a climb of up to four tiers — roughly 1200, 1600, 2000 and 2400.
-            Every tier is two questions about which technique a problem needs. Get both right
-            and you climb; miss one and that area stops there. Your roadmap is then set to
-            match: skills below your level are marked done, and the next ones open up.
+            Six areas of up to four tiers (about 1200, 1600, 2000 and 2400). Each tier asks two
+            questions about which technique a problem needs: answer both correctly to climb.
+            Your roadmap is then set to your level.
           </p>
 
           <ul className="grid gap-2 sm:grid-cols-2">
@@ -169,10 +168,9 @@ export default function GauntletPage() {
           </ul>
 
           <p className="text-xs leading-relaxed text-gray-500">
-            &ldquo;Not sure yet&rdquo; is always an option, and it is the honest answer when it is
-            true — a guess that lands puts you on skills you will then find too hard. Each
-            answer is final once checked, and a retake opens a week later — retaking never
-            undoes progress, only adds to it.
+            Choose &ldquo;Not sure yet&rdquo; rather than guessing — a lucky guess places you too
+            high. Answers are final once checked; retakes open after a week and never undo
+            progress.
           </p>
 
           {paper.nextAttemptAt ? (
@@ -185,7 +183,7 @@ export default function GauntletPage() {
                 {new Date(paper.nextAttemptAt).toLocaleDateString(undefined,
                   { day: 'numeric', month: 'long' })}
               </span>
-              . Solving problems moves your roadmap in the meantime.
+              .
             </p>
           ) : (
             <button onClick={restart} disabled={starting}
@@ -410,8 +408,7 @@ function ResultCard({ result, compact }: { result: GauntletResult; compact?: boo
 
       {!compact && (
         <p className="text-xs leading-relaxed text-gray-500">
-          Your roadmap now starts here: skills at or below each area&rsquo;s level are marked
-          done, and the band just above is open. Solving problems keeps moving it from there.
+          Skills at or below each area&rsquo;s level are now marked done, and the next band is open.
         </p>
       )}
     </div>

@@ -52,11 +52,11 @@ export default function AdminContestFilesPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader eyebrow="Console" title="Contest files"
-        description="Whether contestants may open their personal files during a contest." className="mb-2" />
+      <PageHeader title="Contest files"
+        description="Whether contestants can open their personal files during a contest." className="mb-2" />
       <Panel
         title="Default for every contest"
-        description="What a contest does unless it has a rule of its own"
+        description="Applies unless a contest has its own rule"
         actions={!data.defaultFromConfig && (
           <button
             onClick={() => clearDefault.mutate()}
@@ -77,8 +77,8 @@ export default function AdminContestFilesPage() {
             </p>
             <p className="mt-1 text-xs text-gray-500">
               {data.defaultFromConfig
-                ? 'This is the value from configuration; no admin has overridden it.'
-                : 'Set from this screen, overriding the configured value.'}
+                ? 'From configuration.'
+                : 'Overrides the configured value.'}
             </p>
           </div>
           <button
@@ -115,7 +115,7 @@ export default function AdminContestFilesPage() {
             <tbody className="divide-y divide-gray-800">
               {data.rules.length === 0 && (
                 <EmptyRow colSpan={5}>
-                  No exceptions. Every contest follows the default above.
+                  No exceptions.
                 </EmptyRow>
               )}
               {data.rules.map(rule => (
@@ -220,8 +220,7 @@ export default function AdminContestFilesPage() {
 
         <p className="flex items-start gap-2 border-t border-gray-800 px-4 py-3 text-xs text-gray-500">
           <Info size={13} className="mt-0.5 flex-shrink-0" />
-          Blocking a contest hides the files panel inside it. Nobody's uploads are touched, and
-          their library stays reachable everywhere else.
+          Blocking hides the files panel in that contest only. Uploads are not affected.
         </p>
       </Panel>
     </div>

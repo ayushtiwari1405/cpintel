@@ -38,8 +38,7 @@ export function PastExamCode({ exam }: { exam: MyExam }) {
           Nothing of yours was recorded for this examination.
         </p>
         <p className="mx-auto mt-1 max-w-md text-xs leading-relaxed text-gray-600">
-          Only submissions you sent from CPIntel are kept here. Anything sent straight to the
-          judge is on the judge.
+          Only submissions sent from CPIntel are kept here.
         </p>
       </div>
     )

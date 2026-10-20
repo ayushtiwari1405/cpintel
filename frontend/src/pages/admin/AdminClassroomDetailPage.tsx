@@ -45,7 +45,7 @@ export default function AdminClassroomDetailPage() {
       <PageHeader eyebrow="Classroom" title={room.name}
         description={room.domjudgeUrl
           ? <span className="font-mono text-xs">{room.domjudgeUrl}</span>
-          : 'No judge set for this classroom yet.'}
+          : 'No judge set.'}
         className="mb-2" />
       <Settings room={room} />
       <Teams classroomId={id} />
@@ -93,7 +93,7 @@ function Settings({ room }: { room: ClassroomSummary }) {
   return (
     <Panel
       title={room.name}
-      description="The judge this classroom runs on, and how CPIntel signs in to it"
+      description="Judge connection"
       actions={
         <div className="flex items-center gap-2">
           {!room.active && <Pill tone="gray">archived</Pill>}
@@ -150,8 +150,8 @@ function Settings({ room }: { room: ClassroomSummary }) {
         )}
         {judgeLocked && (
           <p className="text-xs text-gray-600 sm:col-span-2">
-            The judge can't be changed now that students or events are in this classroom: every
-            login was checked against it. Create a new classroom for another judge.
+            The judge is fixed once a classroom has students or events. Create a new classroom
+            for a different judge.
           </p>
         )}
         <div className="flex flex-wrap items-center gap-2 sm:col-span-2">
@@ -195,7 +195,7 @@ function Teams({ classroomId }: { classroomId: number }) {
   const { data: groups } = useAdminGroups()
   const mine = groups?.filter(g => g.classroomId === classroomId) ?? []
   return (
-    <Panel title="Teams" description="Sections in this classroom. Create them from the Teams page">
+    <Panel title="Teams" description="Create teams from the Teams page">
       <div className="flex flex-wrap gap-1.5 p-4">
         {mine.length === 0 && <span className="text-xs text-gray-600">No teams yet.</span>}
         {mine.map(g => (
@@ -218,7 +218,7 @@ function Members({ classroomId }: { classroomId: number }) {
   const enrolled = new Set(members?.map(m => m.userId))
 
   return (
-    <Panel title="Students" description="Everyone enrolled, and whether their DOMjudge login is attached">
+    <Panel title="Students">
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
@@ -233,7 +233,7 @@ function Members({ classroomId }: { classroomId: number }) {
             {isLoading && <EmptyRow colSpan={4}>Loading students…</EmptyRow>}
             {!isLoading && members?.length === 0 && (
               <EmptyRow colSpan={4}>
-                Nobody yet. Import a roster into one of this classroom's teams.
+                No students. Import a roster into one of this classroom's teams.
               </EmptyRow>
             )}
             {members?.map(m => (
@@ -299,7 +299,7 @@ function Staff({ classroomId }: { classroomId: number }) {
   const already = new Set(staff?.map(s => s.userId))
 
   return (
-    <Panel title="Admins" description="Admins who run this classroom — any number of them. Superadmins run every classroom">
+    <Panel title="Admins" description="Superadmins can access every classroom">
       <div className="flex flex-wrap gap-1.5 p-4">
         {staff?.map(s => (
           <span key={s.userId}
@@ -370,7 +370,7 @@ function TeachingAssistants({ classroomId }: { classroomId: number }) {
 
   return (
     <Panel title="Teaching assistants"
-      description="They mark examinations by hand. Give each one questions or a range of students on the examination's Evaluation tab">
+      description="Assign questions or students to each TA on an examination's Evaluation tab">
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <tbody className="divide-y divide-gray-800">
@@ -403,8 +403,7 @@ function TeachingAssistants({ classroomId }: { classroomId: number }) {
       </div>
       <div className="space-y-2 border-t border-gray-800 p-4">
         <span className="text-xs text-gray-500">
-          Add a TA. An existing account is matched by email, then username; otherwise a new one
-          is created, which needs an email.
+          Matches an existing account by email, then username; otherwise creates one.
         </span>
         <div className="flex flex-wrap gap-2">
           <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Email"

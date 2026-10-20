@@ -107,9 +107,8 @@ export default function AdminGroupContestPage() {
               {' '}{standings.unmatched.join(', ')}.
             </p>
             <p className="mt-0.5 opacity-80">
-              Before their first submission this is normal. Afterwards it nearly always means
-              the handle on the group's member list does not match the one on the board — they
-              are left unranked rather than scored zero.
+              Normal before a first submission; afterwards, check that their handle matches the
+              board. Unmatched members are left unranked, not scored zero.
             </p>
           </div>
         </div>
@@ -163,7 +162,7 @@ export default function AdminGroupContestPage() {
         <Panel
           title="Group standings"
           description={computed
-            ? 'Computed from each member’s submissions — see the note below'
+            ? 'Computed from members’ submissions — see note below'
             : 'Read from the judge’s own scoreboard'}
         >
           <div className="overflow-x-auto">
@@ -181,7 +180,7 @@ export default function AdminGroupContestPage() {
               <tbody className="divide-y divide-gray-800">
                 {standings.rows.length === 0 && (
                   <EmptyRow colSpan={6}>
-                    Nothing yet. Refresh once the contest has started and people have submitted.
+                    No standings yet.
                   </EmptyRow>
                 )}
                 {standings.rows.map(row => (
@@ -193,12 +192,9 @@ export default function AdminGroupContestPage() {
 
           {computed && (
             <p className="border-t border-gray-800 px-4 py-3 text-xs text-gray-500">
-              Codeforces will not answer a filtered standings query for a public contest, so
-              these numbers are computed from each member's own submission list: problems solved,
-              plus ten penalty minutes per rejected attempt on a problem they went on to solve.
-              For an ICPC-mode round that matches the official board. For a regular rated round,
-              which scores by decaying problem points, the group's internal order can differ from
-              Codeforces' own — this is a ranking of the group, not a copy of theirs.
+              Computed from members' submissions: problems solved plus ten penalty minutes per
+              rejected attempt on a solved problem. Matches the official board for ICPC-mode
+              rounds; for rated rounds the order can differ from Codeforces.
             </p>
           )}
         </Panel>
@@ -221,11 +217,8 @@ export default function AdminGroupContestPage() {
               <tbody className="divide-y divide-gray-800">
                 {(!violations || violations.entries.length === 0) && (
                   <EmptyRow colSpan={5}>
-                    Nothing reported, and nothing will be: a team contest is not monitored.
-                    Monitoring is what separates an examination from a contest — there is no
-                    away timer, no focus log and no password at the door on a round people
-                    entered voluntarily. To invigilate a round, create it as an examination
-                    under Administration → Examinations, where the session log lives.
+                    Team contests are not monitored. To invigilate a round, create it as an
+                    examination.
                   </EmptyRow>
                 )}
                 {violations?.entries.map(entry => (
@@ -252,13 +245,9 @@ export default function AdminGroupContestPage() {
           </div>
 
           <p className="border-t border-gray-800 px-4 py-3 text-xs leading-relaxed text-gray-500">
-            Rows here are from rounds sat while team contests were still monitored, and are kept
-            for the record. Where a round <em>is</em> monitored — an examination — the same
-            caveat applies to every line of it: a monitor can see that somebody left the window,
-            not whether that was a second screen with the solution on it, a notification, or
-            someone answering the door. It stops nobody leaving and cannot see a phone or a
-            second machine at all, so a clean record is not proof of anything either. Treat this
-            as a place to start a conversation, not as a verdict.
+            Kept from when team contests were monitored. A monitor sees that someone left the
+            window, not why, and cannot see phones or other machines — treat entries as prompts
+            for a conversation, not verdicts.
           </p>
         </Panel>
       )}

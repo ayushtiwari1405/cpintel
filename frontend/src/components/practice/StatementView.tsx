@@ -49,7 +49,7 @@ function MissingStatement({ issue }: { issue?: string | null }) {
             <button onClick={passCheck} className="underline hover:text-amber-200">
               Open codeforces.com
             </button>
-            , let the check finish, then come back and reopen the problem.
+            , let the check finish, then reopen the problem.
           </p>
         )
       case 'SESSION_STALE':
@@ -62,8 +62,7 @@ function MissingStatement({ issue }: { issue?: string | null }) {
               Codeforces only shows its pages to a real browser.{' '}
               <Link to="/extension" target="_blank" rel="noreferrer"
                 className="underline hover:text-amber-200">Install the CPIntel extension</Link>
-              {' '}to read problems here — or open this one on Codeforces meanwhile. (Running
-              CPIntel on this computer? Reconnecting your Codeforces session there works too.)
+              {' '}to read problems here, or open this one on Codeforces.
             </p>
           )
         }
@@ -76,16 +75,15 @@ function MissingStatement({ issue }: { issue?: string | null }) {
       case 'NOT_FOUND':
         return (
           <p>
-            Codeforces has no problemset page for this one — gym and private-contest problems
-            are not published there. Open it on Codeforces to read it; you can still write and
-            submit from here.
+            Gym and private-contest problems have no problemset page. Open it on Codeforces to
+            read it; you can still submit from here.
           </p>
         )
       default:
         return (
           <p>
-            Codeforces did not return a readable statement for this problem. Open it on
-            Codeforces to read it; you can still write and submit from here.
+            No readable statement was returned. Open it on Codeforces; you can still submit
+            from here.
           </p>
         )
     }

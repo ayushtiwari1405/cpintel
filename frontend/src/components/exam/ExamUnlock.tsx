@@ -86,8 +86,7 @@ export function ExamUnlock({ exam, onLeave }: Props) {
         <p className="mt-5 text-sm leading-relaxed text-gray-400">
           {wantsPersonal
             ? 'This paper needs the personal code printed on your own slip.'
-            : 'You are signed in for this paper. It also needs the password your invigilator '
-              + 'reads out to the room when it starts.'}
+            : 'Enter the password your invigilator reads out when the paper starts.'}
         </p>
 
         {!live && (
@@ -97,8 +96,7 @@ export function ExamUnlock({ exam, onLeave }: Props) {
             bg-amber-950/40 px-3 py-2.5 text-xs leading-relaxed text-amber-200">
             <Clock size={13} className="mt-0.5 flex-shrink-0" />
             <span>
-              It cannot be unlocked until it starts, even with the right password. This page
-              notices by itself when the window opens — you can leave it where it is.
+              It unlocks only once it starts. This page updates automatically.
             </span>
           </p>
         )}
@@ -147,7 +145,7 @@ export function ExamUnlock({ exam, onLeave }: Props) {
                 autoFocus={!wantsShared}
               />
               <p className="mt-1 text-xs text-gray-600">
-                The one printed on the slip on your desk, not the one read out to the room.
+                The code printed on your slip, not the one read out to the room.
               </p>
             </div>
           )}
@@ -173,9 +171,8 @@ export function ExamUnlock({ exam, onLeave }: Props) {
         </form>
 
         <p className="mt-5 text-xs leading-relaxed text-gray-600">
-          Typing it without the hyphens, or in lower case, works the same. If neither code opens
-          the paper, put your hand up — your invigilator can issue you a new one without
-          affecting anybody else.
+          Hyphens and case do not matter. If it does not work, raise your hand — your
+          invigilator can issue a new one.
         </p>
       </div>
     </div>

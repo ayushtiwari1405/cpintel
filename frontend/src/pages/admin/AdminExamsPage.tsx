@@ -73,8 +73,8 @@ export default function AdminExamsPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader eyebrow="Console" title="Examinations and contests"
-        description="Create, schedule and run events on each classroom’s judge." className="mb-2" />
+      <PageHeader title="Examinations and contests"
+        className="mb-2" />
       <div className="flex items-center gap-1 rounded-lg border border-gray-800 bg-gray-900 p-1
         w-fit">
         {(['EXAM', 'CONTEST'] as const).map(value => (
@@ -95,9 +95,7 @@ export default function AdminExamsPage() {
 
       <Panel
         title={exam ? 'Examinations' : 'Contests'}
-        description={exam
-          ? 'Assigned, monitored, and logged — every session is recorded'
-          : 'Rounds laid over a judge, for teams or for everybody'}
+        description={exam ? 'Monitored; every session is recorded' : 'Unmonitored rounds on a judge'}
         actions={<ClassroomSelect value={filter} onChange={setFilter} allowAll
           className="rounded-md border border-gray-800 bg-gray-900 px-2 py-1 text-xs
                      text-gray-300 outline-none" />}
@@ -119,8 +117,7 @@ export default function AdminExamsPage() {
               {!isLoading && events?.length === 0 && (
                 <EmptyRow colSpan={6}>
                   {exam
-                    ? 'No examinations yet. Create one below, assign the teams or people '
-                      + 'sitting it, then publish it.'
+                    ? 'No examinations yet.'
                     : 'No contests yet.'}
                 </EmptyRow>
               )}
@@ -177,7 +174,7 @@ export default function AdminExamsPage() {
 
       <Panel
         title={exam ? 'New examination' : 'New contest'}
-        description="Created as a draft — nobody sees it until you publish it"
+        description="Created as a draft; hidden until published"
       >
         <div className="flex flex-wrap items-end gap-2 p-4">
           <Field label="Classroom" className="min-w-[12rem]">
@@ -247,10 +244,8 @@ export default function AdminExamsPage() {
 
       <p className="flex items-start gap-2 px-1 text-xs leading-relaxed text-gray-600">
         <ShieldCheck size={13} className="mt-0.5 flex-shrink-0" />
-        CPIntel does not judge an examination — DOMjudge does, with its own clock and its own
-        verdicts. What CPIntel adds is who may sit it, what is recorded while they do, and a
-        log an invigilator can read afterwards. Every figure in that log is an observation
-        rather than a finding.
+        DOMjudge supplies the clock and verdicts. CPIntel controls who may sit and records each
+        session; its log is a set of observations, not findings.
       </p>
     </div>
   )

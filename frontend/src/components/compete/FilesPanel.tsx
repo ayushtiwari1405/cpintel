@@ -114,8 +114,7 @@ export function FilesPanel({ open, onClose, contest, onUseInEditor }: Props) {
 
         {denied ? (
           <div className="p-4 text-xs text-yellow-500/90 leading-relaxed">
-            Personal files are turned off for this contest. Your library is untouched — it is
-            available again from the Compete page once the contest is over.
+            Personal files are disabled for this contest. Your library returns afterwards.
           </div>
         ) : (
           <>
@@ -152,8 +151,7 @@ export function FilesPanel({ open, onClose, contest, onUseInEditor }: Props) {
               <p className="text-[11px] text-gray-600 leading-relaxed">
                 Drop a file anywhere in this panel. Up to{' '}
                 {vault ? human(vault.maxFileBytes) : '2 MB'} each,{' '}
-                {vault?.maxFiles ?? 100} files. Nothing here is ever submitted or shared —
-                it is read back only to you.
+                {vault?.maxFiles ?? 100} files. Private to you; never submitted.
               </p>
             </div>
 
@@ -165,8 +163,7 @@ export function FilesPanel({ open, onClose, contest, onUseInEditor }: Props) {
                   </div>
                 ) : files.length === 0 ? (
                   <p className="p-4 text-xs text-gray-600 leading-relaxed">
-                    Nothing here yet. A template, a snippets header or a PDF of your notebook
-                    is the usual thing to keep — upload it before a round, not during one.
+                    No files yet. Upload templates or notes before a round.
                   </p>
                 ) : (
                   files.map(file => (
