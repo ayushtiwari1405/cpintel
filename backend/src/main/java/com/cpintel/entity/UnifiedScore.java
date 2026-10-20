@@ -16,8 +16,8 @@ public class UnifiedScore {
     @JsonIgnore
     private User user;
 
-    @Column(name = "cf_score") @Builder.Default private Double cfScore = 0.0;
-    @Column(name = "unified_score") @Builder.Default private Double unifiedScore = 0.0;
-    @Column(name = "cf_weight") @Builder.Default private Double cfWeight = 0.40;
+    @Column(name = "cf_score", columnDefinition = "numeric(7,2)") @Builder.Default private Double cfScore = 0.0;
+    @Column(name = "unified_score", columnDefinition = "numeric(7,2)") @Builder.Default private Double unifiedScore = 0.0;
+    @Column(name = "cf_weight", columnDefinition = "numeric(4,2)") @Builder.Default private Double cfWeight = 0.40;
     @Column(name = "computed_at") private Instant computedAt;
 }

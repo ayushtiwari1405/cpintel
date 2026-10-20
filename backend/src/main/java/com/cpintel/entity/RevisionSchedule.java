@@ -36,7 +36,7 @@ public class RevisionSchedule extends BaseEntity {
     @Builder.Default
     private Integer revisionPriority = 50;
 
-    @Column(name = "decay_score")
+    @Column(name = "decay_score", columnDefinition = "numeric(5,2)")
     @Builder.Default
     private Double decayScore = 0.0;
 
@@ -48,7 +48,7 @@ public class RevisionSchedule extends BaseEntity {
     @Builder.Default
     private Integer repetitionCount = 0;
 
-    @Column(name = "ease_factor")
+    @Column(name = "ease_factor", columnDefinition = "numeric(5,2)")
     @Builder.Default
     private Double easeFactor = 2.5;
 

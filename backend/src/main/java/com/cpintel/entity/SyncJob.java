@@ -36,7 +36,7 @@ public class SyncJob extends BaseEntity {
     @Builder.Default
     private String status = "QUEUED";
 
-    @Column(name = "progress_pct")
+    @Column(name = "progress_pct", columnDefinition = "numeric(5,2)")
     @Builder.Default
     private Double progressPct = 0.0;
 

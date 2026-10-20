@@ -53,19 +53,19 @@ public class TopicMastery {
     @Column(name = "track", length = 60)
     private String track;
 
-    @Column(name = "mastery_score")
+    @Column(name = "mastery_score", columnDefinition = "numeric(5,2)")
     @Builder.Default
     private Double masteryScore = 0.0;
 
-    @Column(name = "confidence_score")
+    @Column(name = "confidence_score", columnDefinition = "numeric(5,2)")
     @Builder.Default
     private Double confidenceScore = 0.0;
 
-    @Column(name = "revision_score")
+    @Column(name = "revision_score", columnDefinition = "numeric(5,2)")
     @Builder.Default
     private Double revisionScore = 0.0;
 
-    @Column(name = "decay_score")
+    @Column(name = "decay_score", columnDefinition = "numeric(5,2)")
     @Builder.Default
     private Double decayScore = 0.0;
 

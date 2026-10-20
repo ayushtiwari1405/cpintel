@@ -826,7 +826,7 @@ as well as on each controller.
 ## Tests
 
 ```bash
-cd backend  && ./mvnw verify    # unit and web-slice tests, then the JaCoCo coverage gate
+cd backend  && ./mvnw verify    # unit, web-slice and Postgres schema tests, then the JaCoCo coverage gate
 cd electron && npm test         # away-time accounting, external-link schemes, executable sizes
 python3 -I scripts/test_grab_cf_cookie.py   # where the Codeforces helper will send a session
 python3 -I scripts/test_nginx_edge.py       # edge headers and the restarting answer (uses Docker)
@@ -835,8 +835,13 @@ cd frontend && npm run type-check && npm run lint
 
 All of these run in CI (`.github/workflows/ci.yml`) and in `scripts/ci-local.sh`. The backend
 suite is the large one, several hundred tests; Maven prints the exact count at the end of a run.
-The backend tests need no database, Redis or network. The nginx test skips its container half
-when Docker is unavailable or `CPINTEL_NO_DOCKER=1` is set.
+The backend tests need no database, Redis or network of their own, with one exception:
+`PostgresSchemaTest` starts a throwaway `postgres:16-alpine` through Testcontainers, applies every
+Flyway migration, validates the entity mappings against the result and runs each native query.
+It is skipped on a machine without Docker, except under CI (`CI` set), where a missing Docker
+fails the run. The coverage gate (`jacoco.min.instruction` in `backend/pom.xml`) only ever moves
+up. The nginx test skips its container half when Docker is unavailable or `CPINTEL_NO_DOCKER=1`
+is set.
 
 The frontend has no test runner yet; that is a known gap rather than an oversight.
 
