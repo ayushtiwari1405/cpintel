@@ -341,7 +341,7 @@ services:
 
   prometheus:
     logging: *default-logging
-    image: prom/prometheus:v2.51.0
+    image: prom/prometheus:v2.55.1
     container_name: cpintel-prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
