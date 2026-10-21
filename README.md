@@ -206,7 +206,7 @@ the product.
 
 ### Prerequisites
 
-Docker, Java 21, Node 20, Maven (or use the included `mvnw`).
+Docker, Java 21, Node 24, Maven (or use the included `mvnw`).
 
 ### 1. Environment
 

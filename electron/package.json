@@ -7,14 +7,14 @@
     "dev": "concurrently \"tsc -w\" \"cross-env NODE_ENV=development electron .\"",
     "build": "tsc && node scripts/stamp-server.mjs && node scripts/fetch-toolchains.mjs && node scripts/package.mjs",
     "pack": "tsc && node scripts/stamp-server.mjs && node scripts/fetch-toolchains.mjs && node scripts/package.mjs --dir",
-    "test": "tsc && node --test dist",
+    "test": "tsc && node --test \"dist/**/*.test.js\"",
     "toolchain": "node scripts/fetch-toolchains.mjs"
   },
   "dependencies": {
     "electron-store": "^8.2.0"
   },
   "devDependencies": {
-    "@types/node": "^20.0.0",
+    "@types/node": "^24.19.2",
     "concurrently": "^8.2.2",
     "cross-env": "^10.1.0",
     "electron": "^41.7.1",

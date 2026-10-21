@@ -23,10 +23,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Node 20
+      - name: Set up Node 24
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
 
       # The compilers the app ships with (scripts/fetch-toolchains.mjs): pinned, checksummed
       # archives, about 350 MB per platform, kept between builds.
