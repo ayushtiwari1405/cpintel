@@ -372,7 +372,7 @@ services:
   # sends nothing, and the alerts are on Prometheus's page as before.
   alertmanager:
     logging: *default-logging
-    image: prom/alertmanager:v0.27.0
+    image: prom/alertmanager:v0.34.1
     container_name: cpintel-alertmanager
     entrypoint: ["/bin/sh", "/etc/alertmanager/start.sh"]
     environment:
