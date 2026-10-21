@@ -3,7 +3,7 @@
 # Its own image rather than stock nginx with a mounted config because it has to decide, at
 # start and then every minute, which certificate to serve — see docker-entrypoint.d — and that
 # needs openssl for the temporary self-signed one.
-FROM nginx:1.27-alpine
+FROM nginx:1.30.6-alpine
 RUN apk add --no-cache openssl && rm -f /etc/nginx/conf.d/default.conf
 COPY nginx.conf /etc/nginx/nginx.conf
 COPY security-headers.conf /etc/nginx/security-headers.conf

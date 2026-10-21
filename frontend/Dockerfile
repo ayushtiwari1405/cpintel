@@ -10,7 +10,7 @@ ARG VITE_CF_EXTENSION_URL=""
 ENV VITE_CF_EXTENSION_URL=$VITE_CF_EXTENSION_URL
 RUN npm run build
 
-FROM nginx:1.25-alpine
+FROM nginx:1.30.6-alpine
 COPY --from=builder /app/dist /usr/share/nginx/html
 COPY nginx-spa.conf /etc/nginx/conf.d/default.conf
 
