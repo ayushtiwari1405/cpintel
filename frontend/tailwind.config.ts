@@ -1,6 +1,6 @@
 import type { Config } from 'tailwindcss'
-import defaultColors from 'tailwindcss/colors'
 import plugin from 'tailwindcss/plugin'
+import { V3_PALETTES } from './tailwind.palette'
 
 /*
  * Theme-aware palettes.
@@ -64,7 +64,7 @@ function paletteVars(mode: 'light' | 'dark') {
     vars[`--c-gray-${shade}`] = rgb(hex)
   }
   const palettes: [string, Record<Shade, string>][] = [
-    ...ACCENTS.map(name => [name, defaultColors[name] as Record<Shade, string>] as [string, Record<Shade, string>]),
+    ...ACCENTS.map(name => [name, V3_PALETTES[name]] as [string, Record<Shade, string>]),
     ['accent', ACCENT],
   ]
   for (const [name, palette] of palettes) {
