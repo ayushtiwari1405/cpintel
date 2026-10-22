@@ -169,20 +169,26 @@ public class RecommendationEngine {
     }
 
     /**
-     * After new evidence: rebuild a missing daily or weekly sheet, or one with no problems on it,
-     * otherwise only mark what has since been solved, and retire contest preparation so it is
-     * rebuilt on next view.
+     * After new evidence: rebuild a missing daily or weekly sheet, one with no problems on it, or
+     * one taken wholly from the roadmap when there are now measured skills to rank; otherwise only
+     * mark what has since been solved. Contest preparation is retired, to be rebuilt on next view.
      */
     @Transactional
     public void refreshSheets(Long userId) {
         History h = history(userId);
+        boolean measurable = skills(userId).stream().anyMatch(s ->
+            s.attempted() >= PracticePlanner.MIN_ATTEMPTS_FOR_SHEET && RoadmapTaxonomy.byId(s.nodeKey()) != null);
         for (String type : List.of(DAILY, WEEKLY)) {
             Optional<Recommendation> live = recommendationRepository.findLatestActiveByUserAndType(userId, type);
             List<Plan.Item> items = live.map(r -> codec.readItems(r.getProblemList())).orElse(List.of());
             // No problems anywhere means the problem list was unavailable when it was built; the
             // sheet says they will be filled in, and this is where that happens.
             boolean noProblems = items.stream().allMatch(i -> i.problems() == null || i.problems().isEmpty());
-            if (noProblems) {
+            // A sheet built only from the roadmap, for somebody who now has measured skills: a new
+            // user's first sync would otherwise leave the fallback sheet up for its whole life.
+            boolean outgrownFallback = measurable
+                && items.stream().noneMatch(i -> Plan.MEASURED.equals(i.basis()));
+            if (noProblems || outgrownFallback) {
                 if (DAILY.equals(type)) generateDailySheet(userId);
                 else generateWeeklySheet(userId);
                 continue;
@@ -284,7 +290,7 @@ public class RecommendationEngine {
             .map(tm -> new PracticePlanner.Skill(tm.getTopic(), score(tm.getMasteryScore()),
                 score(tm.getDecayScore()),
                 tm.getProblemsAttempted() == null ? 0 : tm.getProblemsAttempted(),
-                tm.getSkillRating(), tm.getLastPracticedAt()))
+                tm.getSkillRating(), tm.getLastPracticedAt(), tm.getMaxSolvedRating()))
             .toList();
     }
 

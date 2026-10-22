@@ -297,6 +297,7 @@ const REASON_LABEL: Record<string, { text: string; className: string }> = {
   WEAK_TOPIC:      { text: 'Weak area',     className: 'badge-red' },
   REVISION_DUE:    { text: 'Revision',      className: 'badge-yellow' },
   MOMENTUM:        { text: 'Keep going',    className: 'badge-green' },
+  CONSOLIDATE:     { text: 'Consolidate',   className: 'badge-gray' },
   PROGRESSION:     { text: 'Step up',       className: 'badge-blue' },
   NEXT_ON_ROADMAP: { text: 'From your roadmap', className: 'badge-gray' },
   CONTEST_STAPLE:  { text: 'Contest staple', className: 'badge-blue' },

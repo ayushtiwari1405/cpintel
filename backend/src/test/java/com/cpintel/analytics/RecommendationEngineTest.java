@@ -201,6 +201,41 @@ class RecommendationEngineTest {
         assertFalse(codec.readItems(saved("DAILY").getProblemList()).get(0).problems().isEmpty());
     }
 
+    @Test
+    @DisplayName("a refresh rebuilds a roadmap-only sheet once there are measured skills")
+    void refreshReplacesFallbackSheet() {
+        Plan.Problem p = new Plan.Problem(contestId, "P" + node.minRating(), "x", node.minRating(),
+            false, 50, Plan.CORE, "/p", null);
+        Plan.Item inferred = new Plan.Item(node.id(), "t", null, null, null, 0L, 0L, 1000, "r", "NEXT_ON_ROADMAP",
+            null, Plan.INFERRED, null, List.of(p));
+        Recommendation live = Recommendation.builder().recType("DAILY")
+            .problemList(codec.write(List.of(inferred))).generatedAt(Instant.now()).build();
+        when(recommendations.findLatestActiveByUserAndType(USER, "DAILY")).thenReturn(Optional.of(live));
+
+        engine.refreshSheets(USER);
+
+        // setUp gives the user a measured skill (six attempts).
+        verify(recommendations).markConsumed(USER, "DAILY");
+        assertEquals(Plan.MEASURED, codec.readItems(saved("DAILY").getProblemList()).get(0).basis());
+    }
+
+    @Test
+    @DisplayName("a roadmap-only sheet is kept while there is still nothing measured")
+    void refreshKeepsFallbackWhileSparse() {
+        when(mastery.findByUserUserIdAndScope(USER, TopicMastery.Scope.NODE)).thenReturn(List.of());
+        Plan.Problem p = new Plan.Problem(contestId, "P" + node.minRating(), "x", node.minRating(),
+            false, 50, Plan.CORE, "/p", null);
+        Plan.Item inferred = new Plan.Item(node.id(), "t", null, null, null, 0L, 0L, 1000, "r", "NEXT_ON_ROADMAP",
+            null, Plan.INFERRED, null, List.of(p));
+        Recommendation live = Recommendation.builder().recType("DAILY")
+            .problemList(codec.write(List.of(inferred))).generatedAt(Instant.now()).build();
+        when(recommendations.findLatestActiveByUserAndType(USER, "DAILY")).thenReturn(Optional.of(live));
+
+        engine.refreshSheets(USER);
+
+        verify(recommendations, never()).markConsumed(USER, "DAILY");
+    }
+
     // -- contest preparation -----------------------------------------------------------
 
     @Test

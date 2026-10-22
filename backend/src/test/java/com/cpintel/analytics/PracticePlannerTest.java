@@ -100,7 +100,9 @@ class PracticePlannerTest {
 
         assertEquals(List.of(d.get(1).id(), d.get(2).id(), d.get(3).id()),
             sheet.items().stream().map(Plan.Item::nodeKey).toList());
-        assertTrue(sheet.items().stream().allMatch(i -> "WEAK_TOPIC".equals(i.reasonCode())));
+        // Only the one below 40% is called weak; the others are worth consolidating.
+        assertEquals(List.of("WEAK_TOPIC", "CONSOLIDATE", "CONSOLIDATE"),
+            sheet.items().stream().map(Plan.Item::reasonCode).toList());
         assertTrue(sheet.items().get(0).reason().contains("15%"));
         assertEquals(Plan.MEASURED, sheet.summary().basis());
         assertTrue(sheet.summary().notes().isEmpty());
@@ -117,7 +119,7 @@ class PracticePlannerTest {
         Plan.Item first = sheet.items().get(0);
         assertEquals(d.get(0).id(), first.nodeKey());
         assertEquals("REVISION_DUE", first.reasonCode());
-        assertTrue(first.reason().contains("70%"));
+        assertTrue(first.reason().contains("from 90% to 20%"), first.reason());
     }
 
     @Test
@@ -332,7 +334,8 @@ class PracticePlannerTest {
             skill(d.get(1), 20, 0, 6, daysAgo(3)),       // weak: retains 20
             skill(d.get(2), 45, 0, 6, daysAgo(3)),
             skill(d.get(3), 50, 0, 6, daysAgo(3)),
-            skill(d.get(4), 85, 2, 30, daysAgo(2)),      // strong and fresh
+            // Strong and fresh, rated low enough in its band to have harder problems above.
+            new PracticePlanner.Skill(d.get(4).id(), 85, 2, 30, (double) d.get(4).minRating(), daysAgo(2)),
             skill(d.get(5), 70, 0, 9, daysAgo(2))), List.of(), Set.of(), Set.of()));
 
         List<Plan.Item> items = sheet.items();

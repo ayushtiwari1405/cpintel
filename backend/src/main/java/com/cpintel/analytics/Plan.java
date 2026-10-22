@@ -60,7 +60,7 @@ public final class Plan {
     /**
      * One skill on a sheet and the problems to solve in it.
      *
-     * @param reasonCode WEAK_TOPIC, REVISION_DUE, MOMENTUM, PROGRESSION, NEXT_ON_ROADMAP or
+     * @param reasonCode WEAK_TOPIC, REVISION_DUE, MOMENTUM, CONSOLIDATE, PROGRESSION, NEXT_ON_ROADMAP or
      *                   CONTEST_STAPLE: the rule that put it here, for the page to label
      * @param basis      {@link #MEASURED} or {@link #INFERRED}
      * @param session    weekly plans only: which session of the week this is, from 1

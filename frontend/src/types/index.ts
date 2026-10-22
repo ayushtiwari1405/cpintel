@@ -1417,7 +1417,7 @@ export interface PlanItem {
   decayScore?: number | null
   targetRating?: number | null
   reason?: string | null
-  /** WEAK_TOPIC, REVISION_DUE, MOMENTUM, PROGRESSION, NEXT_ON_ROADMAP or CONTEST_STAPLE. */
+  /** WEAK_TOPIC, REVISION_DUE, MOMENTUM, CONSOLIDATE, PROGRESSION, NEXT_ON_ROADMAP or CONTEST_STAPLE. */
   reasonCode?: string | null
   priority?: string | null
   basis?: 'MEASURED' | 'INFERRED' | null

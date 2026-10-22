@@ -40,6 +40,9 @@ import java.util.Set;
  *       skill's band otherwise.</li>
  *   <li><b>Spread.</b> A daily sheet takes one skill per topic before it takes a second;
  *       weekly plans allow two.</li>
+ *   <li><b>Within reach.</b> A skill is ranked only if its easiest problem is one the user has
+ *       shown they can solve and they have not long outgrown its hardest, and no ladder climbs
+ *       past its own top rung.</li>
  * </ul>
  */
 public final class PracticePlanner {
@@ -77,6 +80,18 @@ public final class PracticePlanner {
     /** Previously solved problems a revision item asks the user to solve again. */
     static final int RESOLVE_COUNT = 2;
 
+    /** Below this mastery a skill is called weak; at or above it, once known. */
+    static final double WEAK_MASTERY = ScoringFormulas.FIT_WEAK_TOPIC_THRESHOLD;
+
+    /** A skill whose hardest problem is this far below the user's level in it is outgrown. */
+    static final int OUTGROWN_MARGIN = 200;
+
+    /** A progression slot needs problems at least this far above the skill's target. */
+    static final int PROGRESSION_ROOM = 100;
+
+    /** Problem ratings come in steps of this; a rung reaches the nearest problem within half of it. */
+    static final int RATING_STEP = 100;
+
     // Skill ladders end at the skill's target, which is already a stretch (a skill rating plus
     // FIT_SKILL_STRETCH, or the top of where mastery sits in the band): centring on it put the
     // warm-up of a weak skill above the user's own rating. Only progression climbs past it.
@@ -92,17 +107,34 @@ public final class PracticePlanner {
     private static final Ladder CONSOLIDATE = new Ladder(
         new int[] {-200}, new String[] {Plan.CORE});
 
-    /** One skill as the planner sees it. Mastery and decay are 0-100. */
+    /**
+     * One skill as the planner sees it. Mastery and decay are 0-100.
+     *
+     * @param maxSolvedRating the hardest problem solved in it, the evidence of ability when there
+     *                        is no skill rating
+     */
     public record Skill(
         String nodeKey,
         double mastery,
         double decay,
         int attempted,
         Double skillRating,
-        Instant lastPracticedAt
+        Instant lastPracticedAt,
+        Integer maxSolvedRating
     ) {
+        public Skill(String nodeKey, double mastery, double decay, int attempted, Double skillRating,
+                     Instant lastPracticedAt) {
+            this(nodeKey, mastery, decay, attempted, skillRating, lastPracticedAt, null);
+        }
+
         static Skill untouched(String nodeKey) {
             return new Skill(nodeKey, 0, 0, 0, null, null);
+        }
+
+        /** What the user has shown they can solve here: the skill rating, else the hardest solve. */
+        Double ability() {
+            if (skillRating != null) return skillRating;
+            return maxSolvedRating == null ? null : maxSolvedRating.doubleValue();
         }
 
         double retained() {
@@ -186,29 +218,35 @@ public final class PracticePlanner {
         return days >= MOMENTUM_DAYS ? 0 : 100 * (1 - days / MOMENTUM_DAYS);
     }
 
-    /** Names the component that contributed most, so the reason says why this skill is here. */
+    /**
+     * Says why a skill is on the sheet. Ranking weighs weakness, decay and momentum together;
+     * the reason names what the user would recognise. Naming the largest weighted component
+     * called a skill at 55% that was practised this morning a "weak area", and so too one known
+     * at 80% that had since faded almost entirely.
+     */
     private static Pick dailyPick(Skill s, Instant now) {
         RoadmapTaxonomy.NodeDef def = RoadmapTaxonomy.byId(s.nodeKey());
-        double weak = W_WEAK * (100 - clamp(s.mastery()));
-        double decay = W_DECAY * clamp(s.decay());
-        double moving = W_MOMENTUM * momentum(s, now);
-
-        if (s.decay() >= REVISION_DECAY_THRESHOLD && decay >= weak && decay >= moving) {
+        if (s.decay() >= REVISION_DECAY_THRESHOLD && s.mastery() >= WEAK_MASTERY) {
             return new Pick(def, s, "REVISION_DUE",
-                "Revision due - about " + Math.round(s.decay()) + "% of this has faded",
+                "Revision due - faded from " + Math.round(s.mastery()) + "% to "
+                    + Math.round(s.retained()) + "% mastery",
                 null, Plan.MEASURED);
         }
-        if (moving > weak) {
+        if (s.mastery() < WEAK_MASTERY) {
+            return new Pick(def, s, "WEAK_TOPIC",
+                "Weak area - mastery " + Math.round(s.mastery()) + "% over "
+                    + s.attempted() + " attempted problems",
+                null, Plan.MEASURED);
+        }
+        if (momentum(s, now) > 0) {
             long days = Math.max(0, Duration.between(s.lastPracticedAt(), now).toDays());
             return new Pick(def, s, "MOMENTUM",
                 "Keep going - you practised this " + (days == 0 ? "today" : days + "d ago")
                     + ", mastery " + Math.round(s.mastery()) + "%",
                 null, Plan.MEASURED);
         }
-        return new Pick(def, s, "WEAK_TOPIC",
-            "Weak area - mastery " + Math.round(s.mastery()) + "% over "
-                + s.attempted() + " attempted problems",
-            null, Plan.MEASURED);
+        return new Pick(def, s, "CONSOLIDATE",
+            "Worth consolidating - mastery " + Math.round(s.mastery()) + "%", null, Plan.MEASURED);
     }
 
     // -- weekly ------------------------------------------------------------
@@ -252,7 +290,7 @@ public final class PracticePlanner {
             return new Pick(def, s, "WEAK_TOPIC",
                 "Barely started - mastery " + Math.round(s.mastery()) + "%", "NEW", Plan.MEASURED);
         }
-        return new Pick(def, s, "WEAK_TOPIC",
+        return new Pick(def, s, "CONSOLIDATE",
             "Worth consolidating - mastery " + Math.round(s.mastery()) + "%", "PRACTICE", Plan.MEASURED);
     }
 
@@ -261,6 +299,11 @@ public final class PracticePlanner {
         return measured.stream()
             .filter(s -> !taken.contains(s.nodeKey()))
             .filter(s -> s.decay() < REVISION_DECAY_THRESHOLD && s.mastery() >= PROGRESSION_MIN_MASTERY)
+            // Somewhere to climb to: a skill that tops out at the user's level has nothing harder.
+            .filter(s -> {
+                RoadmapTaxonomy.NodeDef def = RoadmapTaxonomy.byId(s.nodeKey());
+                return def.maxRating() >= targetFor(def, s) + PROGRESSION_ROOM;
+            })
             .min(Comparator.comparingDouble((Skill s) -> -s.mastery()).thenComparing(Skill::nodeKey))
             .map(s -> new Pick(RoadmapTaxonomy.byId(s.nodeKey()), s, "PROGRESSION",
                 "Strong and fresh - mastery " + Math.round(s.mastery())
@@ -356,13 +399,34 @@ public final class PracticePlanner {
 
     // -- shared ------------------------------------------------------------
 
+    /**
+     * Whether a skill is worth practising at the user's level: its easiest problem is one they
+     * have shown they can solve (to the problem grid), and its hardest is not long behind them.
+     * Without evidence of ability, every skill is.
+     *
+     * <p>A beginner who tried a few problems far above their level has a mastery of zero there,
+     * which ranked it as their weakest skill and put a 1300 warm-up in front of somebody rated
+     * 900. And a 2200 player whose mastery in a 1500-capped skill reads low was sent 1200s.
+     */
+    static boolean inReach(RoadmapTaxonomy.NodeDef def, Skill s) {
+        Double ability = s.ability();
+        if (ability == null) return true;
+        return def.minRating() <= gridCeiling(ability) && def.maxRating() >= ability - OUTGROWN_MARGIN;
+    }
+
+    /** {@code rating} rounded up to the problem grid. */
+    static int gridCeiling(double rating) {
+        return (int) Math.ceil(rating / RATING_STEP) * RATING_STEP;
+    }
+
     /** Skills with enough evidence to be ranked on their own numbers. */
     private static List<Skill> measured(Inputs in) {
         Map<String, Skill> byKey = new HashMap<>();
         for (Skill s : in.skills()) {
             if (s == null || s.nodeKey() == null) continue;
             if (s.attempted() < MIN_ATTEMPTS_FOR_SHEET) continue;
-            if (RoadmapTaxonomy.byId(s.nodeKey()) == null) continue;
+            RoadmapTaxonomy.NodeDef def = RoadmapTaxonomy.byId(s.nodeKey());
+            if (def == null || !inReach(def, s)) continue;
             byKey.putIfAbsent(s.nodeKey(), s);
         }
         return byKey.values().stream().sorted(Comparator.comparing(Skill::nodeKey)).toList();
@@ -439,19 +503,33 @@ public final class PracticePlanner {
      * One problem per rung of the ladder: the unsolved, unused problem nearest each rung's
      * rating. Ties go to the better fit, then the newer contest, then the index, so the choice
      * never depends on the order the candidates arrived in.
+     *
+     * <p>Nothing above the top rung (or the aim, if that is higher) is taken. A skill whose band
+     * starts above the lower rungs used to have its ladder pushed up past its own aim - a 2350
+     * aim ended in a 2500 "stretch" - so a short band now gives fewer problems instead of harder
+     * ones. Only when everything up to the aim is solved are the next problems above it offered.
+     * Each problem is named for the rung it is nearest, and they come back easiest first.
      */
     private static List<Plan.Problem> climb(List<ProblemRecommender.Recommended> candidates, int target,
                                             Ladder ladder, Set<String> used, Set<String> solved) {
-        List<ProblemRecommender.Recommended> pool = new ArrayList<>();
+        int top = Math.max(target, target + ladder.offsets()[ladder.offsets().length - 1]) + RATING_STEP / 2;
+        List<ProblemRecommender.Recommended> open = new ArrayList<>();
         Set<String> seen = new LinkedHashSet<>();
         for (ProblemRecommender.Recommended c : candidates) {
             if (c.contestId() == null || c.index() == null || c.rating() == null) continue;
             String key = key(c);
             if (c.solved() || solved.contains(key) || used.contains(key) || !seen.add(key)) continue;
-            pool.add(c);
+            open.add(c);
+        }
+        List<ProblemRecommender.Recommended> pool = new ArrayList<>();
+        for (ProblemRecommender.Recommended c : open) if (c.rating() <= top) pool.add(c);
+        // Everything up to the aim already solved: that has earned the next ones up.
+        if (pool.isEmpty()) {
+            open.sort(Comparator.comparingInt(ProblemRecommender.Recommended::rating).thenComparing(PracticePlanner::key));
+            pool.addAll(open.subList(0, Math.min(open.size(), ladder.offsets().length)));
         }
 
-        List<Plan.Problem> out = new ArrayList<>();
+        List<ProblemRecommender.Recommended> picked = new ArrayList<>();
         for (int i = 0; i < ladder.offsets().length && !pool.isEmpty(); i++) {
             int rung = target + ladder.offsets()[i];
             ProblemRecommender.Recommended best = pool.stream()
@@ -461,9 +539,23 @@ public final class PracticePlanner {
                     .thenComparing(ProblemRecommender.Recommended::index))
                 .orElseThrow();
             pool.remove(best);
-            out.add(problem(best, ladder.roles()[i], false));
+            picked.add(best);
         }
+        picked.sort(Comparator.comparingInt(ProblemRecommender.Recommended::rating)
+            .thenComparing(PracticePlanner::key));
+
+        List<Plan.Problem> out = new ArrayList<>(picked.size());
+        for (ProblemRecommender.Recommended c : picked) out.add(problem(c, nearestRole(ladder, target, c.rating()), false));
         return out;
+    }
+
+    /** The role of the rung nearest {@code rating}; between two, the lower. */
+    private static String nearestRole(Ladder ladder, int target, int rating) {
+        int best = 0;
+        for (int i = 1; i < ladder.offsets().length; i++) {
+            if (Math.abs(target + ladder.offsets()[i] - rating) < Math.abs(target + ladder.offsets()[best] - rating)) best = i;
+        }
+        return ladder.roles()[best];
     }
 
     /** The rating to aim at in a skill: just above the user's skill rating, or by mastery. */
@@ -471,6 +563,10 @@ public final class PracticePlanner {
         double aim = s.skillRating() != null
             ? s.skillRating() + ScoringFormulas.FIT_SKILL_STRETCH
             : ScoringFormulas.targetRating(s.mastery(), def.minRating(), def.maxRating());
+        // With only a hardest solve to go on, aim no further past it than a skill rating would.
+        if (s.skillRating() == null && s.maxSolvedRating() != null) {
+            aim = Math.min(aim, s.maxSolvedRating() + ScoringFormulas.FIT_SKILL_STRETCH);
+        }
         int lo = Math.min(def.minRating(), def.maxRating());
         int hi = Math.max(def.minRating(), def.maxRating());
         return (int) Math.round(Math.max(lo, Math.min(hi, aim)));
