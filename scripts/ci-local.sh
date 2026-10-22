@@ -10,7 +10,7 @@
 #   ./scripts/ci-local.sh --ref HEAD      # exactly what a commit contains (what the pre-push hook uses)
 #   ./scripts/ci-local.sh --no-docker     # skip the image builds (the slow part) and the nginx container test
 #   ./scripts/ci-local.sh --no-cache      # build images without the layer cache, as a cold CI runner does
-#   ./scripts/ci-local.sh --audit         # also run the dependency audits (needs NVD_API_KEY for the backend)
+#   ./scripts/ci-local.sh --audit         # also the dependency audits: backend scan (needs trivy), frontend; NVD_API_KEY adds OWASP
 #
 # Stages mirror the CI jobs: workflow lint, backend tests + coverage gate, frontend type check,
 # tests + build, desktop tests, the helper and edge nginx script tests, backend and frontend Docker
@@ -126,6 +126,11 @@ audit_backend() (
     -DfailBuildOnCVSS=9 -DnvdApiKey="$NVD_API_KEY"
 )
 
+scan_backend() (
+  # The blocking scan CI runs: the jar the backend stage built, with Trivy.
+  cd "$SRC" && jars=(backend/target/cpintel-backend-*.jar) && scripts/scan-backend-deps.sh "${jars[0]}"
+)
+
 audit_frontend() (
   # Reuses the node_modules frontend_build installed, if it ran.
   cd "$SRC/frontend" && npm audit --audit-level=high
@@ -160,10 +165,15 @@ else
 fi
 
 if [[ $AUDIT -eq 1 ]]; then
-  if [[ -n "${NVD_API_KEY:-}" ]]; then
-    stage "audit: backend" audit_backend
+  if command -v trivy >/dev/null; then
+    stage "audit: backend dependency scan (trivy)" scan_backend
   else
-    skip "audit: backend" "NVD_API_KEY not set"
+    skip "audit: backend dependency scan (trivy)" "trivy not installed"
+  fi
+  if [[ -n "${NVD_API_KEY:-}" ]]; then
+    stage "audit: backend (OWASP, second opinion)" audit_backend
+  else
+    skip "audit: backend (OWASP, second opinion)" "NVD_API_KEY not set"
   fi
   stage "audit: frontend" audit_frontend
 fi

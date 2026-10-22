@@ -1,0 +1,30 @@
+# Vetted exceptions to scripts/scan-backend-deps.sh. Each names the exact package version it
+# covers, says why it does not apply, and expires: after expired_at the finding fails the scan
+# again. Remove an entry as soon as the dependency moves past it.
+
+vulnerabilities:
+  # Spring Framework 6.2.19 is the newest 6.2 release on Maven Central; these are fixed only in
+  # 7.0.9, which needs Spring Boot 4 (a planned upgrade of its own, not a patch).
+  - id: CVE-2026-47884
+    purls:
+      - pkg:maven/org.springframework/spring-webmvc@6.2.19
+    statement: >-
+      RCE/SSRF through XsltView. The backend renders no views at all (REST controllers only;
+      no XsltView, ModelAndView or template engine), so the vulnerable path is never reached.
+    expired_at: 2026-12-31
+  - id: CVE-2026-47890
+    purls:
+      - pkg:maven/org.springframework/spring-webmvc@6.2.19
+      - pkg:maven/org.springframework/spring-webflux@6.2.19
+    statement: >-
+      Stream corruption in Server-Sent Events with view fragments. The backend sends no
+      Server-Sent Events (no SseEmitter, ServerSentEvent or text/event-stream) and renders no views.
+    expired_at: 2026-12-31
+  - id: CVE-2026-47892
+    purls:
+      - pkg:maven/org.springframework/spring-webflux@6.2.19
+    statement: >-
+      Header predicate bypass in WebFlux functional endpoints. WebFlux is on the classpath only
+      for WebClient (outbound calls to Codeforces and DOMjudge); the backend serves no
+      RouterFunction endpoints.
+    expired_at: 2026-12-31

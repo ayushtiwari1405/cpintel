@@ -975,10 +975,32 @@ failure the CI runner would hit. It takes about two minutes warm.
 ./scripts/ci-local.sh               # working tree, uncommitted changes included
 ./scripts/ci-local.sh --no-docker   # skip the image builds and the nginx container test
 ./scripts/ci-local.sh --no-cache    # cold Docker build, as a fresh runner does
-./scripts/ci-local.sh --audit       # add the dependency audits (backend needs NVD_API_KEY)
+./scripts/ci-local.sh --audit       # add the dependency audits (backend scan needs trivy installed)
 
 git config core.hooksPath .githooks # run it on every git push (skip once: git push --no-verify)
 ```
+
+### Dependency vulnerabilities
+
+The backend's libraries are scanned in CI by the `Backend dependency scan` job, which the image
+builds wait for: `scripts/scan-backend-deps.sh` runs Trivy (a pinned, checksum-verified release)
+over the built jar, so it checks exactly the versions that ship. It needs no key or account, and
+caches its vulnerability databases between runs.
+
+- **Fails on** HIGH or CRITICAL findings that have a fixed version. Findings with no fix yet, and
+  every lower severity, are printed and uploaded as `backend-vulnerabilities` but do not fail.
+- **Proves it looked:** it first scans `.github/security/canary` (log4j-core 2.14.1) and fails
+  unless it finds CVE-2021-44228, so a database that did not load cannot pass silently.
+- **When the databases cannot be downloaded,** a cached copy up to 7 days old is used, with a
+  warning in the run; with none, the job fails.
+- **Accepting a finding:** add it to `backend/.trivyignore.yaml` with a `statement` saying why and
+  an `expired_at` date, after which it fails again. It currently holds three Spring Framework
+  6.2.19 CVEs fixed only in 7.0.9 (Spring Boot 4), none of which reaches code the backend uses;
+  they expire on 2026-12-31.
+
+The OWASP dependency-check step in the `Dependency vulnerabilities` job is a second opinion; it
+runs only with an `NVD_API_KEY` repository secret (free from NVD) and does not block. The
+frontend is checked by `npm audit` in the same job.
 
 ## Desktop app
 
