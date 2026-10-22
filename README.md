@@ -350,6 +350,12 @@ backend recreates them under its names on the next start - after a backup:
 and likewise `userId_1_platform_1_externalId_1` on `code_submissions`, and
 `userId_1_cfSubmissionId_1` and `userId_1_verdict_1` on `cf_submissions`.
 
+Until the backend's Mongo template was fixed to honour `auto-index-creation`, it created none of
+its own indexes, so the unique ones on personal files (`idx_files_user_name`) and contest file
+rules (`idx_file_rule_contest`) were not enforced. A database that collected duplicates meanwhile
+- two uploads of one name racing each other - stops the backend at start with a duplicate key
+error naming the index: remove the extra rows (keep the newest), as root, then start it again.
+
 ### Monitoring (optional)
 
 ```bash

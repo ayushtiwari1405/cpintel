@@ -6,6 +6,7 @@ import com.cpintel.entity.mongo.CodeSubmission;
 import com.cpintel.entity.mongo.ContestFileRule;
 import com.cpintel.entity.mongo.ContestSnapshotDoc;
 import com.cpintel.entity.mongo.PersonalFile;
+import com.cpintel.config.MongoConfig;
 import com.cpintel.events.EventExportStore;
 import com.cpintel.repository.mongo.CfStatementRepository;
 import com.cpintel.repository.mongo.CfSubmissionRepository;
@@ -58,7 +59,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * Docker outside CI, like {@link PostgresSchemaTest}.
  */
 @DataMongoTest
-@Import(EventExportStore.class)
+// MongoConfig is the application's own client and template, which @DataMongoTest would otherwise
+// replace with Spring Boot's: the indexes below must come from the wiring that ships.
+@Import({ EventExportStore.class, MongoConfig.class })
 @DisabledIf("noDockerOutsideCi")
 class MongoLeastPrivilegeTest {
 
