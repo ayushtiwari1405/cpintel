@@ -115,7 +115,10 @@ script_tests() (
     && if [[ $DOCKER -eq 0 ]]; then CPINTEL_NO_DOCKER=1 python3 -I scripts/test_mongo_app_user.py;
        else python3 -I scripts/test_mongo_app_user.py; fi \
     && python3 -I scripts/loadtest/test_stack.py \
-    && python3 -I scripts/integration/test_isolation.py
+    && python3 -I scripts/integration/test_isolation.py \
+    && if [[ $DOCKER -eq 0 ]]; then CPINTEL_NO_DOCKER=1 python3 -I scripts/test_mongo_index_upgrade.py \
+         && CPINTEL_NO_DOCKER=1 python3 -I scripts/integration/test_cleanup_lock.py;
+       else python3 -I scripts/test_mongo_index_upgrade.py && python3 -I scripts/integration/test_cleanup_lock.py; fi
 )
 
 docker_backend()  { docker build "${NO_CACHE[@]}" -t "$TAG-backend"  "$SRC/backend"; }
