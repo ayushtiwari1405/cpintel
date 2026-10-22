@@ -3,6 +3,7 @@ import { afterEach } from 'vitest'
 import { cleanup } from '@testing-library/react'
 import { useAuthStore } from '@/store/authStore'
 import { apiClient } from '@/api/client'
+import { useToast } from '@/components/common/Toaster'
 
 const defaultAdapter = apiClient.defaults.adapter
 
@@ -32,5 +33,8 @@ afterEach(() => {
   // inherits another's session.
   useAuthStore.getState().logout()
   localStorage.clear()
+  // So are the toasts, and one stays up for four seconds: without this a test sees the last
+  // test's "Revision marked complete" or error alert as if it were its own.
+  useToast.setState({ toasts: [] })
   apiClient.defaults.adapter = defaultAdapter
 })
