@@ -23,13 +23,14 @@ import jakarta.mail.internet.MimeMessage;
  * action happened.
  *
  * <p><b>It works with no mail server at all.</b> A deployment that has not set {@code
- * SMTP_HOST} gets a service that logs the subject, the recipient and any link the message
- * carried, at INFO. That is not a stub left in by accident: this product is run in exam labs
- * on closed networks where there is no SMTP to point at, and the alternative — refusing to
- * start, or refusing password resets — would make those deployments worse rather than safer.
- * An operator reading the log can still complete a reset by hand. Under the {@code prod}
- * profile {@link com.cpintel.config.SecretsCheck} warns about it, so it is a visible choice
- * rather than a silent one.
+ * SMTP_HOST} logs that a message was not delivered, with the subject and the recipient masked,
+ * and nothing else: the body of a reset message is a live link that signs in as its recipient,
+ * and logs are read by more people than should hold one. A closed exam-lab network, where there
+ * is no SMTP to point at, can set {@code CPINTEL_MAIL_LOG_UNDELIVERED=true} to have the whole
+ * message - recipient and link included - written at INFO, so an operator can finish a reset by
+ * hand. Refusing to start, or refusing password resets, would make those deployments worse
+ * rather than safer. {@link com.cpintel.config.SecretsCheck} warns at startup either way, so it
+ * is a visible choice rather than a silent one.
  *
  * <p><b>Nothing here sends an examination password.</b> Those are carried into the room on
  * paper; see {@link com.cpintel.events.ExamPasswordService} for why.
@@ -46,12 +47,25 @@ public class MailService {
     @Value("${spring.mail.host:}")
     private String host;
 
+    /**
+     * Whether a message with no SMTP to go out through is written to the log whole. Read as a
+     * string so that anything but "true" - a typo included - leaves it off instead of failing
+     * startup or, worse, turning it on.
+     */
+    @Value("${cpintel.mail.log-undelivered:false}")
+    private String logUndelivered;
+
     /** Where a link in an email should point — the address people actually open CPIntel at. */
     @Value("${cpintel.mail.base-url:http://localhost:5173}")
     private String baseUrl;
 
     public MailService(ObjectProvider<JavaMailSender> senders) {
         this.senders = senders;
+    }
+
+    /** True when an operator has asked for undelivered messages, links included, in the log. */
+    public boolean logsUndelivered() {
+        return logUndelivered != null && "true".equalsIgnoreCase(logUndelivered.trim());
     }
 
     /** True when an operator has pointed this deployment at an SMTP server. */
@@ -74,10 +88,16 @@ public class MailService {
     public void send(String to, String subject, String plainText, String html) {
         JavaMailSender sender = senders.getIfAvailable();
         if (sender == null || !StringUtils.hasText(host)) {
-            // Deliberately the whole body, not a summary. On a closed network this log line is
-            // how an operator finishes what the user started.
-            log.info("No SMTP configured — not sending mail to {}.\nSubject: {}\n{}",
-                to, subject, plainText);
+            if (logsUndelivered()) {
+                // Deliberately the whole body, not a summary: an operator who turned this on
+                // finishes what the user started from this line.
+                log.info("No SMTP configured — not sending mail to {}.\nSubject: {}\n{}",
+                    to, subject, plainText);
+            } else {
+                log.info("No SMTP configured — \"{}\" to {} was not sent. Set "
+                    + "CPINTEL_MAIL_LOG_UNDELIVERED=true to write such messages to this log.",
+                    subject, masked(to));
+            }
             return;
         }
 

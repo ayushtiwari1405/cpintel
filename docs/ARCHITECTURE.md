@@ -672,12 +672,15 @@ whether an account exists.
 
 ### Mail is optional, and that is a supported arrangement
 
-With no `SMTP_HOST`, `MailService` logs the subject, the recipient and the body — link included
-— at INFO, and returns. That is not a stub left in by accident: this product runs in exam labs
-on closed networks where there is no SMTP to point at, and the alternative, refusing to start
-or refusing resets, makes those deployments worse rather than safer. An operator reading the
-log can still complete a reset by hand, an administrator can set a password directly from the
-console, and `SecretsCheck` warns at startup so the choice is visible rather than silent.
+With no `SMTP_HOST`, `MailService` logs that a message was not sent, with the subject and the
+recipient masked, and returns. A reset link signs in as its recipient, so it is not written to
+a log unless an operator asks: with `CPINTEL_MAIL_LOG_UNDELIVERED=true` (exactly `true`;
+anything else is off) the subject, the recipient and the body — link included — go to the log
+at INFO. That is not a stub left in by accident: this product runs in exam labs on closed
+networks where there is no SMTP to point at, and the alternative, refusing to start or refusing
+resets, makes those deployments worse rather than safer. An operator reading the log can then
+complete a reset by hand, an administrator can set a password directly from the console, and
+`SecretsCheck` warns at startup so the choice is visible rather than silent.
 
 Every send is asynchronous, bounded, and swallows its own failures. Each one is a notification
 about something that has already happened — a password *was* changed, an account *was* created

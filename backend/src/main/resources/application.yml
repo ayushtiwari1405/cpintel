@@ -64,9 +64,9 @@ spring:
           min-idle: 2
 
   # Mail. Only password resets and account notices use it, and a deployment that sets no host
-  # still works — MailService logs what it would have sent, which on a closed exam-lab network
-  # is how an operator finishes what the user started. Examination passwords are never sent
-  # here; see ExamPasswordService.
+  # still works — with cpintel.mail.log-undelivered on, MailService logs what it would have
+  # sent, which on a closed exam-lab network is how an operator finishes what the user started.
+  # Examination passwords are never sent here; see ExamPasswordService.
   mail:
     host: ${SMTP_HOST:}
     port: ${SMTP_PORT:587}
@@ -164,6 +164,9 @@ cpintel:
     # open CPIntel at, which is not the backend's own.
     from: ${CPINTEL_MAIL_FROM:CPIntel <no-reply@cpintel.local>}
     base-url: ${CPINTEL_PUBLIC_URL:http://localhost:5173}
+    # With no SMTP_HOST: whether a message that could not be sent is written to the log whole,
+    # reset link included, so an operator can pass it on. Off unless exactly "true".
+    log-undelivered: ${CPINTEL_MAIL_LOG_UNDELIVERED:false}
   desktop:
     # Desktop builds older than this are told to update rather than left to fail on a route
     # they no longer recognise. 0.0.0 accepts everything.

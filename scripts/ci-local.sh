@@ -113,7 +113,8 @@ script_tests() (
     && if [[ $DOCKER -eq 0 ]]; then CPINTEL_NO_DOCKER=1 python3 -I scripts/test_nginx_edge.py;
        else python3 -I scripts/test_nginx_edge.py; fi \
     && if [[ $DOCKER -eq 0 ]]; then CPINTEL_NO_DOCKER=1 python3 -I scripts/test_mongo_app_user.py;
-       else python3 -I scripts/test_mongo_app_user.py; fi
+       else python3 -I scripts/test_mongo_app_user.py; fi \
+    && python3 -I scripts/loadtest/test_stack.py
 )
 
 docker_backend()  { docker build "${NO_CACHE[@]}" -t "$TAG-backend"  "$SRC/backend"; }

@@ -9,8 +9,9 @@ vulnerabilities:
     purls:
       - pkg:maven/org.springframework/spring-webmvc@6.2.19
     statement: >-
-      RCE/SSRF through XsltView. The backend renders no views at all (REST controllers only;
-      no XsltView, ModelAndView or template engine), so the vulnerable path is never reached.
+      RCE/SSRF through XsltView. The backend registers no XSLT view or XsltViewResolver, and
+      neither do Spring Boot's defaults or its libraries (springdoc, actuator); its controllers
+      are REST controllers with no template engine, so the vulnerable path is never reached.
     expired_at: 2026-12-31
   - id: CVE-2026-47890
     purls:

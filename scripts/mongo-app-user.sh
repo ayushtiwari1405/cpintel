@@ -18,8 +18,12 @@
 #     --reset-password.
 #   - It writes nothing to the data. The check signs in as the account, reads its own
 #     connectionStatus (user and roles), and confirms it is refused admin.system.users.
-#   - No password reaches a command line or the output: the root password is the container's own
-#     (as in backup.sh), and the account's is passed on stdin.
+#   - The account's password reaches no command line and no output: it travels in this
+#     script's environment and on stdin. The root password is the container's own and is used
+#     as backup.sh uses it, as a mongosh argument inside the container.
+#   - It waits (up to a minute) for MongoDB to answer on the container's own network address.
+#     On a first start the image runs mongod once on localhost only, to run mongo-init.js, then
+#     again for real; an answer on localhost alone can come from that first run.
 #
 # Settings (environment, or .env beside docker-compose.yml):
 #   MONGO_APP_USER            the account's name               default cpintel_app
@@ -60,22 +64,26 @@ CONTAINER="${CPINTEL_MONGO_CONTAINER:-cpintel-mongo}"
 # Runs the JavaScript on stdin as the container's root account. Fed to mongosh as a file rather
 # than on stdin, where mongosh echoes its prompt into the output; the file is private to the
 # container's root and removed at once, and keeps the account's password off any command line.
+# With "network", through the container's own address rather than localhost.
 root_mongosh() {
-  docker exec -i "$CONTAINER" sh -c 'umask 077; f=$(mktemp); cat > "$f"; \
-    mongosh --quiet -u "$MONGO_INITDB_ROOT_USERNAME" -p "$MONGO_INITDB_ROOT_PASSWORD" \
+  docker exec -i -e VIA="${1:-}" "$CONTAINER" sh -c 'umask 077; f=$(mktemp); cat > "$f"; \
+    host=localhost; [ "$VIA" = network ] && host="$(hostname)"; \
+    mongosh --quiet --host "$host" -u "$MONGO_INITDB_ROOT_USERNAME" -p "$MONGO_INITDB_ROOT_PASSWORD" \
       --authenticationDatabase admin --file "$f"; status=$?; rm -f "$f"; exit $status'
 }
-# A container started a moment ago may not be answering yet.
-for _ in $(seq 1 30); do
-  echo 'print(db.adminCommand({ ping: 1 }).ok)' | root_mongosh 2>/dev/null | grep -qx 1 && break
+# A container started a moment ago may not be answering yet, or may still be in its first,
+# localhost-only start (see the top).
+ready() { echo 'print(db.adminCommand({ ping: 1 }).ok)' | root_mongosh network 2>/dev/null | grep -qx 1; }
+for _ in $(seq 1 60); do
+  ready && break
   sleep 1
 done
-echo 'print(db.adminCommand({ ping: 1 }).ok)' | root_mongosh 2>/dev/null | grep -qx 1 \
-  || { echo "!!! Could not sign in to $CONTAINER as its root account."; exit 1; }
+ready || { echo "!!! Could not sign in to $CONTAINER as its root account."; exit 1; }
 
 # -- create or check ------------------------------------------------------------------------------
-# The script travels on stdin; JSON.stringify quotes the values for JavaScript.
-js_string() { python3 -I -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$1"; }
+# The script travels on stdin; json.dumps quotes the values for JavaScript. The value goes to
+# Python through its environment, not its arguments, which any local user can read.
+js_string() { JS_VALUE="$1" python3 -I -c 'import json,os; print(json.dumps(os.environ["JS_VALUE"]))'; }
 result="$(root_mongosh <<JS
 const user = $(js_string "$APP_USER");
 const password = $(js_string "$MONGO_APP_PASSWORD");

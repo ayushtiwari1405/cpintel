@@ -7,7 +7,7 @@ and if not, which part gives way first?
 
 | File | What it does |
 |---|---|
-| `stack.sh up \| status \| down` | The production compose stack under its own project (`cpintel-loadtest`) with the target server's memory limits, plus DOMjudge 9.0.0 (database, domserver, three judgehosts). Random keys in `out/loadtest.env`. |
+| `stack.sh up \| status \| down` | The production compose stack under its own project (`cpintel-loadtest`) with the target server's memory limits, plus DOMjudge 9.0.0 (database, domserver, three judgehosts). Random keys in `out/loadtest.env`; an older file gains the ones it lacks, existing ones are never changed. MongoDB starts first and gets the backend's own account (`scripts/mongo-app-user.sh`) before anything that signs in with it. Tests: `test_stack.py`. |
 | `docker-compose.loadtest.yml` | The pinning, the limits, `cpintel-lt-*` names, the judge; nothing published but nginx and the judge on 127.0.0.1:12345. |
 | `setup_judge.py` | Loads the judge: contest `loadtest`, the six problems, 200 teams and their accounts; checks a team can sign in, C++ is on and the judgehosts registered. Writes `out/judge.json`. |
 | `provision_exam.py` | Classroom on the judge, team, roster with DOMjudge logins, the examination, its problems, room password and candidate passwords, into `out/exam.json`. Re-runnable: it reuses what exists. |

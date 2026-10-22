@@ -116,10 +116,11 @@ public class SecretsCheck {
      * They make a feature quietly absent, which is worse than an error if nobody says so:
      *
      * <ul>
-     *   <li><b>No SMTP.</b> Password resets stop reaching anybody. The mail is logged instead,
-     *       so an operator can still finish what a user started, and on a closed exam-lab
-     *       network with no mail server to point at that is the correct arrangement rather
-     *       than a mistake. Refusing to start would make those deployments worse.</li>
+     *   <li><b>No SMTP.</b> Password resets stop reaching anybody. With
+     *       CPINTEL_MAIL_LOG_UNDELIVERED=true the mail is logged instead, so an operator can
+     *       still finish what a user started; on a closed exam-lab network with no mail server
+     *       to point at that is the correct arrangement rather than a mistake. Refusing to
+     *       start would make those deployments worse.</li>
      *   <li><b>No examination password key.</b> Examination sign-in passwords cannot be
      *       issued, and an examination can only be sat in examination mode, which is entered
      *       with one — so no examination can be sat at all. That is only discovered at the
@@ -131,8 +132,12 @@ public class SecretsCheck {
         List<String> warnings = new ArrayList<>();
 
         if (isBlank("spring.mail.host")) {
-            warnings.add("SMTP_HOST is not set, so no email is sent — password reset links are "
-                + "written to this log instead. Set it to deliver them.");
+            warnings.add("true".equalsIgnoreCase(env.getProperty("cpintel.mail.log-undelivered", "false").trim())
+                ? "SMTP_HOST is not set, so no email is sent; CPINTEL_MAIL_LOG_UNDELIVERED is on, so "
+                    + "password reset links are written to this log instead. Set SMTP_HOST to deliver them."
+                : "SMTP_HOST is not set, so no email is sent and password resets reach nobody. Set it "
+                    + "to deliver them, or set CPINTEL_MAIL_LOG_UNDELIVERED=true to have reset links "
+                    + "written to this log for an operator to pass on.");
         }
         // In prod a missing key is a refusal instead (checkSealingKey).
         if (!isProd && isBlank("cpintel.exams.password-key")) {
@@ -242,8 +247,8 @@ public class SecretsCheck {
             return;
         }
         if (uri.contains(":@")) {
-            problems.add("MONGO_PASSWORD is empty — the Mongo URI has no password between the "
-                + "user and the host");
+            problems.add("MONGO_APP_PASSWORD is empty — the Mongo URI has no password between "
+                + "the user and the host");
         }
         for (String placeholder : KNOWN_PLACEHOLDERS) {
             if (uri.contains(placeholder)) {

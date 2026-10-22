@@ -181,8 +181,8 @@ services:
       CPINTEL_EXAM_PASSWORD_KEY: ${CPINTEL_EXAM_PASSWORD_KEY:-}
       CPINTEL_EXAM_PASSWORD_LENGTH: ${CPINTEL_EXAM_PASSWORD_LENGTH:-8}
       # Password resets and account notices. Nothing about an examination is ever mailed.
-      # Blank SMTP_HOST is supported: the message is logged instead, which is what a closed
-      # exam-lab network with no mail server needs.
+      # Blank SMTP_HOST is supported. A closed exam-lab network with no mail server sets
+      # CPINTEL_MAIL_LOG_UNDELIVERED=true to have the message, reset link included, logged instead.
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USER: ${SMTP_USER:-}
@@ -190,6 +190,7 @@ services:
       SMTP_AUTH: ${SMTP_AUTH:-true}
       SMTP_STARTTLS: ${SMTP_STARTTLS:-true}
       CPINTEL_MAIL_FROM: ${CPINTEL_MAIL_FROM:-CPIntel <no-reply@cpintel.local>}
+      CPINTEL_MAIL_LOG_UNDELIVERED: ${CPINTEL_MAIL_LOG_UNDELIVERED:-false}
       # Where a link in an email points. Must be the address people open CPIntel at, not the
       # backend's own — behind nginx these are not the same thing.
       CPINTEL_PUBLIC_URL: ${CPINTEL_PUBLIC_URL:-http://localhost}

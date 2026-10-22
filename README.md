@@ -445,10 +445,11 @@ Everything below has a working default; only the secrets in `.env` genuinely nee
 | `CPINTEL_GAUNTLET_RETAKE_DAYS` | `7` | How soon the placement gauntlet may be retaken |
 | `CPINTEL_LAB_NETWORKS` | *(unset)* | Comma-separated CIDRs of labs behind one NAT address; inside them the per-address sign-in limit is raised to a shared one (the per-account limit is unchanged) |
 | `CPINTEL_CORS_ALLOWED_ORIGINS` | *(empty)* | **Leave empty when the frontend and API share nginx**, as every CPIntel deployment does: the page, the desktop app and the API are then one origin, on any host or port, and CORS never applies. Only for a page served from a different origin that must call the API: exact `scheme://host[:port]` origins, comma-separated. Wildcards, `null`, paths (even a trailing `/`) and non-http(s) schemes make the `prod` profile refuse to start; elsewhere they are dropped with a warning. Nothing is ever allowed by default |
-| `SMTP_HOST` | *(unset)* | Mail server for password resets. **Blank is supported** — the message is logged instead, which is what a closed exam-lab network needs |
+| `SMTP_HOST` | *(unset)* | Mail server for password resets. **Blank is supported**: resets then reach nobody unless `CPINTEL_MAIL_LOG_UNDELIVERED` is on |
 | `SMTP_PORT` / `_USER` / `_PASSWORD` | `587` / — / — | The rest of the SMTP connection |
 | `SMTP_AUTH` / `SMTP_STARTTLS` | `true` / `true` | Turn off for a relay that wants neither |
 | `CPINTEL_MAIL_FROM` | `CPIntel <no-reply@cpintel.local>` | The From address on anything sent |
+| `CPINTEL_MAIL_LOG_UNDELIVERED` | `false` | With no `SMTP_HOST`: `true` writes each undelivered message whole, reset link included, to the backend log for an operator to pass on. Anything else, a typo included, is off |
 | `CPINTEL_ALERT_EMAIL` | `CPINTEL_ADMIN_EMAIL` | Where the monitoring profile's Alertmanager emails firing alerts, through the SMTP server above |
 | `CPINTEL_PUBLIC_URL` | `http://localhost:5173` | Where a link in an email points — the address people open CPIntel at, not the backend's own |
 | `CPINTEL_RESET_TOKEN_MINUTES` | `60` | How long a password reset link is worth |
@@ -557,11 +558,15 @@ to test a list of addresses against the roster of whoever is being examined.
 a username and may never use the address on their account, so insisting on the address would
 ask half of them for something they do not have to hand.
 
-**With no SMTP configured, resets still work — for an operator.** The message, including the
-link, is written to the backend log at INFO, so a deployment on a closed network can complete a
-reset by hand. The backend warns about it at startup rather than refusing, because an exam lab
-with no mail server is a real arrangement rather than a mistake. An administrator can also set
-a password directly from `/admin/users`, which shows it once and never emails it.
+**With no SMTP configured, resets can still work — for an operator who opts in.** By default
+the backend logs only that a message was not sent, with the subject and the recipient masked
+(`a***@example.edu`): a reset link signs in as its recipient for an hour, and logs are read by
+more people than should hold one. Set `CPINTEL_MAIL_LOG_UNDELIVERED=true` and the whole message,
+recipient and link included, is written to the backend log at INFO, so a deployment on a closed
+network can complete a reset by hand; anyone who can read that log can then use those links.
+The backend warns at startup either way rather than refusing, because an exam lab with no mail
+server is a real arrangement rather than a mistake. An administrator can also set a password
+directly from `/admin/users`, which shows it once and never emails it.
 
 #### The first super admin
 

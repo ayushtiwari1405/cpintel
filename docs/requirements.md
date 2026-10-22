@@ -132,7 +132,7 @@ off the server: losing the keys makes stored exam passwords and DOMjudge logins 
 | `CPINTEL_ACME_EMAIL` | Depends | Only with Let's Encrypt; receives certificate expiry notices |
 | `CPINTEL_LAB_NETWORKS` | Depends | Only if the lab is behind NAT; the address range from 1.2 |
 | `CPINTEL_BACKUP_REMOTE` | Optional | Where nightly backups are copied (1.7) |
-| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `CPINTEL_MAIL_FROM` | Optional | Mail server for password-reset emails. Without it, reset links are written to the server log for an admin to pass on. Exam passwords are never emailed either way |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `CPINTEL_MAIL_FROM` | Optional | Mail server for password-reset emails. Without it, resets reach nobody unless `CPINTEL_MAIL_LOG_UNDELIVERED=true`, which writes reset links to the server log for an admin to pass on. Exam passwords are never emailed either way |
 | `GRAFANA_PASSWORD` | Optional | Only with the `monitoring` profile |
 
 - [ ] **`.env` written on the server** — *Required.*

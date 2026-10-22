@@ -194,6 +194,47 @@ class PersonalDataLoggingTest {
         assertNoPersonalData("SECRET123", "reset-password?token");
     }
 
+    private static final String RESET_URL = "https://cpintel.example.edu/reset-password?token=SECRET123";
+
+    /** No SMTP host; {@code logUndelivered} as an operator might have set it, or null for unset. */
+    @SuppressWarnings("unchecked")
+    private MailService unconfiguredMail(String logUndelivered) {
+        ObjectProvider<JavaMailSender> provider = mock(ObjectProvider.class);
+        MailService mail = new MailService(provider);
+        ReflectionTestUtils.setField(mail, "host", "");
+        ReflectionTestUtils.setField(mail, "logUndelivered", logUndelivered);
+        return mail;
+    }
+
+    @Test
+    @DisplayName("with no SMTP, an undelivered reset is logged without the address, the link or the body")
+    void undeliveredByDefault() {
+        for (String setting : java.util.Arrays.asList(null, "false", "", "yes", "ture", "1")) {
+            logs.list.clear();
+            unconfiguredMail(setting).send(ADDRESS, "Reset your password", "Open " + RESET_URL, null);
+
+            assertEquals(1, messages().size(), "setting " + setting);
+            assertTrue(messages().get(0).startsWith("No SMTP configured — \"Reset your password\" to a***@example.edu was not sent"),
+                "setting " + setting);
+            assertNoPersonalData("SECRET123", "reset-password", "token=", "Open ");
+        }
+    }
+
+    @Test
+    @DisplayName("with no SMTP and CPINTEL_MAIL_LOG_UNDELIVERED=true, the whole message is logged for an operator")
+    void undeliveredWhenAskedFor() {
+        for (String setting : List.of("true", " TRUE ")) {
+            logs.list.clear();
+            unconfiguredMail(setting).send(ADDRESS, "Reset your password", "Open " + RESET_URL, null);
+
+            String line = messages().get(0);
+            // Checked piece by piece rather than printed: a failure names what is missing only.
+            assertTrue(line.contains(ADDRESS), "the recipient is missing");
+            assertTrue(line.contains(RESET_URL), "the reset link is missing");
+            assertTrue(line.contains("Subject: Reset your password"), "the subject is missing");
+        }
+    }
+
     @Test
     @DisplayName("masking keeps the first letter and the domain, and copes with odd input")
     void masking() {

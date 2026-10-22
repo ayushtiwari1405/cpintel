@@ -147,7 +147,7 @@ class SecretsCheckTest {
             e.setProperty("spring.data.mongodb.uri", "mongodb://cpintel_mongo:@mongodb:27017/cpintel");
 
             var ex = assertThrows(IllegalStateException.class, () -> verify(e));
-            assertTrue(ex.getMessage().contains("MONGO_PASSWORD"), ex.getMessage());
+            assertTrue(ex.getMessage().contains("MONGO_APP_PASSWORD"), ex.getMessage());
         }
 
         @Test
