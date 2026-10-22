@@ -61,7 +61,7 @@ export function Tabs<K extends string>({ id, tabs, value, onChange, label, class
             onClick={() => onChange(t.key)}
             onKeyDown={e => onKeyDown(e, i)}
             className={clsx(
-              '-mb-px flex flex-shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2',
+              '-mb-px flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2',
               'text-sm font-medium transition-colors',
               selected
                 ? 'border-accent-400 text-gray-50'
@@ -70,7 +70,7 @@ export function Tabs<K extends string>({ id, tabs, value, onChange, label, class
           >
             {t.label}
             {t.badge != null && (
-              <span className={clsx('rounded px-1.5 font-mono text-[11px] tabular-nums',
+              <span className={clsx('rounded-sm px-1.5 font-mono text-[11px] tabular-nums',
                 selected ? 'bg-accent-400/15 text-accent-300' : 'bg-gray-800 text-gray-400')}>
                 {t.badge}
               </span>

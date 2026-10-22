@@ -102,7 +102,7 @@ export default function AdminOverviewPage() {
         ) : (
           <div className="flex items-center gap-2 rounded-xl border border-amber-900 bg-amber-950/30
             p-4 text-sm text-amber-300">
-            <AlertTriangle size={16} className="flex-shrink-0" />
+            <AlertTriangle size={16} className="shrink-0" />
             File store unreachable; figures unavailable. Contest access still follows the{' '}
             {policy.contestFilesEnabledByDefault ? 'enabled' : 'disabled'} default.
           </div>
@@ -134,7 +134,7 @@ export default function AdminOverviewPage() {
                 <span className="min-w-0 flex-1 truncate text-gray-300">
                   {entry.username ?? entry.entityId ?? 'unknown'}
                 </span>
-                <span className="flex-shrink-0 text-xs text-gray-600">
+                <span className="shrink-0 text-xs text-gray-600">
                   <Ago at={entry.createdAt} />
                 </span>
               </li>

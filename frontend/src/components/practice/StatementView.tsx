@@ -92,7 +92,7 @@ function MissingStatement({ issue }: { issue?: string | null }) {
   return (
     <div className="flex gap-2 p-3 rounded-lg bg-amber-950/40 border border-amber-900
                     text-amber-300 text-xs mb-4">
-      <AlertTriangle size={14} className="flex-shrink-0 mt-0.5" />
+      <AlertTriangle size={14} className="shrink-0 mt-0.5" />
       {body}
     </div>
   )
@@ -222,7 +222,7 @@ export function StatementView({
         {/* Header */}
         <header className="pb-5 mb-5 border-b border-gray-800">
           <div className="flex items-start gap-3">
-            <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl
                             border border-accent-900 bg-accent-600/10 font-mono text-base
                             font-semibold text-accent-300">
               {problem.index}
@@ -242,7 +242,7 @@ export function StatementView({
               // is something a contestant is entitled to do, so the lock lets this one through.
               onClick={() => openExternal(problem.url, true)}
               data-lockdown-allow
-              className="flex-shrink-0 flex items-center gap-1.5 rounded-lg border border-gray-800
+              className="shrink-0 flex items-center gap-1.5 rounded-lg border border-gray-800
                          px-2.5 py-1.5 text-xs text-gray-500 transition-colors
                          hover:border-accent-900 hover:text-accent-400"
             >
@@ -383,7 +383,7 @@ function PdfStatement({ url, text, error }: {
     return (
       <div className="flex gap-2 p-3 rounded-lg bg-amber-950/40 border border-amber-900
                       text-amber-300 text-xs mb-4">
-        <AlertTriangle size={14} className="flex-shrink-0 mt-0.5" />
+        <AlertTriangle size={14} className="shrink-0 mt-0.5" />
         <p>{error} You can still write and submit from here.</p>
       </div>
     )
@@ -403,7 +403,7 @@ function PdfStatement({ url, text, error }: {
 
   if (text !== null) {
     return (
-      <pre className="max-h-[70vh] overflow-auto whitespace-pre-wrap break-words
+      <pre className="max-h-[70vh] overflow-auto whitespace-pre-wrap wrap-break-word
                       rounded-xl border border-gray-800 bg-gray-900/40 p-4 text-[13px]
                       leading-relaxed text-gray-200">
         {text}

@@ -45,7 +45,7 @@ export default function AnalyticsPage() {
       <Tabs id="analytics" label="Analytics views" value={tab} onChange={setTab}
         tabs={TABS.map(t => ({ key: t, label: t }))} className="mb-6" />
 
-      <div {...panelProps('analytics', tab)} className="focus:outline-none">
+      <div {...panelProps('analytics', tab)} className="focus:outline-hidden">
         {tab === 'Overview' && <OverviewTab />}
         {tab === 'Topics'   && <TopicsTab />}
         {tab === 'Contests' && <ContestsTab />}
@@ -330,7 +330,7 @@ function ContestsTab() {
           <ul className="space-y-2">
             {contests.insights.map((insight: string, i: number) => (
               <li key={i} className="flex items-start gap-2 text-sm text-gray-300">
-                <span className="mt-0.5 flex-shrink-0 text-accent-400" aria-hidden="true">→</span>
+                <span className="mt-0.5 shrink-0 text-accent-400" aria-hidden="true">→</span>
                 {insight}
               </li>
             ))}

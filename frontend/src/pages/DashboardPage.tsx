@@ -166,7 +166,7 @@ export default function DashboardPage() {
                     <li key={t.topic}>
                       <div className="mb-1 flex items-baseline justify-between gap-2 text-xs">
                         <span className="truncate text-gray-300">{t.topic}</span>
-                        <span className="flex-shrink-0 font-mono tabular-nums text-gray-400">
+                        <span className="shrink-0 font-mono tabular-nums text-gray-400">
                           {rated
                             ? <>{value}<span className="text-gray-600"> ± {Math.round(t.skillSd ?? 0)}</span></>
                             : `${value} solved`}
@@ -209,7 +209,7 @@ export default function DashboardPage() {
                         {' · '}<span className="font-mono tabular-nums text-gray-400">{c.problemsSolved}/{c.totalProblems}</span> solved
                       </p>
                     </div>
-                    <span className={clsx('flex-shrink-0 rounded-md px-2 py-0.5 font-mono text-sm font-medium tabular-nums',
+                    <span className={clsx('shrink-0 rounded-md px-2 py-0.5 font-mono text-sm font-medium tabular-nums',
                       delta > 0 ? 'bg-green-950/50 text-green-300' : delta < 0 ? 'bg-red-950/50 text-red-300' : 'bg-gray-850 text-gray-400')}
                       title="Rating change">
                       {delta > 0 ? '+' : delta < 0 ? '−' : '±'}{Math.abs(delta)}

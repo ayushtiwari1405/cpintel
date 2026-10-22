@@ -26,7 +26,7 @@ export function ThemeToggle({ showLabel, className }: Props) {
         className,
       )}
     >
-      <Icon size={18} className="flex-shrink-0" />
+      <Icon size={18} className="shrink-0" />
       {showLabel && <span className="text-xs">{next === 'light' ? 'Light mode' : 'Dark mode'}</span>}
     </button>
   )

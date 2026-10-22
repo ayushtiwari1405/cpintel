@@ -347,8 +347,8 @@ function QuestionBlock({ number, question, picked, checked, onPick }: {
               )}
             >
               <span className="flex-1">{text}</span>
-              {right && <CheckCircle2 size={14} className="flex-shrink-0" />}
-              {wrong && <XCircle size={14} className="flex-shrink-0" />}
+              {right && <CheckCircle2 size={14} className="shrink-0" />}
+              {wrong && <XCircle size={14} className="shrink-0" />}
             </button>
           )
         })}
@@ -357,8 +357,8 @@ function QuestionBlock({ number, question, picked, checked, onPick }: {
         <p className={clsx('flex items-start gap-1.5 text-xs leading-relaxed',
           checked.correct ? 'text-green-300/80' : 'text-gray-400')}>
           {checked.correct
-            ? <Check size={12} className="mt-0.5 flex-shrink-0" />
-            : <X size={12} className="mt-0.5 flex-shrink-0" />}
+            ? <Check size={12} className="mt-0.5 shrink-0" />
+            : <X size={12} className="mt-0.5 shrink-0" />}
           {checked.explanation}
         </p>
       )}

@@ -35,7 +35,7 @@ const EXTENSIONS_PAGE: Record<Browser, string> = {
 function Step({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
   return (
     <li className="flex gap-3">
-      <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full
+      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full
         bg-accent-600/20 text-xs font-medium text-accent-300">{n}</span>
       <div className="min-w-0 space-y-2">
         <p className="text-sm font-medium text-gray-200">{title}</p>
@@ -88,7 +88,7 @@ export default function ExtensionPage() {
       <div className="max-w-2xl space-y-6">
         {header}
         <div className="card flex items-start gap-2 text-sm text-gray-300">
-          <CheckCircle2 size={16} className="mt-0.5 flex-shrink-0 text-green-400" />
+          <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-green-400" />
           <p>
             The desktop app needs no extension. Connect your account from{' '}
             <Link to="/platforms" className="text-accent-300 underline">Platforms</Link>.
@@ -116,7 +116,7 @@ export default function ExtensionPage() {
           </Link>
           {installed !== EXTENSION_VERSION && (
             <p className="flex items-start gap-1.5 text-xs text-amber-300/90">
-              <AlertTriangle size={12} className="mt-0.5 flex-shrink-0" />
+              <AlertTriangle size={12} className="mt-0.5 shrink-0" />
               <span>
                 This site now hands out version {EXTENSION_VERSION}.{' '}
                 <button onClick={downloadExtension} className="underline hover:text-amber-200">
@@ -139,7 +139,7 @@ export default function ExtensionPage() {
       {browser === 'other' && (
         <div className="flex items-start gap-2 rounded-lg border border-amber-900/60
           bg-amber-950/20 px-4 py-3 text-xs leading-relaxed text-amber-200">
-          <AlertTriangle size={14} className="mt-0.5 flex-shrink-0" />
+          <AlertTriangle size={14} className="mt-0.5 shrink-0" />
           <p>
             The extension works in Chrome, Edge and Brave. Open CPIntel in one of those to use
             Codeforces here — or use the CPIntel desktop app, which needs no extension.
@@ -185,7 +185,7 @@ export default function ExtensionPage() {
               Paste this into the address bar of a new tab:
             </p>
             <div className="flex items-center gap-2">
-              <code className="select-all rounded bg-black/40 px-2 py-1 font-mono text-gray-200">
+              <code className="select-all rounded-sm bg-black/40 px-2 py-1 font-mono text-gray-200">
                 {extensionsPage}
               </code>
               <button onClick={copy}
@@ -217,7 +217,7 @@ export default function ExtensionPage() {
       </div>
 
       <div className="flex items-start gap-2 text-xs leading-relaxed text-gray-500">
-        <ShieldCheck size={14} className="mt-0.5 flex-shrink-0 text-gray-600" />
+        <ShieldCheck size={14} className="mt-0.5 shrink-0 text-gray-600" />
         <p>
           It only fetches codeforces.com pages when this site asks, stores nothing, and never
           sends your Codeforces password or cookies to CPIntel. A developer-mode reminder from

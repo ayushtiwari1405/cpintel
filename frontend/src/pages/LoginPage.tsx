@@ -122,7 +122,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={login.isPending}
-              className="btn-primary w-full mt-2"
+              className="btn-primary w-full"
             >
               {login.isPending ? 'Signing in…' : 'Sign in'}
             </button>

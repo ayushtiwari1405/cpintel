@@ -49,7 +49,7 @@ export function Dialog({ open, onClose, title, description, children, footer,
         'm-0 max-h-none max-w-none border-gray-800 bg-gray-900 p-0 text-gray-100',
         'backdrop:bg-black/60 backdrop:backdrop-blur-[1px]',
         variant === 'side'
-          ? 'ml-auto h-full w-full border-l sm:w-[30rem]'
+          ? 'ml-auto h-full w-full border-l sm:w-120'
           : clsx('mx-auto my-[8vh] max-h-[84vh] w-[calc(100%-2rem)] rounded-xl border',
               size === 'sm' ? 'sm:max-w-sm' : size === 'lg' ? 'sm:max-w-2xl' : 'sm:max-w-lg'),
       )}
@@ -65,7 +65,7 @@ export function Dialog({ open, onClose, title, description, children, footer,
             </div>
             {dismissible && (
               <button type="button" onClick={onClose} aria-label="Close"
-                className="-mr-1.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg
+                className="-mr-1.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg
                            text-gray-500 transition-colors hover:bg-gray-850 hover:text-gray-200">
                 <X size={17} />
               </button>

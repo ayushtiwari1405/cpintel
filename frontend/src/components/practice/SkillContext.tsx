@@ -48,14 +48,14 @@ export function SkillBanner({ node }: { node: RoadmapNodeData }) {
   return (
     <div className="flex items-center gap-3 px-3 py-2 rounded-lg
                     border border-accent-900/60 bg-accent-950/25">
-      <Target size={14} className="text-accent-400 flex-shrink-0" />
+      <Target size={14} className="text-accent-400 shrink-0" />
       <div className="min-w-0 flex-1">
         <p className="text-xs text-gray-300 truncate">
           Practising <span className="font-medium text-accent-200">{node.topic}</span>
           <span className="text-gray-600"> · rated {node.minDifficulty}–{node.maxDifficulty}</span>
         </p>
       </div>
-      <div className="flex items-center gap-2 flex-shrink-0">
+      <div className="flex items-center gap-2 shrink-0">
         <div className="w-16 h-1 rounded-full bg-gray-800 overflow-hidden">
           <div
             className="h-full bg-accent-500"
@@ -107,8 +107,8 @@ export function SkillProblemList({ node, selected, onSelect }: Props) {
               )}
             >
               {p.solved
-                ? <Check size={11} className="flex-shrink-0 text-green-500" />
-                : <span className="w-[11px] flex-shrink-0" />}
+                ? <Check size={11} className="shrink-0 text-green-500" />
+                : <span className="w-[11px] shrink-0" />}
               <span className={clsx(
                 'flex-1 min-w-0 truncate text-xs',
                 p.solved ? 'text-gray-500' : active ? 'text-accent-200' : 'text-gray-300'
@@ -116,7 +116,7 @@ export function SkillProblemList({ node, selected, onSelect }: Props) {
                 {p.name}
               </span>
               <span className={clsx(
-                'text-[11px] tabular-nums flex-shrink-0', ratingColor(p.rating)
+                'text-[11px] tabular-nums shrink-0', ratingColor(p.rating)
               )}>
                 {p.rating ?? '—'}
               </span>
@@ -165,9 +165,9 @@ export function NextUpList({ nodes, isLoading, onSelect }: {
                        px-2.5 py-2 hover:border-accent-700 transition-colors"
           >
             <div className="flex items-center gap-2">
-              <Target size={11} className="text-accent-400 flex-shrink-0" />
+              <Target size={11} className="text-accent-400 shrink-0" />
               <span className="text-xs text-gray-300 truncate min-w-0 flex-1">{node.topic}</span>
-              <span className="text-[10px] text-gray-600 tabular-nums flex-shrink-0">
+              <span className="text-[10px] text-gray-600 tabular-nums shrink-0">
                 {headline(node)}
               </span>
             </div>
@@ -176,7 +176,7 @@ export function NextUpList({ nodes, isLoading, onSelect }: {
                 {next.name}
               </span>
               <span className={clsx(
-                'text-[11px] tabular-nums flex-shrink-0', ratingColor(next.rating)
+                'text-[11px] tabular-nums shrink-0', ratingColor(next.rating)
               )}>
                 {next.rating ?? '—'}
               </span>

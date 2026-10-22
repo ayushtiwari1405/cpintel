@@ -28,7 +28,7 @@ export function PageHeader({ title, description, eyebrow, actions, meta, classNa
             {eyebrow}
           </p>
         )}
-        <h1 className="break-words text-xl font-semibold tracking-tight text-gray-50 sm:text-2xl">
+        <h1 className="wrap-break-word text-xl font-semibold tracking-tight text-gray-50 sm:text-2xl">
           {title}
         </h1>
         {description && (
@@ -37,7 +37,7 @@ export function PageHeader({ title, description, eyebrow, actions, meta, classNa
         {meta && <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">{meta}</div>}
       </div>
       {actions && (
-        <div className="flex flex-shrink-0 flex-wrap items-center gap-2">{actions}</div>
+        <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>
       )}
     </header>
   )
@@ -56,10 +56,10 @@ export function Section({ title, icon, actions, children, className, bodyClassNa
     <section className={clsx('rounded-xl border border-gray-800 bg-gray-900', className)}>
       <div className="flex items-center justify-between gap-3 border-b border-gray-800 px-4 py-3">
         <h2 className="flex min-w-0 items-center gap-2 text-sm font-medium text-gray-200">
-          {icon && <span className="flex-shrink-0 text-gray-500" aria-hidden="true">{icon}</span>}
+          {icon && <span className="shrink-0 text-gray-500" aria-hidden="true">{icon}</span>}
           <span className="truncate">{title}</span>
         </h2>
-        {actions && <div className="flex flex-shrink-0 items-center gap-2 text-xs">{actions}</div>}
+        {actions && <div className="flex shrink-0 items-center gap-2 text-xs">{actions}</div>}
       </div>
       <div className={clsx('p-4', bodyClassName)}>{children}</div>
     </section>

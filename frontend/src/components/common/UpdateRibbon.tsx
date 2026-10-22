@@ -91,7 +91,7 @@ export function UpdateRibbon() {
       'shadow-lg',
       required ? 'bg-red-700 text-white' : 'bg-accent-600 text-white',
     )}>
-      {required && <AlertTriangle size={14} className="flex-shrink-0" />}
+      {required && <AlertTriangle size={14} className="shrink-0" />}
       <span className="min-w-0 truncate">
         {error
           ? error
@@ -101,13 +101,13 @@ export function UpdateRibbon() {
       </span>
 
       {busy ? (
-        <span className="flex flex-shrink-0 items-center gap-1.5 font-medium">
+        <span className="flex shrink-0 items-center gap-1.5 font-medium">
           <Loader2 size={13} className="animate-spin" /> {busy}
         </span>
       ) : (
         <button
           onClick={update}
-          className="flex flex-shrink-0 items-center gap-1.5 rounded-md bg-white/15 px-2.5 py-1
+          className="flex shrink-0 items-center gap-1.5 rounded-md bg-white/15 px-2.5 py-1
                      font-medium hover:bg-white/25"
         >
           <Download size={12} /> {error ? 'Try again' : 'Update'}
@@ -116,7 +116,7 @@ export function UpdateRibbon() {
 
       {!required && !busy && (
         <button onClick={dismiss} aria-label="Hide until the next version" title="Hide until the next version"
-          className="flex-shrink-0 rounded p-1 hover:bg-white/15">
+          className="shrink-0 rounded-sm p-1 hover:bg-white/15">
           <X size={13} />
         </button>
       )}

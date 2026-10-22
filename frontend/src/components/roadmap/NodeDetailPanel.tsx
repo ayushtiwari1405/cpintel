@@ -60,7 +60,7 @@ export function NodeDetailPanel({ node, allNodes }: Props) {
               {node.track} · rated {node.minDifficulty}–{node.maxDifficulty}
             </p>
           </div>
-          <span className={clsx('badge flex items-center gap-1 flex-shrink-0', status.cls)}>
+          <span className={clsx('badge flex items-center gap-1 shrink-0', status.cls)}>
             <StatusIcon size={11} /> {status.label}
           </span>
         </div>
@@ -112,7 +112,7 @@ export function NodeDetailPanel({ node, allNodes }: Props) {
             {blocking.map(p => (
               <li key={p.nodeKey} className="text-xs text-gray-400 flex justify-between gap-2">
                 <span className="truncate">{p.topic}</span>
-                <span className="text-gray-600 tabular-nums flex-shrink-0">
+                <span className="text-gray-600 tabular-nums shrink-0">
                   {isRated(p)
                     ? `${Math.round(p.skillRating ?? 0)} / ${bandPoint(p, UNLOCK_SHARE)}`
                     : `${p.problemsSolved} / ${COVERAGE_UNLOCK_SOLVED} solved`}
@@ -153,7 +153,7 @@ export function NodeDetailPanel({ node, allNodes }: Props) {
                 >
                   <Code2
                     size={12}
-                    className="flex-shrink-0 text-gray-600 group-hover:text-accent-400"
+                    className="shrink-0 text-gray-600 group-hover:text-accent-400"
                   />
                   <span className={clsx(
                     'truncate',
@@ -164,7 +164,7 @@ export function NodeDetailPanel({ node, allNodes }: Props) {
                 </Link>
 
                 <span className={clsx(
-                  'text-xs tabular-nums flex-shrink-0', ratingColor(p.rating)
+                  'text-xs tabular-nums shrink-0', ratingColor(p.rating)
                 )}>
                   {p.rating ?? '—'}
                 </span>
@@ -175,7 +175,7 @@ export function NodeDetailPanel({ node, allNodes }: Props) {
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={e => e.stopPropagation()}
-                    className="flex-shrink-0 text-gray-600 hover:text-gray-300"
+                    className="shrink-0 text-gray-600 hover:text-gray-300"
                     title="Open on codeforces.com instead"
                   >
                     <ExternalLink size={11} />

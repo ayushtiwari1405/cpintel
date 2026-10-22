@@ -43,7 +43,7 @@ export function LockdownBadge({ state }: { state: LockdownState | null }) {
     <span
       title={detail}
       className={clsx(
-        'flex flex-shrink-0 items-center gap-1.5 rounded-md border px-2 py-1 text-[11px]',
+        'flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-1 text-[11px]',
         state.away
           ? 'border-red-800 bg-red-950/60 text-red-300'
           : state.longAbsences > 0

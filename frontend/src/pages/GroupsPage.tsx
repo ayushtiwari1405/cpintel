@@ -152,7 +152,7 @@ function ContestSection({ title, contests }: {
               {contest.lockdownRequired && (
                 <p className="mt-2 flex items-start gap-1.5 rounded-md border border-amber-900/50
                               bg-amber-950/20 px-2.5 py-1.5 text-xs text-amber-200/90">
-                  <Lock size={12} className="mt-0.5 flex-shrink-0 text-amber-400" aria-hidden="true" />
+                  <Lock size={12} className="mt-0.5 shrink-0 text-amber-400" aria-hidden="true" />
                   <span>
                     <span className="font-medium text-amber-200">Monitored.</span> Leaving the
                     contest window gives a warning after ten seconds; longer absences are reported

@@ -91,7 +91,7 @@ export function SubmissionsList({ submissions, isLoading, onOpen, opening }: Pro
                   pending ? 'text-gray-400' : accepted ? 'text-green-400' : 'text-red-400'
                 )}>
                   <span className="flex items-center gap-1.5">
-                    {pending && <Loader2 size={10} className="animate-spin flex-shrink-0" />}
+                    {pending && <Loader2 size={10} className="animate-spin shrink-0" />}
                     {SHORT_VERDICTS[s.verdict] ?? s.verdict.replace(/_/g, ' ')}
                     {!accepted && !pending && s.passedTestCount != null && (
                       <span className="font-normal text-gray-600">

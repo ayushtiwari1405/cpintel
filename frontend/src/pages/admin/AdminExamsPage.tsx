@@ -98,7 +98,7 @@ export default function AdminExamsPage() {
         description={exam ? 'Monitored; every session is recorded' : 'Unmonitored rounds on a judge'}
         actions={<ClassroomSelect value={filter} onChange={setFilter} allowAll
           className="rounded-md border border-gray-800 bg-gray-900 px-2 py-1 text-xs
-                     text-gray-300 outline-none" />}
+                     text-gray-300 outline-hidden" />}
       >
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -177,10 +177,10 @@ export default function AdminExamsPage() {
         description="Created as a draft; hidden until published"
       >
         <div className="flex flex-wrap items-end gap-2 p-4">
-          <Field label="Classroom" className="min-w-[12rem]">
+          <Field label="Classroom" className="min-w-48">
             <ClassroomSelect value={classroomId} onChange={id => { setClassroomId(id); setTeamId('') }} />
           </Field>
-          <Field label="Name" className="min-w-[14rem] flex-1">
+          <Field label="Name" className="min-w-56 flex-1">
             <input
               value={name}
               onChange={e => setName(e.target.value)}
@@ -189,7 +189,7 @@ export default function AdminExamsPage() {
               className={INPUT}
             />
           </Field>
-          <Field label="DOMjudge contest id" className="min-w-[10rem]">
+          <Field label="DOMjudge contest id" className="min-w-40">
             <input
               value={externalId}
               onChange={e => setExternalId(e.target.value)}
@@ -198,15 +198,15 @@ export default function AdminExamsPage() {
               className={INPUT}
             />
           </Field>
-          <Field label="Starts" className="min-w-[12rem]">
+          <Field label="Starts" className="min-w-48">
             <input type="datetime-local" value={startsAt}
               onChange={e => setStartsAt(e.target.value)} className={INPUT} />
           </Field>
-          <Field label="Ends" className="min-w-[12rem]">
+          <Field label="Ends" className="min-w-48">
             <input type="datetime-local" value={endsAt}
               onChange={e => setEndsAt(e.target.value)} className={INPUT} />
           </Field>
-          <Field label="Owning team (optional)" className="min-w-[12rem]">
+          <Field label="Owning team (optional)" className="min-w-48">
             <select
               value={teamId}
               onChange={e => setTeamId(e.target.value === '' ? '' : Number(e.target.value))}
@@ -218,7 +218,7 @@ export default function AdminExamsPage() {
               ))}
             </select>
           </Field>
-          <Field label="Private files" className="min-w-[12rem]">
+          <Field label="Private files" className="min-w-48">
             <select
               value={files === '' ? (exam ? 'deny' : 'allow') : files}
               onChange={e => setFiles(e.target.value as 'allow' | 'deny')}
@@ -243,7 +243,7 @@ export default function AdminExamsPage() {
       </Panel>
 
       <p className="flex items-start gap-2 px-1 text-xs leading-relaxed text-gray-600">
-        <ShieldCheck size={13} className="mt-0.5 flex-shrink-0" />
+        <ShieldCheck size={13} className="mt-0.5 shrink-0" />
         DOMjudge supplies the clock and verdicts. CPIntel controls who may sit and records each
         session; its log is a set of observations, not findings.
       </p>
@@ -252,7 +252,7 @@ export default function AdminExamsPage() {
 }
 
 const INPUT = 'rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 text-sm text-gray-200 '
-  + 'placeholder-gray-400 outline-none focus:border-accent-600'
+  + 'placeholder-gray-400 outline-hidden focus:border-accent-600'
 
 function Field({ label, className, children }: {
   label: string

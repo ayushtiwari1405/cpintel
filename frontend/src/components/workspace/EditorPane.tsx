@@ -301,7 +301,7 @@ export function EditorPane({
     <>
       {fileError && (
         <p className="flex items-start gap-1.5 text-[11px] text-red-300">
-          <XCircle size={12} className="flex-shrink-0 mt-0.5" /> {fileError}
+          <XCircle size={12} className="shrink-0 mt-0.5" /> {fileError}
         </p>
       )}
       {problemSelected && runnerOn && !runtime && selectedLabel && availableRuntimes.length > 0 && (
@@ -322,7 +322,7 @@ export function EditorPane({
       )}
       {runnerStatus?.enabled && !runnerStatus.local && runnerStatus.isolated === false && (
         <p className="flex items-start gap-1.5 text-[11px] text-amber-300/70">
-          <ShieldAlert size={12} className="flex-shrink-0 mt-0.5" />
+          <ShieldAlert size={12} className="shrink-0 mt-0.5" />
           Code runs with time and memory limits but without filesystem isolation — bubblewrap
           was not available.
         </p>
@@ -339,13 +339,13 @@ export function EditorPane({
         right={
           <>
             {fileName && (
-              <span className="hidden lg:flex items-center gap-1 max-w-[10rem] px-2 py-1
+              <span className="hidden lg:flex items-center gap-1 max-w-40 px-2 py-1
                 rounded-md bg-gray-800 text-[11px] text-gray-400">
                 <span className="truncate font-mono">{fileName}</span>
                 <button
                   onClick={() => { setFileName(null); setPickedLanguage(null); onSourceChange('') }}
                   title="Clear the editor"
-                  className="text-gray-600 hover:text-gray-200 flex-shrink-0"
+                  className="text-gray-600 hover:text-gray-200 shrink-0"
                 >
                   <X size={11} />
                 </button>
@@ -356,8 +356,8 @@ export function EditorPane({
               value={languageId}
               onChange={e => onLanguageChange(e.target.value)}
               title="The language you write in: Run compiles it as this, and Submit sends it as this"
-              className="min-w-0 max-w-[13rem] flex-shrink rounded-md border border-gray-800
-                         bg-gray-900 px-2 py-1 text-xs text-gray-300 outline-none
+              className="min-w-0 max-w-52 shrink rounded-md border border-gray-800
+                         bg-gray-900 px-2 py-1 text-xs text-gray-300 outline-hidden
                          focus:border-accent-600"
             >
               {shownLanguages.length === 0 && <option value="">No languages loaded</option>}

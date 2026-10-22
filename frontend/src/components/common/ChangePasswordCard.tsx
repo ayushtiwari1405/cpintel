@@ -41,7 +41,7 @@ export function ChangePasswordCard({ neverChanged }: { neverChanged?: boolean })
   return (
     <div className="card space-y-4">
       <div className="flex items-start gap-2.5">
-        <KeyRound size={16} className="mt-0.5 flex-shrink-0 text-gray-500" />
+        <KeyRound size={16} className="mt-0.5 shrink-0 text-gray-500" />
         <div>
           <p className="text-gray-300 font-medium">Password</p>
           <p className="mt-0.5 text-xs leading-relaxed text-gray-500">
@@ -55,7 +55,7 @@ export function ChangePasswordCard({ neverChanged }: { neverChanged?: boolean })
         // administrator typed, and they still know it.
         <p className="flex items-start gap-2 rounded-lg border border-amber-900 bg-amber-950/40
           px-3 py-2 text-xs leading-relaxed text-amber-200">
-          <ShieldCheck size={13} className="mt-0.5 flex-shrink-0" />
+          <ShieldCheck size={13} className="mt-0.5 shrink-0" />
           <span>
             You are still using the password an admin set. Change it so only you know it.
           </span>

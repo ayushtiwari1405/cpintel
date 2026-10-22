@@ -140,11 +140,11 @@ export default function AdminGroupDetailPage() {
         <Link to="/admin/teams" className="text-xs text-gray-500 hover:text-gray-300">
           ← All teams
         </Link>
-        <h1 className="break-words text-xl font-semibold tracking-tight text-gray-50 sm:text-2xl">{data.group.name}</h1>
+        <h1 className="wrap-break-word text-xl font-semibold tracking-tight text-gray-50 sm:text-2xl">{data.group.name}</h1>
         {!data.group.active && <Pill tone="gray">retired</Pill>}
       </div>
       {data.group.description && (
-        <p className="-mt-2 text-sm text-gray-500">{data.group.description}</p>
+        <p className="text-sm text-gray-500">{data.group.description}</p>
       )}
 
       <Panel
@@ -192,7 +192,7 @@ export default function AdminGroupDetailPage() {
                       placeholder={member.codeforcesHandle ? 'override' : 'team name'}
                       className="w-40 rounded-md border border-gray-800 bg-gray-900 px-2 py-1
                                  font-mono text-xs text-gray-300 placeholder-gray-400
-                                 outline-none focus:border-accent-600"
+                                 outline-hidden focus:border-accent-600"
                     />
                   </td>
                   <td className="px-4 py-2.5">
@@ -219,7 +219,7 @@ export default function AdminGroupDetailPage() {
                         })
                       }}
                       className="w-36 rounded-md border border-gray-800 bg-gray-900 px-2 py-1
-                                 text-xs text-gray-400 outline-none focus:border-accent-600"
+                                 text-xs text-gray-400 outline-hidden focus:border-accent-600"
                     >
                       <option value="">Move…</option>
                       {allTeams?.filter(team => team.groupId !== id
@@ -252,7 +252,7 @@ export default function AdminGroupDetailPage() {
             onChange={e => setSearch(e.target.value)}
             placeholder="Search by username or email"
             className="w-full max-w-md rounded-lg border border-gray-800 bg-gray-900 px-3 py-2
-                       text-sm text-gray-200 placeholder-gray-400 outline-none
+                       text-sm text-gray-200 placeholder-gray-400 outline-hidden
                        focus:border-accent-600"
           />
           {search.trim() !== '' && (
@@ -368,7 +368,7 @@ export default function AdminGroupDetailPage() {
               value={contest.platform}
               onChange={e => setContest(c => ({ ...c, platform: e.target.value }))}
               className="rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 text-sm
-                         text-gray-300 outline-none focus:border-accent-600"
+                         text-gray-300 outline-hidden focus:border-accent-600"
             >
               <option value="CODEFORCES">Codeforces</option>
               <option value="DOMJUDGE">DOMjudge</option>
@@ -381,18 +381,18 @@ export default function AdminGroupDetailPage() {
               onChange={e => setContest(c => ({ ...c, externalId: e.target.value }))}
               placeholder={contest.platform === 'CODEFORCES' ? '2258' : 'nwerc2024'}
               className="w-32 rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 font-mono
-                         text-sm text-gray-200 placeholder-gray-400 outline-none
+                         text-sm text-gray-200 placeholder-gray-400 outline-hidden
                          focus:border-accent-600"
             />
           </label>
-          <label className="flex min-w-[12rem] flex-1 flex-col gap-1">
+          <label className="flex min-w-48 flex-1 flex-col gap-1">
             <span className="text-xs text-gray-500">Name</span>
             <input
               value={contest.name}
               onChange={e => setContest(c => ({ ...c, name: e.target.value }))}
               placeholder="Week 3 practice round"
               className="rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 text-sm
-                         text-gray-200 placeholder-gray-400 outline-none focus:border-accent-600"
+                         text-gray-200 placeholder-gray-400 outline-hidden focus:border-accent-600"
             />
           </label>
           <label className="flex flex-col gap-1">
@@ -402,7 +402,7 @@ export default function AdminGroupDetailPage() {
               value={contest.startsAt}
               onChange={e => setContest(c => ({ ...c, startsAt: e.target.value }))}
               className="rounded-lg border border-gray-800 bg-gray-900 px-2 py-2 text-xs
-                         text-gray-300 outline-none focus:border-accent-600"
+                         text-gray-300 outline-hidden focus:border-accent-600"
             />
           </label>
           <label className="flex flex-col gap-1">
@@ -412,7 +412,7 @@ export default function AdminGroupDetailPage() {
               value={contest.endsAt}
               onChange={e => setContest(c => ({ ...c, endsAt: e.target.value }))}
               className="rounded-lg border border-gray-800 bg-gray-900 px-2 py-2 text-xs
-                         text-gray-300 outline-none focus:border-accent-600"
+                         text-gray-300 outline-hidden focus:border-accent-600"
             />
           </label>
           <label className="flex items-center gap-1.5 pb-2 text-xs text-gray-400">
@@ -439,7 +439,7 @@ export default function AdminGroupDetailPage() {
         </div>
 
         <p className="flex items-start gap-2 border-t border-gray-800 px-4 py-3 text-xs text-gray-500">
-          <AlertTriangle size={13} className="mt-0.5 flex-shrink-0" />
+          <AlertTriangle size={13} className="mt-0.5 shrink-0" />
           Match the start and end to the judge's window: they set when the lock applies and
           which reports are accepted.
         </p>

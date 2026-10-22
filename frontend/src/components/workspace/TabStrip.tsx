@@ -29,13 +29,13 @@ interface Props {
 export function TabStrip({ tabs, active, onChange, right, className }: Props) {
   return (
     <div className={clsx(
-      'flex items-center gap-1 h-10 px-2 flex-shrink-0',
+      'flex items-center gap-1 h-10 px-2 shrink-0',
       'border-b border-gray-800 bg-gray-900',
       className
     )}>
       {/* The tabs never shrink; the controls do. Squeezing a tab label instead would clip
           the one word on the strip that says what you are looking at. */}
-      <div className="flex items-center gap-0.5 flex-shrink-0">
+      <div className="flex items-center gap-0.5 shrink-0">
         {tabs.map(tab => {
           const Icon = tab.icon
           const isActive = tab.id === active
@@ -52,7 +52,7 @@ export function TabStrip({ tabs, active, onChange, right, className }: Props) {
                   : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800/50'
               )}
             >
-              {Icon && <Icon size={13} className="flex-shrink-0" />}
+              {Icon && <Icon size={13} className="shrink-0" />}
               {tab.label}
               {tab.badge != null && tab.badge}
             </button>

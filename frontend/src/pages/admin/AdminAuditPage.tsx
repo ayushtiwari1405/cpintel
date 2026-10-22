@@ -56,7 +56,7 @@ export default function AdminAuditPage() {
           value={action}
           onChange={e => { setAction(e.target.value); setPage(0) }}
           className="rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 text-sm text-gray-300
-                     outline-none focus:border-accent-600"
+                     outline-hidden focus:border-accent-600"
         >
           <option value="">Every action</option>
           {(data?.actions ?? []).map(a => (
@@ -68,7 +68,7 @@ export default function AdminAuditPage() {
           value={range}
           onChange={e => setRange(Number(e.target.value))}
           className="rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 text-sm text-gray-300
-                     outline-none focus:border-accent-600"
+                     outline-hidden focus:border-accent-600"
         >
           {RANGES.map(r => <option key={r.hours} value={r.hours}>{r.label}</option>)}
         </select>
@@ -81,7 +81,7 @@ export default function AdminAuditPage() {
             placeholder="User ID"
             inputMode="numeric"
             className="w-32 rounded-lg border border-gray-800 bg-gray-900 py-2 pl-9 pr-3 text-sm
-                       text-gray-200 placeholder-gray-400 outline-none focus:border-accent-600"
+                       text-gray-200 placeholder-gray-400 outline-hidden focus:border-accent-600"
           />
         </div>
 

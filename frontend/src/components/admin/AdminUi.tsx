@@ -51,7 +51,7 @@ export function Pill({ children, tone = 'gray' }: {
   return (
     // The same shape as the .badge-* classes elsewhere: one vocabulary for status app-wide.
     <span className={clsx(
-      'inline-flex items-center gap-1 whitespace-nowrap rounded border px-1.5 py-0.5 text-[11px]',
+      'inline-flex items-center gap-1 whitespace-nowrap rounded-sm border px-1.5 py-0.5 text-[11px]',
       'font-medium leading-4',
       {
         'border-gray-700 bg-gray-850 text-gray-300':              tone === 'gray',

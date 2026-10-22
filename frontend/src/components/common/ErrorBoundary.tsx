@@ -47,10 +47,10 @@ export class ErrorBoundary extends Component<Props, State> {
     const scope = this.props.scope ?? 'this page'
 
     return (
-      <div className="flex min-h-[16rem] flex-1 items-center justify-center p-6">
+      <div className="flex min-h-64 flex-1 items-center justify-center p-6">
         <div className="w-full max-w-md rounded-xl border border-gray-800 bg-gray-900 p-6">
           <div className="mb-3 flex items-center gap-2.5">
-            <AlertTriangle size={18} className="flex-shrink-0 text-amber-400" />
+            <AlertTriangle size={18} className="shrink-0 text-amber-400" />
             <h2 className="text-sm font-medium text-gray-200">
               Something went wrong in {scope}
             </h2>

@@ -42,7 +42,7 @@ export default function AdminGroupsPage() {
         title="All teams"
         actions={<ClassroomSelect value={filter} onChange={setFilter} allowAll
           className="rounded-md border border-gray-800 bg-gray-900 px-2 py-1 text-xs
-                     text-gray-300 outline-none" />}
+                     text-gray-300 outline-hidden" />}
       >
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -104,11 +104,11 @@ export default function AdminGroupsPage() {
 
       <Panel title="New team" description="Name it after the people in it — a class, a squad, a cohort">
         <div className="flex flex-wrap items-end gap-2 p-4">
-          <label className="flex min-w-[12rem] flex-col gap-1">
+          <label className="flex min-w-48 flex-col gap-1">
             <span className="text-xs text-gray-500">Classroom</span>
             <ClassroomSelect value={classroomId} onChange={setClassroomId} />
           </label>
-          <label className="flex min-w-[14rem] flex-1 flex-col gap-1">
+          <label className="flex min-w-56 flex-1 flex-col gap-1">
             <span className="text-xs text-gray-500">Name</span>
             <input
               value={name}
@@ -117,10 +117,10 @@ export default function AdminGroupsPage() {
               placeholder="Autumn training squad"
               maxLength={120}
               className="rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 text-sm
-                         text-gray-200 placeholder-gray-400 outline-none focus:border-accent-600"
+                         text-gray-200 placeholder-gray-400 outline-hidden focus:border-accent-600"
             />
           </label>
-          <label className="flex min-w-[16rem] flex-[2] flex-col gap-1">
+          <label className="flex min-w-[16rem] flex-2 flex-col gap-1">
             <span className="text-xs text-gray-500">Description (optional)</span>
             <input
               value={description}
@@ -129,7 +129,7 @@ export default function AdminGroupsPage() {
               placeholder="Second years, Tuesday sessions"
               maxLength={500}
               className="rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 text-sm
-                         text-gray-200 placeholder-gray-400 outline-none focus:border-accent-600"
+                         text-gray-200 placeholder-gray-400 outline-hidden focus:border-accent-600"
             />
           </label>
           <button
@@ -146,7 +146,7 @@ export default function AdminGroupsPage() {
       </Panel>
 
       <p className="flex items-start gap-2 px-1 text-xs text-gray-600">
-        <Users size={13} className="mt-0.5 flex-shrink-0" />
+        <Users size={13} className="mt-0.5 shrink-0" />
         CPIntel does not run the contest. Codeforces or DOMjudge does — a team is laid over
         their contest to rank its own members against each other, out of a board that may hold
         thousands of people nobody here is measuring.

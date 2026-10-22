@@ -42,7 +42,7 @@ export function ClassroomSelect({ value, onChange, allowAll, className }: Props)
       onChange={e => onChange(e.target.value === '' ? null : Number(e.target.value))}
       disabled={isLoading}
       className={className ?? `rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 text-sm
-                               text-gray-200 outline-none focus:border-accent-600`}
+                               text-gray-200 outline-hidden focus:border-accent-600`}
     >
       <option value="">{allowAll ? 'Every classroom' : 'Pick a classroom…'}</option>
       {active.map(c => (

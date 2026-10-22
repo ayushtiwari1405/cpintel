@@ -36,7 +36,7 @@ function Cell({ cell }: { cell: ExamLeaderboardCell | undefined }) {
     return (
       <td className="px-2 py-2 text-center">
         <span
-          className="inline-flex flex-col items-center rounded bg-accent-500/15 px-1.5 py-0.5
+          className="inline-flex flex-col items-center rounded-sm bg-accent-500/15 px-1.5 py-0.5
                      text-[11px] tabular-nums text-accent-300"
           title={`Marked by hand: ${marks(cell.marks)}`
             + (cell.solved ? ' (accepted by the judge)' : ' (not accepted by the judge)')}
@@ -57,7 +57,7 @@ function Cell({ cell }: { cell: ExamLeaderboardCell | undefined }) {
       <td className="px-2 py-2 text-center">
         <span
           className={clsx(
-            'inline-flex flex-col items-center rounded px-1.5 py-0.5 text-[11px] tabular-nums',
+            'inline-flex flex-col items-center rounded-sm px-1.5 py-0.5 text-[11px] tabular-nums',
             cell.firstSolve ? 'bg-green-500/30 text-green-300' : 'bg-green-500/15 text-green-400'
           )}
           title={cell.firstSolve ? 'First to solve this problem' : undefined}
@@ -73,7 +73,7 @@ function Cell({ cell }: { cell: ExamLeaderboardCell | undefined }) {
   return (
     <td className="px-2 py-2 text-center">
       <span className={clsx(
-        'inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] tabular-nums',
+        'inline-flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-[11px] tabular-nums',
         cell.pending ? 'bg-amber-500/10 text-amber-400' : 'bg-red-500/10 text-red-400/80'
       )}>
         {cell.wrongAttempts > 0 && `−${cell.wrongAttempts}`}

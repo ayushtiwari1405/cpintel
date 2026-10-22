@@ -7,7 +7,7 @@ import { Ago, EmptyRow, Panel, Pill } from '@/components/admin/AdminUi'
 import { PageHeader } from '@/components/common/PageHeader'
 
 const field = `rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 text-sm text-gray-200
-               placeholder-gray-400 outline-none focus:border-accent-600`
+               placeholder-gray-400 outline-hidden focus:border-accent-600`
 
 /**
  * The classrooms an admin runs. Each is one DOMjudge instance, and the teams and examinations
@@ -167,7 +167,7 @@ export default function AdminClassroomsPage() {
       )}
 
       <p className="flex items-start gap-2 px-1 text-xs text-gray-600">
-        <School size={13} className="mt-0.5 flex-shrink-0" />
+        <School size={13} className="mt-0.5 shrink-0" />
         To enrol a student in a second classroom, import them with the same username; their
         existing account gains the new DOMjudge login.
       </p>

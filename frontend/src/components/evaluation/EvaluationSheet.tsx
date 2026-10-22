@@ -12,7 +12,7 @@ import {
 import type { EvaluationCell } from '@/types'
 
 const field = `rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 text-sm text-gray-200
-               placeholder-gray-400 outline-none focus:border-accent-600`
+               placeholder-gray-400 outline-hidden focus:border-accent-600`
 
 /** Marks as a person would write them: 30, 12.5 — never 30.0. */
 function marks(value: number): string {
@@ -103,7 +103,7 @@ export function EvaluationSheet({ source }: { source: EvaluationSource }) {
       {sheet.stateMessage && (
         <div className="flex items-center gap-2 rounded-lg border border-gray-800 bg-gray-900
                         px-4 py-2.5 text-xs text-gray-400">
-          <Lock size={13} className="flex-shrink-0 text-gray-500" /> {sheet.stateMessage}
+          <Lock size={13} className="shrink-0 text-gray-500" /> {sheet.stateMessage}
         </div>
       )}
 
@@ -111,7 +111,7 @@ export function EvaluationSheet({ source }: { source: EvaluationSource }) {
         <div className={clsx('flex flex-wrap items-center justify-between gap-3 rounded-lg border px-4 py-2.5 text-xs',
           frozen ? 'border-sky-900 bg-sky-950/30 text-sky-200' : 'border-gray-800 bg-gray-900 text-gray-400')}>
           <span className="flex items-center gap-2">
-            <Snowflake size={13} className="flex-shrink-0" />
+            <Snowflake size={13} className="shrink-0" />
             {frozen
               ? sentBack > 0
                 ? `Frozen. An admin sent ${sentBack} answer${sentBack === 1 ? '' : 's'} back to you; change ${sentBack === 1 ? 'it' : 'them'}, then freeze again.`

@@ -11,7 +11,7 @@ export default [
     // Build output, copied runtimes (public/mathjax), Node build scripts and the tool configs.
     ignores: [
       'dist', 'public', 'scripts', '**/*.cjs',
-      'vite.config.ts', 'postcss.config.js', 'eslint.config.js',
+      'vite.config.ts', 'eslint.config.js',
     ],
   },
   js.configs.recommended,

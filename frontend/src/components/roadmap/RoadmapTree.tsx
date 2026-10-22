@@ -125,16 +125,16 @@ export function RoadmapTree({ nodes, selectedKey, onSelect }: Props) {
             >
               <ChevronRight
                 size={14}
-                className={clsx('text-gray-500 transition-transform flex-shrink-0',
+                className={clsx('text-gray-500 transition-transform shrink-0',
                   !isCollapsed && 'rotate-90')}
               />
               <span className="text-sm font-medium text-gray-200 flex-1 min-w-0 truncate">
                 {track}
               </span>
-              <span className="text-[11px] text-gray-500 tabular-nums flex-shrink-0">
+              <span className="text-[11px] text-gray-500 tabular-nums shrink-0">
                 {completed}/{members.length} done
               </span>
-              <div className="w-16 h-1 rounded-full bg-gray-800 flex-shrink-0 overflow-hidden">
+              <div className="w-16 h-1 rounded-full bg-gray-800 shrink-0 overflow-hidden">
                 <div
                   className="h-full bg-accent-500"
                   style={{ width: `${(completed / members.length) * 100}%` }}
@@ -146,7 +146,7 @@ export function RoadmapTree({ nodes, selectedKey, onSelect }: Props) {
               <div className="px-3 pb-3 flex flex-col gap-3">
                 {tiers.map(({ tier, members: tierMembers }) => (
                   <div key={tier} className="flex gap-3">
-                    <div className="flex-shrink-0 w-12 pt-1.5">
+                    <div className="shrink-0 w-12 pt-1.5">
                       <span className="text-[10px] uppercase tracking-wider text-gray-600">
                         Tier {tier}
                       </span>
@@ -196,7 +196,7 @@ function NodeChip({ node, selected, onSelect }: {
       title={locked ? `${node.topic} - locked` : node.topic}
     >
       <div className="flex items-center gap-1.5 min-w-0">
-        <Icon size={12} className={clsx('flex-shrink-0', style.text)} />
+        <Icon size={12} className={clsx('shrink-0', style.text)} />
         <span className={clsx('text-xs font-medium truncate min-w-0', style.text)}>
           {node.topic}
         </span>
@@ -209,7 +209,7 @@ function NodeChip({ node, selected, onSelect }: {
             style={{ width: `${Math.round(100 * progress(node))}%` }}
           />
         </div>
-        <span className="text-[10px] text-gray-600 tabular-nums flex-shrink-0">
+        <span className="text-[10px] text-gray-600 tabular-nums shrink-0">
           {node.minDifficulty}-{node.maxDifficulty}
         </span>
       </div>

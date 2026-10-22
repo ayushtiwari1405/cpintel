@@ -1,8 +1,49 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+
+/*
+ * The theme stays in tailwind.config.ts: the palettes behind the --c-* variables are built
+ * there by a plugin, which a CSS @theme block cannot express.
+ */
+@config '../../tailwind.config.ts';
+
+/*
+ * Tailwind 3 gave text-xs..text-4xl absolute line heights (text-sm: 1.25rem); 4 gives a ratio,
+ * which a child in a smaller font inherits as a shorter line. Kept absolute, as before, so
+ * table rows and labels keep their height.
+ */
+@theme {
+  --text-xs--line-height: 1rem;
+  --text-sm--line-height: 1.25rem;
+  --text-base--line-height: 1.5rem;
+  --text-lg--line-height: 1.75rem;
+  --text-xl--line-height: 1.75rem;
+  --text-2xl--line-height: 2rem;
+  --text-3xl--line-height: 2.25rem;
+  --text-4xl--line-height: 2.5rem;
+}
+
+/*
+ * Tailwind 4 applies hover: only where the primary input can hover. Kept as it was (any
+ * :hover) so that moving to v4 changes nothing on touch screens; a separate decision.
+ */
+@custom-variant hover (&:hover);
 
 @layer base {
+  /*
+   * Two rules Tailwind 3's preflight had and 4's dropped: buttons show the pointer, and
+   * placeholders are gray-400 rather than half the text colour.
+   */
+  button, [role="button"] {
+    cursor: pointer;
+  }
+  :disabled {
+    cursor: default;
+  }
+  input::placeholder, textarea::placeholder {
+    opacity: 1;
+    color: rgb(var(--c-gray-400));
+  }
+
   /*
    * Interaction tokens. Colours live in tailwind.config.ts as --c-<palette>-<shade> (light and
    * dark); these are the few values that are not a palette shade.
@@ -80,23 +121,24 @@
   }
 
   /* ── buttons ──────────────────────────────────────────────────────────── */
-  .btn {
+  /* Each variant carries the .btn base itself (Tailwind 4 cannot @apply a component class). */
+  .btn, .btn-primary, .btn-secondary, .btn-ghost, .btn-danger {
     @apply inline-flex items-center justify-center gap-2 rounded-lg px-3.5 py-2 text-sm
            font-medium transition-colors duration-150 select-none
            disabled:opacity-50 disabled:cursor-not-allowed;
   }
   .btn-primary {
-    @apply btn bg-accent-600 text-white hover:bg-accent-500;
+    @apply bg-accent-600 text-white hover:bg-accent-500;
   }
   .btn-secondary {
-    @apply btn bg-gray-850 text-gray-200 border border-gray-700 hover:bg-gray-800
+    @apply bg-gray-850 text-gray-200 border border-gray-700 hover:bg-gray-800
            hover:border-gray-600;
   }
   .btn-ghost {
-    @apply btn text-gray-400 hover:bg-gray-800 hover:text-gray-100;
+    @apply text-gray-400 hover:bg-gray-800 hover:text-gray-100;
   }
   .btn-danger {
-    @apply btn bg-red-600 text-white hover:bg-red-500;
+    @apply bg-red-600 text-white hover:bg-red-500;
   }
   .btn-sm {
     @apply px-2.5 py-1.5 text-xs gap-1.5;
@@ -107,7 +149,7 @@
     @apply bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-sm
            text-gray-100 placeholder-gray-400 w-full
            hover:border-gray-600
-           focus:outline-none focus:ring-2 focus:ring-accent-500/60 focus:border-accent-500
+           focus:outline-hidden focus:ring-2 focus:ring-accent-500/60 focus:border-accent-500
            disabled:opacity-60 disabled:cursor-not-allowed
            transition-colors;
   }
@@ -115,20 +157,20 @@
     @apply mb-1.5 block text-xs font-medium text-gray-400;
   }
   .kbd {
-    @apply inline-flex min-w-[1.5em] items-center justify-center rounded border border-gray-700
+    @apply inline-flex min-w-[1.5em] items-center justify-center rounded-sm border border-gray-700
            bg-gray-850 px-1 font-mono text-[11px] text-gray-300;
   }
 
   /* ── status ───────────────────────────────────────────────────────────── */
-  .badge {
-    @apply inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium
+  .badge, .badge-green, .badge-yellow, .badge-red, .badge-blue, .badge-gray {
+    @apply inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm text-[11px] font-medium
            leading-4 border;
   }
-  .badge-green  { @apply badge bg-green-950/60  text-green-300  border-green-800/70; }
-  .badge-yellow { @apply badge bg-yellow-950/60 text-yellow-300 border-yellow-800/70; }
-  .badge-red    { @apply badge bg-red-950/60    text-red-300    border-red-800/70; }
-  .badge-blue   { @apply badge bg-sky-950/60    text-sky-300    border-sky-800/70; }
-  .badge-gray   { @apply badge bg-gray-850      text-gray-400   border-gray-700; }
+  .badge-green  { @apply bg-green-950/60  text-green-300  border-green-800/70; }
+  .badge-yellow { @apply bg-yellow-950/60 text-yellow-300 border-yellow-800/70; }
+  .badge-red    { @apply bg-red-950/60    text-red-300    border-red-800/70; }
+  .badge-blue   { @apply bg-sky-950/60    text-sky-300    border-sky-800/70; }
+  .badge-gray   { @apply bg-gray-850      text-gray-400   border-gray-700; }
 
   /* ── data tables ──────────────────────────────────────────────────────── */
   /*

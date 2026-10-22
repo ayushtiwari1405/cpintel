@@ -66,7 +66,7 @@ export function ExamUnlock({ exam, onLeave }: Props) {
 
       <div className="rounded-2xl border border-gray-800 bg-gray-900 p-7">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl
             bg-accent-950 border border-accent-900">
             <Lock size={18} className="text-accent-400" />
           </div>
@@ -94,7 +94,7 @@ export function ExamUnlock({ exam, onLeave }: Props) {
           // was handed their slip early does not sit pressing a button that will refuse them.
           <p className="mt-4 flex items-start gap-2 rounded-lg border border-amber-900
             bg-amber-950/40 px-3 py-2.5 text-xs leading-relaxed text-amber-200">
-            <Clock size={13} className="mt-0.5 flex-shrink-0" />
+            <Clock size={13} className="mt-0.5 shrink-0" />
             <span>
               It unlocks only once it starts. This page updates automatically.
             </span>
@@ -153,7 +153,7 @@ export function ExamUnlock({ exam, onLeave }: Props) {
           {error && (
             <p className="flex items-start gap-2 rounded-lg border border-red-900
               bg-red-950/40 px-3 py-2.5 text-xs leading-relaxed text-red-200">
-              <AlertTriangle size={13} className="mt-0.5 flex-shrink-0" />
+              <AlertTriangle size={13} className="mt-0.5 shrink-0" />
               <span>{error}</span>
             </p>
           )}

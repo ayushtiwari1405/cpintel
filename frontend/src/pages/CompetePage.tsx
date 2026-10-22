@@ -827,7 +827,7 @@ export default function CompetePage({ examOnly, section }: {
           easy to dismiss and read past; a cover is not. Nothing underneath is lost — the
           buffers stay in state and the editor is still mounted behind it. */}
       {inExam && examSession.fullscreenRequired && !examSession.fullscreen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-gray-950 p-6">
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-gray-950 p-6">
           <div className="flex max-w-md flex-col items-center gap-3 text-center">
             <Maximize size={28} className="text-accent-400" />
             <p className="text-base font-medium text-gray-100">
@@ -848,7 +848,7 @@ export default function CompetePage({ examOnly, section }: {
       )}
 
       {!inExam && needsCfSession && !session?.connected && (
-        <div className="px-4 pt-3 flex-shrink-0">
+        <div className="px-4 pt-3 shrink-0">
           <CfSessionCard />
         </div>
       )}
@@ -856,7 +856,7 @@ export default function CompetePage({ examOnly, section }: {
       {/* The examination's own banner: what it is, how long is left, what is being recorded,
           and a way to say "I am done" that an invigilator can see. */}
       {inExam && exam && (
-        <div className="mx-4 mt-3 flex flex-col gap-2 flex-shrink-0">
+        <div className="mx-4 mt-3 flex flex-col gap-2 shrink-0">
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg
             border border-gray-800 bg-gray-900 px-3 py-2">
             <div className="min-w-0">
@@ -929,8 +929,8 @@ export default function CompetePage({ examOnly, section }: {
           reports on a contestant without saying so is a different and much worse product. */}
       {!inExam && contest.running && groupContest?.lockdownRequired && (
         <div className="mx-4 mt-3 flex items-start gap-2 rounded-lg border border-accent-900
-          bg-accent-950/40 px-3 py-2 text-xs text-accent-200 flex-shrink-0">
-          <Eye size={13} className="mt-0.5 flex-shrink-0" />
+          bg-accent-950/40 px-3 py-2 text-xs text-accent-200 shrink-0">
+          <Eye size={13} className="mt-0.5 shrink-0" />
           <span>
             This round counts for <span className="font-medium">{groupContest.groupName}</span>.
             Leaving this window gives a warning after
@@ -940,7 +940,7 @@ export default function CompetePage({ examOnly, section }: {
         </div>
       )}
 
-      <div className="px-4 pt-3 pb-3 flex-shrink-0">
+      <div className="px-4 pt-3 pb-3 shrink-0">
         <ContestHeader
           contest={contest}
           elapsed={elapsed}
@@ -987,7 +987,7 @@ export default function CompetePage({ examOnly, section }: {
       ) : (
         <>
           {!contest.submissionsOpen && contest.submissionsClosedReason && (
-            <p className="px-4 pb-2 text-xs text-yellow-500/90 flex-shrink-0">
+            <p className="px-4 pb-2 text-xs text-yellow-500/90 shrink-0">
               {contest.submissionsClosedReason}
             </p>
           )}

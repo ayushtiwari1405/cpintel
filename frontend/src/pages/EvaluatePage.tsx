@@ -49,7 +49,7 @@ export default function EvaluatePage() {
             {open.classroomName}
             {open.endsAt && <> · ended {format(new Date(open.endsAt), 'd MMM yyyy, HH:mm')}</>}
           </>}
-          className="mb-2"
+          className="mb-4!"
         />
         <EvaluationSheet source={source} />
       </div>

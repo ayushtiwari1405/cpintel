@@ -137,7 +137,7 @@ export default function PlatformsPage() {
                   </div>
 
                   {account && (
-                    <div className="flex flex-shrink-0 gap-2">
+                    <div className="flex shrink-0 gap-2">
                       <button
                         type="button"
                         className="btn-secondary btn-sm"

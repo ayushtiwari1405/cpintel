@@ -35,8 +35,8 @@ export function ExamNotices({ notices, onDismiss }: Props) {
           )}
         >
           {notice.tone === 'info'
-            ? <Info size={13} className="mt-0.5 flex-shrink-0" />
-            : <AlertTriangle size={13} className="mt-0.5 flex-shrink-0" />}
+            ? <Info size={13} className="mt-0.5 shrink-0" />
+            : <AlertTriangle size={13} className="mt-0.5 shrink-0" />}
           <div className="min-w-0 flex-1">
             <p className="font-medium">{notice.title}</p>
             <p className="mt-0.5 opacity-90">{notice.body}</p>
@@ -44,7 +44,7 @@ export function ExamNotices({ notices, onDismiss }: Props) {
           <button
             onClick={() => onDismiss(notice.id)}
             aria-label="Dismiss"
-            className="flex-shrink-0 rounded p-0.5 opacity-60 transition-opacity hover:opacity-100"
+            className="shrink-0 rounded-sm p-0.5 opacity-60 transition-opacity hover:opacity-100"
           >
             <X size={12} />
           </button>

@@ -126,7 +126,7 @@ export default function AppLayout() {
   return (
     <div className="flex h-screen overflow-hidden bg-gray-950">
       <a href="#main-content"
-        className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-[70]
+        className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-70
                    focus:rounded-md focus:bg-gray-900 focus:px-3 focus:py-2 focus:text-sm
                    focus:text-gray-50 focus:ring-2 focus:ring-accent-400">
         Skip to content
@@ -148,7 +148,7 @@ export default function AppLayout() {
       <div className={clsx('flex min-w-0 flex-1 flex-col transition-[margin] duration-200',
         wide && (sidebarOpen ? 'ml-60' : 'ml-16'))} inert={drawer}>
         {!wide && (
-          <header className="flex h-12 flex-shrink-0 items-center gap-1 border-b border-gray-800
+          <header className="flex h-12 shrink-0 items-center gap-1 border-b border-gray-800
                              bg-gray-900 px-2">
             <button
               ref={menuButtonRef}
@@ -176,7 +176,7 @@ export default function AppLayout() {
         )}
 
         <main id="main-content" tabIndex={-1} className={clsx(
-          'flex min-h-0 flex-1 flex-col focus:outline-none',
+          'flex min-h-0 flex-1 flex-col focus:outline-hidden',
           workspace ? 'overflow-hidden' : 'overflow-auto',
         )}>
           {workspace ? (

@@ -48,7 +48,7 @@ export function ProblemNav({ problems, selected, onSelect, submissions }: Props)
             )}
           >
             <span className={clsx(
-              'font-mono text-sm w-5 flex-shrink-0',
+              'font-mono text-sm w-5 shrink-0',
               active ? 'text-accent-300' : 'text-gray-300'
             )}>
               {p.index}
@@ -58,10 +58,10 @@ export function ProblemNav({ problems, selected, onSelect, submissions }: Props)
               {p.name ?? ''}
             </span>
 
-            {state === 'solved' && <Check size={13} className="text-green-400 flex-shrink-0" />}
-            {state === 'failed' && <X size={13} className="text-red-400 flex-shrink-0" />}
+            {state === 'solved' && <Check size={13} className="text-green-400 shrink-0" />}
+            {state === 'failed' && <X size={13} className="text-red-400 shrink-0" />}
             {state === 'none' && (
-              <Circle size={7} className="text-gray-700 flex-shrink-0" />
+              <Circle size={7} className="text-gray-700 shrink-0" />
             )}
           </button>
         )

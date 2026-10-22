@@ -59,7 +59,7 @@ export default function ResetPasswordPage() {
             // Said plainly, with the way out, rather than as a form that would fail on submit.
             <div className="flex items-start gap-2.5 rounded-lg border border-amber-900
               bg-amber-950/40 px-3 py-2.5 text-xs leading-relaxed text-amber-200">
-              <AlertTriangle size={14} className="mt-0.5 flex-shrink-0" />
+              <AlertTriangle size={14} className="mt-0.5 shrink-0" />
               <span>
                 This link is incomplete. Copy the whole link from the email into the address
                 bar, or request a new one.
@@ -119,7 +119,7 @@ export default function ResetPasswordPage() {
               <button
                 type="submit"
                 disabled={!ready || reset.isPending}
-                className="btn-primary w-full mt-2 disabled:cursor-not-allowed
+                className="btn-primary w-full disabled:cursor-not-allowed
                   disabled:opacity-40"
               >
                 {reset.isPending ? 'Setting it…' : 'Set my password'}

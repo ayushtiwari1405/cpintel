@@ -4,7 +4,7 @@ import { Monitor } from 'lucide-react'
 export function DesktopBadge() {
   if (!isDesktop()) return null
   return (
-    <div className="flex items-center gap-1 px-2 py-0.5 rounded text-xs
+    <div className="flex items-center gap-1 px-2 py-0.5 rounded-sm text-xs
                     bg-accent-900/30 text-accent-400 border border-accent-800">
       <Monitor size={10} />
       Desktop

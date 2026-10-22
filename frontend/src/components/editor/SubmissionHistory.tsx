@@ -222,7 +222,7 @@ export function SubmissionHistory({
 
         <div className="flex flex-1 min-h-0">
           {/* ── the list ─────────────────────────────────────────────── */}
-          <div className="w-72 flex-shrink-0 border-r border-gray-800 flex flex-col min-h-0">
+          <div className="w-72 shrink-0 border-r border-gray-800 flex flex-col min-h-0">
             {scope === 'problem' && problemQuery.data?.notice && (
               <p className="px-3 py-2 text-[11px] text-gray-600 border-b border-gray-850
                             leading-relaxed">
@@ -261,7 +261,7 @@ export function SubmissionHistory({
                   >
                     <div className="flex items-center gap-2">
                       {scope === 'all' && (
-                        <span className="font-mono text-[11px] text-gray-400 flex-shrink-0">
+                        <span className="font-mono text-[11px] text-gray-400 shrink-0">
                           {a.contestId}{a.problemIndex}
                         </span>
                       )}
@@ -273,7 +273,7 @@ export function SubmissionHistory({
                         title={a.stored
                           ? 'Stored in CPIntel — opens instantly, works offline'
                           : 'Only Codeforces has this one; opening it fetches the source'}
-                        className="ml-auto flex-shrink-0 text-gray-700"
+                        className="ml-auto shrink-0 text-gray-700"
                       >
                         {a.stored ? <HardDrive size={11} /> : <Cloud size={11} />}
                       </span>
@@ -285,7 +285,7 @@ export function SubmissionHistory({
                         <span className="truncate">{a.languageLabel}</span>
                       )}
                       {a.sourceBytes != null && (
-                        <span className="ml-auto flex-shrink-0">{sizeOf(a.sourceBytes)}</span>
+                        <span className="ml-auto shrink-0">{sizeOf(a.sourceBytes)}</span>
                       )}
                     </div>
 
@@ -332,7 +332,7 @@ export function SubmissionHistory({
                     {source.data.contestId}{source.data.problemIndex}
                   </span>
                   {source.data.problemName && (
-                    <span className="text-xs text-gray-600 truncate max-w-[14rem]">
+                    <span className="text-xs text-gray-600 truncate max-w-56">
                       {source.data.problemName}
                     </span>
                   )}

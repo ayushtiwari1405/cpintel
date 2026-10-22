@@ -83,7 +83,7 @@ export default function AdminUsersPage() {
             onChange={e => setSearch(e.target.value)}
             placeholder="Search by username, email or name"
             className="w-full rounded-lg border border-gray-800 bg-gray-900 py-2 pl-9 pr-3
-                       text-sm text-gray-200 placeholder-gray-400 outline-none
+                       text-sm text-gray-200 placeholder-gray-400 outline-hidden
                        focus:border-accent-600"
           />
         </div>
@@ -91,7 +91,7 @@ export default function AdminUsersPage() {
           value={role}
           onChange={e => { setRole(e.target.value as typeof role); setPage(0) }}
           className="rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 text-sm text-gray-300
-                     outline-none focus:border-accent-600"
+                     outline-hidden focus:border-accent-600"
         >
           <option value="">Any role</option>
           <option value="USER">Users</option>
@@ -102,7 +102,7 @@ export default function AdminUsersPage() {
           value={active}
           onChange={e => { setActive(e.target.value as typeof active); setPage(0) }}
           className="rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 text-sm text-gray-300
-                     outline-none focus:border-accent-600"
+                     outline-hidden focus:border-accent-600"
         >
           <option value="">Any status</option>
           <option value="true">Active</option>
@@ -416,7 +416,7 @@ function UserDetailDrawer({ userId, onClose }: { userId: number; onClose: () => 
   return (
     <div className="fixed inset-0 z-40 flex justify-end">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <aside className="relative flex h-full w-[28rem] max-w-full flex-col border-l
+      <aside className="relative flex h-full w-md max-w-full flex-col border-l
         border-gray-800 bg-gray-950">
         <header className="flex items-center justify-between border-b border-gray-800 px-4 py-3">
           <h2 className="text-sm font-medium text-gray-200">
@@ -606,7 +606,7 @@ function CreateUserDialog(
               value={form.role}
               onChange={set('role')}
               className="w-full rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 text-sm
-                         text-gray-200 outline-none focus:border-accent-600"
+                         text-gray-200 outline-hidden focus:border-accent-600"
             >
               <option value="USER">User — the normal product</option>
               {canCreateAdmins && (
@@ -649,7 +649,7 @@ function TextField({ label, ...props }: { label: string }
       <input
         {...props}
         className="w-full rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 text-sm
-                   text-gray-200 placeholder-gray-400 outline-none focus:border-accent-600"
+                   text-gray-200 placeholder-gray-400 outline-hidden focus:border-accent-600"
       />
     </label>
   )
@@ -658,8 +658,8 @@ function TextField({ label, ...props }: { label: string }
 function Field({ label, value }: { label: string; value: string | null | undefined }) {
   return (
     <div className="flex gap-3">
-      <dt className="w-24 flex-shrink-0 text-xs text-gray-500">{label}</dt>
-      <dd className="min-w-0 flex-1 break-words text-gray-300">
+      <dt className="w-24 shrink-0 text-xs text-gray-500">{label}</dt>
+      <dd className="min-w-0 flex-1 wrap-break-word text-gray-300">
         {value || <span className="text-gray-600">—</span>}
       </dd>
     </div>

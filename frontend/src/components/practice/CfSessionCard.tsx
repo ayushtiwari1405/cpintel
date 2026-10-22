@@ -36,7 +36,7 @@ export function CfSessionCard({ variant = 'card' }: { variant?: 'card' | 'inline
   if (session && !session.submitEnabled) {
     return (
       <div className={clsx(shell, 'flex gap-2 text-xs text-gray-400')}>
-        <ShieldAlert size={14} className="flex-shrink-0 mt-0.5 text-gray-500" />
+        <ShieldAlert size={14} className="shrink-0 mt-0.5 text-gray-500" />
         <p>
           Submitting is disabled on this server. Submit on Codeforces directly.
         </p>
@@ -84,7 +84,7 @@ function ConnectedRow(
   return (
     <div className={clsx(className, 'flex items-center justify-between gap-3')}>
       <div className="flex items-center gap-2 min-w-0">
-        <ShieldCheck size={15} className="text-green-400 flex-shrink-0" />
+        <ShieldCheck size={15} className="text-green-400 shrink-0" />
         <div className="min-w-0">
           <p className="text-sm text-gray-200 truncate">
             Submitting as <span className="font-medium text-gray-50">{handle}</span>
@@ -104,7 +104,7 @@ function ConnectedRow(
       <button
         onClick={() => disconnect.mutate()}
         className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-red-400
-                   transition-colors flex-shrink-0"
+                   transition-colors shrink-0"
       >
         <LogOut size={13} /> Disconnect
       </button>
@@ -173,7 +173,7 @@ function DesktopConnectForm() {
 
       {error && (
         <p className="flex items-start gap-1.5 text-[11px] text-red-300">
-          <ShieldAlert size={12} className="flex-shrink-0 mt-0.5" /> {error}
+          <ShieldAlert size={12} className="shrink-0 mt-0.5" /> {error}
         </p>
       )}
 
@@ -187,7 +187,7 @@ function DesktopConnectForm() {
       </button>
 
       <div className="flex items-start gap-2 text-[11px] text-amber-300/80">
-        <ShieldAlert size={12} className="flex-shrink-0 mt-0.5" />
+        <ShieldAlert size={12} className="shrink-0 mt-0.5" />
         {window.cpintelDesktop?.cf?.signIn ? (
           <p>
             Your sign-in stays in this app; the server learns only your handle. Revoke it from
@@ -244,7 +244,7 @@ function ExtensionConnectForm() {
       {error && (
         <div className="space-y-1.5">
           <p className="flex items-start gap-1.5 text-[11px] text-red-300">
-            <ShieldAlert size={12} className="flex-shrink-0 mt-0.5" /> {error.message}
+            <ShieldAlert size={12} className="shrink-0 mt-0.5" /> {error.message}
           </p>
           <button onClick={openCodeforces}
             className="flex items-center gap-1 text-[11px] text-accent-300 hover:underline">
@@ -370,7 +370,7 @@ function ConnectForm() {
         <ExternalLink size={12} />
         {opened ? 'Reopen Codeforces sign-in' : 'Open Codeforces and sign in'}
       </button>
-      <p className="text-[11px] text-gray-600 -mt-1">
+      <p className="text-[11px] text-gray-600">
         Tick <span className="text-gray-400">Remember me</span>, or the session ends when the
         browser closes.
       </p>
@@ -394,7 +394,7 @@ function ConnectForm() {
               Your browser cannot read a Codeforces session on its own — the cookie is
               HttpOnly and CORS blocks the request. Run this once, in the project root:
             </p>
-            <code className="block bg-black/40 rounded px-2 py-1 font-mono text-gray-300
+            <code className="block bg-black/40 rounded-sm px-2 py-1 font-mono text-gray-300
                              select-all">
               {HELPER_COMMAND}
             </code>
@@ -404,7 +404,7 @@ function ConnectForm() {
 
       {error && (
         <p className="flex items-start gap-1.5 text-[11px] text-red-300">
-          <ShieldAlert size={12} className="flex-shrink-0 mt-0.5" /> {error}
+          <ShieldAlert size={12} className="shrink-0 mt-0.5" /> {error}
         </p>
       )}
 
@@ -418,7 +418,7 @@ function ConnectForm() {
       </button>
 
       <div className="flex items-start gap-2 text-[11px] text-amber-300/80">
-        <ShieldAlert size={12} className="flex-shrink-0 mt-0.5" />
+        <ShieldAlert size={12} className="shrink-0 mt-0.5" />
         <p>
           The session cookie grants access to your account. The helper sends it straight to the
           server, where it is stored encrypted. Revoke it from Codeforces → Settings → Sessions,

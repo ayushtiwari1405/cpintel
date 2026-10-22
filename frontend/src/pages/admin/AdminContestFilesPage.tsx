@@ -85,7 +85,7 @@ export default function AdminContestFilesPage() {
             onClick={() => setDefault.mutate({ enabled: !data.defaultEnabled })}
             disabled={setDefault.isPending}
             className={clsx(
-              'flex-shrink-0 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+              'shrink-0 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
               'disabled:opacity-50',
               data.defaultEnabled
                 ? 'border border-gray-800 text-gray-300 hover:bg-red-900/30 hover:text-red-400'
@@ -164,7 +164,7 @@ export default function AdminContestFilesPage() {
               value={platform}
               onChange={e => setPlatform(e.target.value)}
               className="rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 text-sm
-                         text-gray-300 outline-none focus:border-accent-600"
+                         text-gray-300 outline-hidden focus:border-accent-600"
             >
               {PLATFORMS.map(p => <option key={p} value={p}>{p}</option>)}
             </select>
@@ -178,7 +178,7 @@ export default function AdminContestFilesPage() {
               placeholder="2259"
               inputMode="numeric"
               className="w-28 rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 text-sm
-                         text-gray-200 placeholder-gray-400 outline-none focus:border-accent-600"
+                         text-gray-200 placeholder-gray-400 outline-hidden focus:border-accent-600"
             />
           </label>
 
@@ -188,14 +188,14 @@ export default function AdminContestFilesPage() {
               value={enabled ? 'true' : 'false'}
               onChange={e => setEnabled(e.target.value === 'true')}
               className="rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 text-sm
-                         text-gray-300 outline-none focus:border-accent-600"
+                         text-gray-300 outline-hidden focus:border-accent-600"
             >
               <option value="false">Blocked</option>
               <option value="true">Allowed</option>
             </select>
           </label>
 
-          <label className="flex min-w-[12rem] flex-1 flex-col gap-1">
+          <label className="flex min-w-48 flex-1 flex-col gap-1">
             <span className="text-xs text-gray-500">Why (optional)</span>
             <input
               value={note}
@@ -203,7 +203,7 @@ export default function AdminContestFilesPage() {
               placeholder="Proctored round"
               maxLength={200}
               className="rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 text-sm
-                         text-gray-200 placeholder-gray-400 outline-none focus:border-accent-600"
+                         text-gray-200 placeholder-gray-400 outline-hidden focus:border-accent-600"
             />
           </label>
 
@@ -219,7 +219,7 @@ export default function AdminContestFilesPage() {
         </div>
 
         <p className="flex items-start gap-2 border-t border-gray-800 px-4 py-3 text-xs text-gray-500">
-          <Info size={13} className="mt-0.5 flex-shrink-0" />
+          <Info size={13} className="mt-0.5 shrink-0" />
           Blocking hides the files panel in that contest only. Uploads are not affected.
         </p>
       </Panel>

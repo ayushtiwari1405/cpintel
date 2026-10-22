@@ -110,8 +110,8 @@ export function SplitPane({
         onDoubleClick={() => setSize(clamp(initial, min, max))}
         title="Drag to resize · double-click to reset"
         className={clsx(
-          'group relative flex-shrink-0 z-10 transition-colors',
-          'focus:outline-none focus-visible:bg-accent-500',
+          'group relative shrink-0 z-10 transition-colors',
+          'focus:outline-hidden focus-visible:bg-accent-500',
           horizontal ? 'w-1.5 cursor-col-resize' : 'h-1.5 cursor-row-resize',
           dragging ? 'bg-accent-500' : 'bg-gray-900 hover:bg-accent-600/60'
         )}

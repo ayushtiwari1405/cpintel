@@ -180,7 +180,7 @@ export function ConsolePanel({
                     placeholder="The stdin your program reads"
                     className="w-full rounded-lg border border-gray-800 bg-gray-900 px-3 py-2
                                font-mono text-xs text-gray-200 placeholder-gray-400 resize-y
-                               outline-none focus:border-accent-600 disabled:opacity-50"
+                               outline-hidden focus:border-accent-600 disabled:opacity-50"
                   />
                 </Labelled>
 
@@ -197,7 +197,7 @@ export function ConsolePanel({
                     placeholder="Leave empty to print the output without judging it"
                     className="w-full rounded-lg border border-gray-800 bg-gray-900 px-3 py-2
                                font-mono text-xs text-gray-200 placeholder-gray-400 resize-y
-                               outline-none focus:border-accent-600 disabled:opacity-50"
+                               outline-hidden focus:border-accent-600 disabled:opacity-50"
                   />
                 </Labelled>
               </>
@@ -397,30 +397,30 @@ function PlatformVerdict({ verdict, polling, onShowTests }: {
 
   return (
     <span className={clsx(
-      'flex items-center gap-1.5 px-2 py-1 rounded-md border text-[11px] max-w-[22rem]',
+      'flex items-center gap-1.5 px-2 py-1 rounded-md border text-[11px] max-w-88',
       pending ? 'bg-gray-800 border-gray-700 text-gray-300'
         : accepted ? 'bg-green-950/60 border-green-900 text-green-300'
           : 'bg-red-950/60 border-red-900 text-red-300'
     )}>
       {pending
-        ? <Loader2 size={11} className="animate-spin flex-shrink-0" />
+        ? <Loader2 size={11} className="animate-spin shrink-0" />
         : accepted
-          ? <CheckCircle2 size={11} className="flex-shrink-0" />
-          : <XCircle size={11} className="flex-shrink-0" />}
+          ? <CheckCircle2 size={11} className="shrink-0" />
+          : <XCircle size={11} className="shrink-0" />}
       <span className="truncate font-medium">
         {PLATFORM_VERDICTS[verdict.verdict] ?? verdict.verdict.replace(/_/g, ' ')}
       </span>
       {verdict.passedTestCount != null && failed && (
-        <span className="opacity-70 flex-shrink-0">on test {verdict.passedTestCount + 1}</span>
+        <span className="opacity-70 shrink-0">on test {verdict.passedTestCount + 1}</span>
       )}
       {pending && polling && (
-        <span className="opacity-60 flex-shrink-0">#{verdict.submissionId}</span>
+        <span className="opacity-60 shrink-0">#{verdict.submissionId}</span>
       )}
       {failed && (
         <button
           onClick={onShowTests}
           title="Open the test that failed, without leaving the app"
-          className="flex-shrink-0 underline underline-offset-2 hover:text-gray-100"
+          className="shrink-0 underline underline-offset-2 hover:text-gray-100"
         >
           see it
         </button>
@@ -446,7 +446,7 @@ function CaseChip({ label, active, sample, tone, onClick, onRemove }: {
     )}>
       <button onClick={onClick} className="flex items-center gap-1.5 px-2 py-1">
         {tone && (
-          <span className={clsx('w-1.5 h-1.5 rounded-full flex-shrink-0', {
+          <span className={clsx('w-1.5 h-1.5 rounded-full shrink-0', {
             'bg-green-400': tone === 'ok',
             'bg-red-400': tone === 'bad',
             'bg-amber-400': tone === 'warn',
@@ -470,7 +470,7 @@ function CaseChip({ label, active, sample, tone, onClick, onRemove }: {
 }
 
 function VerdictIcon({ verdict }: { verdict: RunVerdict }) {
-  const cls = 'flex-shrink-0'
+  const cls = 'shrink-0'
   if (verdict === 'OK') return <CheckCircle2 size={13} className={clsx(cls, 'text-green-400')} />
   if (verdict === 'TIME_LIMIT_EXCEEDED') return <Clock size={13} className={clsx(cls, 'text-amber-400')} />
   if (verdict === 'MEMORY_LIMIT_EXCEEDED') return <XCircle size={13} className={clsx(cls, 'text-amber-400')} />
@@ -498,7 +498,7 @@ function Pre({ children, className }: { children: string; className?: string }) 
   return (
     <pre className={clsx(
       'rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 max-h-48 overflow-auto',
-      'font-mono text-xs text-gray-300 whitespace-pre-wrap break-words',
+      'font-mono text-xs text-gray-300 whitespace-pre-wrap wrap-break-word',
       className
     )}>{children}</pre>
   )
@@ -516,7 +516,7 @@ function Banner({ children, tone, icon }: {
         ? 'border-amber-900 bg-amber-950/40 text-amber-300'
         : 'border-red-900 bg-red-950/40 text-red-300'
     )}>
-      <span className="flex-shrink-0 mt-0.5">{icon}</span>
+      <span className="shrink-0 mt-0.5">{icon}</span>
       <span>{children}</span>
     </div>
   )

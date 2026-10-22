@@ -10,7 +10,7 @@ import type { AssignmentBoard } from '@/types'
 import { ErrorState, LoadingState } from '@/components/common/States'
 
 const field = `rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 text-sm text-gray-200
-               placeholder-gray-400 outline-none focus:border-accent-600`
+               placeholder-gray-400 outline-hidden focus:border-accent-600`
 
 /**
  * An examination's marking, from the admin's side: who marks what, and every mark.

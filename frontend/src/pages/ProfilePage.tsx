@@ -36,7 +36,7 @@ export default function ProfilePage() {
       <PageHeader title="Profile" className="mb-0" />
 
       <div className="flex items-center gap-4 rounded-xl border border-gray-800 bg-gray-900 p-4">
-        <span aria-hidden="true" className="flex h-14 w-14 flex-shrink-0 items-center justify-center
+        <span aria-hidden="true" className="flex h-14 w-14 shrink-0 items-center justify-center
           rounded-lg border border-accent-800/70 bg-accent-950/60 font-mono text-xl font-semibold
           text-accent-300">
           {user?.username?.[0]?.toUpperCase()}

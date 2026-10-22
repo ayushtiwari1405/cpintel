@@ -54,16 +54,16 @@ function TestRow({ test, defaultOpen }: { test: TestOutcome; defaultOpen: boolea
         className="w-full flex items-center gap-2 px-3 py-2 hover:bg-gray-850/50
                    transition-colors text-left"
       >
-        {open ? <ChevronDown size={12} className="text-gray-600 flex-shrink-0" />
-              : <ChevronRight size={12} className="text-gray-600 flex-shrink-0" />}
-        <span className="text-xs font-mono text-gray-400 w-14 flex-shrink-0">
+        {open ? <ChevronDown size={12} className="text-gray-600 shrink-0" />
+              : <ChevronRight size={12} className="text-gray-600 shrink-0" />}
+        <span className="text-xs font-mono text-gray-400 w-14 shrink-0">
           Test {test.index}
         </span>
         <span className={clsx('text-xs font-medium', ok ? 'text-green-400' : 'text-red-400')}>
           {VERDICTS[test.verdict ?? ''] ?? test.verdict?.replace(/_/g, ' ')}
         </span>
         <span className="ml-auto flex items-center gap-3 text-[10px] text-gray-600
-                         tabular-nums flex-shrink-0">
+                         tabular-nums shrink-0">
           {test.timeMs != null && <span>{test.timeMs} ms</span>}
           {test.memoryBytes != null && <span>{kb(test.memoryBytes)}</span>}
         </span>
@@ -92,7 +92,7 @@ function TestRow({ test, defaultOpen }: { test: TestOutcome; defaultOpen: boolea
 
           {test.truncated && (
             <p className="flex items-center gap-1.5 text-[10px] text-gray-600">
-              <Scissors size={10} className="flex-shrink-0" />
+              <Scissors size={10} className="shrink-0" />
               Codeforces clipped this to the first ~500 characters — it is not the whole test.
             </p>
           )}
@@ -183,7 +183,7 @@ export function TestReportView({ archiveId, active }: Props) {
       {data.notice && (
         <p className="flex items-start gap-2 px-3 py-3 text-[11px] text-gray-500
                       leading-relaxed">
-          <AlertTriangle size={12} className="flex-shrink-0 mt-0.5 text-gray-600" />
+          <AlertTriangle size={12} className="shrink-0 mt-0.5 text-gray-600" />
           {data.notice}
         </p>
       )}

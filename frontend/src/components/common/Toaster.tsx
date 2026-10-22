@@ -43,20 +43,20 @@ export function Toaster() {
     // Always mounted, so a screen reader is already listening when a toast arrives. Errors
     // interrupt (role=alert); everything else waits its turn.
     <div role="region" aria-label="Notifications" aria-live="polite"
-      className="pointer-events-none fixed inset-x-3 bottom-3 z-[60] flex flex-col items-end gap-2
+      className="pointer-events-none fixed inset-x-3 bottom-3 z-60 flex flex-col items-end gap-2
                  sm:inset-x-auto sm:bottom-4 sm:right-4">
       {toasts.map((t) => (
         <div
           key={t.id}
           role={t.type === 'error' ? 'alert' : 'status'}
           className={`pointer-events-auto flex w-full items-start gap-3 rounded-lg border px-3.5 py-3
-                      shadow-lg shadow-black/30 backdrop-blur-sm animate-slide-up sm:w-auto
+                      shadow-lg shadow-black/30 backdrop-blur-xs animate-slide-up sm:w-auto
                       sm:min-w-64 sm:max-w-sm ${colors[t.type]}`}
         >
-          <span className="mt-0.5 flex-shrink-0" aria-hidden="true">{icons[t.type]}</span>
-          <span className="flex-1 break-words text-sm text-gray-100">{t.message}</span>
+          <span className="mt-0.5 shrink-0" aria-hidden="true">{icons[t.type]}</span>
+          <span className="flex-1 wrap-break-word text-sm text-gray-100">{t.message}</span>
           <button type="button" onClick={() => dismiss(t.id)} aria-label="Dismiss notification"
-            className="-mr-1 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded
+            className="-mr-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-sm
                        text-gray-400 hover:bg-gray-800/60 hover:text-gray-100">
             <X size={14} />
           </button>

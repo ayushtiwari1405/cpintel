@@ -26,7 +26,7 @@ const mb = (bytes: number) => `${Math.round(bytes / 1048576)} MB`
 function Step({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
   return (
     <li className="flex gap-3">
-      <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full
+      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full
         bg-accent-600/20 text-xs font-medium text-accent-300">{n}</span>
       <div className="min-w-0 space-y-2">
         <p className="text-sm font-medium text-gray-200">{title}</p>
@@ -41,7 +41,7 @@ function Command({ text }: { text: string }) {
   const [copied, setCopied] = useState(false)
   return (
     <div className="flex items-center gap-2">
-      <code className="min-w-0 select-all overflow-x-auto whitespace-nowrap rounded bg-black/40
+      <code className="min-w-0 select-all overflow-x-auto whitespace-nowrap rounded-sm bg-black/40
         px-2 py-1 font-mono text-[11px] text-gray-200">{text}</code>
       <button
         onClick={async () => {
@@ -51,7 +51,7 @@ function Command({ text }: { text: string }) {
             setTimeout(() => setCopied(false), 2000)
           } catch { /* it is on screen to be typed */ }
         }}
-        className="flex flex-shrink-0 items-center gap-1 text-[11px] text-accent-300 hover:underline"
+        className="flex shrink-0 items-center gap-1 text-[11px] text-accent-300 hover:underline"
       >
         <Copy size={11} /> {copied ? 'Copied' : 'Copy'}
       </button>
@@ -64,7 +64,7 @@ function Expected({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex items-start gap-2 rounded-lg border border-amber-900/60 bg-amber-950/20
       px-3 py-2 text-xs leading-relaxed text-amber-200">
-      <AlertTriangle size={13} className="mt-0.5 flex-shrink-0" />
+      <AlertTriangle size={13} className="mt-0.5 shrink-0" />
       <div className="space-y-1">{children}</div>
     </div>
   )
@@ -240,7 +240,7 @@ function Checksums({ release, os }: { release: DesktopRelease; os: Os }) {
         {assets.map(a => (
           <li key={a.name} className="text-[11px]">
             <span className="font-mono text-gray-300">{a.name}</span>
-            <code className="mt-0.5 block select-all break-all rounded bg-black/40 px-2 py-1
+            <code className="mt-0.5 block select-all break-all rounded-sm bg-black/40 px-2 py-1
               font-mono text-gray-200">{a.sha256}</code>
           </li>
         ))}
@@ -324,7 +324,7 @@ export default function DownloadPage() {
       <div className="max-w-2xl space-y-6">
         {header}
         <div className="card flex items-start gap-2 text-sm text-gray-300">
-          <CheckCircle2 size={16} className="mt-0.5 flex-shrink-0 text-green-400" />
+          <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-green-400" />
           <p>
             You are using the desktop app{version ? ` (version ${version})` : ''}. Updates are
             offered in a ribbon at the top of the window.
@@ -394,7 +394,7 @@ export default function DownloadPage() {
       <RedFlags />
 
       <div className="flex items-start gap-2 text-xs leading-relaxed text-gray-500">
-        <ShieldCheck size={14} className="mt-0.5 flex-shrink-0 text-gray-600" />
+        <ShieldCheck size={14} className="mt-0.5 shrink-0 text-gray-600" />
         <p>
           The app shows this site, compiles and runs your code in a temporary folder when you
           press Run, and — only during a contest or examination — records when you leave its

@@ -109,7 +109,7 @@ export default function PracticePage() {
 
       <div className="flex-1 min-h-0 flex flex-col">
         {skill && (
-          <div className="px-3 pt-3 flex-shrink-0">
+          <div className="px-3 pt-3 shrink-0">
             <SkillBanner node={skill} />
           </div>
         )}
@@ -159,7 +159,7 @@ export default function PracticePage() {
       {/* Only in the way when there is something to do about it. Once a session is connected
           the card collapses to a line, and that line is not worth a strip of the workspace. */}
       {!session?.connected && (
-        <div className="px-4 pt-3 flex-shrink-0">
+        <div className="px-4 pt-3 shrink-0">
           <CfSessionCard />
         </div>
       )}

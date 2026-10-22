@@ -144,7 +144,7 @@ export function ExamList({ exams, isLoading, onEnter, entering }: Props) {
             {exam.desktopAppRequired && !over && !isDesktop() && (
               <p className="mt-3 flex items-start gap-2 rounded-lg border border-amber-900
                 bg-amber-950/40 px-3 py-2 text-xs leading-relaxed text-amber-200">
-                <Laptop size={13} className="mt-0.5 flex-shrink-0" />
+                <Laptop size={13} className="mt-0.5 shrink-0" />
                 <span>
                   Requires the CPIntel desktop app; browsers are refused.{' '}
                   <Link to="/download" className="underline hover:text-amber-100">
@@ -158,7 +158,7 @@ export function ExamList({ exams, isLoading, onEnter, entering }: Props) {
             {over && (
               <p className="mt-3 flex items-start gap-2 rounded-lg border border-gray-800
                 bg-gray-950/60 px-3 py-2 text-xs leading-relaxed text-gray-400">
-                <FileText size={13} className="mt-0.5 flex-shrink-0" />
+                <FileText size={13} className="mt-0.5 shrink-0" />
                 <span>
                   Ended. Open it to see your code and, if released, the final standings.
                 </span>
@@ -168,7 +168,7 @@ export function ExamList({ exams, isLoading, onEnter, entering }: Props) {
             {exam.lockdownRequired && !over && (
               <p className="mt-3 flex items-start gap-2 rounded-lg border border-accent-900
                 bg-accent-950/40 px-3 py-2 text-xs leading-relaxed text-accent-200">
-                <ShieldCheck size={13} className="mt-0.5 flex-shrink-0" />
+                <ShieldCheck size={13} className="mt-0.5 shrink-0" />
                 <span>
                   Monitored: leaving the window gives a warning after{' '}
                   {exam.awayThresholdSeconds} seconds, and longer absences are recorded for the

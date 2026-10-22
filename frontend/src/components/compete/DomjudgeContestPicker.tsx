@@ -72,7 +72,7 @@ export function DomjudgeContestPicker({ onPick, loading, classroomId = null }: P
     return (
       <div className="flex items-start gap-2 rounded-lg border border-yellow-900/60
         bg-yellow-950/20 px-3 py-3 text-xs leading-relaxed text-yellow-200/90">
-        <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
+        <AlertCircle size={14} className="mt-0.5 shrink-0" />
         <span>
           No DOMjudge account is attached to you yet. Ask the round's organiser; this list
           updates automatically.
@@ -93,7 +93,7 @@ export function DomjudgeContestPicker({ onPick, loading, classroomId = null }: P
     return (
       <div className="flex items-start gap-2 rounded-lg border border-red-900/60
         bg-red-950/20 px-3 py-3 text-xs leading-relaxed text-red-200/90">
-        <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
+        <AlertCircle size={14} className="mt-0.5 shrink-0" />
         <span>
           Could not reach DOMjudge. The judge may be down, or your account may be invalid.
         </span>
@@ -138,7 +138,7 @@ export function DomjudgeContestPicker({ onPick, loading, classroomId = null }: P
                   : 'border-gray-800 hover:border-gray-700 hover:bg-gray-900/60'
               )}
             >
-              <span className="flex-shrink-0">
+              <span className="shrink-0">
                 {contest.running
                   ? <Radio size={14} className="text-green-400" />
                   : finished

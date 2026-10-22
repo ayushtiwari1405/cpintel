@@ -90,7 +90,7 @@ export function ExamPasswordsTab({ eventId }: { eventId: number }) {
         // because the person reading this is the one who can set it.
         <p className="flex items-start gap-2 rounded-lg border border-amber-900
           bg-amber-950/40 px-3 py-2.5 text-xs leading-relaxed text-amber-200">
-          <AlertTriangle size={14} className="mt-0.5 flex-shrink-0" />
+          <AlertTriangle size={14} className="mt-0.5 shrink-0" />
           <span>
             <span className="font-medium">CPINTEL_EXAM_PASSWORD_KEY is not set</span>: no
             passwords can be generated, and this examination opens for anyone assigned. Set it

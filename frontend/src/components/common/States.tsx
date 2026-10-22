@@ -60,13 +60,13 @@ export function ErrorState({ title = 'Could not load this', error, onRetry, clas
   return (
     <div role="alert" className={clsx('flex items-start gap-3 rounded-lg border border-red-900/60',
       'bg-red-950/30 px-4 py-3 text-sm', className)}>
-      <AlertTriangle size={16} className="mt-0.5 flex-shrink-0 text-red-400" aria-hidden="true" />
+      <AlertTriangle size={16} className="mt-0.5 shrink-0 text-red-400" aria-hidden="true" />
       <div className="min-w-0 flex-1">
         <p className="font-medium text-red-200">{title}</p>
-        {error != null && <p className="mt-0.5 break-words text-red-300/80">{errorMessage(error)}</p>}
+        {error != null && <p className="mt-0.5 wrap-break-word text-red-300/80">{errorMessage(error)}</p>}
       </div>
       {onRetry && (
-        <button type="button" onClick={onRetry} className="btn-secondary btn-sm flex-shrink-0">
+        <button type="button" onClick={onRetry} className="btn-secondary btn-sm shrink-0">
           <RotateCw size={12} aria-hidden="true" /> Retry
         </button>
       )}

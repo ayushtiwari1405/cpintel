@@ -66,11 +66,11 @@ export function ContestHeader({
                        transition-colors truncate flex items-center gap-1.5"
           >
             {contest.name}
-            <ExternalLink size={12} className="flex-shrink-0 text-gray-600" />
+            <ExternalLink size={12} className="shrink-0 text-gray-600" />
           </a>
           {!exam && (
             <span className={clsx(
-              'badge flex-shrink-0',
+              'badge shrink-0',
               contest.running ? 'badge-green'
                 : before ? 'badge-blue' : 'badge-gray'
             )}>
@@ -78,7 +78,7 @@ export function ContestHeader({
             </span>
           )}
           {contest.frozen && (
-            <span className="badge-blue flex-shrink-0 gap-1">
+            <span className="badge-blue shrink-0 gap-1">
               <Snowflake size={10} /> frozen
             </span>
           )}
@@ -92,7 +92,7 @@ export function ContestHeader({
       </div>
 
       {exam && (
-        <div className="flex items-center gap-2 flex-shrink-0">
+        <div className="flex items-center gap-2 shrink-0">
           <Timer size={15} className="text-green-400" />
           <div className="leading-tight">
             <div className="font-mono text-lg tabular-nums text-green-300">
@@ -105,7 +105,7 @@ export function ContestHeader({
 
       {/* Countdown before the start, remaining time once running. */}
       {!exam && (before || contest.running) && (
-        <div className="flex items-center gap-2 flex-shrink-0">
+        <div className="flex items-center gap-2 shrink-0">
           <Timer size={15} className={contest.running ? 'text-green-400' : 'text-accent-400'} />
           <div className="leading-tight">
             <div className={clsx(
@@ -122,7 +122,7 @@ export function ContestHeader({
       )}
 
       {rank?.participating && (
-        <div className="flex items-center gap-2 flex-shrink-0 pl-4 border-l border-gray-800">
+        <div className="flex items-center gap-2 shrink-0 pl-4 border-l border-gray-800">
           <Trophy size={15} className="text-yellow-400" />
           <div className="leading-tight">
             <div className="font-mono text-lg tabular-nums text-gray-100">
@@ -140,7 +140,7 @@ export function ContestHeader({
         <button
           onClick={onOpenFiles}
           title="Your own templates and notes"
-          className="text-gray-500 hover:text-accent-300 transition-colors flex-shrink-0
+          className="text-gray-500 hover:text-accent-300 transition-colors shrink-0
                      flex items-center gap-1.5 text-xs"
         >
           <FolderOpen size={15} /> Files
@@ -151,7 +151,7 @@ export function ContestHeader({
         <button
           onClick={onClose}
           title="Load a different contest"
-          className="text-gray-600 hover:text-gray-300 transition-colors flex-shrink-0"
+          className="text-gray-600 hover:text-gray-300 transition-colors shrink-0"
         >
           <X size={16} />
         </button>

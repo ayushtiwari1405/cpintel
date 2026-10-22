@@ -7,7 +7,7 @@ import { clsx } from 'clsx'
 export function BrandMark({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 32 32" fill="none" aria-hidden="true"
-      className={clsx('h-8 w-8 flex-shrink-0', className)}>
+      className={clsx('h-8 w-8 shrink-0', className)}>
       <rect x="0.5" y="0.5" width="31" height="31" rx="6.5"
         className="fill-gray-900 stroke-gray-700" />
       <path d="M9 10.5 14.5 16 9 21.5" strokeWidth="2.6" strokeLinecap="round"

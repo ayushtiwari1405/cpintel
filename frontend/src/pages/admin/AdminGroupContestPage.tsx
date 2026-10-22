@@ -66,7 +66,7 @@ export default function AdminGroupContestPage() {
         >
           ← {contest.groupName}
         </Link>
-        <h1 className="break-words text-xl font-semibold tracking-tight text-gray-50 sm:text-2xl">{contest.name}</h1>
+        <h1 className="wrap-break-word text-xl font-semibold tracking-tight text-gray-50 sm:text-2xl">{contest.name}</h1>
         <Pill tone={contest.status === 'LIVE' ? 'green' : 'gray'}>
           {contest.status.toLowerCase()}
         </Pill>
@@ -88,7 +88,7 @@ export default function AdminGroupContestPage() {
       {contest.standingsError && (
         <div className="flex items-start gap-2 rounded-xl border border-amber-900
           bg-amber-950/30 p-3 text-xs text-amber-300">
-          <AlertTriangle size={14} className="mt-0.5 flex-shrink-0" />
+          <AlertTriangle size={14} className="mt-0.5 shrink-0" />
           <div>
             <p className="font-medium">The last refresh failed, so these numbers are stale.</p>
             <p className="mt-0.5 opacity-80">{contest.standingsError}</p>
@@ -99,7 +99,7 @@ export default function AdminGroupContestPage() {
       {standings.unmatched.length > 0 && (
         <div className="flex items-start gap-2 rounded-xl border border-amber-900
           bg-amber-950/30 p-3 text-xs text-amber-300">
-          <AlertTriangle size={14} className="mt-0.5 flex-shrink-0" />
+          <AlertTriangle size={14} className="mt-0.5 shrink-0" />
           <div>
             <p className="font-medium">
               {standings.unmatched.length} member
@@ -297,7 +297,7 @@ function ConductCell({ violations }: { violations: ViolationSummary | null }) {
       {violations.focusLosses > 0 && (
         <span
           title={`Left the window ${violations.focusLosses} time(s), ${duration(violations.awayMs)} in total`}
-          className="flex items-center gap-1 rounded bg-amber-950/60 px-1.5 py-0.5 text-amber-300"
+          className="flex items-center gap-1 rounded-sm bg-amber-950/60 px-1.5 py-0.5 text-amber-300"
         >
           <Eye size={10} /> {violations.focusLosses}× away
           {violations.awayMs > 0 && <span className="opacity-70">{duration(violations.awayMs)}</span>}
@@ -306,7 +306,7 @@ function ConductCell({ violations }: { violations: ViolationSummary | null }) {
       {violations.clipboardWipes > 0 && (
         <span
           title="Clipboard content appeared while the window was away, and was discarded"
-          className="flex items-center gap-1 rounded bg-red-950/60 px-1.5 py-0.5 text-red-300"
+          className="flex items-center gap-1 rounded-sm bg-red-950/60 px-1.5 py-0.5 text-red-300"
         >
           <Clipboard size={10} /> {violations.clipboardWipes}
         </span>
@@ -314,7 +314,7 @@ function ConductCell({ violations }: { violations: ViolationSummary | null }) {
       {violations.lockdownUnavailable && (
         <span
           title="Sat in a browser, where monitoring is weaker and can simply be closed"
-          className="flex items-center gap-1 rounded bg-red-950/60 px-1.5 py-0.5 text-red-300"
+          className="flex items-center gap-1 rounded-sm bg-red-950/60 px-1.5 py-0.5 text-red-300"
         >
           <ShieldOff size={10} /> browser only
         </span>
@@ -322,7 +322,7 @@ function ConductCell({ violations }: { violations: ViolationSummary | null }) {
       {violations.lockdownPartial && (
         <span
           title="From an older build that tried to grab keyboard shortcuts and could not"
-          className="rounded bg-amber-950/60 px-1.5 py-0.5 text-amber-300"
+          className="rounded-sm bg-amber-950/60 px-1.5 py-0.5 text-amber-300"
         >
           partial lock
         </span>
@@ -330,7 +330,7 @@ function ConductCell({ violations }: { violations: ViolationSummary | null }) {
       {violations.lockdownReleased && (
         <span
           title="Monitoring stopped while the contest was still running"
-          className="rounded bg-red-950/60 px-1.5 py-0.5 text-red-300"
+          className="rounded-sm bg-red-950/60 px-1.5 py-0.5 text-red-300"
         >
           released early
         </span>
@@ -338,7 +338,7 @@ function ConductCell({ violations }: { violations: ViolationSummary | null }) {
       {violations.blockedActions > 0 && (
         <span
           title={`${violations.blockedActions} navigations or window-opens the monitor refused`}
-          className="rounded bg-gray-800 px-1.5 py-0.5 text-gray-400"
+          className="rounded-sm bg-gray-800 px-1.5 py-0.5 text-gray-400"
         >
           {violations.blockedActions} blocked
         </span>

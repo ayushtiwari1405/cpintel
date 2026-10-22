@@ -178,7 +178,7 @@ function RevisionTab() {
                 <div className="flex items-center gap-2">
                   <p className="text-sm font-medium text-gray-200 truncate">{item.title}</p>
                   {item.track && (
-                    <span className="text-[11px] text-gray-600 flex-shrink-0">{item.track}</span>
+                    <span className="text-[11px] text-gray-600 shrink-0">{item.track}</span>
                   )}
                 </div>
                 <div className="flex gap-4 mt-1 text-xs text-gray-500">
@@ -190,7 +190,7 @@ function RevisionTab() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 flex-shrink-0">
+              <div className="flex items-center gap-2 shrink-0">
                 {item.practicePath && (
                   <Link
                     to={item.practicePath}
@@ -241,7 +241,7 @@ function SkillCard({ item, index }: { item: SheetItem; index: number }) {
       <div className="flex items-start gap-3">
         <div className="w-7 h-7 rounded-lg bg-accent-900/50 border border-accent-800
           flex items-center justify-center text-xs font-medium text-accent-400
-          flex-shrink-0 mt-0.5">
+          shrink-0 mt-0.5">
           {index}
         </div>
 
@@ -265,7 +265,7 @@ function SkillCard({ item, index }: { item: SheetItem; index: number }) {
         {item.nodeKey && (
           <Link
             to={`/practice?node=${encodeURIComponent(item.nodeKey)}`}
-            className="flex-shrink-0 flex items-center gap-1 text-xs text-gray-500
+            className="shrink-0 flex items-center gap-1 text-xs text-gray-500
                        hover:text-accent-300"
           >
             <Target size={11} /> Open skill
@@ -287,8 +287,8 @@ function SkillCard({ item, index }: { item: SheetItem; index: number }) {
                 title={`Open ${p.name} in the practice workspace`}
               >
                 {p.solved
-                  ? <Check size={11} className="flex-shrink-0 text-green-500" />
-                  : <Code2 size={11} className="flex-shrink-0 text-gray-600
+                  ? <Check size={11} className="shrink-0 text-green-500" />
+                  : <Code2 size={11} className="shrink-0 text-gray-600
                                                 group-hover:text-accent-400" />}
                 <span className={clsx(
                   'truncate text-xs',
@@ -298,7 +298,7 @@ function SkillCard({ item, index }: { item: SheetItem; index: number }) {
                 </span>
               </Link>
               <span className={clsx(
-                'text-[11px] tabular-nums flex-shrink-0', ratingColor(p.rating)
+                'text-[11px] tabular-nums shrink-0', ratingColor(p.rating)
               )}>
                 {p.rating ?? '—'}
               </span>
@@ -307,7 +307,7 @@ function SkillCard({ item, index }: { item: SheetItem; index: number }) {
                   href={p.judgeUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex-shrink-0 text-gray-600 hover:text-gray-300"
+                  className="shrink-0 text-gray-600 hover:text-gray-300"
                   title="Open on codeforces.com instead"
                 >
                   <ExternalLink size={10} />

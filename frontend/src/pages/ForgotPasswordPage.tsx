@@ -85,7 +85,7 @@ export default function ForgotPasswordPage() {
                 <button
                   type="submit"
                   disabled={request.isPending}
-                  className="btn-primary w-full mt-2"
+                  className="btn-primary w-full"
                 >
                   {request.isPending ? 'Sending…' : 'Send me a link'}
                 </button>

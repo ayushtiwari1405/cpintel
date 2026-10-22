@@ -76,7 +76,7 @@ export default function AdminExamDetailPage() {
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="break-words text-xl font-semibold tracking-tight text-gray-50 sm:text-2xl">{event.name}</h1>
+            <h1 className="wrap-break-word text-xl font-semibold tracking-tight text-gray-50 sm:text-2xl">{event.name}</h1>
             <LifecyclePill lifecycle={event.lifecycle} />
             {event.completedAt && <Pill tone="green">done</Pill>}
             {event.lockdownRequired && (
@@ -347,12 +347,12 @@ function DonePanel({ detail }: { detail: EventDetail }) {
         {event.exportNote && (
           <p className={clsx('flex items-start gap-1.5 text-xs',
             event.exportStatus === 'FAILED' ? 'text-red-400' : 'text-amber-400')}>
-            <AlertTriangle size={12} className="mt-0.5 flex-shrink-0" /> {event.exportNote}
+            <AlertTriangle size={12} className="mt-0.5 shrink-0" /> {event.exportNote}
           </p>
         )}
         {event.exportStatus === 'FAILED' && !event.exportNote && (
           <p className="flex items-start gap-1.5 text-xs text-red-400">
-            <AlertTriangle size={12} className="mt-0.5 flex-shrink-0" />
+            <AlertTriangle size={12} className="mt-0.5 shrink-0" />
             The export was not finished. Build it again.
           </p>
         )}
@@ -400,7 +400,7 @@ function DonePanel({ detail }: { detail: EventDetail }) {
 // ------------------------------------------------------------------ settings
 
 const INPUT = 'w-full rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 text-sm '
-  + 'text-gray-200 placeholder-gray-400 outline-none focus:border-accent-600'
+  + 'text-gray-200 placeholder-gray-400 outline-hidden focus:border-accent-600'
 
 function toLocalInput(iso: string | null): string {
   if (!iso) return ''
@@ -505,7 +505,7 @@ function SettingsTab({ detail }: { detail: EventDetail }) {
       {locked && (
         <p className="flex items-start gap-2 rounded-lg border border-amber-900 bg-amber-950/40
           px-3 py-2 text-xs leading-relaxed text-amber-200">
-          <Lock size={13} className="mt-0.5 flex-shrink-0" />
+          <Lock size={13} className="mt-0.5 shrink-0" />
           <span>
             Started — settings are locked. The name and end time can still change, and
             candidates can still be added on the People tab.
@@ -606,7 +606,7 @@ function SettingsTab({ detail }: { detail: EventDetail }) {
           ) : (
             <p className="flex items-start gap-2 rounded-lg border border-accent-900
               bg-accent-950/40 px-3 py-2 text-xs leading-relaxed text-accent-200">
-              <Code2 size={13} className="mt-0.5 flex-shrink-0" />
+              <Code2 size={13} className="mt-0.5 shrink-0" />
               <span>
                 Only these appear in the editor; the server refuses other languages for both
                 Run and Submit.
@@ -669,7 +669,7 @@ function SettingsTab({ detail }: { detail: EventDetail }) {
               </label>
             ))}
             <p className="flex items-start gap-2 pt-1 text-xs leading-relaxed text-gray-600">
-              <AlertTriangle size={12} className="mt-0.5 flex-shrink-0" />
+              <AlertTriangle size={12} className="mt-0.5 shrink-0" />
               The desktop app applies what the operating system allows and reports the rest. A
               browser applies almost none (full screen is the exception), and browser sittings
               are recorded as weaker monitoring.
@@ -1000,7 +1000,7 @@ function ProblemsTab({ detail }: { detail: EventDetail }) {
                 readOnly={fromTheJudge} disabled={locked}
                 onChange={e => update(index, { label: e.target.value })} />
             </label>
-            <label className="flex min-w-[12rem] flex-1 flex-col gap-1">
+            <label className="flex min-w-48 flex-1 flex-col gap-1">
               <span className="text-xs text-gray-500">Title</span>
               <input value={row.title ?? ''} maxLength={200} className={INPUT}
                 readOnly={fromTheJudge} disabled={locked}
@@ -1168,7 +1168,7 @@ function MonitorTab({ eventId, live }: { eventId: number; live: boolean }) {
       </Panel>
 
       <p className="flex items-start gap-2 px-1 text-xs leading-relaxed text-gray-600">
-        <AlertTriangle size={12} className="mt-0.5 flex-shrink-0" />
+        <AlertTriangle size={12} className="mt-0.5 shrink-0" />
         A focus loss shows that the window was left, not why — there is deliberately no single
         score to read as a verdict.
       </p>
@@ -1419,7 +1419,7 @@ function FlagList({ report, loading, onOpen }: {
       </Panel>
 
       <p className="flex items-start gap-2 px-1 text-xs leading-relaxed text-gray-600">
-        <AlertTriangle size={12} className="mt-0.5 flex-shrink-0" />
+        <AlertTriangle size={12} className="mt-0.5 shrink-0" />
         Flags are prompts, not findings. Read the whole session before drawing conclusions.
       </p>
     </div>
@@ -1634,7 +1634,7 @@ function RejudgePanel({ event, problems }: {
             <select value={chosen} onChange={e => setLabel(e.target.value)}
               disabled={running || problems.length === 0}
               className="rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 text-sm
-                text-gray-200 outline-none focus:border-accent-600 disabled:opacity-40">
+                text-gray-200 outline-hidden focus:border-accent-600 disabled:opacity-40">
               {problems.length === 0 && <option value="">—</option>}
               {problems.map(p => <option key={p} value={p}>{p}</option>)}
             </select>
@@ -1668,8 +1668,8 @@ function RejudgePanel({ event, problems }: {
           <p className={clsx('flex items-start gap-1.5 text-xs',
             event.rejudgeStatus === 'FAILED' ? 'text-red-400' : 'text-gray-400')}>
             {event.rejudgeStatus === 'FAILED'
-              ? <AlertTriangle size={12} className="mt-0.5 flex-shrink-0" />
-              : <CheckCircle2 size={12} className="mt-0.5 flex-shrink-0 text-green-400" />}
+              ? <AlertTriangle size={12} className="mt-0.5 shrink-0" />
+              : <CheckCircle2 size={12} className="mt-0.5 shrink-0 text-green-400" />}
             <span>
               {event.rejudgeNote
                 ?? `The rejudge of problem ${event.rejudgeLabel} did not finish. Start it again.`}

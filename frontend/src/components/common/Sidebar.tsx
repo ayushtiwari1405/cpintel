@@ -119,7 +119,7 @@ export const Sidebar = forwardRef<HTMLElement, Props>(function Sidebar(
       inert={!wide && !drawerOpen}
     >
       {/* Brand, with the collapse (wide) or close (drawer) control. */}
-      <div className={clsx('flex h-14 flex-shrink-0 items-center border-b border-gray-800',
+      <div className={clsx('flex h-14 shrink-0 items-center border-b border-gray-800',
         expanded ? 'gap-3 px-4' : 'justify-center')}>
         {expanded && <BrandLockup />}
         {wide ? (
@@ -130,7 +130,7 @@ export const Sidebar = forwardRef<HTMLElement, Props>(function Sidebar(
             aria-label={open ? 'Collapse sidebar' : 'Expand sidebar'}
             aria-expanded={open}
             aria-controls="app-sidebar"
-            className={clsx('flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg',
+            className={clsx('flex h-8 w-8 shrink-0 items-center justify-center rounded-lg',
               'text-gray-500 transition-colors hover:bg-gray-850 hover:text-gray-200',
               open && 'ml-auto')}
           >
@@ -150,7 +150,7 @@ export const Sidebar = forwardRef<HTMLElement, Props>(function Sidebar(
       </div>
 
       {wide && page && (
-        <div className={clsx('flex flex-shrink-0 items-center gap-1 border-b border-gray-800 py-2',
+        <div className={clsx('flex shrink-0 items-center gap-1 border-b border-gray-800 py-2',
           expanded ? 'px-2' : 'justify-center')}>
           {page.onBack && (
             <button
@@ -158,7 +158,7 @@ export const Sidebar = forwardRef<HTMLElement, Props>(function Sidebar(
               onClick={page.onBack}
               title="Back to the previous page"
               aria-label="Back"
-              className="flex flex-shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs
+              className="flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs
                          text-gray-500 transition-colors hover:bg-gray-850 hover:text-gray-200"
             >
               <ArrowLeft size={14} /> {expanded && 'Back'}
@@ -221,7 +221,7 @@ export const Sidebar = forwardRef<HTMLElement, Props>(function Sidebar(
                               className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full
                                          bg-accent-400" />
                           )}
-                          <Icon size={17} className={clsx('flex-shrink-0',
+                          <Icon size={17} className={clsx('shrink-0',
                             isActive ? 'text-accent-400' : 'text-gray-500 group-hover:text-gray-300')} />
                           {expanded && <span className="truncate">{label}</span>}
                         </>
@@ -243,11 +243,11 @@ export const Sidebar = forwardRef<HTMLElement, Props>(function Sidebar(
       )}
 
       {/* Who is signed in, sign out, theme. */}
-      <div className="flex-shrink-0 border-t border-gray-800 p-2">
+      <div className="shrink-0 border-t border-gray-800 p-2">
         {user && (
           expanded ? (
             <div className="flex items-center gap-2.5 px-2 py-2">
-              <span aria-hidden="true" className="flex h-8 w-8 flex-shrink-0 items-center
+              <span aria-hidden="true" className="flex h-8 w-8 shrink-0 items-center
                 justify-center rounded-md border border-accent-800/70 bg-accent-950/60
                 font-mono text-xs font-semibold text-accent-300">
                 {user.username?.[0]?.toUpperCase()}
@@ -281,7 +281,7 @@ export const Sidebar = forwardRef<HTMLElement, Props>(function Sidebar(
               'transition-colors hover:bg-red-950/40 hover:text-red-300',
               expanded ? 'flex-1 px-2.5 py-2' : 'h-9 w-9 justify-center')}
           >
-            <LogOut size={17} className="flex-shrink-0" />
+            <LogOut size={17} className="shrink-0" />
             {expanded ? <span>Sign out</span> : <span className="sr-only">Sign out</span>}
           </button>
           <ThemeToggle className={expanded ? '' : 'h-9 w-9 justify-center'} />

@@ -64,7 +64,7 @@ export default function RoadmapPage() {
         className="group flex items-center gap-4 rounded-xl border border-gray-800 bg-gray-900 p-4
                    transition-colors hover:border-accent-800 hover:bg-gray-850/60"
       >
-        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg border
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border
                         border-accent-800/70 bg-accent-950/50 text-accent-300" aria-hidden="true">
           <Swords size={18} />
         </div>
@@ -90,7 +90,7 @@ export default function RoadmapPage() {
           )}
         </div>
         <ArrowRight size={16} aria-hidden="true"
-          className="flex-shrink-0 text-gray-500 transition-transform group-hover:translate-x-0.5 group-hover:text-accent-400" />
+          className="shrink-0 text-gray-500 transition-transform group-hover:translate-x-0.5 group-hover:text-accent-400" />
       </Link>
 
       <div>

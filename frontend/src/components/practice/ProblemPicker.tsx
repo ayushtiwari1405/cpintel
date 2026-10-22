@@ -147,7 +147,7 @@ export function ProblemPicker({
                       : 'border-l-2 border-l-transparent hover:bg-gray-900'
                   )}
                 >
-                  <span className="w-14 flex-shrink-0 font-mono text-[11px] text-gray-600">
+                  <span className="w-14 shrink-0 font-mono text-[11px] text-gray-600">
                     {p.contestId}{p.index}
                   </span>
 
@@ -166,7 +166,7 @@ export function ProblemPicker({
                   </span>
 
                   <span className={clsx(
-                    'flex-shrink-0 text-xs font-medium tabular-nums',
+                    'shrink-0 text-xs font-medium tabular-nums',
                     ratingColor(p.rating)
                   )}>
                     {p.rating ?? '—'}

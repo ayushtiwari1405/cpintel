@@ -87,7 +87,7 @@ export function FilesPanel({ open, onClose, contest, onUseInEditor }: Props) {
 
       <aside
         className={clsx(
-          'w-[30rem] max-w-full h-full bg-gray-900 border-l border-gray-800',
+          'w-120 max-w-full h-full bg-gray-900 border-l border-gray-800',
           'flex flex-col shadow-2xl',
           dragging && 'ring-2 ring-inset ring-accent-500'
         )}
@@ -96,7 +96,7 @@ export function FilesPanel({ open, onClose, contest, onUseInEditor }: Props) {
         onDrop={onDrop}
       >
         <header className="flex items-center gap-2 px-4 h-14 border-b border-gray-800
-                           flex-shrink-0">
+                           shrink-0">
           <FolderOpen size={16} className="text-accent-400" />
           <span className="text-sm font-medium text-gray-100">Your files</span>
           {vault && (
@@ -119,7 +119,7 @@ export function FilesPanel({ open, onClose, contest, onUseInEditor }: Props) {
         ) : (
           <>
             <div className="px-4 py-3 border-b border-gray-800 flex flex-col gap-2
-                            flex-shrink-0">
+                            shrink-0">
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => inputRef.current?.click()}
@@ -156,7 +156,7 @@ export function FilesPanel({ open, onClose, contest, onUseInEditor }: Props) {
             </div>
 
             <div className="flex flex-col min-h-0 flex-1">
-              <div className="overflow-y-auto max-h-56 border-b border-gray-800 flex-shrink-0">
+              <div className="overflow-y-auto max-h-56 border-b border-gray-800 shrink-0">
                 {isLoading ? (
                   <div className="flex items-center gap-2 p-4 text-xs text-gray-600">
                     <Loader2 size={12} className="animate-spin" /> Loading your files…
@@ -193,7 +193,7 @@ export function FilesPanel({ open, onClose, contest, onUseInEditor }: Props) {
                   </div>
                 ) : content?.text != null ? (
                   <>
-                    <div className="flex items-center gap-2 px-4 py-2 flex-shrink-0">
+                    <div className="flex items-center gap-2 px-4 py-2 shrink-0">
                       <FileText size={12} className="text-gray-600" />
                       <span className="text-[11px] text-gray-500 truncate">
                         {content.file.name}
@@ -272,7 +272,7 @@ function FileRow({ file, active, onOpen, onDownload, onDelete }: RowProps) {
     >
       <FileText
         size={13}
-        className={clsx('flex-shrink-0', active ? 'text-accent-400' : 'text-gray-600')}
+        className={clsx('shrink-0', active ? 'text-accent-400' : 'text-gray-600')}
       />
       <div className="min-w-0 flex-1">
         <div className="text-xs text-gray-200 truncate">{file.name}</div>
@@ -280,20 +280,20 @@ function FileRow({ file, active, onOpen, onDownload, onDelete }: RowProps) {
           <div className="text-[10px] text-gray-600 truncate">{file.label}</div>
         )}
       </div>
-      <span className="text-[10px] text-gray-600 tabular-nums flex-shrink-0">
+      <span className="text-[10px] text-gray-600 tabular-nums shrink-0">
         {human(file.sizeBytes)}
       </span>
       <button
         onClick={e => { e.stopPropagation(); onDownload() }}
         title="Download"
-        className="text-gray-700 hover:text-gray-300 transition-colors flex-shrink-0"
+        className="text-gray-700 hover:text-gray-300 transition-colors shrink-0"
       >
         <Download size={12} />
       </button>
       <button
         onClick={e => { e.stopPropagation(); onDelete() }}
         title="Delete"
-        className="text-gray-700 hover:text-red-400 transition-colors flex-shrink-0"
+        className="text-gray-700 hover:text-red-400 transition-colors shrink-0"
       >
         <Trash2 size={12} />
       </button>

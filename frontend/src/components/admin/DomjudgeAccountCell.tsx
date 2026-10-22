@@ -59,7 +59,7 @@ export function DomjudgeAccountCell({ classroomId, userId, username }: Props) {
               {account.teamMismatch && (
                 <AlertTriangle
                   size={10}
-                  className="flex-shrink-0 text-yellow-500"
+                  className="shrink-0 text-yellow-500"
                   aria-label="assigned team differs from the judge's"
                 />
               )}
@@ -197,7 +197,7 @@ function AttachDialog(
   }
 
   const field = `w-full rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 text-sm
-                 text-gray-200 placeholder-gray-400 outline-none focus:border-accent-600`
+                 text-gray-200 placeholder-gray-400 outline-hidden focus:border-accent-600`
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">

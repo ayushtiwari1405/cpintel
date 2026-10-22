@@ -57,7 +57,7 @@ export function ContestLoader({ onLoad, loading }: Props) {
                 : 'border-gray-800 bg-gray-900 hover:border-gray-700 hover:bg-gray-800/60'
             )}
           >
-            <Icon size={18} className={clsx('mt-0.5 flex-shrink-0',
+            <Icon size={18} className={clsx('mt-0.5 shrink-0',
               platform === id ? 'text-accent-400' : 'text-gray-500')} />
             <span className="min-w-0">
               <span className={clsx('block text-sm font-medium',
@@ -104,7 +104,7 @@ export function ContestLoader({ onLoad, loading }: Props) {
         <button
           onClick={submit}
           disabled={loading || !url.trim()}
-          className="btn-primary py-2 px-5 text-sm flex items-center gap-2 flex-shrink-0"
+          className="btn-primary py-2 px-5 text-sm flex items-center gap-2 shrink-0"
         >
           {loading && <Loader2 size={14} className="animate-spin" />}
           Load
