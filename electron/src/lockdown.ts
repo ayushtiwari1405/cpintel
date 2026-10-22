@@ -101,7 +101,7 @@ export class Lockdown {
   private policy: LockdownPolicy = { ...DEFAULT_POLICY }
 
   /** What the clipboard held when focus left, so a change while away can be spotted. */
-  private clipboardOnBlur: string | null = null
+  private clipboardOnBlur: Promise<string | null> | null = null
 
   private readonly onChange: (state: LockdownState) => void
 
@@ -285,7 +285,8 @@ export class Lockdown {
     if (!this.engaged) return
     this.tracker.onBlur(Date.now())
     // Read now, compare on the way back. Anything that appears in the clipboard while the
-    // window is away came from somewhere else.
+    // window is away came from somewhere else. The read is kept as a promise (clipboard reads
+    // are asynchronous since Electron 44) so a quick return still compares against it.
     this.clipboardOnBlur = safeReadClipboard()
     this.emit()
   }
@@ -296,13 +297,21 @@ export class Lockdown {
 
     // Copy and paste inside the app are untouched — that is how code gets written. What is
     // refused is content that arrived from outside while the contestant was elsewhere.
-    const now = this.policy.clipboardGuard ? safeReadClipboard() : null
-    if (now !== null && now !== '' && now !== this.clipboardOnBlur) {
+    const before = this.clipboardOnBlur
+    this.clipboardOnBlur = null
+    if (this.policy.clipboardGuard) void this.wipeIfChanged(before)
+    this.emit()
+  }
+
+  private async wipeIfChanged(before: Promise<string | null> | null): Promise<void> {
+    const [was, now] = await Promise.all([before, safeReadClipboard()])
+    // Released while the reads were in flight: the clipboard is no longer ours to touch.
+    if (!this.engaged) return
+    if (now !== null && now !== '' && now !== was) {
       clipboard.clear()
       this.clipboardWipes++
+      this.emit()
     }
-    this.clipboardOnBlur = null
-    this.emit()
   }
 
   /**
@@ -374,9 +383,9 @@ export class Lockdown {
  * common enough to matter. A failed read means "cannot tell", and cannot-tell must not be
  * mistaken for "it changed" — that would wipe the clipboard on a timing accident.
  */
-function safeReadClipboard(): string | null {
+async function safeReadClipboard(): Promise<string | null> {
   try {
-    return clipboard.readText()
+    return await clipboard.readText()
   } catch {
     return null
   }
