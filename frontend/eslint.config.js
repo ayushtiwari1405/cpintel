@@ -48,4 +48,10 @@ export default [
     files: ['extension-src/**/*.js'],
     languageOptions: { globals: { ...globals.browser, ...globals.webextensions } },
   },
+  {
+    // Run by Node: the session tests and the browser smoke suite (whose page.evaluate callbacks
+    // run in the page, hence the browser globals as well).
+    files: ['tests/**/*.mjs', 'e2e/**/*.mjs'],
+    languageOptions: { globals: { ...globals.node, ...globals.browser } },
+  },
 ]

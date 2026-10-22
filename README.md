@@ -881,6 +881,7 @@ cd electron && npm test         # away-time accounting, external-link schemes, e
 python3 -I scripts/test_grab_cf_cookie.py   # where the Codeforces helper will send a session
 python3 -I scripts/test_nginx_edge.py       # edge headers and the restarting answer (uses Docker)
 cd frontend && npm run type-check && npm run lint
+cd frontend && npm test         # session tests (Node), then component and page tests (Vitest, jsdom)
 ```
 
 All of these run in CI (`.github/workflows/ci.yml`) and in `scripts/ci-local.sh`. The backend
@@ -893,12 +894,33 @@ fails the run. The coverage gate (`jacoco.min.instruction` in `backend/pom.xml`)
 up. The nginx test skips its container half when Docker is unavailable or `CPINTEL_NO_DOCKER=1`
 is set.
 
-The frontend has no test runner yet; that is a known gap rather than an oversight.
+`npm test` in `frontend/` runs two suites, neither needing a browser or the backend:
+`tests/session.test.mjs` drives the axios session handling against a scripted server on Node's
+own runner, and Vitest runs the component and page tests under `src/**/*.test.tsx` - route guards
+and roles, the practice plan's states, sign-in, examination unlock and keyboard use. Those use the
+real routes, providers and API client, with the backend scripted behind the client
+(`src/test/server.ts`).
+
+### Browser smoke test (opt-in)
+
+Not part of `npm test` or CI: it starts a throwaway stack and drives a real Chrome through sign-in,
+a reload, the dashboard, roadmap and practice plan, an administrator's console and a phone-width
+layout check.
+
+```bash
+cd frontend && npm run test:e2e:smoke    # or scripts/e2e-smoke.sh [--keep] [--rebuild]
+scripts/e2e-smoke.sh --cleanup           # lists anything an interrupted run left (--yes removes it)
+```
+
+It needs Docker, Java 21, Node 24 and a Chrome or Chromium (`E2E_CHROME` if it is not on PATH).
+Its containers are `--rm`, labelled and named `cpintel-e2e-*`, on free loopback ports and with no
+named volume, so the development stack and the `cpintel_*` volumes are never touched; passwords
+are generated per run and deleted with its temporary directory, and Codeforces is stubbed.
 
 ### Running CI before pushing
 
 `scripts/ci-local.sh` runs the same stages as `.github/workflows/ci.yml` — workflow lint, backend
-tests with the coverage gate, frontend type check and build, the desktop and script tests, and
+tests with the coverage gate, frontend type check, tests and build, the desktop and script tests, and
 the Docker images — against a
 clean snapshot of the repo, so local `node_modules`, `target/` or `public/mathjax` cannot hide a
 failure the CI runner would hit. It takes about two minutes warm.

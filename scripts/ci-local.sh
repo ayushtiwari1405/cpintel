@@ -12,8 +12,8 @@
 #   ./scripts/ci-local.sh --no-cache      # build images without the layer cache, as a cold CI runner does
 #   ./scripts/ci-local.sh --audit         # also run the dependency audits (needs NVD_API_KEY for the backend)
 #
-# Stages mirror the CI jobs: workflow lint, backend tests + coverage gate, frontend type check
-# + build, desktop tests, the helper and edge nginx script tests, backend and frontend Docker
+# Stages mirror the CI jobs: workflow lint, backend tests + coverage gate, frontend type check,
+# tests + build, desktop tests, the helper and edge nginx script tests, backend and frontend Docker
 # images. Each stage logs to a file; a failure prints the
 # end of its log and the run carries on, so one push attempt reports every broken stage.
 set -uo pipefail
@@ -97,7 +97,8 @@ backend_tests() (
 )
 
 frontend_build() (
-  cd "$SRC/frontend" && npm ci --no-audit --no-fund && npm run type-check && npm run lint && npm run build
+  cd "$SRC/frontend" && npm ci --no-audit --no-fund && npm run type-check && npm run lint && npm test \
+    && npm run build
 )
 
 desktop_tests() (
@@ -139,7 +140,7 @@ else
 fi
 
 stage "backend tests + coverage" backend_tests
-stage "frontend type-check + build" frontend_build
+stage "frontend type-check + tests + build" frontend_build
 stage "desktop tests" desktop_tests
 stage "script tests" script_tests
 
