@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useLogin } from '@/hooks/useAuth'
 import { Eye, EyeOff } from 'lucide-react'
@@ -11,6 +11,8 @@ export default function LoginPage() {
   const [password, setPassword]     = useState('')
   const [showPass, setShowPass]     = useState(false)
   const login = useLogin()
+  const identifierId = useId()
+  const passwordId = useId()
   // Set when an examination session was closed because its paper ended.
   const examEnded = new URLSearchParams(window.location.search).has('exam-ended')
   // Set when an ordinary session was closed because the person's examination is running.
@@ -77,10 +79,11 @@ export default function LoginPage() {
               room they typed their own name wrongly.
             */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1.5">
+              <label htmlFor={identifierId} className="block text-sm font-medium text-gray-300 mb-1.5">
                 Email or username
               </label>
               <input
+                id={identifierId}
                 type="text"
                 value={identifier}
                 onChange={e => setIdentifier(e.target.value)}
@@ -93,9 +96,10 @@ export default function LoginPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1.5">Password</label>
+              <label htmlFor={passwordId} className="block text-sm font-medium text-gray-300 mb-1.5">Password</label>
               <div className="relative">
                 <input
+                  id={passwordId}
                   type={showPass ? 'text' : 'password'}
                   value={password}
                   onChange={e => setPassword(e.target.value)}
@@ -107,6 +111,7 @@ export default function LoginPage() {
                 <button
                   type="button"
                   onClick={() => setShowPass(v => !v)}
+                  aria-label={showPass ? 'Hide password' : 'Show password'}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300"
                 >
                   {showPass ? <EyeOff size={16} /> : <Eye size={16} />}

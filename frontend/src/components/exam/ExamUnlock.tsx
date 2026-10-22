@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { AlertTriangle, ArrowLeft, Clock, KeyRound, Loader2, Lock } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 
@@ -33,6 +33,8 @@ export function ExamUnlock({ exam, onLeave }: Props) {
   const [examPassword, setExamPassword] = useState('')
   const [passcode, setPasscode] = useState('')
   const unlock = useUnlockExam()
+  const sharedId = useId()
+  const personalId = useId()
 
   const live = exam.event.lifecycle === 'ACTIVE'
   const wantsShared = exam.needsExamPassword
@@ -104,10 +106,11 @@ export function ExamUnlock({ exam, onLeave }: Props) {
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
           {wantsShared && (
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1.5">
+              <label htmlFor={sharedId} className="block text-sm font-medium text-gray-300 mb-1.5">
                 Examination password
               </label>
               <input
+                id={sharedId}
                 type="text"
                 value={examPassword}
                 onChange={e => setExamPassword(e.target.value)}
@@ -128,10 +131,11 @@ export function ExamUnlock({ exam, onLeave }: Props) {
 
           {wantsPersonal && (
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1.5">
+              <label htmlFor={personalId} className="block text-sm font-medium text-gray-300 mb-1.5">
                 Your own code
               </label>
               <input
+                id={personalId}
                 type="text"
                 value={passcode}
                 onChange={e => setPasscode(e.target.value)}
@@ -151,7 +155,7 @@ export function ExamUnlock({ exam, onLeave }: Props) {
           )}
 
           {error && (
-            <p className="flex items-start gap-2 rounded-lg border border-red-900
+            <p role="alert" className="flex items-start gap-2 rounded-lg border border-red-900
               bg-red-950/40 px-3 py-2.5 text-xs leading-relaxed text-red-200">
               <AlertTriangle size={13} className="mt-0.5 shrink-0" />
               <span>{error}</span>
