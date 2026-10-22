@@ -334,10 +334,12 @@ per client library and account; the backend's names the Java driver, and should 
 `... as cpintel_app` (your own mongosh session shows up as root):
 
 ```bash
-docker exec cpintel-mongo sh -c 'mongosh --quiet -u "$MONGO_INITDB_ROOT_USERNAME" \
-  -p "$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin --eval \
-  "[...new Set(db.currentOp({ \$all: true }).inprog.filter(o => o.effectiveUsers && o.clientMetadata)
-     .map(o => o.clientMetadata.driver.name + \" as \" + o.effectiveUsers[0].user))]"'
+# mongosh signs in with the container's own root credentials, read inside the script, so the
+# password is on no command line (as in the scripts here).
+printf '%s\n' \
+  'db = connect("mongodb://" + encodeURIComponent(process.env.MONGO_INITDB_ROOT_USERNAME) + ":" + encodeURIComponent(process.env.MONGO_INITDB_ROOT_PASSWORD) + "@localhost:27017/admin");' \
+  'print([...new Set(db.currentOp({ $all: true }).inprog.filter(o => o.effectiveUsers && o.clientMetadata).map(o => o.clientMetadata.driver.name + " as " + o.effectiveUsers[0].user))])' |
+  docker exec -i cpintel-mongo sh -c 'f=$(mktemp); cat > "$f"; mongosh --quiet --nodb --file "$f"; rm -f "$f"'
 ```
 
 Going back: an older version reads its MongoDB address from the same `docker-compose.yml`, so

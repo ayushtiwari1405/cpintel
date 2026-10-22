@@ -103,17 +103,23 @@ start() {   # <role> <docker run arguments...>
   docker run -d --rm --name "$name" --label "$LABEL=1" --label "$LABEL.run=$RUN" "$@" >/dev/null
   CONTAINERS+=("$name")
 }
-start postgres -e POSTGRES_DB=cpintel -e POSTGRES_USER=cpintel -e POSTGRES_PASSWORD="$PG_PW" \
+# Passwords go to the containers as `-e NAME`, taken from this script's environment, so none is
+# on a docker command line, where the host's process list would show it.
+POSTGRES_PASSWORD="$PG_PW" start postgres -e POSTGRES_DB=cpintel -e POSTGRES_USER=cpintel -e POSTGRES_PASSWORD \
   -p "127.0.0.1:$PG_PORT:5432" postgres:16-alpine
 # The backend signs in as the least-privilege account (MONGO_APP_USER), as in docker-compose.yml.
 # A fresh installation gets it from mongo-init.js; --mongo-upgrade starts without it, as a database
 # made before it existed, and has scripts/mongo-app-user.sh add it below.
-MONGO_INIT=(-e MONGO_APP_USER=cpintel_app -e MONGO_APP_PASSWORD="$MONGO_APP_PASSWORD"
+MONGO_INIT=(-e MONGO_APP_USER=cpintel_app -e MONGO_APP_PASSWORD
   -v "$ROOT/mongo-init.js:/docker-entrypoint-initdb.d/init.js:ro")
 [ "$MONGO_UPGRADE" = 1 ] && MONGO_INIT=()
-start mongo -e MONGO_INITDB_ROOT_USERNAME=cpintel_mongo -e MONGO_INITDB_ROOT_PASSWORD="$MONGO_PW" \
+MONGO_INITDB_ROOT_PASSWORD="$MONGO_PW" MONGO_APP_PASSWORD="$MONGO_APP_PASSWORD" \
+  start mongo -e MONGO_INITDB_ROOT_USERNAME=cpintel_mongo -e MONGO_INITDB_ROOT_PASSWORD \
   -e MONGO_INITDB_DATABASE=cpintel "${MONGO_INIT[@]}" -p "127.0.0.1:$MONGO_PORT:27017" mongo:7.0
-start redis -p "127.0.0.1:$REDIS_PORT:6379" redis:7.2-alpine redis-server --requirepass "$REDIS_PW"
+# As docker-compose.yml starts it: the password as a config line on standard input.
+# shellcheck disable=SC2016  # expanded by the container's shell
+REDIS_PASSWORD="$REDIS_PW" start redis -e REDIS_PASSWORD -p "127.0.0.1:$REDIS_PORT:6379" redis:7.2-alpine \
+  sh -c 'printf "requirepass \"%s\"\n" "$(printf %s "$REDIS_PASSWORD" | sed "s/[\\\"]/\\\\&/g")" | exec redis-server -'
 PG="${PREFIX}postgres-$RUN" MONGO="${PREFIX}mongo-$RUN"
 for _ in $(seq 1 60); do docker exec "$PG" pg_isready -U cpintel -d cpintel >/dev/null 2>&1 && break; sleep 1; done
 for _ in $(seq 1 60); do

@@ -18,9 +18,9 @@
 #     --reset-password.
 #   - It writes nothing to the data. The check signs in as the account, reads its own
 #     connectionStatus (user and roles), and confirms it is refused admin.system.users.
-#   - The account's password reaches no command line and no output: it travels in this
-#     script's environment and on stdin. The root password is the container's own and is used
-#     as backup.sh uses it, as a mongosh argument inside the container.
+#   - No password reaches a command line or the output: the account's travels in this script's
+#     environment and on stdin; the root one is the container's own, read by mongosh from the
+#     container's environment inside the script it runs.
 #   - It waits (up to a minute) for MongoDB to answer on the container's own network address.
 #     On a first start the image runs mongod once on localhost only, to run mongo-init.js, then
 #     again for real; an answer on localhost alone can come from that first run.
@@ -64,12 +64,16 @@ CONTAINER="${CPINTEL_MONGO_CONTAINER:-cpintel-mongo}"
 # Runs the JavaScript on stdin as the container's root account. Fed to mongosh as a file rather
 # than on stdin, where mongosh echoes its prompt into the output; the file is private to the
 # container's root and removed at once, and keeps the account's password off any command line.
-# With "network", through the container's own address rather than localhost.
+# Signs in from inside the script mongosh runs, with the root credentials the container already
+# holds in its environment (MONGO_INITDB_ROOT_*): no password on a command line, on this machine
+# or in the container, where the host's process list would show it.
+# With "network", through the container's own address (HOSTNAME) rather than localhost.
 root_mongosh() {
-  docker exec -i -e VIA="${1:-}" "$CONTAINER" sh -c 'umask 077; f=$(mktemp); cat > "$f"; \
-    host=localhost; [ "$VIA" = network ] && host="$(hostname)"; \
-    mongosh --quiet --host "$host" -u "$MONGO_INITDB_ROOT_USERNAME" -p "$MONGO_INITDB_ROOT_PASSWORD" \
-      --authenticationDatabase admin --file "$f"; status=$?; rm -f "$f"; exit $status'
+  local host='"localhost"'
+  [ "${1:-}" = network ] && host='process.env.HOSTNAME'
+  { printf 'db = connect("mongodb://" + encodeURIComponent(process.env.MONGO_INITDB_ROOT_USERNAME) + ":" + encodeURIComponent(process.env.MONGO_INITDB_ROOT_PASSWORD) + "@" + %s + ":27017/admin?authSource=admin");\n' "$host"
+    cat; } | docker exec -i "$CONTAINER" sh -c 'umask 077; f=$(mktemp); cat > "$f"; \
+    mongosh --quiet --nodb --file "$f"; status=$?; rm -f "$f"; exit $status'
 }
 # A container started a moment ago may not be answering yet, or may still be in its first,
 # localhost-only start (see the top).

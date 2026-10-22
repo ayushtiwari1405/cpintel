@@ -24,6 +24,16 @@ DIR="${CPINTEL_BACKUP_DIR:-/var/backups/cpintel}"
 # The containers, by name; set only to point at another stack, as the restore drill does.
 PG_CONTAINER="${CPINTEL_PG_CONTAINER:-cpintel-postgres}"
 MONGO_CONTAINER="${CPINTEL_MONGO_CONTAINER:-cpintel-mongo}"
+# For mongodump and mongorestore, which cannot read a script: the root password in a private file
+# in the container, given as --config and removed on exit, rather than as -p on a command line.
+read -r -d '' MONGO_TOOLS_AUTH <<'SH' || true
+umask 077
+c=$(mktemp)
+trap 'rm -f "$c"' EXIT
+printf 'password: "%s"\n' "$(printf %s "$MONGO_INITDB_ROOT_PASSWORD" | sed 's/[\\"]/\\&/g')" > "$c"
+SH
+# mongosh reads them from the container's environment inside the script it runs, for the same reason.
+MONGOSH_ROOT='db = connect("mongodb://" + encodeURIComponent(process.env.MONGO_INITDB_ROOT_USERNAME) + ":" + encodeURIComponent(process.env.MONGO_INITDB_ROOT_PASSWORD) + "@localhost:27017/admin?authSource=admin");'
 TEST=0
 if [ "${1:-}" = "--test" ]; then TEST=1; shift; fi
 STAMP="${1:?usage: restore.sh [--test] <stamp>   (see ls $DIR)}"
@@ -48,17 +58,15 @@ if [ "$TEST" = 1 ]; then
     union all (select 'postgres schema version: ' || version from flyway_schema_history
                where success order by installed_rank desc limit 1)\""
 
-  docker exec -i "$MONGO_CONTAINER" sh -c "mongorestore --quiet --archive --gzip --drop \
-    --nsFrom 'cpintel.*' --nsTo '$SCRATCH.*' \
-    -u \"\$MONGO_INITDB_ROOT_USERNAME\" -p \"\$MONGO_INITDB_ROOT_PASSWORD\" \
-    --authenticationDatabase admin" < "$MONGO"
-  docker exec "$MONGO_CONTAINER" sh -c "mongosh --quiet \
-    -u \"\$MONGO_INITDB_ROOT_USERNAME\" -p \"\$MONGO_INITDB_ROOT_PASSWORD\" \
-    --authenticationDatabase admin --eval '
-      const d = db.getSiblingDB(\"$SCRATCH\");
+  docker exec -i "$MONGO_CONTAINER" sh -c "$MONGO_TOOLS_AUTH
+    mongorestore --quiet --archive --gzip --drop --nsFrom 'cpintel.*' --nsTo '$SCRATCH.*' \
+      -u \"\$MONGO_INITDB_ROOT_USERNAME\" --config \"\$c\" --authenticationDatabase admin" < "$MONGO"
+  printf '%s\n' "$MONGOSH_ROOT" "
+      const d = db.getSiblingDB('$SCRATCH');
       d.getCollectionNames().sort().forEach(c =>
-        print(\"mongo \" + c + \": \" + d[c].countDocuments({})));
-      d.dropDatabase();'"
+        print('mongo ' + c + ': ' + d[c].countDocuments({})));
+      d.dropDatabase();" | docker exec -i "$MONGO_CONTAINER" sh -c 'umask 077; f=$(mktemp); cat > "$f"; \
+    mongosh --quiet --nodb --file "$f"; s=$?; rm -f "$f"; exit $s'
 
   docker exec "$PG_CONTAINER" sh -c "dropdb -U \"\$POSTGRES_USER\" $SCRATCH"
   echo "Test restore succeeded; scratch databases dropped. Write the date down."
@@ -80,7 +88,7 @@ read -r -p "Type 'restore' to continue: " answer
 
 docker exec -i "$PG_CONTAINER" sh -c 'pg_restore -U "$POSTGRES_USER" -d cpintel \
   --clean --if-exists --no-owner --exit-on-error' < "$PG"
-docker exec -i "$MONGO_CONTAINER" sh -c 'mongorestore --quiet --archive --gzip --drop \
-  -u "$MONGO_INITDB_ROOT_USERNAME" -p "$MONGO_INITDB_ROOT_PASSWORD" \
-  --authenticationDatabase admin' < "$MONGO"
+docker exec -i "$MONGO_CONTAINER" sh -c "$MONGO_TOOLS_AUTH"'
+  mongorestore --quiet --archive --gzip --drop \
+    -u "$MONGO_INITDB_ROOT_USERNAME" --config "$c" --authenticationDatabase admin' < "$MONGO"
 echo "Restored $STAMP. Start the backend again: docker compose start backend"

@@ -242,9 +242,11 @@ wait_backend() {   # <seconds> <UP|DOWN>
 }
 
 root_mongo() {   # <javascript>: as MongoDB's root account, inside the test container
-  docker exec -i "$PROJECT-mongo" sh -c 'umask 077; f=$(mktemp); cat > "$f"; mongosh --quiet \
-    -u "$MONGO_INITDB_ROOT_USERNAME" -p "$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin \
-    cpintel --file "$f"; s=$?; rm -f "$f"; exit $s' <<<"$1"
+  # The credentials are read by mongosh from the container's environment, as in
+  # scripts/mongo-app-user.sh: no password on a command line.
+  { printf '%s\n' 'db = connect("mongodb://" + encodeURIComponent(process.env.MONGO_INITDB_ROOT_USERNAME) + ":" + encodeURIComponent(process.env.MONGO_INITDB_ROOT_PASSWORD) + "@localhost:27017/cpintel?authSource=admin");'
+    printf '%s\n' "$1"; } | docker exec -i "$PROJECT-mongo" sh -c 'umask 077; f=$(mktemp); cat > "$f"; \
+    mongosh --quiet --nodb --file "$f"; s=$?; rm -f "$f"; exit $s'
 }
 
 app_account() {   # [args]: scripts/mongo-app-user.sh against this phase's MongoDB
@@ -316,6 +318,29 @@ db_digest() {
 file_digest() {
   root_mongo 'print(EJSON.stringify(db.personal_files.find({}, { name: 0 }).sort({ _id: 1 }).toArray(), { relaxed: false }))' | sha256sum
 }
+# No generated secret on any of the run's command lines: each container's process list
+# (docker top) and the command and health check docker inspect shows. Secrets belong in the
+# environment only. (Account names are not secrets.)
+command_lines_clean() {
+  local c found=0
+  for c in $(compose ps -q 2>/dev/null); do
+    { docker top "$c" -eo args 2>/dev/null || docker top "$c" 2>/dev/null
+      docker inspect -f '{{json .Config.Cmd}} {{json .Config.Entrypoint}} {{json .Config.Healthcheck}}' "$c"
+    } > "$WORK/cmdlines.txt"
+    if ! python3 -I -c '
+import sys
+text = open(sys.argv[1], encoding="utf-8", errors="replace").read()
+env = dict(l.rstrip("\n").split("=", 1) for l in open(sys.argv[2]) if "=" in l)
+hits = [k for k, v in env.items() if len(v) >= 12 and v in text and not k.endswith(("_USER", "_USERNAME", "_EMAIL", "_URL", "_DOMAIN"))]
+print(", ".join(hits)); sys.exit(1 if hits else 0)' "$WORK/cmdlines.txt" "$ENV_FILE" > "$WORK/cmdlines.hits"; then
+      echo "!!! On a command line of $(docker inspect -f '{{.Name}}' "$c"): $(cat "$WORK/cmdlines.hits")"; found=1
+    fi
+  done
+  rm -f "$WORK/cmdlines.txt" "$WORK/cmdlines.hits"
+  [ "$found" = 0 ] || return 1
+  echo "  no generated secret on any container's command line, process list or health check"
+}
+
 # A dump by scripts/backup.sh, run from a copy in the run's directory so that no .env of this
 # checkout is read - it could name a real backup directory or a remote to copy to.
 take_backup() {
@@ -346,6 +371,7 @@ phase_fresh() {
   made="$(root_mongo 'print(db.personal_files.getIndexes().some(i => i.name === "idx_files_user_name" && i.unique) + "," + db.contest_file_rules.getIndexes().some(i => i.name === "idx_file_rule_contest" && i.unique))')"
   [ "$made" = "true,true" ] || { echo "!!! The backend did not create its unique indexes ($made)."; return 1; }
   echo "  the backend created its own unique indexes (personal files, contest file rules)"
+  command_lines_clean
   api_checks fresh || { diagnose backend nginx; return 1; }
 
   echo "  stopping MongoDB: health must say DOWN, not UP"

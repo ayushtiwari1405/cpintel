@@ -48,10 +48,18 @@ docker exec "$PG_CONTAINER" sh -c 'pg_dump -U "$POSTGRES_USER" -d cpintel -Fc' \
   > "$pg_out.partial"
 mv "$pg_out.partial" "$pg_out"
 
+# For mongodump and mongorestore, which cannot read a script: the root password in a private file
+# in the container, given as --config and removed on exit, rather than as -p on a command line.
+read -r -d '' MONGO_TOOLS_AUTH <<'SH' || true
+umask 077
+c=$(mktemp)
+trap 'rm -f "$c"' EXIT
+printf 'password: "%s"\n' "$(printf %s "$MONGO_INITDB_ROOT_PASSWORD" | sed 's/[\\"]/\\&/g')" > "$c"
+SH
 mongo_out="$DIR/mongo-$STAMP.archive.gz"
-docker exec "$MONGO_CONTAINER" sh -c 'mongodump --quiet --archive --gzip --db cpintel \
-    -u "$MONGO_INITDB_ROOT_USERNAME" -p "$MONGO_INITDB_ROOT_PASSWORD" \
-    --authenticationDatabase admin' > "$mongo_out.partial"
+docker exec "$MONGO_CONTAINER" sh -c "$MONGO_TOOLS_AUTH"'
+  mongodump --quiet --archive --gzip --db cpintel \
+    -u "$MONGO_INITDB_ROOT_USERNAME" --config "$c" --authenticationDatabase admin' > "$mongo_out.partial"
 mv "$mongo_out.partial" "$mongo_out"
 
 chmod 600 "$pg_out" "$mongo_out"

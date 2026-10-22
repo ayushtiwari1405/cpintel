@@ -66,11 +66,22 @@ docker exec "$CONTAINER" sh -c '[ -n "$MONGO_INITDB_ROOT_USERNAME" ] && command 
 
 # The JavaScript on stdin, as the container's root account - fed as a private temporary file, as
 # scripts/mongo-app-user.sh does, so no value reaches a command line on this machine.
+# Signs in from inside the script mongosh runs, with the root credentials the container already
+# holds in its environment (MONGO_INITDB_ROOT_*): no password on a command line, on this machine
+# or in the container, where the host's process list would show it.
 root_mongosh() {
-  docker exec -i "$CONTAINER" sh -c 'umask 077; f=$(mktemp); cat > "$f"; \
-    mongosh --quiet -u "$MONGO_INITDB_ROOT_USERNAME" -p "$MONGO_INITDB_ROOT_PASSWORD" \
-      --authenticationDatabase admin --file "$f"; status=$?; rm -f "$f"; exit $status'
+  { printf '%s\n' 'db = connect("mongodb://" + encodeURIComponent(process.env.MONGO_INITDB_ROOT_USERNAME) + ":" + encodeURIComponent(process.env.MONGO_INITDB_ROOT_PASSWORD) + "@localhost:27017/admin?authSource=admin");'
+    cat; } | docker exec -i "$CONTAINER" sh -c 'umask 077; f=$(mktemp); cat > "$f"; \
+    mongosh --quiet --nodb --file "$f"; status=$?; rm -f "$f"; exit $status'
 }
+# For mongodump and mongorestore, which cannot read a script: the root password in a private file
+# in the container, given as --config and removed on exit, rather than as -p on a command line.
+read -r -d '' MONGO_TOOLS_AUTH <<'SH' || true
+umask 077
+c=$(mktemp)
+trap 'rm -f "$c"' EXIT
+printf 'password: "%s"\n' "$(printf %s "$MONGO_INITDB_ROOT_PASSWORD" | sed 's/[\\"]/\\&/g')" > "$c"
+SH
 for _ in $(seq 1 30); do
   echo 'print(db.adminCommand({ ping: 1 }).ok)' | root_mongosh 2>/dev/null | grep -qx 1 && break
   sleep 1
@@ -90,8 +101,9 @@ check_backup() {
   [ "$age" -le "$max_hours" ] || { echo "!!! The backup is ${age} h old (allowed: ${max_hours} h). Take a fresh one with the backend stopped."; exit 4; }
   gzip -t "$BACKUP" 2>/dev/null || { echo "!!! The backup is not a readable gzip file."; exit 4; }
   # Read through by mongorestore without writing anything.
-  docker exec -i "$CONTAINER" sh -c 'mongorestore --quiet --dryRun --archive --gzip --nsInclude "cpintel.*" \
-    -u "$MONGO_INITDB_ROOT_USERNAME" -p "$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin' \
+  docker exec -i "$CONTAINER" sh -c "$MONGO_TOOLS_AUTH"'
+    mongorestore --quiet --dryRun --archive --gzip --nsInclude "cpintel.*" \
+      -u "$MONGO_INITDB_ROOT_USERNAME" --config "$c" --authenticationDatabase admin' \
     < "$BACKUP" >/dev/null 2>&1 || { echo "!!! mongorestore could not read the backup as a MongoDB dump."; exit 4; }
   echo "Backup: $(basename "$BACKUP"), ${age} h old, readable"
 }

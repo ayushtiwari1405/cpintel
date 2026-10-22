@@ -1,5 +1,6 @@
 package com.cpintel.admin;
 
+import com.cpintel.mail.MailService;
 import com.cpintel.entity.UnifiedScore;
 import com.cpintel.entity.User;
 import com.cpintel.repository.jpa.UnifiedScoreRepository;
@@ -35,6 +36,10 @@ import org.springframework.util.StringUtils;
  *       well-known administrator password is worse than one with no administrator at all,
  *       because the second failure is loud and the first is silent.</li>
  * </ul>
+ *
+ * <p>Its log lines name the account by user id, or - before one exists - by the address masked
+ * to its first letter and domain ({@link MailService#masked}): the address is personal data, and
+ * the log is read more widely than the configuration it came from.
  *
  * Idempotent, and safe to leave configured. An account that is already a super admin is left
  * alone, and the setting never touches any other account.
@@ -79,7 +84,7 @@ public class AdminBootstrap implements ApplicationRunner {
         }
 
         if (Roles.SUPER_ADMIN.equals(user.getRole())) {
-            log.debug("Bootstrap account {} is already a super admin", email);
+            log.debug("Bootstrap account (user {}) is already a super admin", user.getUserId());
             return;
         }
 
@@ -92,20 +97,20 @@ public class AdminBootstrap implements ApplicationRunner {
 
         auditService.record(user.getUserId(), AuditService.ADMIN_BOOTSTRAPPED, "USER",
             user.getUserId() + ":" + previous + "->" + Roles.SUPER_ADMIN);
-        log.info("Promoted {} from {} to SUPER_ADMIN via cpintel.admin.bootstrap-email",
-            email, previous);
+        log.info("Promoted user {} from {} to SUPER_ADMIN via cpintel.admin.bootstrap-email",
+            user.getUserId(), previous);
     }
 
     private void createSuperAdmin(String email) {
         if (!StringUtils.hasText(bootstrapPassword)) {
             log.warn("cpintel.admin.bootstrap-email is set to {}, but no account has that "
                 + "address and cpintel.admin.bootstrap-password is unset, so one cannot be "
-                + "created. Set CPINTEL_ADMIN_PASSWORD and restart.", email);
+                + "created. Set CPINTEL_ADMIN_PASSWORD and restart.", MailService.masked(email));
             return;
         }
         if (bootstrapPassword.length() < 8) {
             log.error("cpintel.admin.bootstrap-password is shorter than 8 characters. "
-                + "Refusing to create the super admin {}.", email);
+                + "Refusing to create the super admin {}.", MailService.masked(email));
             return;
         }
 
@@ -113,7 +118,7 @@ public class AdminBootstrap implements ApplicationRunner {
             ? bootstrapUsername.trim() : "superadmin";
         if (userRepository.existsByUsername(username)) {
             log.error("Cannot create super admin {}: the username '{}' is taken. "
-                + "Set cpintel.admin.bootstrap-username to something else.", email, username);
+                + "Set cpintel.admin.bootstrap-username to something else.", MailService.masked(email), username);
             return;
         }
 
@@ -130,7 +135,7 @@ public class AdminBootstrap implements ApplicationRunner {
 
         auditService.record(user.getUserId(), AuditService.ADMIN_BOOTSTRAPPED, "USER",
             user.getUserId() + ":created");
-        log.info("Created super admin {} (username '{}') from configuration. "
-            + "Change this password after signing in.", email, username);
+        log.info("Created super admin user {} (username '{}') from configuration. "
+            + "Change this password after signing in.", user.getUserId(), username);
     }
 }
