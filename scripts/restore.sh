@@ -20,6 +20,13 @@
 # (docker compose stop backend) so nothing writes while the data is being put back.
 set -euo pipefail
 
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+if [ -f "$ROOT/.env" ]; then
+  # CPINTEL_BACKUP_DIR as backup.sh reads it, so both look in the same place.
+  while IFS='=' read -r key value; do
+    [ "$key" = CPINTEL_BACKUP_DIR ] && [ -z "${CPINTEL_BACKUP_DIR:-}" ] && export "$key=$value"
+  done < <(grep -E '^CPINTEL_BACKUP_DIR=' "$ROOT/.env" || true)
+fi
 DIR="${CPINTEL_BACKUP_DIR:-/var/backups/cpintel}"
 # The containers, by name; set only to point at another stack, as the restore drill does.
 PG_CONTAINER="${CPINTEL_PG_CONTAINER:-cpintel-postgres}"
@@ -43,6 +50,11 @@ MONGO="$DIR/mongo-$STAMP.archive.gz"
 for f in "$PG" "$MONGO"; do
   [ -s "$f" ] || { echo "Missing or empty: $f"; exit 1; }
 done
+# Both read back before anything is touched: a truncated archive found halfway would leave one
+# database restored and the other not (or, with --test, scratch databases behind).
+gzip -t "$MONGO" 2>/dev/null || { echo "!!! $MONGO is not a readable archive. Nothing was changed."; exit 1; }
+docker exec -i "$PG_CONTAINER" pg_restore --list < "$PG" > /dev/null 2>&1 \
+  || { echo "!!! $PG does not read as a Postgres dump. Nothing was changed."; exit 1; }
 
 if [ "$TEST" = 1 ]; then
   SCRATCH="cpintel_restore_test"
@@ -81,8 +93,11 @@ if docker ps --format '{{.Names}}' | grep -qx "$BACKEND_CONTAINER"; then
   exit 1
 fi
 
-echo "This REPLACES the live CPIntel databases with the backup $STAMP."
-echo "Everything written since that backup will be lost."
+project_of() { docker inspect -f '{{index .Config.Labels "com.docker.compose.project"}}' "$1" 2>/dev/null || true; }
+echo "This REPLACES the cpintel databases in these containers with the backup $STAMP:"
+echo "  Postgres: $PG_CONTAINER (Compose project: $(project_of "$PG_CONTAINER"))"
+echo "  MongoDB:  $MONGO_CONTAINER (Compose project: $(project_of "$MONGO_CONTAINER"))"
+echo "Everything written to them since that backup will be lost."
 read -r -p "Type 'restore' to continue: " answer
 [ "$answer" = "restore" ] || { echo "Cancelled."; exit 1; }
 
@@ -91,4 +106,9 @@ docker exec -i "$PG_CONTAINER" sh -c 'pg_restore -U "$POSTGRES_USER" -d cpintel 
 docker exec -i "$MONGO_CONTAINER" sh -c "$MONGO_TOOLS_AUTH"'
   mongorestore --quiet --archive --gzip --drop \
     -u "$MONGO_INITDB_ROOT_USERNAME" --config "$c" --authenticationDatabase admin' < "$MONGO"
-echo "Restored $STAMP. Start the backend again: docker compose start backend"
+echo "Restored $STAMP. Before starting the backend:"
+echo "  - scripts/mongo-app-user.sh --check: database accounts are not in a backup (README, MongoDB accounts)"
+echo "  - scripts/mongo-index-upgrade.sh --container $MONGO_CONTAINER --check: a backup brings back the"
+echo "    indexes it was taken with, so one from before the index upgrade needs it again"
+echo "    (README, Upgrading an existing MongoDB)"
+echo "Then: docker compose start backend"

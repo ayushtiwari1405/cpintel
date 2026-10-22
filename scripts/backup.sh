@@ -8,6 +8,13 @@
 # files. Both are dumped from inside their running containers, with the credentials those
 # containers already have, so nothing here needs a password of its own.
 #
+# What a backup is: the cpintel database of each, data and index definitions. Not in it: database
+# accounts and roles (Postgres roles, MongoDB's root and the backend's cpintel_app - these come
+# from .env and scripts/mongo-app-user.sh), .env itself and its keys, Redis (sessions and grants,
+# rebuilt as people sign in; exam grants are in Postgres too), and anything outside the
+# databases. A dump is kept only if it reads back (pg_restore --list, gzip -t); if the MongoDB
+# one fails, the Postgres one of the same run is removed too, so a stamp is always a pair.
+#
 # Settings (environment, or .env beside docker-compose.yml):
 #   CPINTEL_BACKUP_DIR        where dumps are written       default /var/backups/cpintel
 #   CPINTEL_BACKUP_KEEP_DAYS  how long local dumps are kept  default 14
@@ -41,11 +48,16 @@ chmod 700 "$DIR"
 
 echo "[$(date -u +%FT%TZ)] backup $STAMP → $DIR"
 
-# Written under a temporary name and renamed once complete, so a dump cut short by a full disk
-# or a killed container never sits in the directory looking like a good one.
+# Written under a temporary name, read back, and only then renamed, so a dump cut short by a
+# full disk or a killed container never sits in the directory looking like a good one. A run
+# that fails removes its own partial files.
 pg_out="$DIR/postgres-$STAMP.dump"
+mongo_out="$DIR/mongo-$STAMP.archive.gz"
+trap 'rm -f "$pg_out.partial" "$mongo_out.partial"' EXIT
 docker exec "$PG_CONTAINER" sh -c 'pg_dump -U "$POSTGRES_USER" -d cpintel -Fc' \
   > "$pg_out.partial"
+docker exec -i "$PG_CONTAINER" pg_restore --list < "$pg_out.partial" > /dev/null \
+  || { echo "!!! The Postgres dump does not read back; nothing was kept."; exit 1; }
 mv "$pg_out.partial" "$pg_out"
 
 # For mongodump and mongorestore, which cannot read a script: the root password in a private file
@@ -56,10 +68,12 @@ c=$(mktemp)
 trap 'rm -f "$c"' EXIT
 printf 'password: "%s"\n' "$(printf %s "$MONGO_INITDB_ROOT_PASSWORD" | sed 's/[\\"]/\\&/g')" > "$c"
 SH
-mongo_out="$DIR/mongo-$STAMP.archive.gz"
 docker exec "$MONGO_CONTAINER" sh -c "$MONGO_TOOLS_AUTH"'
   mongodump --quiet --archive --gzip --db cpintel \
-    -u "$MONGO_INITDB_ROOT_USERNAME" --config "$c" --authenticationDatabase admin' > "$mongo_out.partial"
+    -u "$MONGO_INITDB_ROOT_USERNAME" --config "$c" --authenticationDatabase admin' > "$mongo_out.partial" \
+  || { echo "!!! mongodump failed; nothing was kept."; rm -f "$pg_out"; exit 1; }
+gzip -t "$mongo_out.partial" 2>/dev/null && [ -s "$mongo_out.partial" ] \
+  || { echo "!!! The MongoDB dump does not read back; nothing was kept."; rm -f "$pg_out"; exit 1; }
 mv "$mongo_out.partial" "$mongo_out"
 
 chmod 600 "$pg_out" "$mongo_out"

@@ -145,6 +145,11 @@ jobs:
       - name: Compose secret handling tests
         run: python3 -I scripts/test_compose_secrets.py
 
+      # Throwaway Postgres and MongoDB: backup.sh and restore.sh, their refusals, and a restore
+      # into another pair, from before the index upgrade too.
+      - name: Backup and restore tests
+        run: python3 -I scripts/test_backup_restore.py
+
       # The load test's settings file and its MongoDB start, without Docker.
       - name: Load-test stack tests
         run: python3 -I scripts/loadtest/test_stack.py

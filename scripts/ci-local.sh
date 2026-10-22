@@ -120,7 +120,9 @@ script_tests() (
          && CPINTEL_NO_DOCKER=1 python3 -I scripts/integration/test_cleanup_lock.py;
        else python3 -I scripts/test_mongo_index_upgrade.py && python3 -I scripts/integration/test_cleanup_lock.py; fi \
     && if [[ $DOCKER -eq 0 ]]; then CPINTEL_NO_DOCKER=1 python3 -I scripts/test_compose_secrets.py;
-       else python3 -I scripts/test_compose_secrets.py; fi
+       else python3 -I scripts/test_compose_secrets.py; fi \
+    && if [[ $DOCKER -eq 0 ]]; then CPINTEL_NO_DOCKER=1 python3 -I scripts/test_backup_restore.py;
+       else python3 -I scripts/test_backup_restore.py; fi
 )
 
 docker_backend()  { docker build "${NO_CACHE[@]}" -t "$TAG-backend"  "$SRC/backend"; }
