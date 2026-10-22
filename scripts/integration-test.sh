@@ -7,7 +7,8 @@
 #   scripts/integration-test.sh --only fresh     one phase (fresh | upgrade)
 #   scripts/integration-test.sh --keep           leave the last phase's stack up (prints how to stop it)
 #   scripts/integration-test.sh --cleanup        list what earlier runs left behind (removes nothing)
-#   scripts/integration-test.sh --cleanup --yes  remove it
+#   scripts/integration-test.sh --cleanup --yes  remove it - except a run still going (below)
+#   scripts/integration-test.sh --cleanup --yes --project cpintel-it-<id>   only that project
 #
 # Fresh install: postgres, mongodb (with today's mongo-init.js), redis, backend, frontend and
 # nginx. Checks the backend's MongoDB account is readWrite on cpintel only and that the backend
@@ -17,11 +18,15 @@
 # reached any container's log.
 #
 # Upgrade: MongoDB starts from the previous release's mongo-init.js (integration/fixtures/), as
-# a server installed before P6 would have it, and gets data written as root. Then the
-# documented upgrade (README, "MongoDB accounts"): scripts/mongo-app-user.sh creates the
-# account (and finds nothing to do a second time); the backend, started on the old indexes,
-# must fail with IndexOptionsConflict rather than come up; the documented index drop follows;
-# then the backend must come up, the data must still be there, and the API must work.
+# a server installed before P6 would have it, with data written as root - among it duplicate
+# personal file names and a duplicated contest rule, which nothing enforced before. Then the
+# documented upgrade (README, "Upgrading an existing MongoDB"): scripts/mongo-app-user.sh
+# creates the account (and finds nothing to do a second time); the backend, started on the old
+# indexes, must stop rather than come up; scripts/mongo-index-upgrade.sh must find every
+# conflict without changing anything, refuse to apply without a backup and while duplicates
+# remain, export them, rename the duplicate files keeping every file's content, and - once a
+# person has chosen between the duplicated rules - apply, and find nothing to do a second time.
+# Then the backend must come up, every document must still be there, and the API must work.
 #
 # What it touches, and what it never does:
 #   - Each phase is a Compose project of its own, cpintel-it-<run id>[-upgrade]: its containers
@@ -33,9 +38,13 @@
 #     start or to serve the workflow above.
 #   - Secrets are generated for the run into a private temporary directory, passed to Compose
 #     as an env file, and deleted with it. None is printed; diagnostics are redacted.
-#   - Cleanup is `docker compose -p <that project> down -v --rmi local` for the projects this
-#     run created, so it removes their containers, volumes, network and the images Compose
-#     built for them, and nothing else. The Docker build cache is kept.
+#   - Cleanup works by project name, which must be cpintel-it-<letters, digits, dashes>: the
+#     containers, volumes and networks carrying that Compose project label, and the images named
+#     <project>-backend|frontend|nginx|runner (Compose labels its images with no project). Never
+#     a prune. A run removes its own projects when it ends; --cleanup removes those left by runs
+#     that did not end, but skips a project whose run still holds its lock - a flock on
+#     ${CPINTEL_IT_LOCK_DIR:-$XDG_RUNTIME_DIR or /tmp}/cpintel-it-locks/<run>.lock, taken for the
+#     run's whole life. The Docker build cache is kept.
 #
 # Needs: Docker with Compose v2.24 or later (!reset/!override), and python3. Time: a first run
 # builds the backend, frontend and nginx images (several minutes); later runs reuse the build
@@ -44,7 +53,8 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 HERE="$ROOT/scripts/integration"
-PHASES=(fresh upgrade) KEEP=0 CLEANUP=0 YES=0
+PHASES=(fresh upgrade) KEEP=0 CLEANUP=0 YES=0 ONLY_PROJECT=""
+LOCK_DIR="${CPINTEL_IT_LOCK_DIR:-${XDG_RUNTIME_DIR:-/tmp}/cpintel-it-locks}"
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -52,6 +62,7 @@ while [ $# -gt 0 ]; do
     --keep) KEEP=1 ;;
     --cleanup) CLEANUP=1 ;;
     --yes) YES=1 ;;
+    --project) shift; ONLY_PROJECT="${1:-}" ;;
     *) sed -n '2,10p' "$0"; exit 2 ;;
   esac
   shift
@@ -77,12 +88,21 @@ remove_project() {   # <project>: only that project's containers, volumes, netwo
   docker images --format '{{.Repository}}:{{.Tag}}' | grep -E "^$p-(backend|frontend|nginx|runner):" \
     | xargs -r docker rmi >/dev/null 2>&1 || true
 }
+# A run holds a flock on its lock file for as long as it lives; one that can be taken here belongs
+# to a run that has ended.
+lock_file() { echo "$LOCK_DIR/${1%-upgrade}.lock"; }
+in_use() { [ -f "$(lock_file "$1")" ] && ! flock -n "$(lock_file "$1")" true; }
+
 if [ "$CLEANUP" = 1 ]; then
-  mapfile -t projects < <(leftover_projects)
+  mapfile -t projects < <(leftover_projects | { if [ -n "$ONLY_PROJECT" ]; then grep -Fx -- "$ONLY_PROJECT" || true; else cat; fi; })
   [ "${#projects[@]}" -gt 0 ] || { echo "Nothing left behind by earlier runs."; exit 0; }
   echo "Left behind by earlier runs:"; printf '  %s\n' "${projects[@]}"
   [ "$YES" = 1 ] || { echo "Run again with --cleanup --yes to remove them."; exit 0; }
-  for p in "${projects[@]}"; do remove_project "$p" && echo "Removed $p."; done
+  command -v flock >/dev/null || { echo "!!! flock is needed to tell a running test from leftovers; nothing removed."; exit 1; }
+  for p in "${projects[@]}"; do
+    if in_use "$p"; then echo "Skipped $p: its run is still going."; continue; fi
+    remove_project "$p" && rm -f "$(lock_file "$p")" && echo "Removed $p."
+  done
   exit 0
 fi
 
@@ -97,6 +117,11 @@ python3 -I -c 'import sys; v=[int(x) for x in sys.argv[1].lstrip("v").split(".")
 echo "  docker compose $compose_version"
 
 RUN_ID="$(date +%Y%m%d%H%M%S)-$(python3 -I -c 'import secrets; print(secrets.token_hex(3))')"
+command -v flock >/dev/null || { echo "!!! flock (util-linux) is needed."; exit 1; }
+( umask 077; mkdir -p "$LOCK_DIR" )
+LOCK="$(lock_file "cpintel-it-$RUN_ID")"
+exec {LOCK_FD}>"$LOCK"
+flock -n "$LOCK_FD" || { echo "!!! Could not lock $LOCK."; exit 1; }
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/cpintel-it.XXXXXX")"
 chmod 700 "$WORK"
 CREATED=()          # projects this run started, removed on exit unless --keep
@@ -112,6 +137,7 @@ finish() {
     for p in "${CREATED[@]}"; do remove_project "$p" || true; done
   fi
   rm -rf "$WORK"
+  [ "$KEEP" = 1 ] || rm -f "$LOCK"
   exit "$status"
 }
 trap finish EXIT
@@ -282,6 +308,24 @@ fi
 grep -q 'set MONGO_APP_PASSWORD in .env' <<<"$out" || { echo "!!! Without MONGO_APP_PASSWORD, Compose failed for another reason:"; redact <<<"$out"; exit 1; }
 echo "  without MONGO_APP_PASSWORD, Compose refuses before starting anything"
 
+# Every document and index of the test database, hashed: to show a step changed nothing.
+db_digest() {
+  root_mongo 'const out = {}; for (const c of db.getCollectionNames().sort()) out[c] = { d: db[c].find().sort({ _id: 1 }).toArray(), i: db[c].getIndexes() }; print(EJSON.stringify(out));' | sha256sum
+}
+# Every personal file but its name: what a rename must leave as it was.
+file_digest() {
+  root_mongo 'print(EJSON.stringify(db.personal_files.find({}, { name: 0 }).sort({ _id: 1 }).toArray(), { relaxed: false }))' | sha256sum
+}
+# A dump by scripts/backup.sh, run from a copy in the run's directory so that no .env of this
+# checkout is read - it could name a real backup directory or a remote to copy to.
+take_backup() {
+  mkdir -p "$WORK/backup-tool/scripts" "$WORK/backups"
+  cp "$ROOT/scripts/backup.sh" "$WORK/backup-tool/scripts/"
+  CPINTEL_BACKUP_DIR="$WORK/backups" CPINTEL_BACKUP_REMOTE="" CPINTEL_PG_CONTAINER="$PROJECT-postgres" \
+    CPINTEL_MONGO_CONTAINER="$PROJECT-mongo" bash "$WORK/backup-tool/scripts/backup.sh" it >/dev/null 2>&1
+  find "$WORK/backups" -name 'mongo-*.archive.gz' | head -1
+}
+
 api_checks() {   # fresh|upgrade
   IT_BASE_URL="https://127.0.0.1:$PORT" IT_ADMIN_EMAIL="$(env_value CPINTEL_ADMIN_EMAIL)" \
     IT_ADMIN_PASSWORD="$(env_value CPINTEL_ADMIN_PASSWORD)" python3 -I "$HERE/api_checks.py" "$1"
@@ -322,47 +366,105 @@ phase_upgrade() {
   compose up -d postgres mongodb redis >/dev/null 2>&1
   wait_healthy 180 postgres mongodb redis
 
-  # What a server installed before P6 holds: data written with the root account, and no app account.
+  # What a server installed before P6 holds: data written with the root account, no app account,
+  # and duplicates nothing enforced - personal file names (with extensions and an existing
+  # "(2)") and a contest rule.
   root_mongo '
+const t = i => new Date(Date.UTC(2026, 8, 1, 0, i));
+const file = (u, name, i) => ({ userId: NumberLong(String(u)), name: name, label: "it-" + i, contentType: "text/plain",
+  content: BinData(0, btoa("file " + i)), sizeBytes: 6, sourceHash: "h" + i, textual: true, uploadedAt: t(i), updatedAt: t(i) });
 db.code_submissions.insertMany([
-  { userId: 990001, platform: "CODEFORCES", contestId: "1900", problemIndex: "A", externalId: "it-1", source: "int main(){}", submittedAt: new Date() },
-  { userId: 990001, platform: "CODEFORCES", contestId: "1900", problemIndex: "B", externalId: "it-2", source: "int main(){return 0;}", submittedAt: new Date() }]);
-db.cf_submissions.insertOne({ userId: 990001, cfSubmissionId: 424242, verdict: "OK", submittedAt: new Date() });' >/dev/null
+  { userId: NumberLong("990001"), platform: "CODEFORCES", contestId: "1900", problemIndex: "A", externalId: "it-1", source: "int main(){}", submittedAt: t(0) },
+  { userId: NumberLong("990001"), platform: "CODEFORCES", contestId: "1900", problemIndex: "B", externalId: "it-2", source: "int main(){return 0;}", submittedAt: t(1) }]);
+db.cf_submissions.insertOne({ userId: NumberLong("990001"), cfSubmissionId: NumberLong("424242"), verdict: "OK", submittedAt: t(0) });
+db.personal_files.insertMany([file(990001, "main.cpp", 1), file(990001, "main.cpp", 2), file(990001, "main (2).cpp", 3),
+  file(990001, "a.tar.gz", 4), file(990001, "a.tar.gz", 5), file(990002, "main.cpp", 6)]);
+db.contest_file_rules.insertMany([
+  { platform: "DOMJUDGE", contestId: "mid", enabled: false, updatedBy: NumberLong("1"), updatedAt: t(1) },
+  { platform: "DOMJUDGE", contestId: "mid", enabled: true, updatedBy: NumberLong("2"), updatedAt: t(2) }]);' >/dev/null
+  # The earlier release's unique (userId, cfSubmissionId) index already refuses a duplicate.
+  [ "$(root_mongo 'try { db.cf_submissions.insertOne({ userId: NumberLong("990001"), cfSubmissionId: NumberLong("424242") }); print("accepted") } catch (e) { print(e.code) }')" = 11000 ] \
+    || { echo "!!! The earlier release's cf_submissions index did not refuse a duplicate."; return 1; }
   [ "$(root_mongo 'print(db.getUser("cpintel_app") === null)')" = true ] \
     || { echo "!!! The earlier release's database already has cpintel_app."; return 1; }
-  echo "  an earlier release's database: no cpintel_app, 3 documents written as root"
+  echo "  an earlier release's database: no cpintel_app, duplicate file names and a duplicated contest rule"
+  local files_before
+  files_before="$(file_digest)"
 
   if app_account --check >/dev/null; then echo "!!! --check passed before the account existed."; return 1; fi
   app_account | sed 's/^/  /'
   app_account | sed 's/^/  (again) /'
 
-  # The backend on the old, default-named indexes: it must refuse to come up, and say why.
+  # The backend on the old indexes: it must stop rather than come up. A protective stop, not the
+  # migration.
   compose up -d backend >/dev/null 2>&1
   local deadline=$((SECONDS + 240))
-  # grep -c, not -q: -q stops reading at the first match, compose logs dies of SIGPIPE, and
-  # under pipefail the match would count as a miss.
-  until [ "$(docker logs "$PROJECT-backend" 2>&1 | grep -c 'IndexOptionsConflict')" -gt 0 ]; do
-    [ $SECONDS -lt $deadline ] || { echo "!!! The backend did not report IndexOptionsConflict."; diagnose backend; return 1; }
+  # grep -c, not -q: -q stops reading at the first match, the writer dies of SIGPIPE, and under
+  # pipefail the match would count as a miss.
+  until [ "$(docker logs "$PROJECT-backend" 2>&1 | grep -cE 'IndexOptionsConflict|E11000')" -gt 0 ]; do
+    [ $SECONDS -lt $deadline ] || { echo "!!! The backend did not stop on the old indexes."; diagnose backend; return 1; }
     [ "$(health_of "$PROJECT-backend")" = healthy ] && { echo "!!! The backend came up on conflicting indexes."; return 1; }
     sleep 3
   done
   compose stop backend >/dev/null 2>&1
-  echo "  the backend refused to start on the old indexes, with IndexOptionsConflict in its log"
+  echo "  the backend refused to start on the old indexes and duplicates"
 
-  # The README's remedy.
-  root_mongo '
-db.code_submissions.dropIndex("userId_1_platform_1_contestId_1_problemIndex_1_submittedAt_-1");
-db.code_submissions.dropIndex("userId_1_platform_1_externalId_1");
-db.cf_submissions.dropIndex("userId_1_cfSubmissionId_1");
-db.cf_submissions.dropIndex("userId_1_verdict_1");' >/dev/null
-  echo "  dropped the four default-named indexes, as the README says"
+  # The procedure, as the README gives it.
+  local upgrade=("$ROOT/scripts/mongo-index-upgrade.sh" --container "$PROJECT-mongo") out state code
+  state="$(db_digest)"
+  set +e; out="$("${upgrade[@]}" --check 2>&1)"; code=$?; set -e
+  [ "$code" = 3 ] || { echo "!!! --check answered $code, not 3 (duplicates):"; redact <<<"$out"; return 1; }
+  if ! { grep -q 'personal_files (userId, name; idx_files_user_name): 2 duplicated key(s), 4 documents' <<<"$out" \
+      && grep -q 'contest_file_rules (platform, contestId; idx_file_rule_contest): 1 duplicated key(s), 2 documents' <<<"$out" \
+      && grep -q 'held as legacy userId_1_cfSubmissionId_1' <<<"$out"; }; then
+    echo "!!! --check did not report every conflict:"; redact <<<"$out"; return 1
+  fi
+  [ "$(db_digest)" = "$state" ] || { echo "!!! --check changed the database."; return 1; }
+  echo "  --check: duplicate files and rules found, legacy indexes recognised, nothing changed"
+
+  set +e; "${upgrade[@]}" --apply >/dev/null 2>&1; code=$?; set -e
+  [ "$code" = 4 ] || { echo "!!! --apply without a backup answered $code, not 4."; return 1; }
+  local backup
+  backup="$(take_backup)"
+  set +e; "${upgrade[@]}" --apply --backup "$backup" >/dev/null 2>&1; code=$?; set -e
+  [ "$code" = 3 ] && [ "$(db_digest)" = "$state" ] || { echo "!!! --apply did not refuse while duplicates remain ($code)."; return 1; }
+  echo "  --apply refused without a backup, then while duplicates remain; nothing changed"
+
+  "${upgrade[@]}" --export "$WORK/upgrade" >/dev/null 2>&1 || true
+  local rules
+  rules="$(cat "$WORK"/upgrade/mongo-index-upgrade-*/contest_file_rules.conflicts.jsonl)"
+  if [ "$(grep -c . <<<"$rules")" != 2 ] || grep -q '"content"' "$WORK"/upgrade/mongo-index-upgrade-*/personal_files.conflicts.jsonl; then
+    echo "!!! The export is not the two rules and the files without content."; return 1
+  fi
+  "${upgrade[@]}" --rename-duplicate-files "$WORK/upgrade" --confirm --backup "$backup" | grep -E '^Plan:|renamed [0-9]' | sed 's/^/  /'
+  # The person's decision, by _id from the export: the first of the two rules goes.
+  local drop
+  # shellcheck disable=SC2016  # $oid is Extended JSON, not a shell variable
+  drop="$(head -1 <<<"$rules" | python3 -I -c 'import json, sys; print(json.load(sys.stdin)["_id"]["$oid"])')"
+  root_mongo "db.contest_file_rules.deleteOne({ _id: ObjectId(\"$drop\") })" >/dev/null
+  echo "  exported both rules, renamed the duplicate files, removed the rule a person chose"
+
+  set +e; out="$("${upgrade[@]}" --apply --backup "$backup" 2>&1)"; code=$?; set -e
+  [ "$code" = 0 ] || { echo "!!! --apply answered $code:"; redact <<<"$out"; return 1; }
+  state="$(db_digest)"
+  set +e; out="$("${upgrade[@]}" --apply --backup "$backup" 2>&1)"; code=$?; set -e
+  if [ "$code" != 0 ] || [ "$(db_digest)" != "$state" ] || grep -qE ' (created|dropped) ' <<<"$out"; then
+    echo "!!! A second --apply was not a no-op ($code)."; return 1
+  fi
+  echo "  --apply put every index in place; a second run changed nothing"
+
+  [ "$(file_digest)" = "$files_before" ] || { echo "!!! A personal file's content or metadata changed."; return 1; }
+  # shellcheck disable=SC2016  # MongoDB field paths, not shell variables
+  [ "$(root_mongo 'print(db.personal_files.aggregate([{ $group: { _id: { u: "$userId", n: "$name" }, c: { $sum: 1 } } }, { $match: { c: { $gt: 1 } } }]).toArray().length)')" = 0 ] \
+    || { echo "!!! A user still has two files of one name."; return 1; }
+  echo "  every personal file kept its content and metadata, under a name of its own"
 
   compose up -d backend frontend nginx >/dev/null 2>&1
   wait_backend 300 UP || { diagnose backend nginx; return 1; }
   local counts
-  counts="$(root_mongo 'print(db.code_submissions.countDocuments({ userId: 990001 }) + "," + db.cf_submissions.countDocuments({ userId: 990001 }) + "," + db.code_submissions.getIndexes().map(i => i.name).includes("idx_code_user_problem"))')"
-  [ "$counts" = "2,1,true" ] || { echo "!!! After the upgrade: documents and index '$counts', expected 2,1,true."; return 1; }
-  echo "  the data written before the upgrade is all there, and the backend made its own indexes"
+  counts="$(root_mongo 'print([db.code_submissions.countDocuments({ userId: 990001 }), db.cf_submissions.countDocuments({ userId: 990001 }), db.personal_files.countDocuments(), db.contest_file_rules.countDocuments(), db.personal_files.getIndexes().some(i => i.name === "idx_files_user_name" && i.unique)].join(","))')"
+  [ "$counts" = "2,1,6,1,true" ] || { echo "!!! After the upgrade: '$counts', expected 2,1,6,1,true."; return 1; }
+  echo "  the backend is up; every document is there but the rule a person removed"
   api_checks upgrade || { diagnose backend nginx; return 1; }
   app_account --check | sed 's/^/  /'
   logs_clean
