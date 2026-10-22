@@ -274,6 +274,10 @@ belongs outside examinations, which is why the script refuses one during a paper
   touching live data.
 - **Desktop app:** built by the Electron workflow on a `v*` tag, against the repository variable
   `CPINTEL_SERVER_URL`. It is a window onto that server and talks to nothing else.
+- **Browsers:** the site's stylesheet (Tailwind CSS 4) needs Chrome or Edge 111+, Firefox 128+
+  or Safari 16.4+; anything older loads with a broken layout. On a lab machine, open
+  `chrome://version` (or Help → About) and compare. The desktop app carries its own Chromium,
+  so machines that use it are unaffected.
 - **Codeforces on the website:** a hosted server cannot fetch Codeforces' pages (its browser
   check refuses servers), so website users need the CPIntel extension, which fetches them from
   their own browser. Nothing has to be set up for that: somebody who tries to connect Codeforces
@@ -308,6 +312,51 @@ docker compose --profile monitoring up -d
 
 Grafana on `localhost:3000`, Prometheus on `localhost:9090` — loopback only; on a server,
 reach them over an SSH tunnel.
+
+**Upgrading a monitoring stack that already has data.** `deploy.sh` never starts this profile,
+so the next `--profile monitoring up` is the upgrade. Grafana 12.4 migrates its database on first
+start and Prometheus 3 writes its newer storage format; neither project supports running the
+older version on what the newer one wrote. (In a rehearsal on scratch volumes with a few minutes'
+data, 10.4 and 2.51 did start again on the upgraded volumes — not something to count on with
+real data.) The way back is a copy taken before. Loki (profile `logs`) keeps the TSDB v13 schema
+it has always used. Copy the volumes with the services stopped (a running Grafana or Prometheus
+can be mid-write); this takes the dashboards down for under a minute and touches nothing else:
+
+```bash
+docker compose --profile monitoring stop grafana prometheus alertmanager
+B=/var/backups/cpintel/monitoring-$(date -u +%Y%m%dT%H%M%SZ) && mkdir -p "$B"
+for v in grafana_data prometheus_data alertmanager_data; do
+  docker run --rm -v cpintel_$v:/data:ro -v "$B":/backup alpine:3.20 tar -C /data -czf /backup/$v.tar.gz .
+done
+(cd "$B" && for f in *.tar.gz; do tar -tzf "$f" >/dev/null && echo "ok $f"; done && sha256sum *.tar.gz > SHA256SUMS)
+docker compose --profile monitoring up -d
+```
+
+To prove a copy restores, unpack it into a scratch volume and start the old image on it, never on
+the live volume:
+
+```bash
+docker volume create grafana_restore_test
+docker run --rm -v grafana_restore_test:/data -v "$B":/backup:ro alpine:3.20 tar -C /data -xzf /backup/grafana_data.tar.gz
+docker run -d --name grafana-restore-test -p 127.0.0.1:13000:3000 -v grafana_restore_test:/var/lib/grafana grafana/grafana:10.4.0
+curl -s 127.0.0.1:13000/api/health   # "database": "ok"
+docker rm -f grafana-restore-test && docker volume rm grafana_restore_test
+```
+
+To go back after an upgrade, put the copy back over the live volume (this replaces what is there)
+and start the version that wrote it (`grafana/grafana:10.4.0`, `prom/prometheus:v2.51.0`,
+`prom/alertmanager:v0.27.0`, the tags `docker-compose.yml` had before the upgrade), for example:
+
+```bash
+docker compose --profile monitoring stop grafana
+docker run --rm -v cpintel_grafana_data:/data -v "$B":/backup:ro alpine:3.20 \
+  sh -c 'find /data -mindepth 1 -delete && tar -C /data -xzf /backup/grafana_data.tar.gz'
+# then set the old image tag for grafana in docker-compose.yml and:
+docker compose --profile monitoring up -d grafana
+```
+
+Prometheus keeps 7 days of metrics, so starting the old version on an empty volume is also an
+acceptable way back. All of the above was rehearsed on scratch volumes, not on a live server.
 
 ## Configuration
 
@@ -890,6 +939,14 @@ Zig's Clang on macOS and Linux, CPython everywhere — fetched by `scripts/fetch
 from pinned, checksummed URLs into `electron/toolchain`, about 400–520 MB unpacked per platform.
 In dev, run `npm run toolchain` once to get them; without them the app runs code in its browser
 engine instead.
+
+To check which Electron an installer actually carries, without installing or running it:
+
+```bash
+7z x -o/tmp/cpi CPIntel-Setup-<v>-x64.exe '$PLUGINSDIR/app-64.7z'
+7z x -o/tmp/cpi '/tmp/cpi/$PLUGINSDIR/app-64.7z' CPIntel.exe
+strings -n 8 /tmp/cpi/CPIntel.exe | grep -oE 'Electron/[0-9.]+' | sort -u   # expect the lockfile's version
+```
 
 The Electron shell wraps the same React SPA used on web — there is no separate frontend
 codebase.
