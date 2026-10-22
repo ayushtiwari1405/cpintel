@@ -1,5 +1,7 @@
 package com.cpintel.config;
 
+import com.mongodb.ConnectionString;
+import com.mongodb.MongoClientSettings;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
 import org.springframework.beans.factory.annotation.Value;
@@ -12,6 +14,9 @@ import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.SimpleMongoClientDatabaseFactory;
 import org.springframework.data.mongodb.core.convert.MongoConverter;
 
+import java.time.Duration;
+import java.util.concurrent.TimeUnit;
+
 @Configuration
 @EnableMongoAuditing
 public class MongoConfig {
@@ -22,9 +27,31 @@ public class MongoConfig {
     @Value("${spring.data.mongodb.database:cpintel}")
     private String databaseName;
 
+    /** How long an operation waits for a reachable server; see {@link #settings}. */
+    @Value("${cpintel.mongo.server-selection-timeout:5s}")
+    private Duration serverSelectionTimeout;
+
     @Bean
     public MongoClient mongoClient() {
-        return MongoClients.create(mongoUri);
+        return MongoClients.create(settings(mongoUri, serverSelectionTimeout));
+    }
+
+    /**
+     * The URI's settings, with a server selection timeout of {@code serverSelection} unless the
+     * URI sets {@code serverSelectionTimeoutMS} itself.
+     *
+     * <p>The driver's default is 30 s: with MongoDB unreachable, every operation - the health
+     * check included - waited that long before failing, so /actuator/health took 30 s to say
+     * DOWN and requests hung as long. It only applies while no server can be reached at all;
+     * waiting for a pooled connection under load is a separate limit, left as it is.
+     */
+    static MongoClientSettings settings(String uri, Duration serverSelection) {
+        ConnectionString connection = new ConnectionString(uri);
+        MongoClientSettings.Builder builder = MongoClientSettings.builder().applyConnectionString(connection);
+        if (connection.getServerSelectionTimeout() == null) {
+            builder.applyToClusterSettings(c -> c.serverSelectionTimeout(serverSelection.toMillis(), TimeUnit.MILLISECONDS));
+        }
+        return builder.build();
     }
 
     @Bean

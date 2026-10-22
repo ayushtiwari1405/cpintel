@@ -226,7 +226,10 @@ try:
     with urllib.request.urlopen(req, context=ctx, timeout=45) as r: body = r.read()
 except urllib.error.HTTPError as e: body = e.read()
 except Exception: print("unreachable"); sys.exit()
-try: print(json.loads(body).get("status", "?"))
+try:
+    doc = json.loads(body)
+    # Details are for a signed-in super admin; an anonymous caller sees the status alone, UP or DOWN.
+    print(doc.get("status", "?") + ("+details" if "components" in doc or "details" in doc else ""))
 except ValueError: print("no-json")' "https://127.0.0.1:$PORT"
 }
 
@@ -239,6 +242,29 @@ wait_backend() {   # <seconds> <UP|DOWN>
   done
   echo "!!! The backend's health was '$now', not $want, after ${limit}s."
   return 1
+}
+
+# One dependency stopped and started again: health must say DOWN - within <bound> seconds, and
+# each health answer within <answer bound> - then UP once it is back. Prints the times.
+outage() {   # <service> <bound s> <answer bound s>
+  local service="$1" bound="$2" answer_bound="$3" started now t0 took=0 slowest=0
+  compose stop "$service" >/dev/null 2>&1
+  started=$SECONDS
+  while :; do
+    t0=$SECONDS; now="$(backend_health)"; took=$((SECONDS - t0))
+    [ "$took" -gt "$slowest" ] && slowest=$took
+    [ "$now" = DOWN ] && break
+    [ $((SECONDS - started)) -lt 150 ] || { echo "!!! With $service stopped, health was '$now' after 150 s."; diagnose backend; return 1; }
+    sleep 1
+  done
+  echo "  $service stopped: health DOWN after $((SECONDS - started)) s; slowest health answer ${slowest} s"
+  [ "$bound" = 0 ] || [ $((SECONDS - started)) -le "$bound" ] || { echo "!!! Not DOWN within ${bound} s."; return 1; }
+  [ "$answer_bound" = 0 ] || [ "$slowest" -le "$answer_bound" ] || { echo "!!! A health answer took ${slowest} s (allowed ${answer_bound} s)."; return 1; }
+  compose start "$service" >/dev/null 2>&1
+  wait_healthy 120 "$service"
+  started=$SECONDS
+  wait_backend 120 UP >/dev/null || { echo "!!! Health did not return to UP after $service came back."; diagnose backend; return 1; }
+  echo "  $service back: health UP after $((SECONDS - started)) s"
 }
 
 root_mongo() {   # <javascript>: as MongoDB's root account, inside the test container
@@ -374,12 +400,11 @@ phase_fresh() {
   command_lines_clean
   api_checks fresh || { diagnose backend nginx; return 1; }
 
-  echo "  stopping MongoDB: health must say DOWN, not UP"
-  compose stop mongodb >/dev/null 2>&1
-  wait_backend 150 DOWN || { diagnose backend; return 1; }
-  compose start mongodb >/dev/null 2>&1
-  wait_healthy 120 mongodb
-  wait_backend 120 UP || { diagnose backend; return 1; }
+  # Each datastore stopped in turn: health must say DOWN, not UP, within 20 s - every answer
+  # within 10 s, Docker's health check timeout - and UP once it is back.
+  outage mongodb "${IT_HEALTH_DOWN_BOUND:-20}" "${IT_HEALTH_ANSWER_BOUND:-10}"
+  outage redis "${IT_HEALTH_DOWN_BOUND:-20}" "${IT_HEALTH_ANSWER_BOUND:-10}"
+  outage postgres "${IT_HEALTH_DOWN_BOUND:-20}" "${IT_HEALTH_ANSWER_BOUND:-10}"
   logs_clean
 }
 

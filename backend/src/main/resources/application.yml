@@ -154,6 +154,14 @@ logging:
     console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} [%X{requestId:-}] - %msg%n"
 
 cpintel:
+  # How long /actuator/health waits for the database's check before answering DOWN (HealthConfig).
+  # The pool's own wait (hikari.connection-timeout, 30 s) also covers a busy pool, so it stays.
+  health:
+    timeout: 5s
+  # How long a MongoDB operation waits for a reachable server (MongoConfig); the driver's default
+  # is 30 s, which is how long health and every request hung with MongoDB down.
+  mongo:
+    server-selection-timeout: 5s
   cors:
     # Other origins a browser may call the API from with credentials: exact
     # scheme://host[:port] entries, comma-separated. Empty when the frontend and the API share
