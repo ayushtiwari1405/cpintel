@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "lint": "eslint . --report-unused-disable-directives --max-warnings 0",
     "type-check": "tsc --noEmit",
+    "test": "node --test \"tests/**/*.test.mjs\"",
     "predev": "node scripts/copy-mathjax.mjs",
     "prebuild": "node scripts/copy-mathjax.mjs"
   },

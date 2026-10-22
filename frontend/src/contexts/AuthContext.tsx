@@ -38,8 +38,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (r.data) setUser(r.data)
       return r.data
     }),
-    // On isAuthenticated rather than on the token: after a reload there is no token in memory,
-    // and this request is what gets a 401 and renews it from the refresh cookie.
+    // On isAuthenticated rather than on the token: after a reload there is no token in memory
+    // yet, and the client restores it from the refresh cookie before this goes out.
     enabled: isAuthenticated,
     retry: false,
     // The window regains focus far more often than a role changes; once per mount is the

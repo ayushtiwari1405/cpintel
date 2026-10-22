@@ -9,9 +9,9 @@ import type { SessionMode } from '@/api/authApi'
  * <p>Only the user and the signed-in flag are persisted. The access token lives in memory for its
  * fifteen minutes; the refresh token is an HttpOnly cookie the server sets, which no script on
  * the page can read. Both used to sit in localStorage, where anything that ever ran on the page
- * could take a week-long login. After a reload the first request finds no token, gets a 401,
- * and the client renews from the cookie (api/client.ts) — which is also how the app notices a
- * session that has ended.
+ * could take a week-long login. After a reload there is no token, so the client renews from the
+ * cookie once before sending anything that needs it (api/session.ts) — which is also how the app
+ * notices a session that has ended.
  */
 interface AuthState {
   user: User | null
