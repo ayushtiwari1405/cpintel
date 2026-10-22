@@ -9,6 +9,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientRequestException;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.publisher.Mono;
 import reactor.util.retry.Retry;
@@ -78,13 +80,32 @@ public class CodeforcesClient {
         }
     }
 
+    /**
+     * Retries only what can pass: a server error, a 429, a connection that failed or timed out.
+     *
+     * Codeforces answers an unknown handle with a 400, and a body that does not parse will not
+     * parse the second time either. Retrying those made a mistyped handle take the whole backoff
+     * (about fifteen seconds and four calls against the quota) to be turned down, and buried
+     * "CF handle not found" inside a "retries exhausted" error.
+     */
+    private static Retry retry(int times, Duration firstBackoff) {
+        return Retry.backoff(times, firstBackoff).filter(CodeforcesClient::transientFailure);
+    }
+
+    static boolean transientFailure(Throwable e) {
+        if (e instanceof WebClientResponseException r) {
+            return r.getStatusCode().is5xxServerError() || r.getStatusCode().value() == 429;
+        }
+        return e instanceof WebClientRequestException || e instanceof java.util.concurrent.TimeoutException;
+    }
+
     public CfUserInfoResponse getUserInfo(String handle) {
         log.debug("Fetching CF user info for: {}", handle);
         return timed("user.info", () -> client().get()
             .uri("/user.info?handles={handle}", handle)
             .retrieve()
             .bodyToMono(CfUserInfoResponse.class)
-            .retryWhen(Retry.backoff(3, Duration.ofSeconds(2)))
+            .retryWhen(retry(3, Duration.ofSeconds(2)))
             .block(Duration.ofSeconds(15)));
     }
 
@@ -94,7 +115,7 @@ public class CodeforcesClient {
             .uri("/user.rating?handle={handle}", handle)
             .retrieve()
             .bodyToMono(CfRatingResponse.class)
-            .retryWhen(Retry.backoff(3, Duration.ofSeconds(2)))
+            .retryWhen(retry(3, Duration.ofSeconds(2)))
             .block(Duration.ofSeconds(15)));
     }
 
@@ -106,7 +127,7 @@ public class CodeforcesClient {
             .onStatus(status -> status.value() == 400,
                 resp -> Mono.error(ApiException.badRequest("CF handle not found: " + handle)))
             .bodyToMono(CfSubmissionsResponse.class)
-            .retryWhen(Retry.backoff(2, Duration.ofSeconds(3)))
+            .retryWhen(retry(2, Duration.ofSeconds(3)))
             .block(Duration.ofSeconds(20)));
     }
 
@@ -124,7 +145,7 @@ public class CodeforcesClient {
             .uri("/contest.list?gym=false")
             .retrieve()
             .bodyToMono(CfContestMetaResponse.class)
-            .retryWhen(Retry.backoff(2, Duration.ofSeconds(3)))
+            .retryWhen(retry(2, Duration.ofSeconds(3)))
             .block(Duration.ofSeconds(20)));
         if (resp == null || !"OK".equals(resp.getStatus()) || resp.getResult() == null) {
             throw new IllegalStateException("Codeforces contest.list returned no contests");
@@ -149,7 +170,7 @@ public class CodeforcesClient {
             .uri("/contest.list?gym=false")
             .retrieve()
             .bodyToMono(CfContestMetaResponse.class)
-            .retryWhen(Retry.backoff(2, Duration.ofSeconds(3)))
+            .retryWhen(retry(2, Duration.ofSeconds(3)))
             .block(Duration.ofSeconds(20));
 
         if (resp == null || resp.getResult() == null) return null;
@@ -171,7 +192,7 @@ public class CodeforcesClient {
                 resp -> Mono.error(ApiException.badRequest(
                     "Codeforces refused the submission list for contest " + contestId)))
             .bodyToMono(CfSubmissionsResponse.class)
-            .retryWhen(Retry.backoff(2, Duration.ofSeconds(3)))
+            .retryWhen(retry(2, Duration.ofSeconds(3)))
             .block(Duration.ofSeconds(20));
     }
 
