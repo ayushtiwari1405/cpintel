@@ -1,0 +1,37 @@
+# The production stack for scripts/integration-test.sh, on top of docker-compose.yml.
+#
+# Run under a project of its own (cpintel-it-<run id>, CPINTEL_IT_PREFIX), so every container,
+# volume and network is that project's and a development stack - running or stopped - is never
+# touched. Nothing is published but nginx's 443, on a free loopback port. The network takes an
+# address range Docker picks, as the development network already holds 172.20.0.0/16.
+# integration-test.sh checks all of that in the resolved configuration before starting anything.
+services:
+  postgres:
+    ports: !reset []
+    container_name: ${CPINTEL_IT_PREFIX:?run through scripts/integration-test.sh}-postgres
+  mongodb:
+    ports: !reset []
+    container_name: ${CPINTEL_IT_PREFIX:?}-mongo
+    # The init script is chosen per phase: today's for a fresh install, an earlier release's for
+    # the upgrade (fixtures/).
+    volumes: !override
+      - mongo_data:/data/db
+      - ${CPINTEL_IT_MONGO_INIT:?}:/docker-entrypoint-initdb.d/init.js:ro
+  redis:
+    ports: !reset []
+    container_name: ${CPINTEL_IT_PREFIX:?}-redis
+  backend:
+    ports: !reset []
+    container_name: ${CPINTEL_IT_PREFIX:?}-backend
+  runner:
+    container_name: ${CPINTEL_IT_PREFIX:?}-runner
+  frontend:
+    container_name: ${CPINTEL_IT_PREFIX:?}-frontend
+  nginx:
+    container_name: ${CPINTEL_IT_PREFIX:?}-nginx
+    ports: !override
+      - "127.0.0.1:${CPINTEL_IT_HTTPS_PORT:?}:443"
+
+networks:
+  cpintel-net:
+    ipam: !reset {}
