@@ -35,7 +35,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useQuery({
     queryKey: ['me'],
     queryFn: () => userApi.getMe().then(r => {
-      if (r.data) setUser(r.data)
+      // An answer that arrives after signing out must not sign anybody back in: setUser marks
+      // the store authenticated, and this request can still be in flight when the session ends.
+      if (r.data && useAuthStore.getState().isAuthenticated) setUser(r.data)
       return r.data
     }),
     // On isAuthenticated rather than on the token: after a reload there is no token in memory

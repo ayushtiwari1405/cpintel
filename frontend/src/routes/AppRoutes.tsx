@@ -2,7 +2,7 @@ import { Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
 import { useAuth } from '@/contexts/AuthContext'
 import { homeFor, isAdmin } from '@/utils/roles'
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { LoadingScreen } from '@/components/common/LoadingScreen'
 import { ErrorBoundary } from '@/components/common/ErrorBoundary'
 
@@ -52,10 +52,20 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
-/** The paper an examination session was signed in for, and nothing else. */
+/**
+ * The paper an examination session was signed in for, and nothing else.
+ *
+ * An examination session with no paper to show cannot be sent anywhere: /login sends anyone
+ * signed in home, and home sends an examination session back here, so the tab redirected for
+ * ever. It is ended instead, and the guards then send it to sign in.
+ */
 function ExamModePage() {
   const examId = useAuthStore(s => s.examId)
-  return examId == null ? <Navigate to="/login" replace /> : <CompetePage examOnly={examId} />
+  const { logout } = useAuth()
+  useEffect(() => {
+    if (examId == null) logout()
+  }, [examId, logout])
+  return examId == null ? null : <CompetePage examOnly={examId} />
 }
 
 function GuestRoute({ children }: { children: React.ReactNode }) {
