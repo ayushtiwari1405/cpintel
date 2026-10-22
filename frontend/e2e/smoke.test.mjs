@@ -111,6 +111,49 @@ describe('signing in and staying signed in', () => {
   })
 })
 
+describe('when something goes wrong', () => {
+  test('a wrong password stays on sign in, says so, and leaves no session behind', async () => {
+    const { context, page, problems } = await session()
+    await page.goto(`${BASE}/login`)
+    await page.getByLabel('Email or username').fill(STUDENT.name)
+    await page.getByLabel('Password', { exact: true }).fill(`${STUDENT.password}-wrong`)
+    const answer = page.waitForResponse(r => r.url().endsWith('/api/v1/auth/login'))
+    await page.getByRole('button', { name: 'Sign in' }).click()
+    assert.equal((await answer).status(), 401)
+
+    await page.getByRole('alert').first().waitFor()
+    assert.equal(path(page), '/login')
+    assert.deepEqual((await context.cookies()).filter(c => c.name === 'cpintel_refresh'), [])
+    await page.goto(`${BASE}/dashboard`)
+    await page.waitForURL(u => u.pathname === '/login')
+    assert.deepEqual(problems, [])
+    await context.close()
+  })
+
+  test('a server error on the practice plan is shown, not masked, and Retry recovers', async () => {
+    const { context, page } = await session()
+    await signIn(page, STUDENT)
+    // One answer from the real backend is replaced with a 500, in the browser only.
+    let failing = true
+    await page.route('**/api/v1/recommendations/daily', route => failing
+      ? route.fulfill({ status: 500, contentType: 'application/json',
+          body: JSON.stringify({ code: 'INTERNAL_ERROR', message: 'An unexpected error occurred' }) })
+      : route.continue())
+
+    await page.goto(`${BASE}/recommendations`)
+    const alert = page.getByRole('alert').filter({ hasText: "Could not load today's sheet" })
+    await alert.waitFor()
+    assert.match(await alert.innerText(), /An unexpected error occurred/)
+    assert.equal(await page.getByRole('progressbar').count(), 0, 'no progress shown for a plan that did not load')
+
+    failing = false
+    await alert.getByRole('button', { name: 'Retry' }).click()
+    await page.getByRole('progressbar').waitFor()
+    assert.match(await page.getByRole('tabpanel').innerText(), /solved today/)
+    await context.close()
+  })
+})
+
 describe('a student\'s main pages', () => {
   test('dashboard, roadmap and the practice plan, reached from the sidebar', async () => {
     const { context, page, problems } = await session()
