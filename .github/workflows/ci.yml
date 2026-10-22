@@ -10,6 +10,10 @@ on:
     # Argon2, JJWT, Jsoup and BouncyCastle are all pinned here and nothing was watching them.
     - cron: '0 6 * * 1'
 
+# Read-only unless a job says otherwise (docker-build adds packages: write to push images).
+permissions:
+  contents: read
+
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
@@ -136,6 +140,10 @@ jobs:
       - name: Load-test stack tests
         run: python3 -I scripts/loadtest/test_stack.py
 
+      # The check integration-test.sh runs on the resolved Compose configuration, without Docker.
+      - name: Integration isolation tests
+        run: python3 -I scripts/integration/test_isolation.py
+
   # The libraries inside the backend jar against known vulnerabilities, with Trivy, which needs no
   # key or account (OWASP dependency-check below needs an NVD key and runs only with one). Blocks
   # the images on fixable HIGH or CRITICAL findings; prints everything; see
@@ -185,6 +193,22 @@ jobs:
           name: backend-vulnerabilities
           path: backend-vulnerabilities.json
           if-no-files-found: ignore
+
+  # The production images built from this commit, under a throwaway Compose project, through a
+  # fresh install and an upgrade from the release before the backend's own MongoDB account:
+  # see scripts/integration-test.sh. On main only, like the image builds, and not (yet) a gate
+  # for them.
+  integration:
+    name: Full-stack integration
+    runs-on: ubuntu-latest
+    needs: [backend-test, frontend-build]
+    if: github.ref == 'refs/heads/main'
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fresh install and upgrade
+        run: scripts/integration-test.sh
 
   docker-build:
     name: Build Docker images
