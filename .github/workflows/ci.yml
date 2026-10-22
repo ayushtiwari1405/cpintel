@@ -78,7 +78,8 @@ jobs:
         working-directory: frontend
         run: npm run lint
 
-      # Plain Node: it runs the TypeScript module under test directly, so no test framework.
+      # The session tests on Node's own runner, then the component and page tests in Vitest
+      # (jsdom). Neither needs a browser or the backend.
       - name: Tests
         working-directory: frontend
         run: npm test
