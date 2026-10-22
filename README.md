@@ -276,9 +276,16 @@ belongs outside examinations, which is why the script refuses one during a paper
 - **Upgrading a server whose database predates this release:** its indexes, and possibly
   duplicate files or contest rules, need [Upgrading an existing MongoDB](#upgrading-an-existing-mongodb)
   *before* `./deploy.sh`; a fresh install needs nothing.
+- **Before each deploy:** `python3 -I scripts/deploy-preflight.py --version <commit-sha>` -
+  read-only checks of `.env` (every secret present, long enough, not a placeholder, not shared;
+  the file private; https; mail; backups; the production Compose configuration; the scan
+  exceptions' deadline), naming settings but never their values. Exit 1 on a FAIL. It cannot
+  see the server's data, DNS or network.
 - **Backups:** `scripts/backup.sh` nightly from cron, with `CPINTEL_BACKUP_REMOTE` for the copy
-  off the server; `scripts/restore.sh --test <stamp>` proves a backup reads back without
-  touching live data.
+  off the server - what a backup holds, how to restore, and what a restore does not bring back:
+  [Backups and restore](#backups-and-restore).
+- **Health:** `/actuator/health`, asked by Docker and `deploy.sh` - see
+  [Health checks](#health-checks).
 - **Desktop app:** built by the Electron workflow on a `v*` tag, against the repository variable
   `CPINTEL_SERVER_URL`. It is a window onto that server and talks to nothing else.
 - **Browsers:** the site's stylesheet (Tailwind CSS 4) needs Chrome or Edge 111+, Firefox 128+
@@ -480,6 +487,58 @@ The integration test rehearses all of this on a throwaway copy of an earlier rel
 ([Full-stack integration test](#full-stack-integration-test-opt-in-locally-on-main-in-ci)), and
 `scripts/test_mongo_index_upgrade.py` covers each case of the script on its own.
 
+### Backups and restore
+
+`scripts/backup.sh` (nightly from cron, and by `deploy.sh` before each deploy) dumps the `cpintel`
+database of Postgres (`pg_dump -Fc`) and of MongoDB (`mongodump --gzip`), data and index
+definitions, from inside their containers with the credentials those containers already hold.
+Each dump is read back (`pg_restore --list`, `gzip -t`) before it is kept; a run that fails keeps
+nothing, so a stamp is always a pair: `postgres-<stamp>.dump` and `mongo-<stamp>.archive.gz`,
+mode 0600, in `CPINTEL_BACKUP_DIR` (0700, default `/var/backups/cpintel`), 14 days locally, and
+copied to `CPINTEL_BACKUP_REMOTE` if set.
+
+**Not in a backup:** database accounts and roles - MongoDB's root and the backend's
+`cpintel_app`, Postgres's roles - which come from `.env`, `mongo-init.js` and
+`scripts/mongo-app-user.sh`; `.env` and its keys (keep a copy off the server: without the
+sealing keys, stored examination passwords and DOMjudge logins cannot be read); Redis (sign-in
+sessions and exam grants - people sign in again, and grants are in Postgres too); anything
+outside the two databases.
+
+**The drill** - proves a backup reads back without touching live data:
+`./scripts/restore.sh --test <stamp>` restores both into scratch databases in the same containers,
+prints row and document counts and the schema version, and drops them again.
+
+**A real restore** replaces the `cpintel` database in both containers with the backup:
+
+1. `docker compose stop backend` - `restore.sh` refuses while it runs.
+2. `./scripts/restore.sh <stamp>` - it reads both archives back before changing anything, names
+   the containers it is about to overwrite, and asks you to type `restore`.
+3. `scripts/mongo-app-user.sh --check` (and without `--check` if the account is missing - a new
+   server, for one): accounts are not in the backup.
+4. `scripts/mongo-index-upgrade.sh --container cpintel-mongo --check`: a restore brings back the
+   indexes the backup was taken with, so a backup from before the index upgrade needs
+   [Upgrading an existing MongoDB](#upgrading-an-existing-mongodb) again.
+5. `docker compose start backend`.
+
+Everything written since the backup is lost, in both databases. `scripts/test_backup_restore.py`
+runs all of this - backup, the drill, a restore into another pair of throwaway containers, the
+account, a backup from before the index upgrade, and the refusals - on throwaway databases only;
+no backup of a real server has been restored by it.
+
+### Health checks
+
+`/actuator/health` is what the backend container's own Docker check and `deploy.sh` ask, and what
+nginx serves at `https://<host>/actuator/health` (nginx's own container check is its `/health`).
+It is UP when Postgres, MongoDB and Redis all answer, and DOWN otherwise, within about
+5 seconds: MongoDB's client gives up looking for a server after 5 s
+(`cpintel.mongo.server-selection-timeout`), the database check answers DOWN after 5 s
+(`cpintel.health.timeout`), and Redis after its 2 s command timeout. (Before this, a stopped
+MongoDB or Postgres held every health answer for 30 s.) It is UP again as soon as the datastore is
+back. DOWN marks the container unhealthy; Docker does not restart it, so a brief outage of a
+datastore ends without one. An anonymous caller sees only `{"status": ...}`; the components and
+their errors are shown to a signed-in super admin. The integration test stops each datastore in
+turn and checks all of this.
+
 ### Monitoring (optional)
 
 ```bash
@@ -603,6 +662,14 @@ head -c 48 /dev/urandom | base64 | tr -d '\n=' | tr '+/' '-_'
 
 Outside `prod` the same problems are logged as warnings and startup continues, so a half-filled
 `.env` gives you a readable explanation rather than a refusal.
+
+Secrets reach the containers as environment variables and nowhere else: not on a command line
+(Redis reads its password as a config line on its standard input; the scripts here sign in to
+MongoDB from inside the script `mongosh` runs, or through a private `--config` file for
+`mongodump`/`mongorestore`), and not in a log. `scripts/test_compose_secrets.py` checks that no
+service's command or health check carries one. A container's environment is still visible to
+`docker inspect`, so anyone who can run `docker` on the host - root and the `docker` group - can
+read them; that is the boundary.
 
 The Postgres, MongoDB and Redis ports are published to `127.0.0.1` only. They are exposed at all
 so the backend can run on the host during development; nothing outside the machine needs to reach
@@ -1074,6 +1141,9 @@ python3 -I scripts/test_mongo_index_upgrade.py  # scripts/mongo-index-upgrade.sh
 python3 -I scripts/loadtest/test_stack.py   # the load test's settings file and MongoDB start
 python3 -I scripts/integration/test_isolation.py  # the integration test's isolation check
 python3 -I scripts/integration/test_cleanup_lock.py  # its cleanup leaves a running test alone (Docker, flock)
+python3 -I scripts/test_compose_secrets.py      # no secret on a command line; Redis as Compose starts it (Docker)
+python3 -I scripts/test_backup_restore.py       # backup.sh and restore.sh on throwaway databases (Docker)
+python3 -I scripts/test_deploy_preflight.py     # the deployment preflight, on made-up settings
 cd frontend && npm run type-check && npm run lint
 cd frontend && npm test         # session tests (Node), then component and page tests (Vitest, jsdom)
 ```
@@ -1117,8 +1187,9 @@ several minutes for the image builds, later ones reuse the build cache.
   caller), a 401 for an anonymous or wrongly-passworded request, the bootstrap admin's sign-in
   and refresh cookie flags, the profile, a personal file written to MongoDB and read back, a
   practice plan, a password reset request, and sign-out refusing both the token and the refresh
-  cookie. MongoDB is then stopped: health must report DOWN (it takes about 30 s, the driver's
-  server selection timeout), and UP again once MongoDB is back.
+  cookie. Then MongoDB, Redis and Postgres are stopped in turn: health must report DOWN within
+  20 s, every answer within 10 s (Docker's own check timeout) and with no details for an
+  anonymous caller, and UP again once each is back. Measured here: 5 s, 2 s and 5 s.
 - **Upgrade:** MongoDB starts from the previous release's `mongo-init.js`
   (`scripts/integration/fixtures/`) with data written as root, including duplicate personal file
   names (with extensions and an existing `(2)`) and a duplicated contest rule. Then
@@ -1129,8 +1200,9 @@ several minutes for the image builds, later ones reuse the build cache.
   file contents, rename the duplicate files, and - after the test removes one rule as a person
   would - apply, and change nothing on a second run. Every personal file must keep its content and
   metadata under a name of its own, the backend must come up, and the API must work.
-- **Both:** Compose must refuse a configuration without `MONGO_APP_PASSWORD`, and no generated
-  secret or reset link may appear in any container's log.
+- **Both:** Compose must refuse a configuration without `MONGO_APP_PASSWORD`, no generated
+  secret or reset link may appear in any container's log, and none may appear on any container's
+  command line, process list or health check.
 
 **What it never touches.** Before anything starts, `scripts/integration/isolation.py` checks the
 resolved configuration: the project is `cpintel-it-*`, every container, volume and network
@@ -1180,20 +1252,22 @@ script here:
   database; it has not been run on a real one.
 - **Mail:** `SMTP_HOST`, or a decision to run without it. Reset links are not logged unless
   `CPINTEL_MAIL_LOG_UNDELIVERED=true`; off, a reset reaches nobody.
-- **Backups and a rollback you have tried:** `scripts/backup.sh`, `scripts/restore.sh --test`,
-  and `./deploy.sh --rollback` on the real server.
+- **The preflight:** `python3 -I scripts/deploy-preflight.py --version <sha>` with no FAIL.
+- **Backups and a rollback you have tried:** [Backups and restore](#backups-and-restore) - the
+  drill on the real server, an off-server copy, and `./deploy.sh --rollback` there. Tested here
+  only on throwaway databases.
 - **Monitoring** if you want alerts ([Monitoring](#monitoring-optional)).
 - **The dependency scan's exceptions** expire on 2026-12-31 (below): before then, Spring Boot 4.
 
 Known and still open - none of these is fixed by anything above:
 
-- Redis takes its password on its command line (`--requirepass`), where `docker inspect` and a
-  process list on the host show it; the root MongoDB password is likewise a `mongosh`/`mongodump`
-  argument inside its container when the scripts here use it.
-- The backend logs the bootstrap admin's configured email address when it creates that account.
-- With MongoDB unreachable, `/actuator/health` takes about 30 s to answer DOWN (the driver's
-  server selection timeout); the backend container's own health check times out at 10 s and
-  reports unhealthy meanwhile.
+- Secrets are in the containers' environments, which `docker inspect` shows to root and the
+  `docker` group on the host. (No longer on any command line, and the bootstrap admin's address
+  is no longer logged.)
+- The deploy-time image is not re-scanned on the server; the vulnerability gate runs in CI on
+  the jar it builds.
+- Hikari still waits up to 30 s for a pooled connection, so with Postgres down a request (not
+  the health check) can take that long to fail.
 - The `Full-stack integration` CI job has run only on a developer machine, not on a GitHub
   runner, and does not yet gate the image builds.
 - No deployment of this release has been made; everything above was verified on test stacks.

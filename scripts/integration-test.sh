@@ -13,9 +13,10 @@
 # Fresh install: postgres, mongodb (with today's mongo-init.js), redis, backend, frontend and
 # nginx. Checks the backend's MongoDB account is readWrite on cpintel only and that the backend
 # created its own unique indexes, runs the API
-# workflow in integration/api_checks.py through nginx, stops MongoDB and expects health to say
-# DOWN rather than UP, starts it again, and checks that no generated secret or reset link
-# reached any container's log.
+# workflow in integration/api_checks.py through nginx, stops MongoDB, Redis and Postgres in turn
+# and expects health to say DOWN within 20 s (each answer within 10 s, no details for an
+# anonymous caller) and UP once each is back, and checks that no generated secret or reset link
+# reached any container's log or command line.
 #
 # Upgrade: MongoDB starts from the previous release's mongo-init.js (integration/fixtures/), as
 # a server installed before P6 would have it, with data written as root - among it duplicate

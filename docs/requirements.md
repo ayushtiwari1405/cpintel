@@ -155,7 +155,9 @@ GitHub builds CPIntel. The server downloads the finished images from GitHub's co
 ### 1.7 Backups
 
 Both databases are dumped every night and kept for 14 days (`scripts/backup.sh`, from cron). A
-copy has to live off the server, or a disk failure loses everything.
+copy has to live off the server, or a disk failure loses everything. What a backup holds, what it
+does not (database accounts, `.env` and its keys, Redis), and the restore steps are in the
+README's [Backups and restore](../README.md#backups-and-restore).
 
 - [ ] **An off-server place for the nightly dumps** — *Required.* Another machine, object
   storage, or a mounted network share.
@@ -248,9 +250,14 @@ and survived a page reload with no Content-Security-Policy violations.
   (README, "Upgrading an existing MongoDB"), and a backend that stops on one is rolled back, not
   repaired.
 - [ ] Optional: enable the commented-out SSH deploy job in `ci.yml` for automatic deploys.
-- [x] **Backups.** Nightly `pg_dump` + `mongodump`, 14 days kept, copied to
-  `CPINTEL_BACKUP_REMOTE`; `scripts/restore.sh` restores, and `--test` restores into a scratch
-  copy.
+- [x] **Backups.** Nightly `pg_dump` + `mongodump`, each read back before it is kept, 14 days
+  kept, copied to `CPINTEL_BACKUP_REMOTE`; `scripts/restore.sh` restores (checking both archives
+  first and naming the containers it overwrites), and `--test` restores into a scratch copy.
+  Tested on throwaway databases (`scripts/test_backup_restore.py`), not yet on a server.
+- [x] **Preflight.** `python3 -I scripts/deploy-preflight.py --version <sha>` checks `.env` and
+  the production Compose files before a deploy, read-only, without printing a value.
+- [x] **Health.** `/actuator/health` says DOWN within about 5 s of a datastore going away and UP
+  as soon as it is back (README, "Health checks").
 - [x] **Lab behind NAT.** `CPINTEL_LAB_NETWORKS` sizes both nginx's and the backend's
   per-address limits for a room; per-account limits are unchanged.
 - [x] **Run on a server.** A separate runner container with no network, a read-only filesystem,
