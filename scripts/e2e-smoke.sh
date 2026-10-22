@@ -5,6 +5,9 @@
 #   scripts/e2e-smoke.sh                   run, then take everything it started down again
 #   scripts/e2e-smoke.sh --keep            leave the stack up afterwards (prints how to stop it)
 #   scripts/e2e-smoke.sh --rebuild         rebuild the backend jar first
+#   scripts/e2e-smoke.sh --mongo-upgrade   start MongoDB as an installation from before the backend
+#                                          had its own account, and give it one with
+#                                          scripts/mongo-app-user.sh, as deploy.sh would
 #   scripts/e2e-smoke.sh --cleanup         list containers left behind by earlier runs (removes nothing)
 #   scripts/e2e-smoke.sh --cleanup --yes   remove them
 #
@@ -28,13 +31,14 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LABEL=org.cpintel.e2e
 PREFIX=cpintel-e2e-
-KEEP=0 REBUILD=0 CLEANUP=0 YES=0
+KEEP=0 REBUILD=0 CLEANUP=0 YES=0 MONGO_UPGRADE=0
 for arg in "$@"; do
   case "$arg" in
     --keep) KEEP=1 ;;
     --rebuild) REBUILD=1 ;;
     --cleanup) CLEANUP=1 ;;
     --yes) YES=1 ;;
+    --mongo-upgrade) MONGO_UPGRADE=1 ;;
     *) echo "Unknown option: $arg (see the top of $0)"; exit 2 ;;
   esac
 done
@@ -89,7 +93,7 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 secret() { openssl rand -hex "$1"; }
-export PG_PW="$(secret 16)" MONGO_PW="$(secret 16)" REDIS_PW="$(secret 16)"
+export PG_PW="$(secret 16)" MONGO_PW="$(secret 16)" MONGO_APP_PASSWORD="$(secret 16)" REDIS_PW="$(secret 16)"
 export E2E_ADMIN_PASSWORD="$(secret 12)Aa1!" E2E_STUDENT_PASSWORD="$(secret 12)Bb2!" E2E_ADMIN2_PASSWORD="$(secret 12)Cc3!"
 
 # -- datastores -----------------------------------------------------------------------------------
@@ -101,8 +105,14 @@ start() {   # <role> <docker run arguments...>
 }
 start postgres -e POSTGRES_DB=cpintel -e POSTGRES_USER=cpintel -e POSTGRES_PASSWORD="$PG_PW" \
   -p "127.0.0.1:$PG_PORT:5432" postgres:16-alpine
+# The backend signs in as the least-privilege account (MONGO_APP_USER), as in docker-compose.yml.
+# A fresh installation gets it from mongo-init.js; --mongo-upgrade starts without it, as a database
+# made before it existed, and has scripts/mongo-app-user.sh add it below.
+MONGO_INIT=(-e MONGO_APP_USER=cpintel_app -e MONGO_APP_PASSWORD="$MONGO_APP_PASSWORD"
+  -v "$ROOT/mongo-init.js:/docker-entrypoint-initdb.d/init.js:ro")
+[ "$MONGO_UPGRADE" = 1 ] && MONGO_INIT=()
 start mongo -e MONGO_INITDB_ROOT_USERNAME=cpintel_mongo -e MONGO_INITDB_ROOT_PASSWORD="$MONGO_PW" \
-  -p "127.0.0.1:$MONGO_PORT:27017" mongo:7.0
+  -e MONGO_INITDB_DATABASE=cpintel "${MONGO_INIT[@]}" -p "127.0.0.1:$MONGO_PORT:27017" mongo:7.0
 start redis -p "127.0.0.1:$REDIS_PORT:6379" redis:7.2-alpine redis-server --requirepass "$REDIS_PW"
 PG="${PREFIX}postgres-$RUN" MONGO="${PREFIX}mongo-$RUN"
 for _ in $(seq 1 60); do docker exec "$PG" pg_isready -U cpintel -d cpintel >/dev/null 2>&1 && break; sleep 1; done
@@ -110,6 +120,16 @@ for _ in $(seq 1 60); do
   docker exec "$MONGO" mongosh --quiet -u cpintel_mongo -p "$MONGO_PW" --authenticationDatabase admin \
     --eval 'db.runCommand({ ping: 1 }).ok' >/dev/null 2>&1 && break; sleep 1
 done
+# The entrypoint answers from a temporary mongod while it initialises, then restarts it.
+for _ in $(seq 1 60); do
+  [ "$(docker logs "$MONGO" 2>&1 | grep -c 'Waiting for connections')" -ge 2 ] && break; sleep 1
+done
+if [ "$MONGO_UPGRADE" = 1 ]; then
+  say "Upgrading MongoDB: data from before, then the backend's account"
+  docker exec "$MONGO" mongosh --quiet -u cpintel_mongo -p "$MONGO_PW" --authenticationDatabase admin cpintel \
+    --eval 'db.personal_files.insertOne({ userId: 999, name: "from-before.cpp", content: "int main(){}" })' >/dev/null
+  CPINTEL_MONGO_CONTAINER="$MONGO" MONGO_APP_USER=cpintel_app "$ROOT/scripts/mongo-app-user.sh"
+fi
 
 # -- frontend and the stub in front of everything --------------------------------------------
 say "Building the frontend into the run's directory"
@@ -131,7 +151,7 @@ say "Starting the backend"
 SERVER_PORT="$API_PORT" \
 SPRING_DATASOURCE_URL="jdbc:postgresql://127.0.0.1:$PG_PORT/cpintel" SPRING_DATASOURCE_USERNAME=cpintel \
 SPRING_DATASOURCE_PASSWORD="$PG_PW" \
-SPRING_DATA_MONGODB_URI="mongodb://cpintel_mongo:$MONGO_PW@127.0.0.1:$MONGO_PORT/cpintel?authSource=admin" \
+SPRING_DATA_MONGODB_URI="mongodb://cpintel_app:$MONGO_APP_PASSWORD@127.0.0.1:$MONGO_PORT/cpintel?authSource=cpintel" \
 SPRING_DATA_REDIS_HOST=127.0.0.1 SPRING_DATA_REDIS_PORT="$REDIS_PORT" SPRING_DATA_REDIS_PASSWORD="$REDIS_PW" \
 JWT_SECRET="$(openssl rand -base64 48 | tr -d '\n')" \
 CPINTEL_EXAM_PASSWORD_KEY="$(openssl rand -base64 32 | tr -d '\n')" \

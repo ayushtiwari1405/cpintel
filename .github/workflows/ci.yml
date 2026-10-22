@@ -127,6 +127,11 @@ jobs:
       - name: Edge nginx tests
         run: python3 -I scripts/test_nginx_edge.py
 
+      # Throwaway mongo:7.0 containers: the backend's least-privilege account on a fresh
+      # database (mongo-init.js) and on an existing one (scripts/mongo-app-user.sh).
+      - name: MongoDB account tests
+        run: python3 -I scripts/test_mongo_app_user.py
+
   docker-build:
     name: Build Docker images
     runs-on: ubuntu-latest

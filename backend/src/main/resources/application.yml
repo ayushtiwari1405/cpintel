@@ -48,7 +48,9 @@ spring:
 
   data:
     mongodb:
-      uri: ${SPRING_DATA_MONGODB_URI:mongodb://${MONGO_USER:cpintel_mongo}:${MONGO_PASSWORD:}@localhost:27017/cpintel?authSource=admin}
+      # The backend's own account (readWrite on cpintel only), not the root one; see
+      # scripts/mongo-app-user.sh. Docker sets SPRING_DATA_MONGODB_URI; this is for a backend on the host.
+      uri: ${SPRING_DATA_MONGODB_URI:mongodb://${MONGO_APP_USER:cpintel_app}:${MONGO_APP_PASSWORD:}@localhost:27017/cpintel?authSource=cpintel}
       database: cpintel
       auto-index-creation: true
     redis:

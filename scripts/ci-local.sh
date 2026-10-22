@@ -111,7 +111,9 @@ script_tests() (
   # static checks.
   cd "$SRC" && python3 -I scripts/test_grab_cf_cookie.py \
     && if [[ $DOCKER -eq 0 ]]; then CPINTEL_NO_DOCKER=1 python3 -I scripts/test_nginx_edge.py;
-       else python3 -I scripts/test_nginx_edge.py; fi
+       else python3 -I scripts/test_nginx_edge.py; fi \
+    && if [[ $DOCKER -eq 0 ]]; then CPINTEL_NO_DOCKER=1 python3 -I scripts/test_mongo_app_user.py;
+       else python3 -I scripts/test_mongo_app_user.py; fi
 )
 
 docker_backend()  { docker build "${NO_CACHE[@]}" -t "$TAG-backend"  "$SRC/backend"; }

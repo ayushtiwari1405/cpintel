@@ -54,6 +54,10 @@ if [ "${status:-}" != "healthy" ]; then
 fi
 echo "Postgres ready."
 
+# The backend signs in to MongoDB with its own account, not root. A database made before that
+# account existed gets it here; nothing starts without it.
+"$ROOT/scripts/mongo-app-user.sh" || exit 1
+
 # Start backend
 # Serves desktop installers made by scripts/build-desktop.sh, if any, on /download.
 export CPINTEL_DESKTOP_DIR="${CPINTEL_DESKTOP_DIR:-$ROOT/desktop}"

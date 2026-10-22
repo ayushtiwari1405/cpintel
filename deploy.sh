@@ -7,7 +7,8 @@
 #
 # In order:
 #   1. back up both databases (the backend applies schema migrations as it starts, so this is
-#      the copy to go back to if a migration goes wrong);
+#      the copy to go back to if a migration goes wrong), and make sure the backend's own
+#      MongoDB account exists (scripts/mongo-app-user.sh);
 #   2. pull that version's images;
 #   3. restart the application containers on them — the databases keep running;
 #   4. wait for the backend to report healthy;
@@ -119,6 +120,11 @@ backup=""
 if [ -n "$current" ]; then
   backup="$(./scripts/backup.sh "pre-deploy-$target" | tail -1)"
 fi
+# The backend signs in to MongoDB with its own least-privilege account (MONGO_APP_USER). A
+# database created before that account existed gets it here - before any application container
+# is touched, so a failure leaves the running version as it was.
+./scripts/mongo-app-user.sh || { echo "!!! The backend's MongoDB account is not ready; not deploying."; exit 1; }
+
 schema_before="$(schema_version)"
 
 CPINTEL_VERSION="$target" "${COMPOSE[@]}" pull "${APP[@]}"

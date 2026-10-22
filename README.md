@@ -213,7 +213,7 @@ Docker, Java 21, Node 24, Maven (or use the included `mvnw`).
 
 ```bash
 cp .env.example .env
-# fill in DB passwords and a JWT secret
+# fill in DB passwords (MONGO_APP_PASSWORD too: the backend's own MongoDB account) and a JWT secret
 ```
 
 ### 2. Start the databases
@@ -221,6 +221,7 @@ cp .env.example .env
 ```bash
 docker compose up postgres mongodb redis -d
 docker compose ps postgres   # STATUS should read (healthy)
+scripts/mongo-app-user.sh    # a database made before the backend had its own account gets it
 ```
 
 ### 3. Backend
@@ -269,6 +270,9 @@ belongs outside examinations, which is why the script refuses one during a paper
   Either is picked up within a minute, without a restart.
 - **A lab behind one NAT address:** set `CPINTEL_LAB_NETWORKS` to its range, or two hundred
   people signing in together hit the per-address limits.
+- **MongoDB accounts:** the backend signs in as `MONGO_APP_USER` (default `cpintel_app`), which
+  holds `readWrite` on the `cpintel` database and nothing else; the root account (`MONGO_USER`) is
+  for backups, restores and creating that account. See [MongoDB accounts](#mongodb-accounts).
 - **Backups:** `scripts/backup.sh` nightly from cron, with `CPINTEL_BACKUP_REMOTE` for the copy
   off the server; `scripts/restore.sh --test <stamp>` proves a backup reads back without
   touching live data.
@@ -303,6 +307,48 @@ belongs outside examinations, which is why the script refuses one during a paper
   ```
 
 See `docs/requirements.md` for the full checklist.
+
+### MongoDB accounts
+
+A fresh database gets the backend's account from `mongo-init.js` on its first start. MongoDB runs
+init scripts only on an empty data directory, so a database created before that account existed
+gets it from `scripts/mongo-app-user.sh` instead - which `deploy.sh` and `start.sh` run before the
+backend starts, and which is safe to run any number of times. To move an existing server over:
+
+1. Add `MONGO_APP_PASSWORD` to `.env` (`openssl rand -hex 24`); `MONGO_APP_USER` defaults to
+   `cpintel_app`. Docker Compose refuses to start the stack until it is set.
+2. Optionally first: `scripts/mongo-app-user.sh --check` - reports whether the account exists and
+   changes nothing.
+3. `./deploy.sh <sha>` as usual. It creates the account (if missing) and checks it before any
+   application container is touched; if that fails, nothing else happens.
+
+The script never changes an existing account's roles - an account of that name with other roles
+is reported and left for a person to decide - and changes its password only with
+`--reset-password`. It writes no data: it signs in as the account, reads its `connectionStatus`,
+and confirms the account is refused `admin.system.users`. Run `scripts/mongo-app-user.sh --check`
+at any time to see the same. To see which account the running backend actually uses - one line
+per client library and account; the backend's names the Java driver, and should read
+`... as cpintel_app` (your own mongosh session shows up as root):
+
+```bash
+docker exec cpintel-mongo sh -c 'mongosh --quiet -u "$MONGO_INITDB_ROOT_USERNAME" \
+  -p "$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin --eval \
+  "[...new Set(db.currentOp({ \$all: true }).inprog.filter(o => o.effectiveUsers && o.clientMetadata)
+     .map(o => o.clientMetadata.driver.name + \" as \" + o.effectiveUsers[0].user))]"'
+```
+
+Going back: an older version reads its MongoDB address from the same `docker-compose.yml`, so
+`./deploy.sh --rollback` keeps working; to run on the root account again, restore the old
+`SPRING_DATA_MONGODB_URI` line and recreate the backend. The extra account harms nothing; remove
+it, if wanted, with `db.getSiblingDB('cpintel').dropUser('cpintel_app')` as root.
+
+A database created by an older `mongo-init.js` can hold its indexes under MongoDB's default names,
+where the backend declares the same indexes under its own (`idx_code_user_problem`, ...); the
+backend then stops at start with `IndexOptionsConflict`. Drop the default-named copies - the
+backend recreates them under its names on the next start - after a backup:
+`db.code_submissions.dropIndex('userId_1_platform_1_contestId_1_problemIndex_1_submittedAt_-1')`,
+and likewise `userId_1_platform_1_externalId_1` on `code_submissions`, and
+`userId_1_cfSubmissionId_1` and `userId_1_verdict_1` on `cf_submissions`.
 
 ### Monitoring (optional)
 

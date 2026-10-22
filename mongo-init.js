@@ -25,4 +25,17 @@ db.code_submissions.createIndex(
 db.code_submissions.createIndex({ userId: 1, platform: 1, externalId: 1 }, { name: 'idx_code_user_external' });
 db.code_submissions.createIndex({ userId: 1, submittedAt: -1 });
 
+// The account the backend connects with: readWrite on this database and nothing else. The root
+// account from MONGO_INITDB_ROOT_* stays for administration (backups, restores, this script).
+//
+// Runs only when the data directory is empty, as every init script does. A database created
+// before this account existed gets it from scripts/mongo-app-user.sh, which deploy.sh and
+// start.sh run before the backend starts.
+const appUser = process.env.MONGO_APP_USER || 'cpintel_app';
+const appPassword = process.env.MONGO_APP_PASSWORD;
+if (!appPassword) {
+  throw new Error('MONGO_APP_PASSWORD is not set: the backend would have no account to connect with.');
+}
+db.createUser({ user: appUser, pwd: appPassword, roles: [{ role: 'readWrite', db: 'cpintel' }] });
+
 print('CPIntel MongoDB initialized');

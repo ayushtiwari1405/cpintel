@@ -48,6 +48,9 @@ services:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER}
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
       MONGO_INITDB_DATABASE: cpintel
+      # Read by mongo-init.js, on a first start only, to create the backend's own account.
+      MONGO_APP_USER: ${MONGO_APP_USER:-cpintel_app}
+      MONGO_APP_PASSWORD: ${MONGO_APP_PASSWORD:?set MONGO_APP_PASSWORD in .env (the backend's MongoDB account)}
     ports:
       # Bound to loopback, not 0.0.0.0. These publishes exist so the backend can run on
       # the host during development; nothing outside this machine has any reason to reach
@@ -112,7 +115,8 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/cpintel
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
-      SPRING_DATA_MONGODB_URI: mongodb://${MONGO_USER}:${MONGO_PASSWORD}@mongodb:27017/cpintel?authSource=admin
+      # The least-privilege account (readWrite on cpintel), not root: see scripts/mongo-app-user.sh.
+      SPRING_DATA_MONGODB_URI: mongodb://${MONGO_APP_USER:-cpintel_app}:${MONGO_APP_PASSWORD:?set MONGO_APP_PASSWORD in .env}@mongodb:27017/cpintel?authSource=cpintel
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
       SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD}
