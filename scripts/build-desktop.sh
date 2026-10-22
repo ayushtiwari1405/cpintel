@@ -27,7 +27,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-IMAGE="electronuserland/builder:20-wine@sha256:aec4b2175b923382e298afa8f3ee680b6aa3890b738ddcf228ddf038bc7c2f5c"
+IMAGE="electronuserland/builder:24-wine-10.26@sha256:d91127d54da6c183efcbc587534daba402108b63be9d92844114c735dffe4e37"
 
 # ── Inside the container ─────────────────────────────────────────────────────────────────────
 if [ "${1:-}" = "--inside" ]; then

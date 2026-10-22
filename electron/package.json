@@ -21,6 +21,9 @@
     "electron-builder": "^26.15.3",
     "typescript": "^5.4.5"
   },
+  "overrides": {
+    "global-agent": "^4.1.3"
+  },
   "build": {
     "appId": "com.cpintel.desktop",
     "productName": "CPIntel",
