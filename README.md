@@ -59,9 +59,10 @@ the reasoning behind the harder decisions, and [`docs/SRS.md`](docs/SRS.md) for 
   real histories in `scripts/analytics-eval` — see there for what it does and does not predict
 - Contest analytics: rating history, wrong-submission patterns, behavioural insight generation
 - Unified rating: the Codeforces rating mapped onto a 0-1000 scale
-- Daily/weekly recommendation sheets and an SM-2-style spaced repetition revision queue. The
-  page is parked — out of the sidebar, and `/recommendations` redirects to the roadmap — because
-  the roadmap already answers "what next", and two answers that can disagree are worse than one
+- A practice plan (`/recommendations`): a daily sheet, a weekly plan in sessions with a goal,
+  an SM-2-style revision queue that offers old solves to redo, and preparation for the next rated
+  Codeforces round. Each skill on it says why it is there; where the user's own history is too
+  thin to rank, the plan takes the roadmap's next skills, so the two do not disagree
 - 140-node adaptive roadmap with real prerequisite chains, live-pulled Codeforces problems per
   node, and auto-unlock based on measured mastery
 - A placement gauntlet (`/roadmap/gauntlet`): a short tiered test per area whose result moves
@@ -786,7 +787,7 @@ Three things are worth checking by hand as well:
 |---|---|---|
 | `/dashboard` | anyone | Topic radar, streak, recent contests |
 | `/analytics` | anyone | Mastery heatmap, rating history, behavioural insights |
-| `/recommendations` | — | Parked; redirects to `/roadmap` |
+| `/recommendations` | anyone | Practice plan: today, this week, revision, contest prep |
 | `/roadmap` | anyone | The 140-node dependency graph with problems per node |
 | `/roadmap/gauntlet` | anyone | The placement gauntlet |
 | `/practice` | anyone | Problem search, statement, editor, local runner, submit |

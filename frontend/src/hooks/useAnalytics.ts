@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { analyticsApi, recommendationApi, roadmapApi } from '@/api/analyticsApi'
+import type { PlanType } from '@/types'
 import { useToast } from '@/components/common/Toaster'
 
 export function useOverview() {
@@ -67,32 +68,42 @@ export function useRefreshAnalytics() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['analytics'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+      queryClient.invalidateQueries({ queryKey: ['recommendations'] })
       toast.push('success', 'Analytics refreshed')
     },
     onError: (err: any) => toast.push('error', err.response?.data?.message ?? 'Refresh failed'),
   })
 }
 
-export function useDailyRecs() {
+/** One practice plan. Opening it builds it on the server the first time, so it is not refetched eagerly. */
+export function usePlan(type: PlanType) {
   return useQuery({
-    queryKey: ['recommendations', 'daily'],
-    queryFn: () => recommendationApi.getDaily().then(r => r.data),
-    staleTime: 1000 * 60 * 30,
+    queryKey: ['recommendations', type],
+    queryFn: () => recommendationApi.getPlan(type).then(r => r.data),
+    staleTime: 1000 * 60 * 5,
   })
 }
 
-export function useWeeklyRecs() {
-  return useQuery({
-    queryKey: ['recommendations', 'weekly'],
-    queryFn: () => recommendationApi.getWeekly().then(r => r.data),
-    staleTime: 1000 * 60 * 60,
+/** Replaces a plan with a new one; the server keeps a sheet built in the last minute. */
+export function useRegeneratePlan(type: PlanType) {
+  const queryClient = useQueryClient()
+  const toast = useToast()
+  return useMutation({
+    mutationFn: () => recommendationApi.regenerate(type).then(r => r.data),
+    onSuccess: plan => {
+      queryClient.setQueryData(['recommendations', type], plan)
+      // A new sheet leaves the others' problems out, so they are worth reading again.
+      queryClient.invalidateQueries({ queryKey: ['recommendations'] })
+      toast.push('success', 'New plan ready')
+    },
+    onError: (err: any) => toast.push('error', err.response?.data?.message ?? 'Could not build a new plan'),
   })
 }
 
-export function useRevisionQueue() {
+export function useRevisionQueue(horizonDays = 14) {
   return useQuery({
-    queryKey: ['recommendations', 'revision'],
-    queryFn: () => recommendationApi.getRevision().then(r => r.data),
+    queryKey: ['recommendations', 'revision', horizonDays],
+    queryFn: () => recommendationApi.getRevision(horizonDays).then(r => r.data),
   })
 }
 
@@ -105,6 +116,7 @@ export function useMarkRevisionDone() {
       queryClient.invalidateQueries({ queryKey: ['recommendations', 'revision'] })
       toast.push('success', 'Revision marked complete')
     },
+    onError: (err: any) => toast.push('error', err.response?.data?.message ?? 'Could not mark it done'),
   })
 }
 

@@ -12,6 +12,7 @@ const ResetPasswordPage  = lazy(() => import('@/pages/ResetPasswordPage'))
 const DashboardPage     = lazy(() => import('@/pages/DashboardPage'))
 const AnalyticsPage     = lazy(() => import('@/pages/AnalyticsPage'))
 const RoadmapPage       = lazy(() => import('@/pages/RoadmapPage'))
+const RecommendationsPage = lazy(() => import('@/pages/RecommendationsPage'))
 const GauntletPage      = lazy(() => import('@/pages/GauntletPage'))
 const PlatformsPage     = lazy(() => import('@/pages/PlatformsPage'))
 const PracticePage      = lazy(() => import('@/pages/PracticePage'))
@@ -144,8 +145,7 @@ export function AppRoutes() {
           <Route element={<StudentOnly />}>
           <Route path="/dashboard"       element={<DashboardPage />} />
           <Route path="/analytics"       element={<AnalyticsPage />} />
-          {/* Hidden for now (see the sidebar); a bookmark lands on the roadmap instead. */}
-          <Route path="/recommendations" element={<Navigate to="/roadmap" replace />} />
+          <Route path="/recommendations" element={<RecommendationsPage />} />
           <Route path="/roadmap"         element={<RoadmapPage />} />
           <Route path="/roadmap/gauntlet" element={<GauntletPage />} />
           <Route path="/practice"        element={

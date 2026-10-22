@@ -121,16 +121,6 @@ export interface RoadmapNode {
   completedAt?: string
 }
 
-export interface RevisionItem {
-  revisionId: number
-  topic: string
-  nextRevisionAt: string
-  revisionPriority: number
-  decayScore: number
-  intervalDays: number
-  repetitionCount: number
-}
-
 export interface SyncJob {
   jobId: number
   platform: string
@@ -1394,4 +1384,92 @@ export interface MarkRequest {
   /** The markedAt of the mark on screen (null if none): a newer one by somebody else refuses the save. */
   seenMarkedAt?: string | null
   checkSeen?: boolean
+}
+
+// ── Practice plans (/recommendations) ────────────────────────────────────────────────────────
+// What the server's Plan records carry. Older stored sheets lack the newer fields, so those are
+// optional.
+
+/** MEASURED: from the user's own history. INFERRED: a fallback. PARTIAL: some of each. */
+export type PlanBasis = 'MEASURED' | 'INFERRED' | 'PARTIAL' | 'NONE'
+export type PlanType = 'daily' | 'weekly' | 'contest-prep'
+
+export interface PlanProblem {
+  contestId: number
+  index: string
+  name: string
+  rating: number | null
+  solved: boolean
+  fit: number
+  /** WARM_UP, CORE, STRETCH, or RESOLVE for a solved problem to do again. */
+  role?: 'WARM_UP' | 'CORE' | 'STRETCH' | 'RESOLVE' | null
+  practicePath: string | null
+  judgeUrl: string | null
+}
+
+export interface PlanItem {
+  nodeKey: string
+  title: string
+  track?: string | null
+  topic?: string | null
+  blurb?: string | null
+  masteryScore?: number | null
+  decayScore?: number | null
+  targetRating?: number | null
+  reason?: string | null
+  /** WEAK_TOPIC, REVISION_DUE, MOMENTUM, PROGRESSION, NEXT_ON_ROADMAP or CONTEST_STAPLE. */
+  reasonCode?: string | null
+  priority?: string | null
+  basis?: 'MEASURED' | 'INFERRED' | null
+  /** Weekly plans: the session this skill is, from 1. */
+  session?: number | null
+  problems: PlanProblem[]
+}
+
+export interface PlanContest {
+  id: number
+  name: string
+  division: string
+  startsAt: string
+  durationSeconds: number | null
+  url: string
+}
+
+export interface PlanSummary {
+  basis: PlanBasis
+  notes: string[]
+  goalProblems?: number | null
+  rating?: number | null
+  ratingBasis?: 'MEASURED' | 'INFERRED' | null
+  contest?: PlanContest | null
+  record?: { contests: number; avgSolved: number; avgRatingChange: number } | null
+}
+
+export interface PracticePlan {
+  type: 'DAILY' | 'WEEKLY' | 'CONTEST_PREP'
+  items: PlanItem[]
+  generatedAt: string | null
+  expiresAt: string | null
+  summary: PlanSummary
+  progress: { solved: number; total: number }
+}
+
+export interface RevisionItem {
+  revisionId: number
+  nodeKey: string
+  title: string
+  track: string | null
+  topic: string | null
+  nextRevisionAt: string
+  revisionPriority: number | null
+  decayScore: number | null
+  intervalDays: number | null
+  repetitionCount: number | null
+  easeFactor: number | null
+  lastRevisedAt: string | null
+  practicePath: string | null
+  status: 'DUE' | 'UPCOMING'
+  reason: string
+  lastPracticedAt: string | null
+  problems: PlanProblem[]
 }

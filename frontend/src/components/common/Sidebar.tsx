@@ -3,7 +3,7 @@ import { forwardRef } from 'react'
 import {
   ArrowLeft, LayoutDashboard, BarChart2, Map, Link2, User, PanelLeftClose, PanelLeftOpen,
   LogOut, Code2, Swords, Shield, Users, ScrollText, FolderCog, UsersRound, FileText, School,
-  ClipboardCheck, Monitor, X, type LucideIcon } from 'lucide-react'
+  ClipboardCheck, Monitor, X, CalendarCheck, type LucideIcon } from 'lucide-react'
 import { useLogout } from '@/hooks/useAuth'
 import { ThemeToggle } from './ThemeToggle'
 import { BrandLockup } from './BrandMark'
@@ -18,9 +18,9 @@ interface Group { label: string; items: Item[] }
 
 const DASHBOARD: Item = { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' }
 const ANALYTICS: Item = { to: '/analytics', icon: BarChart2,       label: 'Analytics' }
-// Recommendations is parked for now: the roadmap already says what to practise next, and two
-// answers to the same question that can disagree are worse than one. The page and its route
-// stay; add it to the Train group to bring it back.
+// The practice plan sits beside the roadmap rather than competing with it: where the user's own
+// skills are too thin to rank, its sheets take the roadmap's next skills, in the roadmap's order.
+const PLAN:      Item = { to: '/recommendations', icon: CalendarCheck, label: 'Practice plan' }
 const ROADMAP:   Item = { to: '/roadmap',   icon: Map,             label: 'Roadmap' }
 const PRACTICE:  Item = { to: '/practice',  icon: Code2,           label: 'Practice' }
 const COMPETE:   Item = { to: '/compete',   icon: Swords,          label: 'Compete' }
@@ -81,7 +81,7 @@ export const Sidebar = forwardRef<HTMLElement, Props>(function Sidebar(
   const expanded = wide ? open : true
 
   const studentGroups: Group[] = [
-    { label: 'Train',       items: [DASHBOARD, ANALYTICS, ROADMAP] },
+    { label: 'Train',       items: [DASHBOARD, ANALYTICS, ROADMAP, PLAN] },
     { label: 'Solve',       items: [PRACTICE, COMPETE, EXAMS] },
     { label: 'Collaborate', items: marks ? [TEAMS, EVALUATE] : [TEAMS] },
     // Where to get the desktop app — pointless inside it.

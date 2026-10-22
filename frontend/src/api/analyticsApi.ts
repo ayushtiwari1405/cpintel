@@ -1,5 +1,5 @@
 import { apiClient } from './client'
-import type { ApiResponse, SkillBasis } from '@/types'
+import type { ApiResponse, PlanType, PracticePlan, RevisionItem, SkillBasis } from '@/types'
 
 export const analyticsApi = {
   getOverview: () =>
@@ -19,12 +19,13 @@ export const analyticsApi = {
 }
 
 export const recommendationApi = {
-  getDaily: () =>
-    apiClient.get<ApiResponse<any>>('/recommendations/daily').then(r => r.data),
-  getWeekly: () =>
-    apiClient.get<ApiResponse<any>>('/recommendations/weekly').then(r => r.data),
-  getRevision: () =>
-    apiClient.get<ApiResponse<any[]>>('/recommendations/revision').then(r => r.data),
+  getPlan: (type: PlanType) =>
+    apiClient.get<ApiResponse<PracticePlan>>(`/recommendations/${type}`).then(r => r.data),
+  regenerate: (type: PlanType) =>
+    apiClient.post<ApiResponse<PracticePlan>>(`/recommendations/${type}/regenerate`).then(r => r.data),
+  getRevision: (horizonDays = 14) =>
+    apiClient.get<ApiResponse<RevisionItem[]>>('/recommendations/revision', { params: { horizonDays } })
+      .then(r => r.data),
   markRevisionDone: (id: number) =>
     apiClient.post<ApiResponse<void>>(`/recommendations/revision/${id}/done`).then(r => r.data),
 }

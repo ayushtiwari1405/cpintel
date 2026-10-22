@@ -11,7 +11,7 @@ import { clsx } from 'clsx'
 const PAGE_TITLES: Record<string, string> = {
   '/dashboard':       'Dashboard',
   '/analytics':       'Analytics',
-  '/recommendations': 'Recommendations',
+  '/recommendations': 'Practice plan',
   '/roadmap':         'Roadmap',
   '/roadmap/gauntlet': 'Roadmap · Gauntlet',
   '/practice':        'Practice',

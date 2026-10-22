@@ -76,6 +76,8 @@ export function useSyncAccount() {
           clearInterval(pollingRef.current[jobId])
           delete pollingRef.current[jobId]
           queryClient.invalidateQueries({ queryKey: ['platforms'] })
+          // The sync marked new solves on the practice plans.
+          queryClient.invalidateQueries({ queryKey: ['recommendations'] })
           toast.push('success', `${platform} sync complete — ${job.itemsSynced} items synced`)
         } else if (job.status === 'FAILED') {
           clearInterval(pollingRef.current[jobId])
