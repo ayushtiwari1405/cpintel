@@ -77,7 +77,11 @@ class MongoLeastPrivilegeTest {
             "/docker-entrypoint-initdb.d/init.js")
         .withExposedPorts(27017)
         // The entrypoint starts mongod once to run the init scripts, then again for real.
-        .waitingFor(Wait.forLogMessage(".*Waiting for connections.*\\n", 2));
+        .waitingFor(Wait.forLogMessage(".*Waiting for connections.*\\n", 2))
+        // Now and then the real start finds 27017 still held by the init-script run and exits
+        // with code 48 ("Address already in use"). docker-compose.yml's restart policy covers
+        // that in a deployment; here a fresh container is the same remedy.
+        .withStartupAttempts(3);
 
     static boolean noDockerOutsideCi() {
         return System.getenv("CI") == null && !DockerClientFactory.instance().isDockerAvailable();
