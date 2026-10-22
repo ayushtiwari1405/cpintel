@@ -419,7 +419,7 @@ class PracticePlannerTest {
         Set<String> solved = Set.of(oldest, middle, newest);
 
         List<Plan.Problem> out = planner.revision(d.id(), skill(d, 60, 30, 10, daysAgo(70)), solved,
-            Map.of(oldest, daysAgo(200), middle, daysAgo(100), newest, daysAgo(80)));
+            Map.of(oldest, daysAgo(200), middle, daysAgo(100), newest, daysAgo(80)), new HashSet<>());
 
         assertEquals(3, out.size());
         assertEquals(List.of(oldest, middle), out.subList(0, 2).stream().map(Plan.Problem::key).toList());
@@ -433,6 +433,30 @@ class PracticePlannerTest {
     @Test
     @DisplayName("Revision of an unknown skill is empty")
     void revisionUnknown() {
-        assertTrue(planner.revision("nope", null, Set.of(), Map.of()).isEmpty());
+        assertTrue(planner.revision("nope", null, Set.of(), Map.of(), new HashSet<>()).isEmpty());
+    }
+
+    @Test
+    @DisplayName("A problem filed under two faded skills is offered for revision once")
+    void revisionSharedAcrossSkills() {
+        List<RoadmapTaxonomy.NodeDef> d = distinctTopics(2);
+        RoadmapTaxonomy.NodeDef shared = d.get(0);
+        PracticePlanner sharing = new PracticePlanner((def, sr, m, solved) -> problemsFor(shared, solved));
+        List<ProblemRecommender.Recommended> all = problemsFor(shared, Set.of());
+        Set<String> solved = Set.of(all.get(0).contestId() + all.get(0).index(),
+            all.get(1).contestId() + all.get(1).index());
+
+        Set<String> used = new HashSet<>();
+        List<Plan.Problem> first = sharing.revision(d.get(0).id(), null, solved, Map.of(), used);
+        List<Plan.Problem> second = sharing.revision(d.get(1).id(), null, solved, Map.of(), used);
+
+        Set<String> a = first.stream().map(Plan.Problem::key).collect(Collectors.toSet());
+        Set<String> b = second.stream().map(Plan.Problem::key).collect(Collectors.toSet());
+        assertEquals(2, first.stream().filter(p -> Plan.RESOLVE.equals(p.role())).count());
+        assertTrue(second.stream().noneMatch(p -> Plan.RESOLVE.equals(p.role())), "both solves went to the first");
+        assertTrue(java.util.Collections.disjoint(a, b), a + " and " + b);
+        Set<String> both = new HashSet<>(a);
+        both.addAll(b);
+        assertEquals(both, used, "used records every problem handed out");
     }
 }

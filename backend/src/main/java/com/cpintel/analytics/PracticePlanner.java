@@ -328,9 +328,11 @@ public final class PracticePlanner {
      * back.
      *
      * @param solvedAt when each solved problem was last worked on, by key
+     * @param used     keys already given to another revision item; the ones chosen here are
+     *                 added, so a problem filed under two faded skills is offered once
      */
     public List<Plan.Problem> revision(String nodeKey, Skill skill, Set<String> solved,
-                                       Map<String, Instant> solvedAt) {
+                                       Map<String, Instant> solvedAt, Set<String> used) {
         RoadmapTaxonomy.NodeDef def = RoadmapTaxonomy.byId(nodeKey);
         if (def == null) return List.of();
         Skill s = skill == null ? Skill.untouched(nodeKey) : skill;
@@ -340,16 +342,15 @@ public final class PracticePlanner {
         List<Plan.Problem> out = new ArrayList<>();
         candidates.stream()
             .filter(c -> c.contestId() != null && c.index() != null)
-            .filter(c -> solved.contains(key(c)))
+            .filter(c -> solved.contains(key(c)) && !used.contains(key(c)))
             .sorted(Comparator.comparing((ProblemRecommender.Recommended c) ->
                     solvedAt.getOrDefault(key(c), Instant.MAX))
                 .thenComparing(PracticePlanner::key))
             .limit(RESOLVE_COUNT)
             .forEach(c -> out.add(problem(c, Plan.RESOLVE, true)));
 
-        Set<String> used = new HashSet<>();
+        out.addAll(climb(candidates, targetFor(def, s), CONSOLIDATE, keysOf(out, used), solved));
         for (Plan.Problem p : out) used.add(p.key());
-        out.addAll(climb(candidates, targetFor(def, s), CONSOLIDATE, used, solved));
         return out;
     }
 
@@ -502,6 +503,13 @@ public final class PracticePlanner {
                 + "problems yet. They will be filled in on the next refresh.");
         }
         return List.copyOf(notes);
+    }
+
+    /** {@code used} plus the keys of {@code problems}, without changing {@code used}. */
+    private static Set<String> keysOf(List<Plan.Problem> problems, Set<String> used) {
+        Set<String> keys = new HashSet<>(used);
+        for (Plan.Problem p : problems) keys.add(p.key());
+        return keys;
     }
 
     private static Set<String> keysOf(List<Pick> picks) {

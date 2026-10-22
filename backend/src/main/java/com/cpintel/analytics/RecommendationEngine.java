@@ -240,7 +240,10 @@ public class RecommendationEngine {
         log.debug("Revision schedule for user {}: {} faded skills", userId, toSave.size());
     }
 
-    /** What to solve to revise each of these skills: old solves again, then one new problem. */
+    /**
+     * What to solve to revise each of these skills: old solves again, then one new problem.
+     * Taken in the order given, so a problem filed under several faded skills goes to the first.
+     */
     @Transactional(readOnly = true)
     public Map<String, List<Plan.Problem>> revisionProblems(Long userId, List<String> nodeKeys) {
         if (nodeKeys.isEmpty()) return Map.of();
@@ -250,8 +253,9 @@ public class RecommendationEngine {
 
         PracticePlanner planner = planner();
         Map<String, List<Plan.Problem>> out = new HashMap<>();
+        Set<String> used = new HashSet<>();
         for (String key : nodeKeys) {
-            out.put(key, planner.revision(key, skills.get(key), h.solved(), h.solvedAt()));
+            out.put(key, planner.revision(key, skills.get(key), h.solved(), h.solvedAt(), used));
         }
         return out;
     }
