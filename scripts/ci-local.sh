@@ -122,7 +122,8 @@ script_tests() (
     && if [[ $DOCKER -eq 0 ]]; then CPINTEL_NO_DOCKER=1 python3 -I scripts/test_compose_secrets.py;
        else python3 -I scripts/test_compose_secrets.py; fi \
     && if [[ $DOCKER -eq 0 ]]; then CPINTEL_NO_DOCKER=1 python3 -I scripts/test_backup_restore.py;
-       else python3 -I scripts/test_backup_restore.py; fi
+       else python3 -I scripts/test_backup_restore.py; fi \
+    && python3 -I scripts/test_deploy_preflight.py
 )
 
 docker_backend()  { docker build "${NO_CACHE[@]}" -t "$TAG-backend"  "$SRC/backend"; }
