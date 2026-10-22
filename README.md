@@ -932,11 +932,22 @@ as well as on each controller.
 
 ## Tests
 
+Three layers, from cheap to thorough. Only the first runs on every push and pull request:
+
+| Layer | What | Where it runs |
+|---|---|---|
+| Unit, component and script tests | the commands below; no running stack | CI and `scripts/ci-local.sh`, every push |
+| Full-stack integration test | the production images under a throwaway Compose project: fresh install, upgrade, API workflow through nginx | `scripts/integration-test.sh`; CI on `main` only |
+| Browser smoke test | a real Chrome through the main journeys | `scripts/e2e-smoke.sh`, by hand |
+
 ```bash
-cd backend  && ./mvnw verify    # unit, web-slice and Postgres schema tests, then the JaCoCo coverage gate
+cd backend  && ./mvnw verify    # unit, web-slice and Postgres/Mongo container tests, then the JaCoCo coverage gate
 cd electron && npm test         # away-time accounting, external-link schemes, executable sizes
 python3 -I scripts/test_grab_cf_cookie.py   # where the Codeforces helper will send a session
 python3 -I scripts/test_nginx_edge.py       # edge headers and the restarting answer (uses Docker)
+python3 -I scripts/test_mongo_app_user.py   # the backend's MongoDB account, fresh and existing (uses Docker)
+python3 -I scripts/loadtest/test_stack.py   # the load test's settings file and MongoDB start
+python3 -I scripts/integration/test_isolation.py  # the integration test's isolation check
 cd frontend && npm run type-check && npm run lint
 cd frontend && npm test         # session tests (Node), then component and page tests (Vitest, jsdom)
 ```
@@ -946,7 +957,9 @@ suite is the large one, several hundred tests; Maven prints the exact count at t
 The backend tests need no database, Redis or network of their own, with one exception:
 `PostgresSchemaTest` starts a throwaway `postgres:16-alpine` through Testcontainers, applies every
 Flyway migration, validates the entity mappings against the result and runs each native query.
-It is skipped on a machine without Docker, except under CI (`CI` set), where a missing Docker
+`MongoLeastPrivilegeTest` does the same with `mongo:7.0` and the repository's `mongo-init.js`,
+and runs every Mongo repository, GridFS and index creation as the backend's own account. Both
+are skipped on a machine without Docker, except under CI (`CI` set), where a missing Docker
 fails the run. The coverage gate (`jacoco.min.instruction` in `backend/pom.xml`) only ever moves
 up. The nginx test skips its container half when Docker is unavailable or `CPINTEL_NO_DOCKER=1`
 is set.
@@ -954,15 +967,61 @@ is set.
 `npm test` in `frontend/` runs two suites, neither needing a browser or the backend:
 `tests/session.test.mjs` drives the axios session handling against a scripted server on Node's
 own runner, and Vitest runs the component and page tests under `src/**/*.test.tsx` - route guards
-and roles, the practice plan's states, sign-in, examination unlock and keyboard use. Those use the
-real routes, providers and API client, with the backend scripted behind the client
-(`src/test/server.ts`).
+and roles, signing out (including a profile answer that arrives after it), the practice plan's
+states and failures, sign-in, examination unlock and keyboard use. Those use the real routes,
+providers and API client, with the backend scripted behind the client (`src/test/server.ts`).
+
+### Full-stack integration test (opt-in locally, on `main` in CI)
+
+```bash
+scripts/integration-test.sh                  # fresh install, then upgrade; removes everything it made
+scripts/integration-test.sh --only fresh     # or --only upgrade
+scripts/integration-test.sh --keep           # leave the last stack up to look at
+scripts/integration-test.sh --cleanup        # list what an interrupted run left (--yes removes it)
+```
+
+It builds the backend, frontend and nginx images from the checkout and runs them with Postgres,
+MongoDB and Redis under a Compose project of its own (`cpintel-it-<run id>`), with secrets
+generated for the run. Needs Docker with Compose 2.24 or later and `python3`; a first run takes
+several minutes for the image builds, later ones reuse the build cache.
+
+- **Fresh install:** the backend's MongoDB account is checked (readWrite on `cpintel` only);
+  then, through nginx over https: the app's page, health (UP, with no details for an anonymous
+  caller), a 401 for an anonymous or wrongly-passworded request, the bootstrap admin's sign-in
+  and refresh cookie flags, the profile, a personal file written to MongoDB and read back, a
+  practice plan, a password reset request, and sign-out refusing both the token and the refresh
+  cookie. MongoDB is then stopped: health must report DOWN (it takes about 30 s, the driver's
+  server selection timeout), and UP again once MongoDB is back.
+- **Upgrade:** MongoDB starts from the previous release's `mongo-init.js`
+  (`scripts/integration/fixtures/`) with data written as root. The documented upgrade follows -
+  `scripts/mongo-app-user.sh` creates the account, and finds nothing to do the second time; the
+  backend must refuse to start on the old indexes with `IndexOptionsConflict`; the README's index
+  drop ([MongoDB accounts](#mongodb-accounts)); then the backend comes up, the data is all there
+  and the API works.
+- **Both:** Compose must refuse a configuration without `MONGO_APP_PASSWORD`, and no generated
+  secret or reset link may appear in any container's log.
+
+**What it never touches.** Before anything starts, `scripts/integration/isolation.py` checks the
+resolved configuration: the project is `cpintel-it-*`, every container, volume and network
+carries its name, bind mounts are read-only files from the checkout, and nothing is published
+but nginx on a free `127.0.0.1` port. The development stack (`cpintel` project, `cpintel_*`
+volumes) is never named. Cleanup removes only the run's own projects - their containers,
+volumes, networks and the images Compose built for them - and the run fails if the volume list
+afterwards differs from before. It never prunes. The runner, monitoring and certbot are not
+started.
+
+**When it fails.** It prints which step, the containers' state and the last log lines, with
+every generated secret replaced by `<redacted>`. Common causes: a port or disk space problem
+during the image build (the build log is in the run's temporary directory, removed afterwards -
+rerun with `--keep` to keep the stack); Docker Compose older than 2.24; or a backend that does
+not reach UP within five minutes on a slow machine.
 
 ### Browser smoke test (opt-in)
 
 Not part of `npm test` or CI: it starts a throwaway stack and drives a real Chrome through sign-in,
-a reload, the dashboard, roadmap and practice plan, an administrator's console and a phone-width
-layout check.
+a reload, a wrong password, the dashboard, roadmap and practice plan (and a server error on it,
+shown rather than masked, then retried), an administrator's console and a phone-width layout
+check.
 
 ```bash
 cd frontend && npm run test:e2e:smoke    # or scripts/e2e-smoke.sh [--keep] [--rebuild]
@@ -973,6 +1032,27 @@ It needs Docker, Java 21, Node 24 and a Chrome or Chromium (`E2E_CHROME` if it i
 Its containers are `--rm`, labelled and named `cpintel-e2e-*`, on free loopback ports and with no
 named volume, so the development stack and the `cpintel_*` volumes are never touched; passwords
 are generated per run and deleted with its temporary directory, and Codeforces is stubbed.
+
+### Release readiness
+
+What the tests above do not cover, and what a release still needs - none of it is done by any
+script here:
+
+- **Secrets:** a production `.env` with every key from `.env.example`, including
+  `MONGO_APP_PASSWORD` (Compose refuses to start without it) and the sealing keys, with copies
+  kept off the server.
+- **Upgrading an existing server:** the [MongoDB accounts](#mongodb-accounts) steps, including
+  the index drop if the database predates the renamed indexes - the integration test rehearses
+  exactly that, but on a throwaway database.
+- **Mail:** `SMTP_HOST`, or a decision to run without it. Reset links are not logged unless
+  `CPINTEL_MAIL_LOG_UNDELIVERED=true`; off, a reset reaches nobody.
+- **Backups and a rollback you have tried:** `scripts/backup.sh`, `scripts/restore.sh --test`,
+  and `./deploy.sh --rollback` on the real server.
+- **Monitoring** if you want alerts ([Monitoring](#monitoring-optional)).
+- **The dependency scan's exceptions** expire on 2026-12-31 (below): before then, Spring Boot 4.
+
+Passing tests mean the code behaves as tested on a test stack. They do not certify a server,
+its data, its secrets or its network.
 
 ### Running CI before pushing
 
@@ -1007,7 +1087,9 @@ caches its vulnerability databases between runs.
 - **Accepting a finding:** add it to `backend/.trivyignore.yaml` with a `statement` saying why and
   an `expired_at` date, after which it fails again. It currently holds three Spring Framework
   6.2.19 CVEs fixed only in 7.0.9 (Spring Boot 4), none of which reaches code the backend uses;
-  they expire on 2026-12-31.
+  they expire on 2026-12-31. Do not extend that date to make the scan pass: from 2027-01-01 the
+  job fails until the backend is on Spring Boot 4 (4.1 is supported until 2027-07-31), or the
+  entries are re-checked against the code and renewed with a reason.
 
 The OWASP dependency-check step in the `Dependency vulnerabilities` job is a second opinion; it
 runs only with an `NVD_API_KEY` repository secret (free from NVD) and does not block. The
