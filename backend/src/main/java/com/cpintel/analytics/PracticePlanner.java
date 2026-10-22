@@ -1,0 +1,514 @@
+package com.cpintel.analytics;
+
+import com.cpintel.roadmap.ProblemRecommender;
+import com.cpintel.roadmap.RoadmapTaxonomy;
+
+import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+
+/**
+ * Decides what goes on a practice sheet: which skills, which problems, in what order, and why.
+ *
+ * <p>Pure on purpose. It takes the user's per-skill numbers, the roadmap's next skills and a way
+ * to list a skill's problems, and returns a sheet; it reads no repository and no clock, so the
+ * same inputs always give the same sheet and every rule here can be tested without a database.
+ * {@link RecommendationEngine} gathers the inputs and stores what comes out.
+ *
+ * <h2>The rules</h2>
+ *
+ * <ul>
+ *   <li><b>Evidence first.</b> A skill is ranked on its own numbers only once the user has
+ *       attempted {@value #MIN_ATTEMPTS_FOR_SHEET} problems in it; below that a mastery of zero
+ *       means "not reached", not "weak". Any places left are filled from the roadmap's next
+ *       skills, in the roadmap's order and marked {@link Plan#INFERRED}, so the sheet and the
+ *       roadmap cannot point different ways.</li>
+ *   <li><b>Nothing solved, nothing twice.</b> Solved problems are never offered as new
+ *       practice, only as an explicit {@link Plan#RESOLVE} on a revision item, and no problem
+ *       appears twice on a sheet or on two live sheets at once.</li>
+ *   <li><b>A climb, not a pile.</b> Each skill gets problems at fixed offsets around one target
+ *       rating - a warm-up, the core, a stretch - aimed from the user's rating on that skill
+ *       when they have one and from where their mastery sits in the skill's band otherwise.</li>
+ *   <li><b>Spread.</b> A daily sheet takes one skill per topic before it takes a second;
+ *       weekly plans allow two.</li>
+ * </ul>
+ */
+public final class PracticePlanner {
+
+    /** Attempts in a skill before its own numbers rank it. */
+    public static final int MIN_ATTEMPTS_FOR_SHEET = 3;
+
+    /** Decay, in mastery points, past which a skill counts as needing revision. */
+    public static final double REVISION_DECAY_THRESHOLD = 10.0;
+
+    static final int DAILY_ITEMS = 3;
+    static final int WEEKLY_FOCUS_ITEMS = 4;
+    static final int CONTEST_ITEMS = 3;
+
+    /** How the daily priority weighs weakness, decay and recent momentum. */
+    static final double W_WEAK = 0.5;
+    static final double W_DECAY = 0.3;
+    static final double W_MOMENTUM = 0.2;
+
+    /** Practice within this many days still counts as momentum, fading linearly. */
+    static final int MOMENTUM_DAYS = 14;
+
+    /** A weekly plan's progression slot goes to a fresh skill at least this strong. */
+    static final double PROGRESSION_MIN_MASTERY = 50;
+
+    /** Weekly decay past which a skill is labelled for revision rather than practice. */
+    static final double WEEKLY_REVISION_DECAY = 20;
+
+    /** A weekly goal is this share of the problems on the plan. */
+    static final double WEEKLY_GOAL_SHARE = 2.0 / 3.0;
+
+    /** Contest prep only takes skills whose band comes within this of the target rating. */
+    static final int CONTEST_BAND_REACH = 200;
+
+    /** Previously solved problems a revision item asks the user to solve again. */
+    static final int RESOLVE_COUNT = 2;
+
+    private static final Ladder DAILY = new Ladder(
+        new int[] {-200, -100, 0, 100}, new String[] {Plan.WARM_UP, Plan.CORE, Plan.CORE, Plan.STRETCH});
+    private static final Ladder WEEKLY = new Ladder(
+        new int[] {-100, 0, 100}, new String[] {Plan.WARM_UP, Plan.CORE, Plan.STRETCH});
+    private static final Ladder PROGRESSION = new Ladder(
+        new int[] {0, 100, 200}, new String[] {Plan.CORE, Plan.STRETCH, Plan.STRETCH});
+    private static final Ladder CONTEST = new Ladder(
+        new int[] {-200, 0, 200}, new String[] {Plan.WARM_UP, Plan.CORE, Plan.STRETCH});
+    private static final Ladder CONSOLIDATE = new Ladder(
+        new int[] {-100}, new String[] {Plan.CORE});
+
+    /** One skill as the planner sees it. Mastery and decay are 0-100. */
+    public record Skill(
+        String nodeKey,
+        double mastery,
+        double decay,
+        int attempted,
+        Double skillRating,
+        Instant lastPracticedAt
+    ) {
+        static Skill untouched(String nodeKey) {
+            return new Skill(nodeKey, 0, 0, 0, null, null);
+        }
+
+        double retained() {
+            return Math.max(0, mastery - decay);
+        }
+    }
+
+    /** Lists a skill's problems. */
+    @FunctionalInterface
+    public interface ProblemSource {
+        /** Every problem in the skill, each flagged solved or not against {@code solved}. */
+        List<ProblemRecommender.Recommended> candidates(RoadmapTaxonomy.NodeDef def, Double skillRating,
+                                                        double mastery, Set<String> solved);
+    }
+
+    /**
+     * @param skills              the user's per-skill rows (any order)
+     * @param roadmapNext         the roadmap's next skills, in the roadmap's order
+     * @param solved              keys ({@code contestId + index}) of every problem the user has solved
+     * @param exclude             keys already on another live sheet
+     * @param problemsetAvailable false when the problem list could not be loaded, so the sheet
+     *                            can say why it names skills without problems
+     */
+    public record Inputs(
+        List<Skill> skills,
+        List<String> roadmapNext,
+        Set<String> solved,
+        Set<String> exclude,
+        boolean problemsetAvailable,
+        Instant now
+    ) {}
+
+    /** A finished sheet. */
+    public record Sheet(List<Plan.Item> items, Plan.Summary summary) {}
+
+    /** Offsets from a target rating, and what each rung is called. */
+    private record Ladder(int[] offsets, String[] roles) {}
+
+    /** A skill chosen for a sheet, before its problems are attached. */
+    private record Pick(RoadmapTaxonomy.NodeDef def, Skill skill, String reasonCode, String reason,
+                        String priority, String basis) {}
+
+    private final ProblemSource source;
+
+    public PracticePlanner(ProblemSource source) {
+        this.source = source;
+    }
+
+    // -- daily -------------------------------------------------------------
+
+    /**
+     * Today's sheet: the skills with the highest priority, which weighs weakness, decay and
+     * momentum together, so a weak skill, a fading one and the one the user is in the middle of
+     * all have a way onto it.
+     */
+    public Sheet daily(Inputs in) {
+        List<Pick> ranked = measured(in).stream()
+            .sorted(Comparator.comparingDouble((Skill s) -> -dailyPriority(s, in.now()))
+                .thenComparing(Skill::nodeKey))
+            .map(s -> dailyPick(s, in.now()))
+            .toList();
+
+        List<Pick> chosen = withRoadmapFallback(select(ranked, DAILY_ITEMS, 1), DAILY_ITEMS, in, null);
+
+        Set<String> used = new HashSet<>(in.exclude());
+        List<Plan.Item> items = new ArrayList<>();
+        for (Pick p : chosen) items.add(item(p, DAILY, null, used, in, null));
+        return new Sheet(items, Plan.Summary.of(basisOf(items), notes(items, in)));
+    }
+
+    /** Weakness, decay and momentum, weighted, 0-100. */
+    static double dailyPriority(Skill s, Instant now) {
+        return W_WEAK * (100 - clamp(s.mastery())) + W_DECAY * clamp(s.decay())
+            + W_MOMENTUM * momentum(s, now);
+    }
+
+    /** 100 on the day of practice, falling to 0 at {@value #MOMENTUM_DAYS} days. */
+    static double momentum(Skill s, Instant now) {
+        if (s.lastPracticedAt() == null || now == null) return 0;
+        double days = Math.max(0, Duration.between(s.lastPracticedAt(), now).toHours() / 24.0);
+        return days >= MOMENTUM_DAYS ? 0 : 100 * (1 - days / MOMENTUM_DAYS);
+    }
+
+    /** Names the component that contributed most, so the reason says why this skill is here. */
+    private static Pick dailyPick(Skill s, Instant now) {
+        RoadmapTaxonomy.NodeDef def = RoadmapTaxonomy.byId(s.nodeKey());
+        double weak = W_WEAK * (100 - clamp(s.mastery()));
+        double decay = W_DECAY * clamp(s.decay());
+        double moving = W_MOMENTUM * momentum(s, now);
+
+        if (s.decay() >= REVISION_DECAY_THRESHOLD && decay >= weak && decay >= moving) {
+            return new Pick(def, s, "REVISION_DUE",
+                "Revision due - about " + Math.round(s.decay()) + "% of this has faded",
+                null, Plan.MEASURED);
+        }
+        if (moving > weak) {
+            long days = Math.max(0, Duration.between(s.lastPracticedAt(), now).toDays());
+            return new Pick(def, s, "MOMENTUM",
+                "Keep going - you practised this " + (days == 0 ? "today" : days + "d ago")
+                    + ", mastery " + Math.round(s.mastery()) + "%",
+                null, Plan.MEASURED);
+        }
+        return new Pick(def, s, "WEAK_TOPIC",
+            "Weak area - mastery " + Math.round(s.mastery()) + "% over "
+                + s.attempted() + " attempted problems",
+            null, Plan.MEASURED);
+    }
+
+    // -- weekly ------------------------------------------------------------
+
+    /**
+     * The week's plan: the skills the user retains least - so a strong skill gone stale ranks
+     * beside a weak one - and then one progression slot that pushes a strong, fresh skill
+     * harder. Each skill is one session.
+     */
+    public Sheet weekly(Inputs in) {
+        List<Skill> measured = measured(in);
+        List<Pick> ranked = measured.stream()
+            .sorted(Comparator.comparingDouble(Skill::retained).thenComparing(Skill::nodeKey))
+            .map(PracticePlanner::weeklyPick)
+            .toList();
+
+        List<Pick> chosen = new ArrayList<>(
+            withRoadmapFallback(select(ranked, WEEKLY_FOCUS_ITEMS, 2), WEEKLY_FOCUS_ITEMS, in, null));
+        progressionPick(measured, keysOf(chosen)).ifPresent(chosen::add);
+
+        Set<String> used = new HashSet<>(in.exclude());
+        List<Plan.Item> items = new ArrayList<>();
+        int session = 1;
+        for (Pick p : chosen) {
+            Ladder ladder = "PROGRESSION".equals(p.reasonCode()) ? PROGRESSION : WEEKLY;
+            items.add(item(p, ladder, null, used, in, session++));
+        }
+
+        int total = items.stream().mapToInt(i -> i.problems().size()).sum();
+        return new Sheet(items, new Plan.Summary(basisOf(items), notes(items, in),
+            total == 0 ? null : (int) Math.ceil(total * WEEKLY_GOAL_SHARE), null, null, null, null));
+    }
+
+    private static Pick weeklyPick(Skill s) {
+        RoadmapTaxonomy.NodeDef def = RoadmapTaxonomy.byId(s.nodeKey());
+        if (s.decay() > WEEKLY_REVISION_DECAY) {
+            return new Pick(def, s, "REVISION_DUE",
+                "Fading - " + Math.round(s.decay()) + "% of this has decayed", "REVISION", Plan.MEASURED);
+        }
+        if (s.mastery() < 30) {
+            return new Pick(def, s, "WEAK_TOPIC",
+                "Barely started - mastery " + Math.round(s.mastery()) + "%", "NEW", Plan.MEASURED);
+        }
+        return new Pick(def, s, "WEAK_TOPIC",
+            "Worth consolidating - mastery " + Math.round(s.mastery()) + "%", "PRACTICE", Plan.MEASURED);
+    }
+
+    /** The strongest skill that is still fresh, to be pushed rather than repaired. */
+    private static Optional<Pick> progressionPick(List<Skill> measured, Set<String> taken) {
+        return measured.stream()
+            .filter(s -> !taken.contains(s.nodeKey()))
+            .filter(s -> s.decay() < REVISION_DECAY_THRESHOLD && s.mastery() >= PROGRESSION_MIN_MASTERY)
+            .min(Comparator.comparingDouble((Skill s) -> -s.mastery()).thenComparing(Skill::nodeKey))
+            .map(s -> new Pick(RoadmapTaxonomy.byId(s.nodeKey()), s, "PROGRESSION",
+                "Strong and fresh - mastery " + Math.round(s.mastery())
+                    + "%: step up to harder problems",
+                "PROGRESS", Plan.MEASURED));
+    }
+
+    // -- contest preparation -----------------------------------------------
+
+    /**
+     * Preparation for a rated round at {@code rating}: the weakest skills that such a round
+     * actually tests, each with a quick warm-up below the rating, a core problem at it and a
+     * stretch above it - the one that, solved in the round, is the rating gain.
+     *
+     * @param ratingBasis {@link Plan#MEASURED} for the user's Codeforces rating, {@link Plan#INFERRED}
+     *                    for an estimate from what they have solved
+     */
+    public Sheet contestPrep(Inputs in, int rating, String ratingBasis,
+                             Plan.Contest contest, Plan.ContestRecord record) {
+        List<Pick> ranked = measured(in).stream()
+            .filter(s -> reaches(RoadmapTaxonomy.byId(s.nodeKey()), rating))
+            .sorted(Comparator.comparingDouble(Skill::retained).thenComparing(Skill::nodeKey))
+            .map(s -> new Pick(RoadmapTaxonomy.byId(s.nodeKey()), s, "CONTEST_STAPLE",
+                "Rounds at your level test this, and it is one of your weaker skills - mastery "
+                    + Math.round(s.mastery()) + "%",
+                null, Plan.MEASURED))
+            .toList();
+
+        List<Pick> chosen = withRoadmapFallback(select(ranked, CONTEST_ITEMS, 1), CONTEST_ITEMS, in, rating);
+
+        Set<String> used = new HashSet<>(in.exclude());
+        List<Plan.Item> items = new ArrayList<>();
+        for (Pick p : chosen) items.add(item(p, CONTEST, rating, used, in, null));
+
+        List<String> notes = new ArrayList<>(notes(items, in));
+        if (Plan.INFERRED.equals(ratingBasis)) {
+            notes.add("No Codeforces rating yet, so the plan is aimed at an estimated " + rating
+                + " from the problems you have solved.");
+        }
+        if (record != null && record.contests() > 0) {
+            notes.add(String.format(java.util.Locale.ROOT,
+                "In your last %d rated rounds you solved %.1f problems on average (rating change %+.0f). "
+                    + "The stretch problems are aimed at the next one.",
+                record.contests(), record.avgSolved(), record.avgRatingChange()));
+        }
+        if (contest == null) {
+            notes.add("No upcoming rated Codeforces round for your rating was found, so this is "
+                + "general preparation.");
+        }
+        return new Sheet(items, new Plan.Summary(basisOf(items), List.copyOf(notes), null,
+            rating, ratingBasis, contest, record));
+    }
+
+    private static boolean reaches(RoadmapTaxonomy.NodeDef def, int rating) {
+        return def != null
+            && def.minRating() <= rating + CONTEST_BAND_REACH
+            && def.maxRating() >= rating - CONTEST_BAND_REACH;
+    }
+
+    // -- revision ----------------------------------------------------------
+
+    /**
+     * What to do for a skill that has faded: solve again the problems in it the user solved
+     * longest ago, then one new problem just under their level to confirm it has come back.
+     *
+     * @param solvedAt when each solved problem was last worked on, by key
+     */
+    public List<Plan.Problem> revision(String nodeKey, Skill skill, Set<String> solved,
+                                       Map<String, Instant> solvedAt) {
+        RoadmapTaxonomy.NodeDef def = RoadmapTaxonomy.byId(nodeKey);
+        if (def == null) return List.of();
+        Skill s = skill == null ? Skill.untouched(nodeKey) : skill;
+        List<ProblemRecommender.Recommended> candidates =
+            source.candidates(def, s.skillRating(), s.mastery(), solved);
+
+        List<Plan.Problem> out = new ArrayList<>();
+        candidates.stream()
+            .filter(c -> c.contestId() != null && c.index() != null)
+            .filter(c -> solved.contains(key(c)))
+            .sorted(Comparator.comparing((ProblemRecommender.Recommended c) ->
+                    solvedAt.getOrDefault(key(c), Instant.MAX))
+                .thenComparing(PracticePlanner::key))
+            .limit(RESOLVE_COUNT)
+            .forEach(c -> out.add(problem(c, Plan.RESOLVE, true)));
+
+        Set<String> used = new HashSet<>();
+        for (Plan.Problem p : out) used.add(p.key());
+        out.addAll(climb(candidates, targetFor(def, s), CONSOLIDATE, used, solved));
+        return out;
+    }
+
+    // -- shared ------------------------------------------------------------
+
+    /** Skills with enough evidence to be ranked on their own numbers. */
+    private static List<Skill> measured(Inputs in) {
+        Map<String, Skill> byKey = new HashMap<>();
+        for (Skill s : in.skills()) {
+            if (s == null || s.nodeKey() == null) continue;
+            if (s.attempted() < MIN_ATTEMPTS_FOR_SHEET) continue;
+            if (RoadmapTaxonomy.byId(s.nodeKey()) == null) continue;
+            byKey.putIfAbsent(s.nodeKey(), s);
+        }
+        return byKey.values().stream().sorted(Comparator.comparing(Skill::nodeKey)).toList();
+    }
+
+    /**
+     * Takes {@code n} from {@code ranked} in order, at most {@code perTopic} from any one topic
+     * while others are left, then tops up from what was skipped.
+     */
+    private static List<Pick> select(List<Pick> ranked, int n, int perTopic) {
+        List<Pick> chosen = new ArrayList<>();
+        Map<String, Integer> perTopicCount = new HashMap<>();
+        List<Pick> skipped = new ArrayList<>();
+        for (Pick p : ranked) {
+            if (chosen.size() >= n) break;
+            String topic = p.def().rollupTopic();
+            if (perTopicCount.getOrDefault(topic, 0) >= perTopic) {
+                skipped.add(p);
+                continue;
+            }
+            perTopicCount.merge(topic, 1, Integer::sum);
+            chosen.add(p);
+        }
+        for (Pick p : skipped) {
+            if (chosen.size() >= n) break;
+            chosen.add(p);
+        }
+        return chosen;
+    }
+
+    /**
+     * Fills any places left with the roadmap's next skills, in its order. These are where the
+     * user is going rather than where they are weak, and are marked as inferred.
+     *
+     * @param contestRating when set, only skills whose band reaches it
+     */
+    private static List<Pick> withRoadmapFallback(List<Pick> chosen, int n, Inputs in, Integer contestRating) {
+        if (chosen.size() >= n || in.roadmapNext() == null) return chosen;
+        Map<String, Skill> byKey = new HashMap<>();
+        for (Skill s : in.skills()) if (s != null && s.nodeKey() != null) byKey.putIfAbsent(s.nodeKey(), s);
+
+        List<Pick> out = new ArrayList<>(chosen);
+        Set<String> taken = keysOf(out);
+        for (String key : in.roadmapNext()) {
+            if (out.size() >= n) break;
+            RoadmapTaxonomy.NodeDef def = RoadmapTaxonomy.byId(key);
+            if (def == null || !taken.add(key)) continue;
+            if (contestRating != null && !reaches(def, contestRating)) continue;
+            Skill s = byKey.getOrDefault(key, Skill.untouched(key));
+            out.add(new Pick(def, s, "NEXT_ON_ROADMAP",
+                "Next on your roadmap - not enough attempts here yet to measure it",
+                null, Plan.INFERRED));
+        }
+        return out;
+    }
+
+    private Plan.Item item(Pick p, Ladder ladder, Integer fixedTarget, Set<String> used,
+                           Inputs in, Integer session) {
+        RoadmapTaxonomy.NodeDef def = p.def();
+        Skill s = p.skill();
+        int target = fixedTarget != null ? fixedTarget : targetFor(def, s);
+
+        List<Plan.Problem> problems = climb(
+            source.candidates(def, s.skillRating(), s.mastery(), in.solved()),
+            target, ladder, used, in.solved());
+        for (Plan.Problem pr : problems) used.add(pr.key());
+
+        return new Plan.Item(def.id(), def.displayName(), def.track(), def.rollupTopic(), def.blurb(),
+            Math.round(s.mastery()), Math.round(s.decay()), target,
+            p.reason(), p.reasonCode(), p.priority(), p.basis(), session, problems);
+    }
+
+    /**
+     * One problem per rung of the ladder: the unsolved, unused problem nearest each rung's
+     * rating. Ties go to the better fit, then the newer contest, then the index, so the choice
+     * never depends on the order the candidates arrived in.
+     */
+    private static List<Plan.Problem> climb(List<ProblemRecommender.Recommended> candidates, int target,
+                                            Ladder ladder, Set<String> used, Set<String> solved) {
+        List<ProblemRecommender.Recommended> pool = new ArrayList<>();
+        Set<String> seen = new LinkedHashSet<>();
+        for (ProblemRecommender.Recommended c : candidates) {
+            if (c.contestId() == null || c.index() == null || c.rating() == null) continue;
+            String key = key(c);
+            if (c.solved() || solved.contains(key) || used.contains(key) || !seen.add(key)) continue;
+            pool.add(c);
+        }
+
+        List<Plan.Problem> out = new ArrayList<>();
+        for (int i = 0; i < ladder.offsets().length && !pool.isEmpty(); i++) {
+            int rung = target + ladder.offsets()[i];
+            ProblemRecommender.Recommended best = pool.stream()
+                .min(Comparator.comparingInt((ProblemRecommender.Recommended c) -> Math.abs(c.rating() - rung))
+                    .thenComparing(Comparator.comparingDouble(ProblemRecommender.Recommended::fit).reversed())
+                    .thenComparing(Comparator.comparingInt(ProblemRecommender.Recommended::contestId).reversed())
+                    .thenComparing(ProblemRecommender.Recommended::index))
+                .orElseThrow();
+            pool.remove(best);
+            out.add(problem(best, ladder.roles()[i], false));
+        }
+        return out;
+    }
+
+    /** The rating to aim at in a skill: just above the user's skill rating, or by mastery. */
+    static int targetFor(RoadmapTaxonomy.NodeDef def, Skill s) {
+        double aim = s.skillRating() != null
+            ? s.skillRating() + ScoringFormulas.FIT_SKILL_STRETCH
+            : ScoringFormulas.targetRating(s.mastery(), def.minRating(), def.maxRating());
+        int lo = Math.min(def.minRating(), def.maxRating());
+        int hi = Math.max(def.minRating(), def.maxRating());
+        return (int) Math.round(Math.max(lo, Math.min(hi, aim)));
+    }
+
+    private static Plan.Problem problem(ProblemRecommender.Recommended c, String role, boolean solved) {
+        return new Plan.Problem(c.contestId(), c.index(), c.name(), c.rating(), solved, c.fit(), role,
+            c.practicePath(), c.judgeUrl());
+    }
+
+    private static String basisOf(List<Plan.Item> items) {
+        if (items.isEmpty()) return Plan.NONE;
+        boolean measured = items.stream().anyMatch(i -> Plan.MEASURED.equals(i.basis()));
+        boolean inferred = items.stream().anyMatch(i -> Plan.INFERRED.equals(i.basis()));
+        return measured && inferred ? Plan.PARTIAL : measured ? Plan.MEASURED : Plan.INFERRED;
+    }
+
+    private static List<String> notes(List<Plan.Item> items, Inputs in) {
+        List<String> notes = new ArrayList<>();
+        if (items.isEmpty()) {
+            notes.add("Nothing to plan from yet. Link and sync your Codeforces account, and your "
+                + "roadmap's first skills will appear here.");
+        } else if (items.stream().anyMatch(i -> Plan.INFERRED.equals(i.basis()))) {
+            notes.add("Skills marked \"from your roadmap\" have fewer than " + MIN_ATTEMPTS_FOR_SHEET
+                + " attempted problems, so they come from your roadmap's next steps rather than "
+                + "from measured weakness.");
+        }
+        if (!in.problemsetAvailable() && !items.isEmpty()) {
+            notes.add("The Codeforces problem list could not be loaded, so some skills have no "
+                + "problems yet. They will be filled in on the next refresh.");
+        }
+        return List.copyOf(notes);
+    }
+
+    private static Set<String> keysOf(List<Pick> picks) {
+        Set<String> keys = new HashSet<>();
+        for (Pick p : picks) keys.add(p.def().id());
+        return keys;
+    }
+
+    private static String key(ProblemRecommender.Recommended c) {
+        return c.contestId() + c.index();
+    }
+
+    private static double clamp(double v) {
+        return Math.max(0, Math.min(100, v));
+    }
+}
