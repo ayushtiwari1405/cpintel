@@ -98,11 +98,22 @@ public class MailService {
                 message.setText(plainText);
                 sender.send(message);
             }
-            log.info("Sent \"{}\" to {}", subject, to);
+            log.info("Sent \"{}\" to {}", subject, masked(to));
         } catch (Exception e) {
-            // The address is logged; the body is not, because these bodies carry reset links.
-            log.warn("Could not send \"{}\" to {}: {}", subject, to, e.getMessage());
+            // Neither the body, which can carry a reset link, nor the whole address.
+            log.warn("Could not send \"{}\" to {}: {}", subject, masked(to), e.getMessage());
         }
+    }
+
+    /**
+     * An address with all but its first character hidden, keeping the domain - enough to tell
+     * a delivery problem at one mail host from a typo, without writing the address into a log.
+     */
+    public static String masked(String address) {
+        if (address == null) return "(none)";
+        int at = address.lastIndexOf('@');
+        if (at < 1) return "***";
+        return address.charAt(0) + "***" + address.substring(at);
     }
 
     public void send(String to, String subject, String plainText) {

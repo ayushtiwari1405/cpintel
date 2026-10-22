@@ -93,7 +93,9 @@ public class AuthService {
         // seeded lazily by RoadmapService.ensureSeeded.)
         unifiedScoreRepository.save(UnifiedScore.builder().user(user).build());
 
-        log.info("New user registered: {}", user.getEmail());
+        // The id, not the address: application logs are kept, shipped and read far more widely
+        // than the audit trail, and an address is personal data the id does not need.
+        log.info("New user registered: user {}", user.getUserId());
         auditService.record(user.getUserId(), AuditService.REGISTER, "USER",
             String.valueOf(user.getUserId()), httpReq);
 
@@ -174,7 +176,7 @@ public class AuthService {
         // so the refusal says nothing about anybody's examinations to somebody guessing.
         refuseDuringExamination(user, httpReq);
 
-        log.info("User logged in: {}", user.getEmail());
+        log.info("User {} logged in", user.getUserId());
         auditService.record(user.getUserId(), AuditService.LOGIN, "USER",
             String.valueOf(user.getUserId()), httpReq);
         return buildAuthResponse(user, httpReq);

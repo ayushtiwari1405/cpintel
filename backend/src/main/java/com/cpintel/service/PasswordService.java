@@ -103,8 +103,9 @@ public class PasswordService {
 
         if (found.isEmpty()) {
             // Logged, because a burst of these against addresses that do not exist is worth
-            // seeing. Not audited against a user, because there is no user.
-            log.info("Password reset asked for an address with no account: {}", email);
+            // seeing. Not audited against a user, because there is no user. The address itself
+            // is left out: it was typed by anybody, and is personal data whoever it belongs to.
+            log.info("Password reset asked for an address with no account");
             return;
         }
 
