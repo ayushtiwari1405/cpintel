@@ -3,6 +3,9 @@ db = db.getSiblingDB('cpintel');
 // Indexes the entities also declare (@CompoundIndex) carry the entities' names. Created here
 // under MongoDB's default names, they collided with the backend's own index creation at start
 // (IndexOptionsConflict: same keys, another name) and a fresh installation could not start.
+// The backend creates the rest itself at start (personal_files, contest_file_rules, ...). This
+// runs only on an empty database; an existing one is brought up to date by
+// scripts/mongo-index-upgrade.sh (README, "Upgrading an existing MongoDB").
 
 db.createCollection('cf_submissions');
 db.createCollection('code_submissions');

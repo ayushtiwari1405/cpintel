@@ -119,7 +119,8 @@ off the server: losing the keys makes stored exam passwords and DOMjudge logins 
 | Setting | Needed | What it is |
 | --- | --- | --- |
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` | Required | Database login |
-| `MONGO_USER` / `MONGO_PASSWORD` | Required | Database login |
+| `MONGO_USER` / `MONGO_PASSWORD` | Required | MongoDB's root account: backups, restores, creating the account below |
+| `MONGO_APP_USER` / `MONGO_APP_PASSWORD` | Required | The backend's own MongoDB account, `readWrite` on `cpintel` only (`MONGO_APP_USER` defaults to `cpintel_app`). Compose refuses to start without the password |
 | `REDIS_PASSWORD` | Required | Cache password |
 | `JWT_SECRET` | Required | Random, at least 32 characters; signs sign-in sessions |
 | `CPINTEL_SESSION_KEY` | Required | Random key |
@@ -162,6 +163,12 @@ copy has to live off the server, or a disk failure loses everything.
   `scripts/restore.sh --test <stamp>` once and write down the result. (A full restore — backup,
   drill, data deleted, restored in place, backend started on the result — was rehearsed on
   throwaway containers on 2026-10-15; see the head of `scripts/restore.sh`.)
+
+- [ ] **Only when upgrading a server whose database predates this release:** a maintenance
+  window to stop the backend and run the README's
+  [Upgrading an existing MongoDB](../README.md#upgrading-an-existing-mongodb) before deploying,
+  and someone to decide between any duplicated contest file rules it finds. A fresh install
+  needs none of this.
 
 ### 1.8 Lab PCs and browsers
 
@@ -236,7 +243,10 @@ and survived a page reload with no Content-Security-Policy violations.
 - [x] **Deploy script.** `./deploy.sh <version>` backs up both databases, pulls, restarts, waits
   for the health check and rolls back on failure; `./deploy.sh --rollback` returns to the
   previous version. It refuses while an examination is running or about to (`--force`
-  overrides), and reloads nginx so it finds the restarted backend.
+  overrides), and reloads nginx so it finds the restarted backend. It does not change MongoDB's
+  indexes or data: an older database is prepared first with `scripts/mongo-index-upgrade.sh`
+  (README, "Upgrading an existing MongoDB"), and a backend that stops on one is rolled back, not
+  repaired.
 - [ ] Optional: enable the commented-out SSH deploy job in `ci.yml` for automatic deploys.
 - [x] **Backups.** Nightly `pg_dump` + `mongodump`, 14 days kept, copied to
   `CPINTEL_BACKUP_REMOTE`; `scripts/restore.sh` restores, and `--test` restores into a scratch

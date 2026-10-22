@@ -19,6 +19,10 @@
 #      the schema, say so and name the backup to restore: an older backend on a newer schema is
 #      not something to leave running without a person deciding.
 #
+# It does not prepare MongoDB's indexes or resolve duplicate data. A database from an earlier
+# release goes through README.md, "Upgrading an existing MongoDB" (scripts/mongo-index-upgrade.sh)
+# first; a backend that stops on one here is rolled back by step 6, not repaired.
+#
 # Refused while an examination is running or starts within 30 minutes: the backend is down for
 # the half minute or so it takes to start, and a room mid-paper sees requests fail for that long
 # (nobody is signed out, and nothing saved is lost, but submissions wait). --force overrides it,

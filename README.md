@@ -273,6 +273,9 @@ belongs outside examinations, which is why the script refuses one during a paper
 - **MongoDB accounts:** the backend signs in as `MONGO_APP_USER` (default `cpintel_app`), which
   holds `readWrite` on the `cpintel` database and nothing else; the root account (`MONGO_USER`) is
   for backups, restores and creating that account. See [MongoDB accounts](#mongodb-accounts).
+- **Upgrading a server whose database predates this release:** its indexes, and possibly
+  duplicate files or contest rules, need [Upgrading an existing MongoDB](#upgrading-an-existing-mongodb)
+  *before* `./deploy.sh`; a fresh install needs nothing.
 - **Backups:** `scripts/backup.sh` nightly from cron, with `CPINTEL_BACKUP_REMOTE` for the copy
   off the server; `scripts/restore.sh --test <stamp>` proves a backup reads back without
   touching live data.
@@ -342,19 +345,138 @@ Going back: an older version reads its MongoDB address from the same `docker-com
 `SPRING_DATA_MONGODB_URI` line and recreate the backend. The extra account harms nothing; remove
 it, if wanted, with `db.getSiblingDB('cpintel').dropUser('cpintel_app')` as root.
 
-A database created by an older `mongo-init.js` can hold its indexes under MongoDB's default names,
-where the backend declares the same indexes under its own (`idx_code_user_problem`, ...); the
-backend then stops at start with `IndexOptionsConflict`. Drop the default-named copies - the
-backend recreates them under its names on the next start - after a backup:
-`db.code_submissions.dropIndex('userId_1_platform_1_contestId_1_problemIndex_1_submittedAt_-1')`,
-and likewise `userId_1_platform_1_externalId_1` on `code_submissions`, and
-`userId_1_cfSubmissionId_1` and `userId_1_verdict_1` on `cf_submissions`.
+### Upgrading an existing MongoDB
 
-Until the backend's Mongo template was fixed to honour `auto-index-creation`, it created none of
-its own indexes, so the unique ones on personal files (`idx_files_user_name`) and contest file
-rules (`idx_file_rule_contest`) were not enforced. A database that collected duplicates meanwhile
-- two uploads of one name racing each other - stops the backend at start with a duplicate key
-error naming the index: remove the extra rows (keep the newest), as root, then start it again.
+This is the one procedure for bringing a database created by an earlier release up to the indexes
+this backend expects. A fresh installation needs none of it: `mongo-init.js` and the backend's
+first start create everything. It is not done by `deploy.sh`.
+
+**The indexes.** The backend declares these, and since `78f1dc6` it creates them at start
+(`spring.data.mongodb.auto-index-creation`). Before that, `MongoConfig` built its `MongoTemplate`
+with a mapping context of its own that ignored the setting, so the backend created no index at
+all; only `mongo-init.js`'s existed, and the two unique ones it does not make were not enforced.
+
+| Collection | Index | Key | Unique | On a fresh install, made by |
+|---|---|---|---|---|
+| `cf_submissions` | `idx_cf_user_submission` | `userId`, `cfSubmissionId` | yes | `mongo-init.js` |
+| `cf_submissions` | `idx_cf_user_verdict` | `userId`, `verdict` | no | `mongo-init.js` |
+| `code_submissions` | `idx_code_user_problem` | `userId`, `platform`, `contestId`, `problemIndex`, `submittedAt` desc | no | `mongo-init.js` |
+| `code_submissions` | `idx_code_user_external` | `userId`, `platform`, `externalId` | no | `mongo-init.js` |
+| `personal_files` | `idx_files_user_name` | `userId`, `name` | yes | the backend |
+| `contest_file_rules` | `idx_file_rule_contest` | `platform`, `contestId` | yes | the backend |
+
+(The backend also makes plain indexes - `idx_cf_user_created`, `idx_snap_user_platform` and
+single-field ones - that no earlier release had in another form; they need nothing here.)
+
+**What an earlier database can hold instead.** `mongo-init.js` before `874bfc5` made the first
+four under MongoDB's default names (`userId_1_cfSubmissionId_1`, `userId_1_verdict_1`,
+`userId_1_platform_1_contestId_1_problemIndex_1_submittedAt_-1`,
+`userId_1_platform_1_externalId_1`); MongoDB will not hold a second index on the same key, so the
+backend stops at start with `IndexOptionsConflict`. The first releases (`6041bf0`, `7487e24`) had
+a unique `cfSubmissionId_1` across all users instead. And `personal_files` and
+`contest_file_rules` may hold duplicates - two uploads of one name racing each other, two saves of
+one rule - which stop the backend at start with a duplicate key error (`E11000`).
+
+**A backend that stops at start is a protective stop, not the migration.** It changes no data,
+and `deploy.sh` then returns to the previous version by itself; but neither it nor
+`./deploy.sh --rollback` fixes indexes or duplicates. Do the steps below first.
+
+#### The procedure
+
+`scripts/mongo-index-upgrade.sh` does the checks and changes. It needs `--container` named
+explicitly, works on the `cpintel` database as the container's root account (as
+`scripts/backup.sh` does), and never deletes a document, uses `dropIndexes()`, touches `_id_`,
+or drops an index it has not matched exactly - key, order, direction and options - against a
+known earlier definition. Exit codes: 0 done or ready, 3 duplicates remain, 4 refused (no
+backup, or something can still write), 1 anything that needs a person, 2 usage.
+
+1. **Stop everything that writes**, during a window when nobody needs the site: `docker compose
+   stop backend` (and anything else you run that signs in to MongoDB). The script refuses to
+   change anything while a Java driver or the backend's account (`MONGO_APP_USER`) is connected.
+2. **Back up**, now that nothing writes: `./scripts/backup.sh pre-index-upgrade`, which writes
+   `postgres-<time>-pre-index-upgrade.dump` and `mongo-<time>-pre-index-upgrade.archive.gz` to
+   `CPINTEL_BACKUP_DIR`. Changes need `--backup` naming that MongoDB dump: under a day old
+   (`CPINTEL_BACKUP_MAX_AGE_HOURS`), readable by `gzip -t`, and read through by
+   `mongorestore --dryRun`.
+3. **Check** (read-only; safe at any time, even with the backend running):
+
+   ```bash
+   scripts/mongo-index-upgrade.sh --container cpintel-mongo --check
+   ```
+
+   It prints, per unique index, how many keys are duplicated - counts only, no names - and per
+   index whether it is in place, will be created, will be renamed from an earlier definition, or
+   needs a person.
+4. **If there are duplicates, export them** (read-only) - a record to review and to go back to:
+
+   ```bash
+   scripts/mongo-index-upgrade.sh --container cpintel-mongo --export /var/backups/cpintel/index-upgrade
+   ```
+
+   One JSON line per conflicting document, in Extended JSON (types kept), in a new private
+   directory: `personal_files.conflicts.jsonl` (without file contents),
+   `contest_file_rules.conflicts.jsonl`, `cf_submissions.conflicts.jsonl`.
+5. **Resolve them, keeping the data.**
+   - *Personal files:* plan, review, then apply. Only the name changes: the first upload keeps
+     its name and each later one becomes `name (2).cpp`, `name (3).cpp`, ... - the next number
+     free among all of that user's files, so an existing `name (2).cpp` is skipped; files without
+     an extension become `Makefile (2)`; names stay within the 120-character limit. Content,
+     owner and dates stay as they were, and the plan (`_id`, user, old and new name) is written
+     to disk before anything is renamed.
+
+     ```bash
+     scripts/mongo-index-upgrade.sh --container cpintel-mongo --rename-duplicate-files /var/backups/cpintel/index-upgrade
+     scripts/mongo-index-upgrade.sh --container cpintel-mongo --rename-duplicate-files /var/backups/cpintel/index-upgrade \
+       --confirm --backup /var/backups/cpintel/mongo-<time>-pre-index-upgrade.archive.gz
+     ```
+
+   - *Contest file rules:* a person decides. Each pair is an admin's decision about one contest
+     (or, with no contest, about all of them); read both in the export, keep the one that is
+     right, and remove the other by its `_id`, as root:
+     `db.contest_file_rules.deleteOne({ _id: ObjectId('<_id from the export>') })`. The export is
+     the record of what was removed; to put one back, `mongoimport` that line into
+     `cpintel.contest_file_rules` as root (it reads Extended JSON, so the `_id` comes back as it
+     was).
+   - *Codeforces submissions:* every earlier release kept these unique, so duplicates mean the
+     database never had its indexes. They are copies of what Codeforces holds; keep one of each
+     pair the same way, or remove the user's rows and let a resync bring them back.
+
+6. **Check again** until it reports no duplicates (exit 0).
+7. **Apply:**
+
+   ```bash
+   scripts/mongo-index-upgrade.sh --container cpintel-mongo --apply \
+     --backup /var/backups/cpintel/mongo-<time>-pre-index-upgrade.archive.gz
+   ```
+
+   Missing indexes are created under their names. Each earlier default-named one is dropped and
+   recreated under its name; for `userId_1_cfSubmissionId_1` a temporary unique index
+   (`p7_guard_cf_user_submission`, the same fields reversed) holds the uniqueness meanwhile,
+   because MongoDB will not hold two indexes on one key. The first releases' global
+   `cfSubmissionId_1` goes once the per-user one exists. It ends by checking every index is in
+   place.
+8. **Deploy and start the backend** (`./deploy.sh <sha>`); it finds its indexes in place. Then
+   check the site: sign in, open personal files, open a practice plan.
+
+**Running it again** is always safe: every step reads the state first, so after a completed run
+it changes nothing, and after an interrupted one (including one that stopped between the guard
+and the new index) it carries on from where it stopped. Renames are guarded by the old name, so
+none is applied twice.
+
+**When it stops (exit 1)** it says which index and why - most often an index of a wanted name
+with another definition, or one of another name on the same key that no release made. Nothing
+further was changed; compare it with the table above and drop or rename that index by hand,
+then run the check again.
+
+**Going back.** The previous backend version runs on the renamed indexes and on renamed files
+(it creates no indexes), so `./deploy.sh --rollback` keeps working. Renames are not undone by
+it: the plan file has every old name. To return the database exactly as it was, restore the
+backups from step 2 - `docker compose stop backend && ./scripts/restore.sh <time>-pre-index-upgrade`
+puts back both databases, and so discards anything written to either since.
+
+The integration test rehearses all of this on a throwaway copy of an earlier release's database
+([Full-stack integration test](#full-stack-integration-test-opt-in-locally-on-main-in-ci)), and
+`scripts/test_mongo_index_upgrade.py` covers each case of the script on its own.
 
 ### Monitoring (optional)
 
@@ -946,8 +1068,10 @@ cd electron && npm test         # away-time accounting, external-link schemes, e
 python3 -I scripts/test_grab_cf_cookie.py   # where the Codeforces helper will send a session
 python3 -I scripts/test_nginx_edge.py       # edge headers and the restarting answer (uses Docker)
 python3 -I scripts/test_mongo_app_user.py   # the backend's MongoDB account, fresh and existing (uses Docker)
+python3 -I scripts/test_mongo_index_upgrade.py  # scripts/mongo-index-upgrade.sh, case by case (uses Docker)
 python3 -I scripts/loadtest/test_stack.py   # the load test's settings file and MongoDB start
 python3 -I scripts/integration/test_isolation.py  # the integration test's isolation check
+python3 -I scripts/integration/test_cleanup_lock.py  # its cleanup leaves a running test alone (Docker, flock)
 cd frontend && npm run type-check && npm run lint
 cd frontend && npm test         # session tests (Node), then component and page tests (Vitest, jsdom)
 ```
@@ -978,6 +1102,7 @@ scripts/integration-test.sh                  # fresh install, then upgrade; remo
 scripts/integration-test.sh --only fresh     # or --only upgrade
 scripts/integration-test.sh --keep           # leave the last stack up to look at
 scripts/integration-test.sh --cleanup        # list what an interrupted run left (--yes removes it)
+scripts/integration-test.sh --cleanup --yes --project cpintel-it-<id>   # only that one
 ```
 
 It builds the backend, frontend and nginx images from the checkout and runs them with Postgres,
@@ -993,11 +1118,15 @@ several minutes for the image builds, later ones reuse the build cache.
   cookie. MongoDB is then stopped: health must report DOWN (it takes about 30 s, the driver's
   server selection timeout), and UP again once MongoDB is back.
 - **Upgrade:** MongoDB starts from the previous release's `mongo-init.js`
-  (`scripts/integration/fixtures/`) with data written as root. The documented upgrade follows -
-  `scripts/mongo-app-user.sh` creates the account, and finds nothing to do the second time; the
-  backend must refuse to start on the old indexes with `IndexOptionsConflict`; the README's index
-  drop ([MongoDB accounts](#mongodb-accounts)); then the backend comes up, the data is all there
-  and the API works.
+  (`scripts/integration/fixtures/`) with data written as root, including duplicate personal file
+  names (with extensions and an existing `(2)`) and a duplicated contest rule. Then
+  [the procedure](#upgrading-an-existing-mongodb): `scripts/mongo-app-user.sh` creates the
+  account and finds nothing to do the second time; the backend, started on the old indexes, must
+  stop; the index upgrade must find every conflict without changing anything, refuse without a
+  backup (one is made with `scripts/backup.sh`) and while duplicates remain, export them without
+  file contents, rename the duplicate files, and - after the test removes one rule as a person
+  would - apply, and change nothing on a second run. Every personal file must keep its content and
+  metadata under a name of its own, the backend must come up, and the API must work.
 - **Both:** Compose must refuse a configuration without `MONGO_APP_PASSWORD`, and no generated
   secret or reset link may appear in any container's log.
 
@@ -1007,8 +1136,10 @@ carries its name, bind mounts are read-only files from the checkout, and nothing
 but nginx on a free `127.0.0.1` port. The development stack (`cpintel` project, `cpintel_*`
 volumes) is never named. Cleanup removes only the run's own projects - their containers,
 volumes, networks and the images Compose built for them - and the run fails if the volume list
-afterwards differs from before. It never prunes. The runner, monitoring and certbot are not
-started.
+afterwards differs from before. It never prunes. A run holds a lock (`flock` on
+`$XDG_RUNTIME_DIR/cpintel-it-locks/<run>.lock`, or under `/tmp`) for as long as it lives, and
+`--cleanup --yes` skips any project whose run still holds it, so it cannot pull a stack from under
+a test that is still going. The runner, monitoring and certbot are not started.
 
 **When it fails.** It prints which step, the containers' state and the last log lines, with
 every generated secret replaced by `<redacted>`. Common causes: a port or disk space problem
@@ -1041,15 +1172,29 @@ script here:
 - **Secrets:** a production `.env` with every key from `.env.example`, including
   `MONGO_APP_PASSWORD` (Compose refuses to start without it) and the sealing keys, with copies
   kept off the server.
-- **Upgrading an existing server:** the [MongoDB accounts](#mongodb-accounts) steps, including
-  the index drop if the database predates the renamed indexes - the integration test rehearses
-  exactly that, but on a throwaway database.
+- **Upgrading an existing server:** [MongoDB accounts](#mongodb-accounts), then
+  [Upgrading an existing MongoDB](#upgrading-an-existing-mongodb) - in a maintenance window, with
+  the backend stopped, before `./deploy.sh`. The integration test rehearses it on a throwaway
+  database; it has not been run on a real one.
 - **Mail:** `SMTP_HOST`, or a decision to run without it. Reset links are not logged unless
   `CPINTEL_MAIL_LOG_UNDELIVERED=true`; off, a reset reaches nobody.
 - **Backups and a rollback you have tried:** `scripts/backup.sh`, `scripts/restore.sh --test`,
   and `./deploy.sh --rollback` on the real server.
 - **Monitoring** if you want alerts ([Monitoring](#monitoring-optional)).
 - **The dependency scan's exceptions** expire on 2026-12-31 (below): before then, Spring Boot 4.
+
+Known and still open - none of these is fixed by anything above:
+
+- Redis takes its password on its command line (`--requirepass`), where `docker inspect` and a
+  process list on the host show it; the root MongoDB password is likewise a `mongosh`/`mongodump`
+  argument inside its container when the scripts here use it.
+- The backend logs the bootstrap admin's configured email address when it creates that account.
+- With MongoDB unreachable, `/actuator/health` takes about 30 s to answer DOWN (the driver's
+  server selection timeout); the backend container's own health check times out at 10 s and
+  reports unhealthy meanwhile.
+- The `Full-stack integration` CI job has run only on a developer machine, not on a GitHub
+  runner, and does not yet gate the image builds.
+- No deployment of this release has been made; everything above was verified on test stacks.
 
 Passing tests mean the code behaves as tested on a test stack. They do not certify a server,
 its data, its secrets or its network.

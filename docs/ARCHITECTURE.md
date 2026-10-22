@@ -364,6 +364,19 @@ them would bury three focus losses in four hundred problem-opened rows.
 | `personal_files` | Uploaded templates and notes, bytes inline | Small by construction; one round trip beats GridFS |
 | `contest_file_rules` | Per-contest exceptions to the file policy | A handful of rows, written by hand |
 
+Indexes are declared on the entities (`@CompoundIndex`, `@Indexed`) and created by the backend at
+start (`spring.data.mongodb.auto-index-creation`); `mongo-init.js` makes the ones a fresh
+database needs before the backend first runs, under the same names. Two are unique and carry
+behaviour, not just speed: `idx_files_user_name` (`userId`, `name`) turns two uploads of one name
+racing each other into a 409, and `idx_file_rule_contest` (`platform`, `contestId`) keeps one
+rule per contest. `MongoConfig` builds its `MongoTemplate` with Spring Boot's `MongoConverter`,
+whose mapping context carries the auto-index setting; built with only a database factory, as it
+was until `78f1dc6`, the template makes a mapping context of its own with index creation off, and
+no entity index was ever created - which `@DataMongoTest` did not show, as it replaces
+`MongoConfig` with Spring Boot's own template (`MongoLeastPrivilegeTest` now imports it). A
+database created before then may hold earlier index definitions and duplicates: see the README's
+[Upgrading an existing MongoDB](../README.md#upgrading-an-existing-mongodb), the one procedure for it.
+
 ## Why the analytics engine lives in Java
 
 The mastery, decay, recommendation, and unified-rating logic runs as Spring services
