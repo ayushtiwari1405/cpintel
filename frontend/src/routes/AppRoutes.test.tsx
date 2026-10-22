@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { useLocation } from 'react-router-dom'
 import axios, { AxiosError } from 'axios'
 import { AppRoutes } from './AppRoutes'
@@ -47,7 +48,13 @@ vi.mock('@/pages/DownloadPage', () => stub('Download'))
 vi.mock('@/pages/EvaluatePage', () => stub('Evaluate'))
 vi.mock('@/layouts/AppLayout', async () => {
   const { Outlet } = await import('react-router-dom')
-  return { default: () => <main aria-label="app layout"><Outlet /></main> }
+  const { useLogout } = await import('@/hooks/useAuth')
+  // The sidebar's sign-out, through the same hook.
+  function SignOut() {
+    const logout = useLogout()
+    return <button onClick={() => logout.mutate()}>Sign out</button>
+  }
+  return { default: () => <main aria-label="app layout"><SignOut /><Outlet /></main> }
 })
 
 function Where() {
@@ -186,6 +193,53 @@ describe('an examination session', () => {
     expect(await visit('/exam')).toHaveTextContent('Login page')
     expect(location()).toBe('/login')
     expect(useAuthStore.getState().isAuthenticated).toBe(false)
+  })
+})
+
+describe('signing out', () => {
+  it('ends the session here and on the server, and the protected pages send them to sign in', async () => {
+    const me = user('USER')
+    const server = fakeServer({ 'GET /users/me': { data: me }, 'POST /auth/logout': { data: null } })
+    signedIn(me, 'token-before-sign-out')
+    expect(await visit('/recommendations')).toHaveTextContent('Practice plan page')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Sign out' }))
+
+    expect(await screen.findByRole('heading', { name: 'Login page' })).toBeInTheDocument()
+    expect(location()).toBe('/login')
+    expect(useAuthStore.getState()).toMatchObject({ isAuthenticated: false, user: null, accessToken: null })
+    expect(server.calls('POST /auth/logout')).toEqual([expect.objectContaining({ token: 'token-before-sign-out' })])
+  })
+
+  it('a sign-out the server fails still signs out here', async () => {
+    const me = user('USER')
+    fakeServer({ 'GET /users/me': { data: me }, 'POST /auth/logout': { status: 500, body: { code: 'INTERNAL_ERROR' } } })
+    signedIn(me)
+    await visit('/dashboard')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Sign out' }))
+
+    expect(await screen.findByRole('heading', { name: 'Login page' })).toBeInTheDocument()
+    expect(useAuthStore.getState().isAuthenticated).toBe(false)
+  })
+
+  it('a profile answer that arrives after signing out does not sign anybody back in', async () => {
+    const me = user('USER')
+    const held = gate()
+    const server = fakeServer({ 'GET /users/me': { data: me, wait: held.wait }, 'POST /auth/logout': { data: null } })
+    signedIn(me)
+    await visit('/dashboard')
+    await waitFor(() => expect(server.calls('GET /users/me')).toHaveLength(1))
+
+    await userEvent.click(screen.getByRole('button', { name: 'Sign out' }))
+    expect(await screen.findByRole('heading', { name: 'Login page' })).toBeInTheDocument()
+
+    held.open()
+    await held.wait
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(useAuthStore.getState()).toMatchObject({ isAuthenticated: false, user: null })
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Login page')
+    expect(location()).toBe('/login')
   })
 })
 

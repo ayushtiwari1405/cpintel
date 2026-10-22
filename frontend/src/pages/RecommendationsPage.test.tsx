@@ -157,6 +157,20 @@ describe('today', () => {
     await waitFor(() => expect(server.calls('POST /recommendations/weekly/regenerate')).toHaveLength(1))
     expect(server.calls('POST /recommendations/daily/regenerate')).toHaveLength(0)
   })
+
+  it('a new plan the server cannot build says so and keeps the sheet that was there', async () => {
+    const server = open('/recommendations', {
+      'GET /recommendations/daily': { data: plan('DAILY', dailyItems) },
+      'POST /recommendations/daily/regenerate': { status: 503, body: { code: 'UNAVAILABLE', message: 'Planner is busy, try again' } },
+    })
+    await screen.findByText('DP Basics (1D)')
+    await userEvent.click(screen.getByRole('button', { name: 'New plan' }))
+
+    expect(await screen.findByText('Planner is busy, try again')).toBeInTheDocument()
+    expect(screen.queryByText('New plan ready')).not.toBeInTheDocument()
+    expect(screen.getByText('DP Basics (1D)')).toBeInTheDocument()
+    expect(server.calls('POST /recommendations/daily/regenerate')).toHaveLength(1)
+  })
 })
 
 describe('this week', () => {
@@ -253,6 +267,22 @@ describe('revision', () => {
     })
     expect(await screen.findByRole('alert')).toHaveTextContent('Could not load the revision queue')
   })
+
+  it('a "done" the server refuses says so, and the queue is not shown as moved', async () => {
+    const server = open('/recommendations?tab=revision', {
+      'GET /recommendations/daily': { data: plan('DAILY', []) },
+      'GET /recommendations/revision': { data: queue },
+      'POST /recommendations/revision/11/done': { status: 500, body: { code: 'INTERNAL_ERROR', message: 'An unexpected error occurred' } },
+    })
+    const dfs = (await screen.findByText('Depth-First Search')).closest('.card') as HTMLElement
+
+    await userEvent.click(within(dfs).getByRole('button', { name: /Done/ }))
+
+    expect(await screen.findByText('An unexpected error occurred')).toBeInTheDocument()
+    expect(screen.queryByText('Revision marked complete')).not.toBeInTheDocument()
+    expect(screen.getByText('2 skills to revise today')).toBeInTheDocument()
+    expect(server.calls('GET /recommendations/revision')).toHaveLength(1)
+  })
 })
 
 describe('contest prep', () => {
@@ -290,5 +320,21 @@ describe('contest prep', () => {
     expect(screen.getByText(/No rated round for your level in the next two weeks/)).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: /Register on Codeforces/ })).not.toBeInTheDocument()
     expect(screen.queryByText(/Last \d+ rounds/)).not.toBeInTheDocument()
+  })
+})
+
+describe('a plan that does not load', () => {
+  it.each([
+    ['/recommendations?tab=week', 'GET /recommendations/weekly', 'Could not load the weekly plan'],
+    ['/recommendations?tab=contest', 'GET /recommendations/contest-prep', 'Could not load contest preparation'],
+  ])('%s says which plan failed and offers a retry', async (path, route, title) => {
+    open(path, {
+      'GET /recommendations/daily': { data: plan('DAILY', []) },
+      [route]: { status: 500, body: { code: 'INTERNAL_ERROR', message: 'Codeforces did not answer' } },
+    })
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent(title)
+    expect(alert).toHaveTextContent('Codeforces did not answer')
+    expect(within(alert).getByRole('button', { name: 'Retry' })).toBeInTheDocument()
   })
 })
