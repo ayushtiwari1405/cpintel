@@ -169,8 +169,9 @@ public class RecommendationEngine {
     }
 
     /**
-     * After new evidence: rebuild an empty or missing daily or weekly sheet, otherwise only mark
-     * what has since been solved, and retire contest preparation so it is rebuilt on next view.
+     * After new evidence: rebuild a missing daily or weekly sheet, or one with no problems on it,
+     * otherwise only mark what has since been solved, and retire contest preparation so it is
+     * rebuilt on next view.
      */
     @Transactional
     public void refreshSheets(Long userId) {
@@ -178,7 +179,10 @@ public class RecommendationEngine {
         for (String type : List.of(DAILY, WEEKLY)) {
             Optional<Recommendation> live = recommendationRepository.findLatestActiveByUserAndType(userId, type);
             List<Plan.Item> items = live.map(r -> codec.readItems(r.getProblemList())).orElse(List.of());
-            if (items.isEmpty()) {
+            // No problems anywhere means the problem list was unavailable when it was built; the
+            // sheet says they will be filled in, and this is where that happens.
+            boolean noProblems = items.stream().allMatch(i -> i.problems() == null || i.problems().isEmpty());
+            if (noProblems) {
                 if (DAILY.equals(type)) generateDailySheet(userId);
                 else generateWeeklySheet(userId);
                 continue;

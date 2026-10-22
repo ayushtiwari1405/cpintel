@@ -186,6 +186,21 @@ class RecommendationEngineTest {
         assertFalse(codec.readItems(saved("DAILY").getProblemList()).isEmpty());
     }
 
+    @Test
+    @DisplayName("a refresh rebuilds a sheet built while the problem list was unavailable")
+    void refreshFillsProblemlessSheet() {
+        Plan.Item bare = new Plan.Item(node.id(), "t", null, null, null, 20L, 0L, 1000, "r", "WEAK_TOPIC",
+            null, Plan.MEASURED, null, List.of());
+        Recommendation live = Recommendation.builder().recType("DAILY")
+            .problemList(codec.write(List.of(bare))).generatedAt(Instant.now()).build();
+        when(recommendations.findLatestActiveByUserAndType(USER, "DAILY")).thenReturn(Optional.of(live));
+
+        engine.refreshSheets(USER);
+
+        verify(recommendations).markConsumed(USER, "DAILY");
+        assertFalse(codec.readItems(saved("DAILY").getProblemList()).get(0).problems().isEmpty());
+    }
+
     // -- contest preparation -----------------------------------------------------------
 
     @Test
