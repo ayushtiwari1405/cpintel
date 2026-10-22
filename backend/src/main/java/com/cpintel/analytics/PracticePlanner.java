@@ -34,9 +34,10 @@ import java.util.Set;
  *   <li><b>Nothing solved, nothing twice.</b> Solved problems are never offered as new
  *       practice, only as an explicit {@link Plan#RESOLVE} on a revision item, and no problem
  *       appears twice on a sheet or on two live sheets at once.</li>
- *   <li><b>A climb, not a pile.</b> Each skill gets problems at fixed offsets around one target
- *       rating - a warm-up, the core, a stretch - aimed from the user's rating on that skill
- *       when they have one and from where their mastery sits in the skill's band otherwise.</li>
+ *   <li><b>A climb, not a pile.</b> Each skill gets problems at fixed steps below one target
+ *       rating - a warm-up, the core, and the target itself as the stretch - aimed from the
+ *       user's rating on that skill when they have one and from where their mastery sits in the
+ *       skill's band otherwise.</li>
  *   <li><b>Spread.</b> A daily sheet takes one skill per topic before it takes a second;
  *       weekly plans allow two.</li>
  * </ul>
@@ -76,16 +77,20 @@ public final class PracticePlanner {
     /** Previously solved problems a revision item asks the user to solve again. */
     static final int RESOLVE_COUNT = 2;
 
+    // Skill ladders end at the skill's target, which is already a stretch (a skill rating plus
+    // FIT_SKILL_STRETCH, or the top of where mastery sits in the band): centring on it put the
+    // warm-up of a weak skill above the user's own rating. Only progression climbs past it.
+    // Contest ladders are around the user's rating itself.
     private static final Ladder DAILY = new Ladder(
-        new int[] {-200, -100, 0, 100}, new String[] {Plan.WARM_UP, Plan.CORE, Plan.CORE, Plan.STRETCH});
+        new int[] {-300, -200, -100, 0}, new String[] {Plan.WARM_UP, Plan.CORE, Plan.CORE, Plan.STRETCH});
     private static final Ladder WEEKLY = new Ladder(
-        new int[] {-100, 0, 100}, new String[] {Plan.WARM_UP, Plan.CORE, Plan.STRETCH});
+        new int[] {-200, -100, 0}, new String[] {Plan.WARM_UP, Plan.CORE, Plan.STRETCH});
     private static final Ladder PROGRESSION = new Ladder(
-        new int[] {0, 100, 200}, new String[] {Plan.CORE, Plan.STRETCH, Plan.STRETCH});
+        new int[] {-100, 0, 100}, new String[] {Plan.CORE, Plan.STRETCH, Plan.STRETCH});
     private static final Ladder CONTEST = new Ladder(
         new int[] {-200, 0, 200}, new String[] {Plan.WARM_UP, Plan.CORE, Plan.STRETCH});
     private static final Ladder CONSOLIDATE = new Ladder(
-        new int[] {-100}, new String[] {Plan.CORE});
+        new int[] {-200}, new String[] {Plan.CORE});
 
     /** One skill as the planner sees it. Mastery and decay are 0-100. */
     public record Skill(
@@ -319,7 +324,8 @@ public final class PracticePlanner {
 
     /**
      * What to do for a skill that has faded: solve again the problems in it the user solved
-     * longest ago, then one new problem just under their level to confirm it has come back.
+     * longest ago, then one new problem comfortably under their target to confirm it has come
+     * back.
      *
      * @param solvedAt when each solved problem was last worked on, by key
      */

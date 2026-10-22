@@ -155,7 +155,7 @@ class PracticePlannerTest {
     // -- problems --------------------------------------------------------------
 
     @Test
-    @DisplayName("Problems climb from warm-up to stretch around the skill-rating target")
+    @DisplayName("Problems climb from warm-up to a stretch at the skill-rating target, not past it")
     void problemsClimb() {
         RoadmapTaxonomy.NodeDef d = distinctTopics(1).get(0);
         double skillRating = d.minRating() + 100;
@@ -173,6 +173,9 @@ class PracticePlannerTest {
         Collections.sort(sorted);
         assertEquals(sorted, ratings, "easiest first");
         assertTrue(ratings.stream().allMatch(r -> r >= d.minRating() && r <= d.maxRating()));
+        // The target is already a stretch, so a daily ladder ends there rather than passing it.
+        assertTrue(ratings.stream().allMatch(r -> r <= target + 50), ratings + " vs aim " + target);
+        assertTrue(Math.abs(ratings.get(ratings.size() - 1) - target) <= 50, "the stretch is the aim");
     }
 
     @Test
