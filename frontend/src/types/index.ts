@@ -1468,8 +1468,11 @@ export interface RevisionItem {
   easeFactor: number | null
   lastRevisedAt: string | null
   practicePath: string | null
-  status: 'DUE' | 'UPCOMING'
+  /** DUE: today's revision. QUEUED: overdue, waiting its turn. UPCOMING: not yet due. */
+  status: 'DUE' | 'QUEUED' | 'UPCOMING'
   reason: string
   lastPracticedAt: string | null
+  /** QUEUED only: its place among the waiting skills, from 1. */
+  queuePosition: number | null
   problems: PlanProblem[]
 }

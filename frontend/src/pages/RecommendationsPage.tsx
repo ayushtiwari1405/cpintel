@@ -410,6 +410,7 @@ function RevisionPanel() {
   if (isError || !data) return <ErrorState title="Could not load the revision queue" error={error} onRetry={() => refetch()} />
 
   const due = data.filter(r => r.status === 'DUE')
+  const queued = data.filter(r => r.status === 'QUEUED')
   const upcoming = data.filter(r => r.status === 'UPCOMING')
 
   if (data.length === 0) {
@@ -427,13 +428,40 @@ function RevisionPanel() {
       <section aria-labelledby="revision-due" className="space-y-3">
         <h2 id="revision-due" className="flex items-center gap-1.5 text-sm text-gray-400">
           <Clock size={13} className="text-teal-400" aria-hidden="true" />
-          {due.length === 0 ? 'Nothing due right now' : `${due.length} skill${due.length === 1 ? '' : 's'} due for revision`}
+          {due.length > 0 ? `${due.length} skill${due.length === 1 ? '' : 's'} to revise today`
+            : queued.length > 0 ? 'Today\'s revision is done' : 'Nothing due right now'}
         </h2>
         {due.map(item => (
           <RevisionCard key={item.revisionId} item={item}
             onDone={() => markDone.mutate(item.revisionId)} pending={markDone.isPending} />
         ))}
       </section>
+
+      {queued.length > 0 && (
+        <Section title={`Waiting their turn (${queued.length})`} icon={<Clock size={14} />} bodyClassName="p-0">
+          <p className="border-b border-gray-800 px-4 py-2.5 text-xs text-gray-500">
+            Also faded, and not forgotten: a few come up each day, longest-waiting and most faded first.
+            Practising one of them now counts too.
+          </p>
+          <ol className="divide-y divide-gray-800">
+            {queued.map(item => (
+              <li key={item.revisionId} className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm">
+                <span className="flex min-w-0 items-center gap-2">
+                  <span className="w-6 shrink-0 text-right font-mono text-xs tabular-nums text-gray-600">
+                    {item.queuePosition}
+                  </span>
+                  {item.practicePath
+                    ? <Link to={item.practicePath} className="truncate text-gray-300 hover:text-accent-300">{item.title}</Link>
+                    : <span className="truncate text-gray-300">{item.title}</span>}
+                </span>
+                <span className="shrink-0 text-xs text-amber-500/80">
+                  {Math.round(item.decayScore ?? 0)}% faded
+                </span>
+              </li>
+            ))}
+          </ol>
+        </Section>
+      )}
 
       {upcoming.length > 0 && (
         <Section title="Coming up" icon={<CalendarClock size={14} />} bodyClassName="p-0">

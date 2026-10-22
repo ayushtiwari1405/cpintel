@@ -4,6 +4,7 @@ import com.cpintel.analytics.Plan;
 import com.cpintel.analytics.PlanCodec;
 import com.cpintel.analytics.PracticePlanner;
 import com.cpintel.analytics.RecommendationEngine;
+import com.cpintel.analytics.RevisionQueue;
 import com.cpintel.common.RecomputeLock;
 import com.cpintel.entity.Recommendation;
 import com.cpintel.entity.RevisionSchedule;
@@ -159,11 +160,14 @@ public class RecommendationService {
     // -- revision ----------------------------------------------------------
 
     /**
-     * Skills due for revision, and those coming due within {@code horizonDays}.
+     * Today's revision, the overdue skills queued behind it, and those coming due within
+     * {@code horizonDays}.
      *
-     * <p>Due means the scheduled date has passed <em>and</em> the skill is still faded: a user
-     * who has practised it since has revised it, whether or not they pressed "done". The raw
-     * entity used to be returned, whose {@code topic} is a node id the page showed verbatim.
+     * <p>Overdue means the scheduled date has passed <em>and</em> the skill is still faded: a
+     * user who has practised it since has revised it, whether or not they pressed "done". Of the
+     * overdue skills, {@link RevisionQueue} decides which are due today and in what order the
+     * rest wait; all of them are listed. Reading the queue changes nothing - no date moves until
+     * a revision is marked done.
      */
     public List<RevisionItem> getRevisionQueue(Long userId, int horizonDays) {
         if (horizonDays < 0 || horizonDays > MAX_HORIZON_DAYS) {
@@ -183,23 +187,37 @@ public class RecommendationService {
 
         Instant now = Instant.now();
         Instant horizon = now.plus(Duration.ofDays(horizonDays));
-        List<Entry> entries = new ArrayList<>();
+        Instant today = RevisionQueue.startOfDay(now);
+        Map<String, RevisionSchedule> byTopic = new HashMap<>();
+        List<RevisionQueue.Candidate> overdue = new ArrayList<>();
+        List<Entry> upcoming = new ArrayList<>();
+        int completedToday = 0;
         for (RevisionSchedule rs : scheduled) {
+            byTopic.put(rs.getTopic(), rs);
+            if (rs.getLastRevisedAt() != null && !rs.getLastRevisedAt().isBefore(today)) completedToday++;
             TopicMastery tm = mastery.get(rs.getTopic());
             double decay = tm != null && tm.getDecayScore() != null ? tm.getDecayScore()
                 : rs.getDecayScore() == null ? 0 : rs.getDecayScore();
             boolean dueDate = !rs.getNextRevisionAt().isAfter(now);
             if (dueDate && decay >= PracticePlanner.REVISION_DECAY_THRESHOLD) {
-                entries.add(new Entry(rs, tm, decay, RevisionStatus.DUE));
+                overdue.add(new RevisionQueue.Candidate(rs.getTopic(), decay, rs.getNextRevisionAt()));
             } else if (!dueDate && !rs.getNextRevisionAt().isAfter(horizon)) {
-                entries.add(new Entry(rs, tm, decay, RevisionStatus.UPCOMING));
+                upcoming.add(new Entry(rs, tm, decay, RevisionStatus.UPCOMING, null));
             }
         }
-        entries.sort(Comparator.comparing((Entry e) -> e.status())
-            .thenComparing(e -> e.status() == RevisionStatus.DUE ? -e.decay() : 0.0)
-            .thenComparing(e -> e.rs().getNextRevisionAt())
+
+        int open = RevisionQueue.openSlots(completedToday);
+        List<Entry> entries = new ArrayList<>();
+        for (RevisionQueue.Placed p : RevisionQueue.arrange(overdue, now, open)) {
+            RevisionSchedule rs = byTopic.get(p.candidate().key());
+            entries.add(new Entry(rs, mastery.get(rs.getTopic()), p.candidate().decay(),
+                p.status() == RevisionQueue.Status.DUE ? RevisionStatus.DUE : RevisionStatus.QUEUED,
+                p.status() == RevisionQueue.Status.DUE ? null : p.position() - open));
+        }
+        // Every overdue skill is listed; only the look ahead is limited.
+        upcoming.sort(Comparator.comparing((Entry e) -> e.rs().getNextRevisionAt())
             .thenComparing(e -> e.rs().getTopic()));
-        if (entries.size() > MAX_REVISION_ITEMS) entries = entries.subList(0, MAX_REVISION_ITEMS);
+        entries.addAll(upcoming.subList(0, Math.min(upcoming.size(), MAX_REVISION_ITEMS)));
 
         List<String> dueKeys = entries.stream()
             .filter(e -> e.status() == RevisionStatus.DUE).map(e -> e.rs().getTopic()).toList();
@@ -210,17 +228,24 @@ public class RecommendationService {
             .toList();
     }
 
-    private record Entry(RevisionSchedule rs, TopicMastery tm, double decay, RevisionStatus status) {}
+    /** @param queuePosition queued items only: its place among the queued skills, from 1 */
+    private record Entry(RevisionSchedule rs, TopicMastery tm, double decay, RevisionStatus status,
+                         Integer queuePosition) {}
 
     private static RevisionItem toRevisionItem(Entry e, List<Plan.Problem> problems, Instant now) {
         RevisionSchedule rs = e.rs();
         RoadmapTaxonomy.NodeDef def = RoadmapTaxonomy.byId(rs.getTopic());
         Instant last = e.tm() == null ? null : e.tm().getLastPracticedAt();
-        String reason = e.status() == RevisionStatus.DUE
-            ? "About " + Math.round(e.decay()) + "% of this has faded"
-                + (last == null ? "" : " - last practised " + Duration.between(last, now).toDays() + " days ago")
-            : "Next revision in " + Math.max(1, Duration.between(now, rs.getNextRevisionAt()).toDays())
-                + " days";
+        String faded = "About " + Math.round(e.decay()) + "% of this has faded"
+            + (last == null ? "" : " - last practised " + Duration.between(last, now).toDays() + " days ago");
+        String reason = switch (e.status()) {
+            case DUE -> faded;
+            case QUEUED -> faded + ". Waiting its turn: " + (e.queuePosition() == 1 ? "next in line"
+                : (e.queuePosition() - 1) + " ahead of it") + ", " + RevisionQueue.SLOTS_PER_DAY
+                + " come up a day";
+            case UPCOMING -> "Next revision in "
+                + Math.max(1, Duration.between(now, rs.getNextRevisionAt()).toDays()) + " days";
+        };
         return new RevisionItem(
             rs.getRevisionId(),
             rs.getTopic(),
@@ -239,6 +264,7 @@ public class RecommendationService {
             e.status().name(),
             reason,
             last,
+            e.queuePosition(),
             problems);
     }
 
@@ -261,8 +287,8 @@ public class RecommendationService {
         revisionScheduleRepository.save(rs);
     }
 
-    /** Sorts due items before upcoming ones. */
-    public enum RevisionStatus { DUE, UPCOMING }
+    /** Today's revision, overdue but waiting its turn, and not yet due; listed in that order. */
+    public enum RevisionStatus { DUE, QUEUED, UPCOMING }
 
     /** One skill on the revision schedule, named the way a person would recognise it. */
     public record RevisionItem(
@@ -279,10 +305,12 @@ public class RecommendationService {
         Double easeFactor,
         Instant lastRevisedAt,
         String practicePath,
-        /** DUE or UPCOMING. */
+        /** DUE, QUEUED or UPCOMING. */
         String status,
         String reason,
         Instant lastPracticedAt,
+        /** QUEUED only: its place among the queued skills, from 1. */
+        Integer queuePosition,
         /** Due items only: earlier solves to redo, then one new problem. */
         List<Plan.Problem> problems
     ) {}

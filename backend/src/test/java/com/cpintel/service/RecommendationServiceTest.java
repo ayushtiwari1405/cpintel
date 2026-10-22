@@ -233,6 +233,110 @@ class RecommendationServiceTest {
         verify(engine, never()).generateRevisionSchedule(anyLong());
     }
 
+    /** {@code n} nodes from the taxonomy, each with a schedule overdue by a day and a mastery row. */
+    private void backlog(int n, double baseDecay, java.util.function.IntFunction<Instant> dueAt,
+                         java.util.function.IntFunction<Instant> revisedAt) {
+        List<RevisionSchedule> rows = new java.util.ArrayList<>();
+        List<TopicMastery> rowsMastery = new java.util.ArrayList<>();
+        for (int i = 0; i < n; i++) {
+            RoadmapTaxonomy.NodeDef d = RoadmapTaxonomy.NODES.get(i);
+            RevisionSchedule rs = schedule(100 + i, d, dueAt.apply(i));
+            rs.setLastRevisedAt(revisedAt.apply(i));
+            rows.add(rs);
+            rowsMastery.add(mastery(d, baseDecay + i));
+        }
+        when(revisions.findByUserUserId(USER)).thenReturn(rows);
+        when(mastery.findByUserUserIdAndScope(USER, TopicMastery.Scope.NODE)).thenReturn(rowsMastery);
+        when(engine.revisionProblems(eq(USER), anyList())).thenReturn(Map.of());
+    }
+
+    @Test
+    @DisplayName("a large backlog: today's allowance is due, the rest are queued in order, none dropped")
+    void revisionBacklog() {
+        Instant now = Instant.now();
+        backlog(21, 11, i -> now.minus(Duration.ofDays(1)), i -> null);
+
+        var queue = service.getRevisionQueue(USER, 14);
+
+        assertEquals(21, queue.size());
+        var due = queue.stream().filter(r -> r.status().equals("DUE")).toList();
+        var queued = queue.stream().filter(r -> r.status().equals("QUEUED")).toList();
+        assertEquals(com.cpintel.analytics.RevisionQueue.SLOTS_PER_DAY, due.size());
+        assertEquals(17, queued.size());
+        assertEquals(java.util.stream.IntStream.rangeClosed(1, 17).boxed().toList(),
+            queued.stream().map(RecommendationService.RevisionItem::queuePosition).toList());
+        assertTrue(queued.get(0).reason().contains("next in line"));
+        assertTrue(queued.get(1).reason().contains("1 ahead of it"));
+        // Most faded first; problems are worked out only for today's.
+        assertEquals(RoadmapTaxonomy.NODES.get(20).id(), due.get(0).nodeKey());
+        verify(engine).revisionProblems(USER, due.stream().map(RecommendationService.RevisionItem::nodeKey).toList());
+    }
+
+    @Test
+    @DisplayName("revisions completed today use up today's allowance")
+    void revisionCompletedToday() {
+        Instant now = Instant.now();
+        // Two done earlier today (now scheduled ahead), eight still overdue.
+        backlog(10, 20, i -> i < 2 ? now.plus(Duration.ofDays(4)) : now.minus(Duration.ofDays(2)),
+            i -> i < 2 ? now.minusSeconds(60) : null);
+
+        var queue = service.getRevisionQueue(USER, 14);
+
+        assertEquals(com.cpintel.analytics.RevisionQueue.SLOTS_PER_DAY - 2,
+            queue.stream().filter(r -> r.status().equals("DUE")).count());
+        assertEquals(2, queue.stream().filter(r -> r.status().equals("UPCOMING")).count(), "done ones stay done");
+    }
+
+    @Test
+    @DisplayName("reading the queue again and again changes nothing")
+    void revisionReadsAreReadOnly() {
+        Instant now = Instant.now();
+        backlog(8, 15, i -> now.minus(Duration.ofDays(i)), i -> null);
+
+        var first = service.getRevisionQueue(USER, 14);
+        var second = service.getRevisionQueue(USER, 14);
+        var third = service.getRevisionQueue(USER, 14);
+
+        assertEquals(first, second);
+        assertEquals(second, third);
+        verify(revisions, never()).save(any());
+        verify(revisions, never()).saveAll(any());
+        verify(engine, never()).generateRevisionSchedule(anyLong());
+    }
+
+    @Test
+    @DisplayName("back after a long break: the longest-waiting skills are not stuck behind fresher fades")
+    void revisionAfterLongBreak() {
+        Instant now = Instant.now();
+        // Skill 0 has been overdue 40 days with mild decay; the others fell due today, badly faded.
+        backlog(10, 40, i -> i == 0 ? now.minus(Duration.ofDays(40)) : now, i -> null);
+
+        var queue = service.getRevisionQueue(USER, 14);
+
+        assertEquals(RoadmapTaxonomy.NODES.get(0).id(), queue.get(0).nodeKey());
+        assertEquals("DUE", queue.get(0).status());
+    }
+
+    @Test
+    @DisplayName("a completed item stays completed across reads and a rebuilt schedule")
+    void completedStaysCompleted() {
+        RevisionSchedule rs = schedule(5, nodeA, Instant.now().minus(Duration.ofDays(1)));
+        when(revisions.findByRevisionIdAndUserUserId(5L, USER)).thenReturn(Optional.of(rs));
+        when(revisions.findByUserUserId(USER)).thenReturn(List.of(rs));
+        when(mastery.findByUserUserIdAndScope(USER, TopicMastery.Scope.NODE)).thenReturn(List.of(mastery(nodeA, 40)));
+        when(engine.revisionProblems(eq(USER), anyList())).thenReturn(Map.of());
+        assertEquals("DUE", service.getRevisionQueue(USER, 14).get(0).status());
+
+        service.markRevisionDone(USER, 5L);
+        Instant next = rs.getNextRevisionAt();
+
+        for (int i = 0; i < 3; i++) {
+            var queue = service.getRevisionQueue(USER, 30);
+            assertEquals("UPCOMING", queue.get(0).status());
+        }
+        assertEquals(next, rs.getNextRevisionAt());
+    }
+
     @Test
     @DisplayName("the horizon decides how far ahead upcoming items are shown")
     void revisionHorizon() {

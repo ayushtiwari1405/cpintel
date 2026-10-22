@@ -285,6 +285,34 @@ class RecommendationEngineTest {
     }
 
     @Test
+    @DisplayName("rebuilding the schedule again adds no rows and moves no dates")
+    void revisionScheduleIdempotent() {
+        when(revisions.findByUserUserId(USER)).thenReturn(List.of());
+        when(mastery.findDecayed(eq(USER), eq(TopicMastery.Scope.NODE), anyDouble())).thenReturn(List.of(
+            TopicMastery.builder().topic(node.id()).masteryScore(60.0).decayScore(25.0).build()));
+        engine.generateRevisionSchedule(USER);
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<RevisionSchedule>> first = ArgumentCaptor.forClass(List.class);
+        verify(revisions).saveAll(first.capture());
+        RevisionSchedule created = first.getValue().get(0);
+        Instant due = created.getNextRevisionAt();
+
+        // The second pass finds the row the first one wrote.
+        when(revisions.findByUserUserId(USER)).thenReturn(List.of(created));
+        engine.generateRevisionSchedule(USER);
+        engine.generateRevisionSchedule(USER);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<RevisionSchedule>> all = ArgumentCaptor.forClass(List.class);
+        verify(revisions, times(3)).saveAll(all.capture());
+        for (List<RevisionSchedule> saved : all.getAllValues()) {
+            assertEquals(1, saved.size());
+            assertSame(created, saved.get(0), "the same row, not a second one");
+        }
+        assertEquals(due, created.getNextRevisionAt());
+    }
+
+    @Test
     @DisplayName("nothing faded writes nothing")
     void revisionNothingFaded() {
         when(mastery.findDecayed(eq(USER), any(), anyDouble())).thenReturn(List.of());
