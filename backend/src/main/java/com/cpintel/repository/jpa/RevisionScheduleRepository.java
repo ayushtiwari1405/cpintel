@@ -13,6 +13,7 @@ import java.util.Optional;
 public interface RevisionScheduleRepository extends JpaRepository<RevisionSchedule, Long> {
     List<RevisionSchedule> findByUserUserId(Long userId);
     Optional<RevisionSchedule> findByUserUserIdAndTopic(Long userId, String topic);
+    Optional<RevisionSchedule> findByRevisionIdAndUserUserId(Long revisionId, Long userId);
 
     @Query(value = """
         SELECT rs.* FROM revision_schedule rs

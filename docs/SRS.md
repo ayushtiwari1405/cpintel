@@ -78,10 +78,12 @@ The desktop build is the same SPA plus a main process that can observe the windo
 - FR-5.2 The unified score is that normalized rating. (It was once a weighted average across Codeforces, LeetCode and CodeChef; the other two were dropped with FR-2.1.)
 
 ### FR-6 Recommendations
-- FR-6.1 Daily sheet: top 3 weakest topics with a target difficulty band.
-- FR-6.2 Weekly plan: 7 topics prioritized by combined mastery gap and decay.
-- FR-6.3 Revision queue: SM-2-inspired spaced repetition; completing a revision increases the interval and ease factor and reduces decay score.
+- FR-6.1 Daily sheet: 3 skills ranked by weakness, decay and recent momentum (one per topic before a second), each with 4 unsolved Codeforces problems climbing from warm-up to stretch around a target rating; each skill states why it was chosen. Expires at 06:00 UTC the next day.
+- FR-6.2 Weekly plan: the 4 skills the user retains least plus one progression skill (strong and fresh, pushed harder), one session each with 3 problems, and a goal of two thirds of them. Lasts 7 days.
+- FR-6.3 Revision queue: SM-2-inspired spaced repetition. A skill is due when it first fades past the threshold and again when its interval runs out, while it is still faded; practising it clears it. Due items offer the problems solved longest ago to solve again and one new problem; completing a revision increases the interval and ease factor and reduces decay score. Upcoming items within a horizon (0-60 days, default 14) are listed after the due ones.
 - FR-6.4 The recommendations page is currently withdrawn from navigation and its route redirects to the roadmap, which answers the same question; the endpoints remain.
+- FR-6.5 Contest preparation: the next rated Codeforces round within 14 days that the user's division admits, their record over the last 5 rated rounds, and the 3 weakest skills such a round tests, each with a warm-up, core and stretch problem around their rating (or an estimate, marked as such, when they have none).
+- FR-6.6 Sheets rank skills on their own numbers only after 3 attempted problems; otherwise they fall back to the roadmap's next skills, marked as inferred. Solved problems are never offered as new practice, and no problem appears twice on a sheet or on two live sheets. A sync marks newly solved problems on the live sheets rather than replacing them; the user can ask for a new sheet (at most once a minute).
 
 ### FR-7 Adaptive roadmap
 - FR-7.1 140 DSA sub-skill nodes (e.g. "Two Pointers", "Segment Trees with Lazy Propagation"), each with a Codeforces rating band, form a directed prerequisite graph.

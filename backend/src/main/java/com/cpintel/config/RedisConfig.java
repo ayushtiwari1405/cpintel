@@ -1,6 +1,5 @@
 package com.cpintel.config;
 
-import com.cpintel.service.RecommendationService;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
@@ -13,7 +12,6 @@ import org.springframework.data.redis.cache.RedisCacheManager;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
-import org.springframework.data.redis.serializer.Jackson2JsonRedisSerializer;
 import org.springframework.data.redis.serializer.RedisSerializationContext;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 
@@ -41,7 +39,7 @@ public class RedisConfig {
      * @param appMapper Spring Boot's auto-configured ObjectMapper. Copied rather than
      *                  built fresh so the cache inherits the modules Boot registers —
      *                  in particular ParameterNamesModule, without which record-shaped
-     *                  payloads like RecommendationPayload have no usable creator.
+     *                  payloads have no usable creator.
      */
     @Bean
     public RedisCacheManager cacheManager(RedisConnectionFactory factory, ObjectMapper appMapper) {
@@ -79,22 +77,8 @@ public class RedisConfig {
                 .fromSerializer(serializer))
             .disableCachingNullValues();
 
-        // The recommendations cache holds exactly one type, so it can be serialized
-        // against that type directly and skip default typing altogether. That matters
-        // because RecommendationPayload carries List<Map<String, Object>>, whose values
-        // are final types (String, Integer): NON_FINAL writes no hint for them, but the
-        // reader demands one for an Object-declared slot, so the round-trip fails. Naming
-        // the type removes the question. Caches holding several types (analytics) still
-        // need the generic serializer above.
-        RedisCacheConfiguration recommendationsConfig = defaultConfig
-            .serializeValuesWith(RedisSerializationContext.SerializationPair
-                .fromSerializer(new Jackson2JsonRedisSerializer<>(
-                    appMapper.copy().registerModule(new JavaTimeModule()),
-                    RecommendationService.RecommendationPayload.class)));
-
         Map<String, RedisCacheConfiguration> cacheConfigs = new HashMap<>();
         cacheConfigs.put("analytics",       defaultConfig.entryTtl(Duration.ofHours(6)));
-        cacheConfigs.put("recommendations", recommendationsConfig.entryTtl(Duration.ofHours(24)));
         cacheConfigs.put("unified_score",   defaultConfig.entryTtl(Duration.ofHours(12)));
         cacheConfigs.put("user_profile",    defaultConfig.entryTtl(Duration.ofMinutes(30)));
 

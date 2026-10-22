@@ -118,6 +118,20 @@ public class CodeforcesClient {
             .block(Duration.ofSeconds(15));
     }
 
+    /** Every non-gym contest, past and upcoming, as {@code contest.list} describes them. */
+    public List<CfStandingsResponse.Contest> getContests() {
+        CfContestMetaResponse resp = timed("contest.list", () -> client().get()
+            .uri("/contest.list?gym=false")
+            .retrieve()
+            .bodyToMono(CfContestMetaResponse.class)
+            .retryWhen(Retry.backoff(2, Duration.ofSeconds(3)))
+            .block(Duration.ofSeconds(20)));
+        if (resp == null || !"OK".equals(resp.getStatus()) || resp.getResult() == null) {
+            throw new IllegalStateException("Codeforces contest.list returned no contests");
+        }
+        return resp.getResult();
+    }
+
     /**
      * Metadata for one contest: name, phase, official start and duration.
      *

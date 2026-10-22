@@ -198,6 +198,20 @@ class PostgresSchemaTest {
     }
 
     @Test
+    @DisplayName("a revision item is found by its id only together with its owner")
+    void revisionByOwner() {
+        long owner = user("owner");
+        long other = user("other");
+        Long id = jdbc.queryForObject("""
+            INSERT INTO revision_schedule (user_id, topic, next_revision_at) VALUES (?, 'dp-basics', now())
+            RETURNING revision_id
+            """, Long.class, owner);
+
+        assertThat(revisions.findByRevisionIdAndUserUserId(id, owner)).isPresent();
+        assertThat(revisions.findByRevisionIdAndUserUserId(id, other)).isEmpty();
+    }
+
+    @Test
     @DisplayName("latest active recommendation skips consumed and expired ones")
     void latestActiveRecommendation() {
         long u = user("recommended");

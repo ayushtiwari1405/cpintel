@@ -317,8 +317,6 @@ public class AnalyticsService {
         @CacheEvict(value = "analytics", key = "'topics:' + #userId"),
         @CacheEvict(value = "analytics", key = "'nodes:' + #userId"),
         @CacheEvict(value = "analytics", key = "'trends:' + #userId"),
-        @CacheEvict(value = "recommendations", key = "'daily:' + #userId"),
-        @CacheEvict(value = "recommendations", key = "'weekly:' + #userId"),
     })
     public void triggerAnalyticsRefresh(Long userId) {
         log.info("Triggering analytics refresh for user {}", userId);
@@ -327,11 +325,12 @@ public class AnalyticsService {
         // Step 2: score the populated rows and regenerate the derived sheets
         analyticsEngine.refreshAllMastery(userId);
         contestAnalysisService.detectBehaviorPatterns(userId);
-        recommendationEngine.generateDailySheet(userId);
-        recommendationEngine.generateWeeklySheet(userId);
-        recommendationEngine.generateRevisionSchedule(userId);
-        // The roadmap's statuses are read from the ratings just written.
+        // The roadmap's statuses are read from the ratings just written, and the sheets read
+        // the roadmap's next skills, so it goes first.
         roadmapService.regenerateRoadmap(userId);
+        // Live sheets are kept and only marked with new solves; see RecommendationEngine.
+        recommendationEngine.refreshSheets(userId);
+        recommendationEngine.generateRevisionSchedule(userId);
     }
 
     /**

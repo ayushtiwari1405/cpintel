@@ -1,89 +1,111 @@
 package com.cpintel.analytics;
 
+import com.cpintel.entity.ContestSummary;
+import com.cpintel.entity.PlatformAccount;
 import com.cpintel.entity.Recommendation;
 import com.cpintel.entity.RevisionSchedule;
 import com.cpintel.entity.TopicMastery;
 import com.cpintel.entity.User;
+import com.cpintel.integration.codeforces.CfUpcomingContests;
+import com.cpintel.repository.jpa.ContestSummaryRepository;
+import com.cpintel.repository.jpa.PlatformAccountRepository;
 import com.cpintel.repository.jpa.RecommendationRepository;
 import com.cpintel.repository.jpa.RevisionScheduleRepository;
 import com.cpintel.repository.jpa.TopicMasteryRepository;
 import com.cpintel.repository.jpa.UserRepository;
 import com.cpintel.roadmap.ProblemRecommender;
 import com.cpintel.roadmap.RoadmapTaxonomy;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.cpintel.roadmap.SkillAttribution;
+import com.cpintel.service.RoadmapService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.LinkedHashMap;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 /**
- * Daily and weekly practice sheets, and the spaced-repetition revision schedule.
+ * Builds and stores the practice sheets - daily, weekly and contest preparation - and keeps the
+ * spaced-repetition revision schedule. What goes on a sheet is {@link PracticePlanner}'s
+ * decision; this gathers what it needs and writes down what it returns.
  *
- * <p>The Oracle version assembled its JSON by concatenating strings, so any topic name
- * containing a quote or backslash produced a payload the reader could not parse. These build
- * real objects and let Jackson serialise them.
+ * <h2>History</h2>
  *
- * <h2>What was wrong with the sheets</h2>
+ * <p>The Oracle version assembled its JSON by concatenating strings and listed topic names with
+ * a "target difficulty" of about 250, which matched no problem that exists. The sheets then
+ * gained real problems but passed an empty solved set, so problems the user had solved were
+ * offered again as new. The weekly plan once ranked backwards (see {@link PracticePlanner}).
  *
- * <p><b>They recommended nothing to solve.</b> Each item was a topic name and a
- * {@code targetDifficulty} computed as {@code round(mastery) + 200} - a number around 250,
- * which is not a Codeforces rating and corresponds to no problem that exists. The column
- * holding them is called {@code problem_list} and held no problems. Every item now carries
- * real, currently-unsolved problems with a link into the practice workspace.
+ * <h2>Sheets are kept, not replaced</h2>
  *
- * <p><b>The weekly plan ranked backwards.</b> It sorted by {@code mastery + decay} ascending
- * and took the lowest seven, which sends a strong-but-fading skill - high mastery, high decay,
- * so a high sum - to the <em>bottom</em> of the list and drops it. The comment above it said the
- * opposite was intended. Ranking is now by what the user actually retains, so a faded skill and
- * a weak one both surface.
+ * <p>Every analytics refresh - each sync, each Gauntlet run - used to regenerate both sheets, so
+ * a user who solved two of today's four problems and synced was handed four new ones and lost
+ * their progress. A live sheet now stays until it expires (tomorrow 06:00 UTC, or a week) and
+ * a refresh only marks what has since been solved. An empty sheet is rebuilt at once, since a
+ * new user's first sync is exactly when there is something to put on it.
+ *
+ * <h2>The revision queue was always empty</h2>
+ *
+ * <p>Every generation set {@code next_revision_at} to now plus the interval - at least a day
+ * away - for every faded skill, and the revision page regenerated whenever nothing was due. So
+ * nothing was ever due, and "done" was undone by the next refresh. Schedules are now set when a
+ * skill first fades (due at once) and afterwards only moved by the user marking a revision done.
  */
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class RecommendationEngine {
 
-    /** How many skills go into a daily sheet. */
-    private static final int DAILY_NODE_COUNT = 3;
-
-    /** How many skills go into a weekly plan. */
-    private static final int WEEKLY_NODE_COUNT = 7;
-
-    /** Problems attached to each skill on a sheet. */
-    private static final int PROBLEMS_PER_ITEM = 4;
-
-    /** Below this decay a skill is still fresh enough to skip revision. */
-    private static final double REVISION_DECAY_THRESHOLD = 10.0;
+    public static final String DAILY = "DAILY";
+    public static final String WEEKLY = "WEEKLY";
+    public static final String CONTEST_PREP = "CONTEST_PREP";
 
     /** Daily sheets expire the following morning at this hour, UTC. */
     private static final int DAILY_EXPIRY_HOUR_UTC = 6;
 
-    /**
-     * A skill needs at least this much evidence before a sheet will name it.
-     *
-     * <p>Without it every sheet is the same three untouched nodes from the deep end of the tree,
-     * because a node with no attempts scores zero mastery and therefore sorts first among the
-     * weakest. Those are not the user's weak areas; they are the parts of the tree they have not
-     * reached. The roadmap is where you go to find those deliberately.
-     */
-    private static final int MIN_ATTEMPTS_FOR_SHEET = 3;
+    private static final Duration WEEKLY_LIFETIME = Duration.ofDays(7);
+
+    /** Contest preparation is rebuilt at least daily, and as soon as its round starts. */
+    private static final Duration CONTEST_PREP_LIFETIME = Duration.ofHours(24);
+
+    /** Rated rounds the contest record is taken over. */
+    private static final int RECENT_CONTESTS = 5;
+
+    /** The aim for a user with no rating and nothing solved: Codeforces' entry level. */
+    static final int DEFAULT_RATING = 800;
+
+    /** An unrated user's estimate is this percentile of the ratings they have solved. */
+    private static final double ESTIMATE_PERCENTILE = 0.7;
+
+    private static final String CODEFORCES = "CODEFORCES";
 
     private final TopicMasteryRepository topicMasteryRepository;
     private final RecommendationRepository recommendationRepository;
     private final RevisionScheduleRepository revisionScheduleRepository;
     private final UserRepository userRepository;
+    private final PlatformAccountRepository platformAccountRepository;
+    private final ContestSummaryRepository contestSummaryRepository;
     private final ProblemRecommender problemRecommender;
-    private final ObjectMapper objectMapper;
+    private final PracticeHistory practiceHistory;
+    private final RoadmapService roadmapService;
+    private final CfUpcomingContests upcomingContests;
+    private final PlatformTransactionManager transactions;
+    private final PlanCodec codec;
+
+    /** What the user has solved on Codeforces, once per generation. */
+    private record History(Set<String> solved, Map<String, Instant> solvedAt, List<Integer> solvedRatings) {}
 
     /** How well a problem of the given rating suits this user's level in a skill-tree node. */
     @Transactional(readOnly = true)
@@ -97,215 +119,257 @@ public class RecommendationEngine {
             mastery, def.minRating(), def.maxRating(), problemRating);
     }
 
-    /**
-     * Today's sheet: the weakest skills the user has actually started, with problems to solve
-     * in each. Supersedes any sheet still live.
-     */
+    // -- sheets ------------------------------------------------------------
+
+    /** A new daily sheet, superseding any still live. */
     @Transactional
     public void generateDailySheet(Long userId) {
-        List<TopicMastery> targets = sheetCandidates(userId).stream()
-            .sorted(Comparator.comparingDouble(tm -> score(tm.getMasteryScore())))
-            .limit(DAILY_NODE_COUNT)
-            .toList();
-
-        List<Map<String, Object>> items = new ArrayList<>();
-        Set<String> solved = Set.of();
-        for (TopicMastery tm : targets) {
-            RoadmapTaxonomy.NodeDef def = RoadmapTaxonomy.byId(tm.getTopic());
-            if (def == null) continue;
-            double mastery = score(tm.getMasteryScore());
-            items.add(item(def, tm, mastery,
-                "Weakest area you have started - mastery " + Math.round(mastery) + "%",
-                solved));
-        }
-
-        supersede(userId, "DAILY");
-        save(userId, "DAILY", items, tomorrowMorningUtc());
+        Instant now = Instant.now();
+        PracticePlanner.Inputs in = inputs(userId, history(userId), liveKeys(userId, WEEKLY, CONTEST_PREP), now);
+        store(userId, DAILY, planner().daily(in), tomorrowMorningUtc(now));
     }
 
-    /**
-     * This week's plan: the skills most in need of attention, ranked by what the user currently
-     * retains rather than by what they once reached.
-     *
-     * <p>Ranking on {@code revisionScore} - mastery after decay - is what makes a strong skill
-     * that has gone stale rank alongside a genuinely weak one, which is what the old comment
-     * claimed and the old arithmetic did the reverse of.
-     */
+    /** A new weekly plan, superseding any still live. */
     @Transactional
     public void generateWeeklySheet(Long userId) {
-        List<TopicMastery> targets = sheetCandidates(userId).stream()
-            .sorted(Comparator.comparingDouble(tm -> retained(tm)))
-            .limit(WEEKLY_NODE_COUNT)
-            .toList();
-
-        List<Map<String, Object>> items = new ArrayList<>();
-        for (TopicMastery tm : targets) {
-            RoadmapTaxonomy.NodeDef def = RoadmapTaxonomy.byId(tm.getTopic());
-            if (def == null) continue;
-            double mastery = score(tm.getMasteryScore());
-            double decay = score(tm.getDecayScore());
-            String priority = decay > 20 ? "REVISION" : mastery < 30 ? "NEW" : "PRACTICE";
-            String reason = switch (priority) {
-                case "REVISION" -> "Fading - " + Math.round(decay) + "% of this has decayed";
-                case "NEW" -> "Barely started - mastery " + Math.round(mastery) + "%";
-                default -> "Worth consolidating - mastery " + Math.round(mastery) + "%";
-            };
-            Map<String, Object> entry = item(def, tm, mastery, reason, Set.of());
-            entry.put("priority", priority);
-            items.add(entry);
-        }
-
-        supersede(userId, "WEEKLY");
-        save(userId, "WEEKLY", items, Instant.now().plus(Duration.ofDays(7)));
+        Instant now = Instant.now();
+        PracticePlanner.Inputs in = inputs(userId, history(userId), liveKeys(userId, DAILY, CONTEST_PREP), now);
+        store(userId, WEEKLY, planner().weekly(in), now.plus(WEEKLY_LIFETIME));
     }
 
     /**
-     * Refresh the spaced-repetition queue for every skill that has decayed past the threshold,
-     * using an SM-2 derived interval: the more a skill has faded, the lower its ease factor and
-     * the sooner it comes back around.
+     * New contest preparation, superseding any still live.
      *
-     * <p>This produced nothing at all for as long as it existed. Decay is a function of how long
-     * it has been since the skill was practised, and that timestamp was overwritten with the
-     * current time on every analytics refresh - so decay was always zero, the
-     * {@code decay > threshold} filter never matched, and the queue was permanently empty. The
-     * timestamp is now the real date of the user's last work on the skill.
+     * <p>Not one transaction: finding the next round can mean a call to Codeforces, and that
+     * should not hold a database connection while it waits. The rating is read first, the round
+     * looked up, and only the build and the write are transactional.
+     */
+    public void generateContestPrep(Long userId) {
+        Instant now = Instant.now();
+        History h = history(userId);
+        Optional<Integer> cfRating = platformAccountRepository
+            .findByUserUserIdAndPlatform(userId, CODEFORCES)
+            .map(PlatformAccount::getCurrentRating)
+            .filter(r -> r != null && r > 0);
+        int rating = cfRating.orElseGet(() -> estimateRating(h.solvedRatings()));
+        String ratingBasis = cfRating.isPresent() ? Plan.MEASURED : Plan.INFERRED;
+
+        Plan.Contest contest = upcomingContests.nextFor(cfRating.orElse(null), now).orElse(null);
+        Plan.ContestRecord record = contestRecord(userId);
+
+        Instant expires = now.plus(CONTEST_PREP_LIFETIME);
+        if (contest != null && contest.startsAt().isBefore(expires)) expires = contest.startsAt();
+        Instant expiresAt = expires;
+
+        new TransactionTemplate(transactions).executeWithoutResult(status -> {
+            PracticePlanner.Inputs in = inputs(userId, h, liveKeys(userId, DAILY, WEEKLY), now);
+            store(userId, CONTEST_PREP,
+                planner().contestPrep(in, rating, ratingBasis, contest, record), expiresAt);
+        });
+    }
+
+    /**
+     * After new evidence: rebuild an empty or missing daily or weekly sheet, otherwise only mark
+     * what has since been solved, and retire contest preparation so it is rebuilt on next view.
+     */
+    @Transactional
+    public void refreshSheets(Long userId) {
+        History h = history(userId);
+        for (String type : List.of(DAILY, WEEKLY)) {
+            Optional<Recommendation> live = recommendationRepository.findLatestActiveByUserAndType(userId, type);
+            List<Plan.Item> items = live.map(r -> codec.readItems(r.getProblemList())).orElse(List.of());
+            if (items.isEmpty()) {
+                if (DAILY.equals(type)) generateDailySheet(userId);
+                else generateWeeklySheet(userId);
+                continue;
+            }
+            List<Plan.Item> marked = markSolved(items, h.solved());
+            if (!marked.equals(items)) {
+                live.get().setProblemList(codec.write(marked));
+                recommendationRepository.save(live.get());
+            }
+        }
+        recommendationRepository.markConsumed(userId, CONTEST_PREP);
+    }
+
+    // -- revision ----------------------------------------------------------
+
+    /**
+     * Puts every skill that has faded past the threshold on the revision schedule, due now.
+     *
+     * <p>A skill already scheduled keeps its date: that date is the spaced-repetition interval
+     * from the user's last revision, and only marking a revision done moves it. Its decay and
+     * priority are brought up to date so the queue still sorts by how far it has faded.
      */
     @Transactional
     public void generateRevisionSchedule(Long userId) {
-        List<TopicMastery> due = topicMasteryRepository.findDecayed(
-            userId, TopicMastery.Scope.NODE, REVISION_DECAY_THRESHOLD);
-
-        if (due.isEmpty()) {
-            log.debug("Nothing due for revision for user {}", userId);
+        List<TopicMastery> faded = topicMasteryRepository.findDecayed(
+            userId, TopicMastery.Scope.NODE, PracticePlanner.REVISION_DECAY_THRESHOLD);
+        if (faded.isEmpty()) {
+            log.debug("Nothing has faded for user {}", userId);
             return;
         }
 
+        Map<String, RevisionSchedule> existing = new HashMap<>();
+        for (RevisionSchedule rs : revisionScheduleRepository.findByUserUserId(userId)) {
+            existing.put(rs.getTopic(), rs);
+        }
+
         User user = userRepository.getReferenceById(userId);
+        Instant now = Instant.now();
         List<RevisionSchedule> toSave = new ArrayList<>();
-
-        for (TopicMastery tm : due) {
+        for (TopicMastery tm : faded) {
             double decay = score(tm.getDecayScore());
-            double mastery = score(tm.getMasteryScore());
-            double ease = ScoringFormulas.easeFactor(decay);
-            int intervalDays = ScoringFormulas.revisionIntervalDays(mastery, ease);
-
-            RevisionSchedule rs = revisionScheduleRepository
-                .findByUserUserIdAndTopic(userId, tm.getTopic())
-                .orElseGet(() -> RevisionSchedule.builder()
+            RevisionSchedule rs = existing.get(tm.getTopic());
+            if (rs == null) {
+                double ease = ScoringFormulas.easeFactor(decay);
+                rs = RevisionSchedule.builder()
                     .user(user)
                     .topic(tm.getTopic())
-                    .build());
-
-            rs.setNextRevisionAt(Instant.now().plus(Duration.ofDays(intervalDays)));
+                    .nextRevisionAt(now)
+                    .intervalDays(ScoringFormulas.revisionIntervalDays(score(tm.getMasteryScore()), ease))
+                    .easeFactor(ease)
+                    .build();
+            }
             rs.setDecayScore(decay);
             rs.setRevisionPriority((int) Math.round(decay));
-            rs.setIntervalDays(intervalDays);
-            rs.setEaseFactor(ease);
             toSave.add(rs);
         }
 
         revisionScheduleRepository.saveAll(toSave);
-        log.debug("Refreshed {} revision entries for user {}", toSave.size(), userId);
+        log.debug("Revision schedule for user {}: {} faded skills", userId, toSave.size());
+    }
+
+    /** What to solve to revise each of these skills: old solves again, then one new problem. */
+    @Transactional(readOnly = true)
+    public Map<String, List<Plan.Problem>> revisionProblems(Long userId, List<String> nodeKeys) {
+        if (nodeKeys.isEmpty()) return Map.of();
+        History h = history(userId);
+        Map<String, PracticePlanner.Skill> skills = new HashMap<>();
+        for (PracticePlanner.Skill s : skills(userId)) skills.put(s.nodeKey(), s);
+
+        PracticePlanner planner = planner();
+        Map<String, List<Plan.Problem>> out = new HashMap<>();
+        for (String key : nodeKeys) {
+            out.put(key, planner.revision(key, skills.get(key), h.solved(), h.solvedAt()));
+        }
+        return out;
     }
 
     // -- internals ---------------------------------------------------------
 
-    /**
-     * Node rows with enough evidence to be worth ranking. Sheets work over nodes rather than the
-     * coarse roll-ups so that "practise this" names something specific enough to act on -
-     * "Bitmask DP" rather than "Dynamic Programming".
-     */
-    private List<TopicMastery> sheetCandidates(Long userId) {
-        return topicMasteryRepository
-            .findByUserUserIdAndScope(userId, TopicMastery.Scope.NODE).stream()
-            .filter(tm -> orZeroInt(tm.getProblemsAttempted()) >= MIN_ATTEMPTS_FOR_SHEET)
-            .filter(tm -> RoadmapTaxonomy.byId(tm.getTopic()) != null)
+    private PracticePlanner planner() {
+        return new PracticePlanner((def, skillRating, mastery, solved) ->
+            problemRecommender.forNode(def, skillRating, mastery, solved, Integer.MAX_VALUE));
+    }
+
+    private PracticePlanner.Inputs inputs(Long userId, History h, Set<String> exclude, Instant now) {
+        List<String> roadmapNext = roadmapService.nextUp(userId).stream()
+            .map(RoadmapService.RoadmapNodeView::nodeKey)
+            .toList();
+        return new PracticePlanner.Inputs(skills(userId), roadmapNext, h.solved(), exclude,
+            problemRecommender.problemsetAvailable(), now);
+    }
+
+    private List<PracticePlanner.Skill> skills(Long userId) {
+        return topicMasteryRepository.findByUserUserIdAndScope(userId, TopicMastery.Scope.NODE).stream()
+            .map(tm -> new PracticePlanner.Skill(tm.getTopic(), score(tm.getMasteryScore()),
+                score(tm.getDecayScore()),
+                tm.getProblemsAttempted() == null ? 0 : tm.getProblemsAttempted(),
+                tm.getSkillRating(), tm.getLastPracticedAt()))
             .toList();
     }
 
-    /** One sheet entry, with real problems attached. */
-    private Map<String, Object> item(RoadmapTaxonomy.NodeDef def, TopicMastery tm,
-                                     double mastery, String reason, Set<String> solvedKeys) {
-        List<ProblemRecommender.Recommended> problems =
-            problemRecommender.forNode(def, tm == null ? null : tm.getSkillRating(), mastery,
-                solvedKeys, PROBLEMS_PER_ITEM);
-
-        List<Map<String, Object>> problemPayload = new ArrayList<>(problems.size());
-        for (ProblemRecommender.Recommended p : problems) {
-            Map<String, Object> row = new LinkedHashMap<>();
-            row.put("contestId", p.contestId());
-            row.put("index", p.index());
-            row.put("name", p.name());
-            row.put("rating", p.rating());
-            row.put("solved", p.solved());
-            row.put("fit", p.fit());
-            row.put("practicePath", p.practicePath());
-            row.put("judgeUrl", p.judgeUrl());
-            problemPayload.add(row);
+    private History history(Long userId) {
+        Set<String> solved = new HashSet<>();
+        Map<String, Instant> solvedAt = new HashMap<>();
+        List<Integer> ratings = new ArrayList<>();
+        for (SkillAttribution.Practised p : practiceHistory.forUser(userId)) {
+            if (!p.solved() || !CODEFORCES.equals(p.platform())) continue;
+            solved.add(p.problemKey());
+            if (p.lastAttemptAt() != null) solvedAt.put(p.problemKey(), p.lastAttemptAt());
+            if (p.rating() != null) ratings.add(p.rating());
         }
-
-        Map<String, Object> item = new LinkedHashMap<>();
-        item.put("nodeKey", def.id());
-        item.put("title", def.displayName());
-        item.put("track", def.track());
-        item.put("topic", def.rollupTopic());
-        item.put("blurb", def.blurb());
-        item.put("masteryScore", Math.round(mastery));
-        item.put("decayScore", Math.round(score(tm.getDecayScore())));
-        // A real Codeforces rating this time, derived from where the user sits inside the
-        // node's own difficulty band rather than from the mastery percentage directly.
-        item.put("targetRating", (int) Math.round(
-            ScoringFormulas.targetRating(mastery, def.minRating(), def.maxRating())));
-        item.put("reason", reason);
-        item.put("problems", problemPayload);
-        return item;
+        return new History(Set.copyOf(solved), Map.copyOf(solvedAt), ratings);
     }
 
-    /** Mark any live sheet of this type consumed, so the new one is the only active row. */
-    private void supersede(Long userId, String type) {
+    /** Problem keys on the live sheets of these types, so a new sheet does not repeat them. */
+    private Set<String> liveKeys(Long userId, String... types) {
+        Set<String> keys = new HashSet<>();
+        for (String type : types) {
+            recommendationRepository.findLatestActiveByUserAndType(userId, type).ifPresent(r -> {
+                for (Plan.Item item : codec.readItems(r.getProblemList())) {
+                    if (item.problems() == null) continue;
+                    for (Plan.Problem p : item.problems()) keys.add(p.key());
+                }
+            });
+        }
+        return keys;
+    }
+
+    private static List<Plan.Item> markSolved(List<Plan.Item> items, Set<String> solved) {
+        List<Plan.Item> out = new ArrayList<>(items.size());
+        for (Plan.Item item : items) {
+            if (item.problems() == null) {
+                out.add(item);
+                continue;
+            }
+            out.add(item.withProblems(item.problems().stream()
+                .map(p -> p.withSolved(p.solved() || solved.contains(p.key())))
+                .toList()));
+        }
+        return out;
+    }
+
+    /**
+     * An unrated user's level, from what they have solved: high enough that the core problems
+     * are ones they can do, which a median of mostly-easy history would undershoot.
+     */
+    static int estimateRating(List<Integer> solvedRatings) {
+        if (solvedRatings == null || solvedRatings.isEmpty()) return DEFAULT_RATING;
+        List<Integer> sorted = solvedRatings.stream().sorted().toList();
+        int at = sorted.get((int) Math.floor(ESTIMATE_PERCENTILE * (sorted.size() - 1)));
+        int rounded = (int) Math.round(at / 100.0) * 100;
+        return Math.max(DEFAULT_RATING, Math.min(3500, rounded));
+    }
+
+    private Plan.ContestRecord contestRecord(Long userId) {
+        List<ContestSummary> recent = contestSummaryRepository.findRecentContests(userId, 4 * RECENT_CONTESTS)
+            .stream()
+            .filter(c -> CODEFORCES.equals(c.getPlatform()))
+            .limit(RECENT_CONTESTS)
+            .toList();
+        if (recent.isEmpty()) return null;
+        double solved = recent.stream()
+            .mapToInt(c -> c.getProblemsSolved() == null ? 0 : c.getProblemsSolved()).average().orElse(0);
+        double change = recent.stream()
+            .mapToInt(c -> c.getRatingChange() == null ? 0 : c.getRatingChange()).average().orElse(0);
+        return new Plan.ContestRecord(recent.size(), solved, change);
+    }
+
+    /** Retires any live sheet of this type and saves the new one in its place. */
+    private void store(Long userId, String type, PracticePlanner.Sheet sheet, Instant expiresAt) {
         recommendationRepository.markConsumed(userId, type);
-    }
-
-    private void save(Long userId, String type, List<Map<String, Object>> items, Instant expiresAt) {
         recommendationRepository.save(Recommendation.builder()
             .user(userRepository.getReferenceById(userId))
             .recType(type)
-            .problemList(toJson(items))
+            .problemList(codec.write(sheet.items()))
+            .metadata(codec.write(sheet.summary()))
             .generatedAt(Instant.now())
             .expiresAt(expiresAt)
             .isConsumed(false)
             .build());
     }
 
-    private String toJson(Object value) {
-        try {
-            return objectMapper.writeValueAsString(value);
-        } catch (Exception e) {
-            log.warn("Failed to serialise recommendation payload: {}", e.getMessage());
-            return "[]";
-        }
-    }
-
     /** Tomorrow at 06:00 UTC. */
-    private Instant tomorrowMorningUtc() {
-        return LocalDate.now(ZoneOffset.UTC)
+    private static Instant tomorrowMorningUtc(Instant now) {
+        return LocalDate.ofInstant(now, ZoneOffset.UTC)
             .plusDays(1)
             .atTime(DAILY_EXPIRY_HOUR_UTC, 0)
             .toInstant(ZoneOffset.UTC);
     }
 
-    /** Mastery after decay: what the user still has. */
-    private double retained(TopicMastery tm) {
-        Double stored = tm.getRevisionScore();
-        if (stored != null) return stored;
-        return ScoringFormulas.revisionScore(score(tm.getMasteryScore()), score(tm.getDecayScore()));
-    }
-
-    private double score(Double value) {
+    private static double score(Double value) {
         return value == null ? 0.0 : value;
-    }
-
-    private int orZeroInt(Integer value) {
-        return value == null ? 0 : value;
     }
 }

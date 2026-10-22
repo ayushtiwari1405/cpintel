@@ -12,6 +12,10 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+/**
+ * The signed-in user's own practice plans. Nothing here takes a user id: every route reads the
+ * principal, so there is no parameter through which one user could ask for another's plan.
+ */
 @RestController
 @RequestMapping("/api/v1/recommendations")
 @RequiredArgsConstructor
@@ -37,12 +41,31 @@ public class RecommendationController {
         return ResponseEntity.ok(ApiResponse.ok(recommendationService.getWeekly(userId)));
     }
 
-    @GetMapping("/revision")
-    @Operation(summary = "Get revision queue")
-    public ResponseEntity<ApiResponse<List<RecommendationService.RevisionItem>>> getRevision(
+    @GetMapping("/contest-prep")
+    @Operation(summary = "Get preparation for the next rated Codeforces round")
+    public ResponseEntity<ApiResponse<RecommendationService.RecommendationPayload>> getContestPrep(
         @AuthenticationPrincipal Long userId
     ) {
-        return ResponseEntity.ok(ApiResponse.ok(recommendationService.getRevisionQueue(userId)));
+        return ResponseEntity.ok(ApiResponse.ok(recommendationService.getContestPrep(userId)));
+    }
+
+    @PostMapping("/{type}/regenerate")
+    @Operation(summary = "Replace a plan (daily, weekly or contest-prep) with a new one")
+    public ResponseEntity<ApiResponse<RecommendationService.RecommendationPayload>> regenerate(
+        @AuthenticationPrincipal Long userId,
+        @PathVariable String type
+    ) {
+        return ResponseEntity.ok(ApiResponse.ok(recommendationService.regenerate(
+            userId, RecommendationService.SheetType.fromPath(type))));
+    }
+
+    @GetMapping("/revision")
+    @Operation(summary = "Get the revision queue: what is due, and what comes due within horizonDays")
+    public ResponseEntity<ApiResponse<List<RecommendationService.RevisionItem>>> getRevision(
+        @AuthenticationPrincipal Long userId,
+        @RequestParam(defaultValue = "14") int horizonDays
+    ) {
+        return ResponseEntity.ok(ApiResponse.ok(recommendationService.getRevisionQueue(userId, horizonDays)));
     }
 
     @PostMapping("/revision/{revisionId}/done")
