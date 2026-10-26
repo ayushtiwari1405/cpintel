@@ -101,6 +101,18 @@ public class ClassroomService {
             || classrooms.isTaInAny(userId, managed));
     }
 
+    /**
+     * Whether every classroom this person is enrolled in, or a TA in, is one this admin runs.
+     * Credential and account writes need this rather than {@link #canSeeUser}: an admin can make
+     * anyone visible by enrolling them, so visibility alone is not authority over the account.
+     */
+    public boolean onlyInManaged(Long adminId, Long userId) {
+        List<Long> managed = managedIds(adminId);
+        if (managed == null) return true;
+        return managed.containsAll(members.classroomIdsOf(userId))
+            && managed.containsAll(classrooms.taClassroomIds(userId));
+    }
+
     /** As {@link #canSeeUser}, answering "no such user" so an id does not confirm an account. */
     public void requireVisibleUser(Long adminId, Long userId) {
         if (!canSeeUser(adminId, userId)) throw ApiException.notFound("No such user");
@@ -212,6 +224,14 @@ public class ClassroomService {
             username = null;
             sealed = null;
         } else if (req.servicePassword() == null) {
+            // The stored password goes only to the judge it was given for. Reused for a new
+            // address, it would be sent there by the check below, so anyone allowed to edit the
+            // classroom could read it off a server of their own.
+            if (classroom.getDomjudgeUrl() == null
+                    || !classroom.getDomjudgeUrl().equalsIgnoreCase(url)) {
+                throw ApiException.badRequest("The judge address changed. Give the service "
+                    + "account's password again.");
+            }
             sealed = classroom.getServicePassword();
             if (sealed == null) {
                 throw ApiException.badRequest("Give the service account's password.");

@@ -281,7 +281,7 @@ public class AdminUserService {
                                        boolean callerIsSuperAdmin,
                                        HttpServletRequest httpReq) {
         User user = require(targetUserId);
-        requireMayTouch(user, callerIsSuperAdmin, "change the details of");
+        requireMayTouch(adminId, user, callerIsSuperAdmin, "change the details of");
 
         if (StringUtils.hasText(req.email())) {
             String email = req.email().trim().toLowerCase(Locale.ROOT);
@@ -322,7 +322,7 @@ public class AdminUserService {
             throw ApiException.badRequest("You cannot deactivate your own account.");
 
         User user = require(targetUserId);
-        requireMayTouch(user, callerIsSuperAdmin, active ? "reactivate" : "deactivate");
+        requireMayTouch(adminId, user, callerIsSuperAdmin, active ? "reactivate" : "deactivate");
 
         // A super admin cannot be switched off from here, by anyone — including another super
         // admin. The tier is the fixed point the rest of the permission system hangs from, and
@@ -361,7 +361,7 @@ public class AdminUserService {
     @Transactional
     public void revokeSessions(Long adminId, Long targetUserId, boolean callerIsSuperAdmin,
                                HttpServletRequest httpReq) {
-        requireMayTouch(require(targetUserId), callerIsSuperAdmin, "sign out");
+        requireMayTouch(adminId, require(targetUserId), callerIsSuperAdmin, "sign out");
         endSessions(targetUserId);
         auditService.record(adminId, AuditService.SESSIONS_REVOKED, "USER",
             String.valueOf(targetUserId), httpReq);
@@ -393,7 +393,7 @@ public class AdminUserService {
                                                   boolean callerIsSuperAdmin,
                                                   HttpServletRequest httpReq) {
         User user = require(targetUserId);
-        requireMayTouch(user, callerIsSuperAdmin, "set the password of");
+        requireMayTouch(adminId, user, callerIsSuperAdmin, "set the password of");
 
         if (adminId != null && adminId.equals(targetUserId)) {
             throw ApiException.badRequest(
@@ -487,14 +487,25 @@ public class AdminUserService {
      * arrived at from a different screen — so the check lives on every write rather than on the
      * one that looks dangerous.
      *
+     * <p>Nor may they reach an account that is also in a classroom they do not run. Seeing an
+     * account comes from enrolment, and enrolling is something any admin can do to any account
+     * from their own classroom, so without this an admin of one class could enrol a student of
+     * another and then re-password them.
+     *
      * <p>A super admin passes through unconditionally. Every account in the deployment, admins
      * included, is theirs to change; that is what the tier is for.
      */
-    private void requireMayTouch(User target, boolean callerIsSuperAdmin, String verb) {
+    private void requireMayTouch(Long adminId, User target, boolean callerIsSuperAdmin,
+                                 String verb) {
         if (callerIsSuperAdmin) return;
-        if (!Roles.isAdminLevel(target.getRole())) return;
-        throw ApiException.forbidden(
-            "Only a super admin may " + verb + " another administrator's account.");
+        if (Roles.isAdminLevel(target.getRole())) {
+            throw ApiException.forbidden(
+                "Only a super admin may " + verb + " another administrator's account.");
+        }
+        if (!classrooms.onlyInManaged(adminId, target.getUserId())) {
+            throw ApiException.forbidden("This account is also in a classroom you do not run. "
+                + "Only a super admin may " + verb + " it.");
+        }
     }
 
     /**

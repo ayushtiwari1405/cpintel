@@ -47,6 +47,7 @@ class AdminUserServiceTest {
     private UnifiedScoreRepository unifiedScores;
     private PasswordEncoder passwordEncoder;
     private ExamEventRepository examEvents;
+    private com.cpintel.classrooms.ClassroomService classrooms;
     private AdminUserService service;
 
     @BeforeEach
@@ -60,12 +61,15 @@ class AdminUserServiceTest {
         unifiedScores = mock(UnifiedScoreRepository.class);
         passwordEncoder = mock(PasswordEncoder.class);
         examEvents = mock(ExamEventRepository.class);
+        classrooms = mock(com.cpintel.classrooms.ClassroomService.class);
         service = new AdminUserService(users, auditLog, refreshTokens, files, unifiedScores,
             passwordEncoder, new UserMapper(), audit, jwt, examEvents, mock(MailService.class),
             mock(com.cpintel.repository.mongo.CfSubmissionRepository.class),
             mock(AdminAuditService.class),
-            mock(com.cpintel.classrooms.ClassroomService.class));
+            classrooms);
 
+        // Unless a test says otherwise, the target is in no classroom the caller does not run.
+        when(classrooms.onlyInManaged(anyLong(), anyLong())).thenReturn(true);
         when(passwordEncoder.encode(any())).thenReturn("hashed");
 
         when(auditLog.lastLoginFor(anyCollection())).thenReturn(List.of());
@@ -444,6 +448,28 @@ class AdminUserServiceTest {
                 () -> service.setActive(ADMIN_ID, OTHER_ID, active(false), false, null));
             assertDoesNotThrow(() -> service.setPassword(ADMIN_ID, OTHER_ID,
                 new AdminDto.SetPasswordRequest(null, null), false, null));
+        }
+
+        @Test
+        @DisplayName("an admin may not reach a user who is also in a classroom they do not run")
+        void cannotReachAnotherClassroomsStudent() {
+            User student = user(OTHER_ID, "USER", true);
+            // What enrolling them into the admin's own classroom leaves: visible, but shared.
+            when(classrooms.onlyInManaged(ADMIN_ID, OTHER_ID)).thenReturn(false);
+
+            ApiException e = assertThrows(ApiException.class, () -> service.setPassword(ADMIN_ID,
+                OTHER_ID, new AdminDto.SetPasswordRequest(null, null), false, null));
+            assertTrue(e.getMessage().contains("classroom you do not run"));
+            assertThrows(ApiException.class, () -> service.updateUser(ADMIN_ID, OTHER_ID,
+                new AdminDto.UpdateUserRequest(null, "mine@example.com", null, null), false, null));
+            assertThrows(ApiException.class,
+                () -> service.setActive(ADMIN_ID, OTHER_ID, active(false), false, null));
+            assertThrows(ApiException.class,
+                () -> service.revokeSessions(ADMIN_ID, OTHER_ID, false, null));
+
+            assertEquals("user2@example.com", student.getEmail());
+            verify(users, never()).save(any());
+            verify(passwordEncoder, never()).encode(any());
         }
 
         @Test

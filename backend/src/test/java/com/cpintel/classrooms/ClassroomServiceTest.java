@@ -161,6 +161,31 @@ class ClassroomServiceTest {
     }
 
     @Nested
+    @DisplayName("authority over an account")
+    class AccountAuthority {
+
+        @Test
+        @DisplayName("holds only when every classroom the person is in is the admin's")
+        void onlyInManaged() {
+            when(classrooms.findManagedBy(OWNER)).thenReturn(List.of(room));
+            when(members.classroomIdsOf(5L)).thenReturn(List.of(ROOM));
+            when(members.classroomIdsOf(6L)).thenReturn(List.of(ROOM, 99L));
+            when(classrooms.taClassroomIds(7L)).thenReturn(List.of(99L));
+
+            assertTrue(service.onlyInManaged(OWNER, 5L));
+            assertFalse(service.onlyInManaged(OWNER, 6L));
+            assertFalse(service.onlyInManaged(OWNER, 7L));
+        }
+
+        @Test
+        @DisplayName("a superadmin holds it over everyone")
+        void superAdmin() {
+            signIn("ROLE_ADMIN", "ROLE_SUPER_ADMIN");
+            assertTrue(service.onlyInManaged(OWNER, 6L));
+        }
+    }
+
+    @Nested
     @DisplayName("changing a classroom")
     class Updates {
 
@@ -196,6 +221,36 @@ class ClassroomServiceTest {
 
             assertEquals("sealed:secret", room.getServicePassword());
             verify(judges).check(URL, "svc", "secret");
+        }
+
+        @Test
+        @DisplayName("never sends the stored service password to a new judge address")
+        void storedPasswordStaysWithItsJudge() {
+            room.setServiceUsername("svc");
+            room.setServicePassword("sealed:secret");
+            when(classrooms.findByDomjudgeUrl(anyString())).thenReturn(Optional.empty());
+
+            assertThrows(ApiException.class, () -> service.update(OWNER, ROOM,
+                new ClassroomsDto.ClassroomRequest("DSA", null, "https://evil.example.net", "svc",
+                    null), null));
+
+            verify(judges, never()).check(anyString(), any(), eq("secret"));
+            assertEquals(URL, room.getDomjudgeUrl());
+            verify(classrooms, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("a new judge address with its password given again is accepted")
+        void newAddressWithPassword() {
+            room.setServiceUsername("svc");
+            room.setServicePassword("sealed:secret");
+            when(classrooms.findByDomjudgeUrl(anyString())).thenReturn(Optional.empty());
+
+            service.update(OWNER, ROOM, new ClassroomsDto.ClassroomRequest("DSA", null,
+                "https://judge2.example.edu", "svc", "fresh"), null);
+
+            verify(judges).check("https://judge2.example.edu", "svc", "fresh");
+            assertEquals("sealed:fresh", room.getServicePassword());
         }
 
         @Test

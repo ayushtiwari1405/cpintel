@@ -463,7 +463,7 @@ public class AdminEventController {
         @AuthenticationPrincipal Long adminId,
         @PathVariable Long eventId,
         HttpServletRequest httpReq) {
-        passwords.revokePasscodes(adminId, eventId, httpReq);
+        events.revokePasscodes(adminId, eventId, httpReq);
         return ResponseEntity.ok(ApiResponse.message(
             "Every personal code on this examination has been withdrawn."));
     }

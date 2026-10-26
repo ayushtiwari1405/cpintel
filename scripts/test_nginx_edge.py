@@ -41,6 +41,8 @@ EDGE_HEADERS = {
 # Set by both Spring Security and nginx, so the proxied copy has to be dropped.
 BACKEND_DUPLICATES = list(EDGE_HEADERS)
 ALSO_ONCE = ["Content-Security-Policy", "Referrer-Policy"]
+# Spring's ForwardedHeaderFilter believes these, so a client's copies must never reach the backend.
+CLEARED_FORWARDING = ["Forwarded", "X-Forwarded-Port", "X-Forwarded-Prefix"]
 
 
 def api_locations(conf):
@@ -69,6 +71,12 @@ class StaticConfig(unittest.TestCase):
         for head, body in locations.items():
             for name in BACKEND_DUPLICATES:
                 self.assertRegex(body, rf"\n\s*proxy_hide_header\s+{name};", f"{head}: {name}")
+
+    def test_every_backend_location_sets_the_forwarding_headers_itself(self):
+        for head, body in backend_locations(TEMPLATE).items():
+            for name in CLEARED_FORWARDING:
+                self.assertRegex(body, rf'\n\s*proxy_set_header\s+{name}\s+"";', f"{head}: {name}")
+            self.assertRegex(body, r"\n\s*proxy_set_header\s+X-Forwarded-For\s+\$remote_addr;", head)
 
     def test_both_api_locations_found(self):
         self.assertEqual(sorted(api_locations(TEMPLATE)),
@@ -103,7 +111,7 @@ class StaticConfig(unittest.TestCase):
 # ── runtime ──────────────────────────────────────────────────────────────────
 
 STUB = r'''
-import socket, time
+import json, socket, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 class H(BaseHTTPRequestHandler):
     def _answer(self):
@@ -112,6 +120,9 @@ class H(BaseHTTPRequestHandler):
         if "case=slow" in self.path:            # slower than proxy_read_timeout: nginx answers 504
             time.sleep(8)
         body = b'{"ok":true}'
+        if "case=echo" in self.path:            # the forwarding headers nginx passed on
+            names = ("Forwarded", "X-Forwarded-For", "X-Forwarded-Port", "X-Forwarded-Prefix")
+            body = json.dumps({n: self.headers.get(n) for n in names}).encode()
         self.send_response(200)
         # Exactly what Spring Security adds to an API response behind X-Forwarded-Proto: https.
         self.send_header("Strict-Transport-Security", "max-age=31536000 ; includeSubDomains")
@@ -209,10 +220,10 @@ class Runtime(unittest.TestCase):
             time.sleep(0.5)
 
     @classmethod
-    def get(cls, path, method="GET"):
+    def get(cls, path, method="GET", headers=None):
         conn = http.client.HTTPSConnection("127.0.0.1", cls.port, context=cls.ctx, timeout=30)
         try:
-            conn.request(method, path, headers={"Host": "localhost"})
+            conn.request(method, path, headers={"Host": "localhost", **(headers or {})})
             resp = conn.getresponse()
             return resp.status, resp.getheaders(), resp.read()
         finally:
@@ -231,6 +242,18 @@ class Runtime(unittest.TestCase):
             status, headers, _ = self.get(path, method)
             self.assertEqual(status, 200, path)
             self.assertEdgeHeaders(headers, path)
+
+    def test_client_forwarding_headers_do_not_reach_the_backend(self):
+        spoof = {"Forwarded": "for=10.20.0.5", "X-Forwarded-For": "10.20.0.6",
+                 "X-Forwarded-Port": "1", "X-Forwarded-Prefix": "/evil"}
+        for path, method in (("/api/v1/thing?case=echo", "GET"), ("/api/v1/auth/login?case=echo", "POST"),
+                             ("/actuator/health?case=echo", "GET")):
+            status, _, body = self.get(path, method, spoof)
+            self.assertEqual(status, 200, path)
+            seen = json.loads(body)
+            for name in CLEARED_FORWARDING:
+                self.assertIsNone(seen[name], f"{path}: {name}")
+            self.assertNotIn("10.20.0.6", seen["X-Forwarded-For"] or "", path)
 
     def assertRestarting(self, path, method, cause):
         """The JSON restarting answer, and nginx's log saying it was for the intended reason."""

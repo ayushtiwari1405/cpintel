@@ -96,6 +96,12 @@ server {
         # page (same origin, no CORS) on any port. Without it Spring takes the port from
         # X-Forwarded-Proto's default, and on anything but 443 its own page looks foreign.
         proxy_set_header   X-Forwarded-Host $http_host;
+        # Spring's ForwardedHeaderFilter reads RFC 7239 Forwarded before X-Forwarded-For, and
+        # nginx passes on any header it is not told about, so a client's "Forwarded: for=..."
+        # chose its own address. Only nginx says where a request came from.
+        proxy_set_header   Forwarded "";
+        proxy_set_header   X-Forwarded-Port "";
+        proxy_set_header   X-Forwarded-Prefix "";
         proxy_connect_timeout 10s;
         proxy_read_timeout    30s;
         # Spring Security sets these three as well; passing its copies on put two of each in
@@ -130,6 +136,12 @@ server {
         # page (same origin, no CORS) on any port. Without it Spring takes the port from
         # X-Forwarded-Proto's default, and on anything but 443 its own page looks foreign.
         proxy_set_header   X-Forwarded-Host $http_host;
+        # Spring's ForwardedHeaderFilter reads RFC 7239 Forwarded before X-Forwarded-For, and
+        # nginx passes on any header it is not told about, so a client's "Forwarded: for=..."
+        # chose its own address. Only nginx says where a request came from.
+        proxy_set_header   Forwarded "";
+        proxy_set_header   X-Forwarded-Port "";
+        proxy_set_header   X-Forwarded-Prefix "";
         proxy_connect_timeout 10s;
         # Long enough for a Run that queued for a runner slot and then compiled.
         proxy_read_timeout    120s;
@@ -163,6 +175,10 @@ server {
     # no sign-in — so anyone in the building could read the backend's internals.
     location = /actuator/health {
         proxy_pass http://backend;
+        proxy_set_header   Forwarded "";
+        proxy_set_header   X-Forwarded-For $remote_addr;
+        proxy_set_header   X-Forwarded-Port "";
+        proxy_set_header   X-Forwarded-Prefix "";
         # Spring Security's copies, as on the API locations: nginx's are the ones that count.
         proxy_hide_header  Strict-Transport-Security;
         proxy_hide_header  X-Frame-Options;

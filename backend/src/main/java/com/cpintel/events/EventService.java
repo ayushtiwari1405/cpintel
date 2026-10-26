@@ -767,8 +767,30 @@ public class EventService {
         // Read through the assignment list rather than from a roster column, so a team added
         // to the examination this morning brings its members with it.
         Set<Long> participants = participantIds(eventId);
-        return examPasswords.issuePasscodes(adminId, eventId, participants, regenerate, httpReq)
-            .stream().map(EventService::toIssuedDto).toList();
+        Set<Long> rotated = regenerate ? holdersOfCodes(eventId) : Set.of();
+        List<EventsDto.IssuedPasscode> issued =
+            examPasswords.issuePasscodes(adminId, eventId, participants, regenerate, httpReq)
+                .stream().map(EventService::toIssuedDto).toList();
+        // A code that no longer opens anything must not leave open what it already opened:
+        // regenerating is for a leaked roster, and whoever used a leaked slip is signed in.
+        rotated.forEach(userId -> access.revoke(eventId, userId));
+        return issued;
+    }
+
+    /** Withdraws every personal code, and ends the sessions they opened. */
+    @Transactional
+    public void revokePasscodes(Long adminId, Long eventId, HttpServletRequest httpReq) {
+        Set<Long> holders = holdersOfCodes(eventId);
+        examPasswords.revokePasscodes(adminId, eventId, httpReq);
+        holders.forEach(userId -> access.revoke(eventId, userId));
+    }
+
+    private Set<Long> holdersOfCodes(Long eventId) {
+        Set<Long> holders = new HashSet<>();
+        for (var row : passcodeRepository.findAllForContest(eventId)) {
+            holders.add(row.getUser().getUserId());
+        }
+        return holders;
     }
 
     @Transactional(readOnly = true)
@@ -786,7 +808,11 @@ public class EventService {
                 "That person is not assigned to this examination, so a code would open "
                 + "nothing. Assign them first.");
         }
-        return toIssuedDto(examPasswords.reissue(adminId, eventId, userId, httpReq));
+        EventsDto.IssuedPasscode issued =
+            toIssuedDto(examPasswords.reissue(adminId, eventId, userId, httpReq));
+        // The slip went missing, so whoever found it may be signed in with the old code.
+        access.revoke(eventId, userId);
+        return issued;
     }
 
     /** Makes one candidate unlock again — for a move to another machine, or a removal. */
