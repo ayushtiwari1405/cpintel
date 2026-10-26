@@ -11,7 +11,16 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 
+import com.cpintel.entity.GroupContest;
+import com.cpintel.security.SessionMode;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
+
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -26,21 +35,40 @@ class ExamSessionGuardTest {
 
     private static final Long USER = 42L;
 
+    private static final Long PAPER = 7L;
+
+    private GroupContestRepository events;
+    private ExamAccessService access;
     private ClassroomMemberRepository members;
     private ExamSessionGuard guard;
 
     @BeforeEach
     void setUp() {
-        GroupContestRepository events = mock(GroupContestRepository.class);
+        events = mock(GroupContestRepository.class);
         when(events.findByPlatformAndExternalId(anyString(), anyString())).thenReturn(List.of());
         members = mock(ClassroomMemberRepository.class);
-        guard = new ExamSessionGuard(events, mock(ExamAccessService.class), members);
+        access = mock(ExamAccessService.class);
+        guard = new ExamSessionGuard(events, access, members);
         signIn("ROLE_USER");
     }
 
     @AfterEach
     void clear() {
         SecurityContextHolder.clearContext();
+        RequestContextHolder.resetRequestAttributes();
+    }
+
+    /** An examination session for a paper on 3~demo, starting at the given offset from now. */
+    private GroupContest examSession(Duration fromNow) {
+        GroupContest paper = GroupContest.builder().contestId(PAPER).kind("EXAM")
+            .platform("DOMJUDGE").externalId("3~demo").name("Midsem").lifecycle("SCHEDULED")
+            .startsAt(Instant.now().plus(fromNow))
+            .endsAt(Instant.now().plus(fromNow).plus(Duration.ofHours(2))).build();
+        when(events.findById(PAPER)).thenReturn(Optional.of(paper));
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setAttribute(SessionMode.EXAM_ATTRIBUTE, PAPER);
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
+        return paper;
     }
 
     private void signIn(String role) {
@@ -75,5 +103,33 @@ class ExamSessionGuardTest {
     void admin() {
         signIn("ROLE_ADMIN");
         assertDoesNotThrow(() -> guard.requireContestAccess(USER, "DOMJUDGE", "4~demo"));
+    }
+
+    @Test
+    @DisplayName("an examination session waits for the start without reading the paper")
+    void paperWithheldBeforeStart() {
+        examSession(Duration.ofMinutes(30));
+
+        // The countdown is still served.
+        assertDoesNotThrow(() -> guard.requireContestAccess(USER, "DOMJUDGE", "3~demo"));
+        ApiException e = assertThrows(ApiException.class,
+            () -> guard.requirePaperContent(USER, "DOMJUDGE", "3~demo"));
+        assertTrue(e.getMessage().contains("has not started"));
+    }
+
+    @Test
+    @DisplayName("once the paper starts, its content still needs the room's unlock")
+    void paperNeedsUnlockOnceRunning() {
+        GroupContest paper = examSession(Duration.ofMinutes(-10));
+
+        assertDoesNotThrow(() -> guard.requirePaperContent(USER, "DOMJUDGE", "3~demo"));
+        verify(access, atLeastOnce()).requireUnlocked(paper, USER);
+    }
+
+    @Test
+    @DisplayName("an ordinary session's reads are not changed by the paper gate")
+    void ordinarySessionUnchanged() {
+        when(members.existsByClassroomIdAndUserUserId(3L, USER)).thenReturn(true);
+        assertDoesNotThrow(() -> guard.requirePaperContent(USER, "DOMJUDGE", "3~demo"));
     }
 }

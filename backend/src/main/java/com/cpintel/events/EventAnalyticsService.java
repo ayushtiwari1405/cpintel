@@ -44,19 +44,28 @@ public class EventAnalyticsService {
     private final ContestAssignmentRepository assignmentRepository;
     private final ExamEventService examEvents;
     private final EventService events;
+    private final com.cpintel.classrooms.ClassroomService classrooms;
 
     /**
      * One person's history with everything they were assigned.
      *
      * Includes events they never entered, which is the part an admin usually came for: a
      * candidate who did not sit an examination is invisible in any list built from results.
+     *
+     * <p>Only the reader's classrooms: a student shared with another classroom has a history
+     * there too, and its examinations and proctoring counts are that classroom's business.
      */
     @Transactional(readOnly = true)
-    public List<EventsDto.ParticipationRow> participation(Long userId) {
+    public List<EventsDto.ParticipationRow> participation(Long readerId, Long userId) {
         Instant now = Instant.now();
         List<EventsDto.ParticipationRow> rows = new ArrayList<>();
+        List<Long> managed = classrooms.managedIds(readerId);
 
         for (GroupContest event : eventRepository.findAllForParticipant(userId)) {
+            if (managed != null && event.getClassroomId() != null
+                    && !managed.contains(event.getClassroomId())) {
+                continue;
+            }
             Long eventId = event.getContestId();
 
             GroupStanding mine = null;

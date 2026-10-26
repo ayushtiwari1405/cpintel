@@ -565,7 +565,10 @@ public class EventService {
          * password is wanted are all still returned, because a candidate sitting in front of a
          * locked paper needs to know what they are waiting for.
          */
-        boolean mayReadPaper = unlocked || stage != GroupContest.Lifecycle.ACTIVE;
+        // Before the start there is nothing to read, unlocked or not; after the end it is the
+        // record of a paper that is over.
+        boolean mayReadPaper = (stage == GroupContest.Lifecycle.ACTIVE && unlocked)
+            || stage == GroupContest.Lifecycle.ENDED || stage == GroupContest.Lifecycle.ARCHIVED;
 
         return new EventsDto.MyExam(
             summarise(event, now),

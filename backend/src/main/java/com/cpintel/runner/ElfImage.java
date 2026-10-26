@@ -26,7 +26,10 @@ final class ElfImage {
      * when the file is not one or cannot be read.
      */
     static long loadKb(Path file) {
-        try (FileChannel ch = FileChannel.open(file, StandardOpenOption.READ)) {
+        // The binary sits in the program's own work directory: see RunEngine.plainFile.
+        if (!RunEngine.plainFile(file, Long.MAX_VALUE)) return -1;
+        try (FileChannel ch = FileChannel.open(file, StandardOpenOption.READ,
+                java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
             ByteBuffer header = read(ch, 0, 64);
             if (header == null || header.getInt(0) != 0x464c457f   // \x7fELF, little-endian read
                 || header.get(4) != 2 || header.get(5) != 1) {     // 64-bit, little-endian

@@ -105,13 +105,13 @@ public class CompeteService {
 
     public PracticeDto.ProblemDetail statement(Long userId, String platform, String contestId,
                                                String index) {
-        examGuard.requireContestAccess(userId, platform, contestId);
+        examGuard.requirePaperContent(userId, platform, contestId);
         return provider(platform).statement(userId, contestId, index);
     }
 
     public CompeteDto.StatementDocument statementDocument(Long userId, String platform,
                                                           String contestId, String index) {
-        examGuard.requireContestAccess(userId, platform, contestId);
+        examGuard.requirePaperContent(userId, platform, contestId);
         return provider(platform).statementDocument(userId, contestId, index);
     }
 

@@ -5,7 +5,9 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -78,6 +80,15 @@ public class RunEngine {
                 blocked == null && r.isAvailable(),
                 blocked != null ? blocked : r.isAvailable() ? null : r.unavailableReason()))
             .toList();
+    }
+
+    /**
+     * The longest a whole run can legitimately take: the compile, every test at twice its limit
+     * (the sandbox's own wall clock has some slack), and setting up and tearing down.
+     */
+    public Duration deadline(int tests) {
+        return Duration.ofMillis(limits.compileTimeLimitMs()
+            + 2L * Math.max(1, tests) * limits.timeLimitMs()).plusSeconds(30);
     }
 
     public RunDto.RunResponse run(String language, String source, List<RunDto.TestCase> tests) {
@@ -214,8 +225,25 @@ public class RunEngine {
         return kb >= limits.memoryLimitMb() * 1024L * 9 / 10;
     }
 
+    /**
+     * Whether a file the sandboxed program could have written is safe for this process to open:
+     * a regular file, not a link, and small. The work directory is the program's, so what sits
+     * at a name there may be a FIFO, whose open blocks until somebody writes to it, holding the
+     * run's slot long after the program's own time limit, or a link to somewhere else.
+     */
+    static boolean plainFile(Path file, long maxBytes) {
+        try {
+            BasicFileAttributes attrs = Files.readAttributes(file, BasicFileAttributes.class,
+                LinkOption.NOFOLLOW_LINKS);
+            return attrs.isRegularFile() && attrs.size() <= maxBytes;
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
     /** GNU time's report: the last line is the peak in KB; lines before it say how it ended. */
     static Long readPeak(Path file) {
+        if (!plainFile(file, 4096)) return null;
         try {
             List<String> lines = Files.readAllLines(file);
             for (int i = lines.size() - 1; i >= 0; i--) {

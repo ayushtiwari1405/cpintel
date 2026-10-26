@@ -119,8 +119,9 @@ public class AdminUserController {
             + "admin opened this: somebody who did not sit an examination is invisible in any "
             + "list built from results.")
     public ResponseEntity<ApiResponse<List<EventsDto.ParticipationRow>>> participation(
+        @AuthenticationPrincipal Long adminId,
         @PathVariable Long userId) {
-        return ResponseEntity.ok(ApiResponse.ok(analytics.participation(userId)));
+        return ResponseEntity.ok(ApiResponse.ok(analytics.participation(adminId, userId)));
     }
 
     @PutMapping("/{userId}/active")

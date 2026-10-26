@@ -83,4 +83,24 @@ class EventWindowTest {
         assertSame(judge, window.apply(USER, judge));
         assertDoesNotThrow(() -> window.requireOpen(USER, "DOMJUDGE", "4"));
     }
+
+    @Test
+    @DisplayName("before the round starts its problem list is withheld, even if the judge serves it")
+    void problemsWithheldBeforeStart() {
+        CompeteDto.ContestInfo withProblems = new CompeteDto.ContestInfo(
+            judge.id(), judge.name(), judge.platform(), judge.phase(), judge.running(),
+            judge.frozen(), judge.startsAt(), judge.durationSeconds(), judge.secondsUntilStart(),
+            judge.secondsRemaining(), judge.submissionsOpen(), judge.submissionsClosedReason(),
+            judge.personalFilesEnabled(), judge.statementFormat(),
+            List.of(new CompeteDto.ContestProblem("A", "Secret", 40.0, null)), judge.url());
+        Instant start = Instant.now().plus(Duration.ofMinutes(30));
+        holds(round(start, start.plus(Duration.ofHours(2))));
+
+        CompeteDto.ContestInfo seen = window.apply(USER, withProblems);
+        assertEquals("BEFORE", seen.phase());
+        assertTrue(seen.problems().isEmpty());
+
+        holds(round(Instant.now().minus(Duration.ofMinutes(5)), start));
+        assertEquals(1, window.apply(USER, withProblems).problems().size());
+    }
 }

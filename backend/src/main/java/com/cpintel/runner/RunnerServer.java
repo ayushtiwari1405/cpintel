@@ -15,9 +15,13 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /**
  * The code runner as its own process, for a shared server.
@@ -69,6 +73,12 @@ public final class RunnerServer {
     private final RunEngine engine;
     private final byte[] token;
     private final Semaphore slots;
+    /** Where runs execute, so the request thread can stop waiting on one that never returns. */
+    private final ExecutorService workers = Executors.newCachedThreadPool(r -> {
+        Thread t = new Thread(r, "runner-run");
+        t.setDaemon(true);
+        return t;
+    });
     private final ObjectMapper json = new ObjectMapper()
         .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
@@ -152,13 +162,35 @@ public final class RunnerServer {
             try {
                 acquired = slots.tryAcquire(QUEUE_WAIT_MS, TimeUnit.MILLISECONDS);
                 if (!acquired) { send(ex, 503, Map.of("error", "busy")); return; }
-                send(ex, 200, engine.run(req.language(), req.source(), req.tests()));
+                send(ex, 200, runBounded(req));
+            } catch (TimeoutException e) {
+                // The slot is released below whatever the stuck run does next; holding it would
+                // let a few such runs turn Run off for everybody until a restart.
+                log.warn("A run passed its deadline and was abandoned");
+                send(ex, 503, Map.of("error", "run took too long"));
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 send(ex, 503, Map.of("error", "interrupted"));
             } finally {
                 if (acquired) slots.release();
             }
+        }
+    }
+
+    private RunDto.RunResponse runBounded(Request req)
+            throws InterruptedException, TimeoutException {
+        Future<RunDto.RunResponse> run = workers.submit(
+            () -> engine.run(req.language(), req.source(), req.tests()));
+        try {
+            return run.get(engine.deadline(req.tests().size()).toMillis(), TimeUnit.MILLISECONDS);
+        } catch (ExecutionException e) {
+            Throwable cause = e.getCause();
+            if (cause instanceof RuntimeException re) throw re;
+            if (cause instanceof Error err) throw err;
+            throw new IllegalStateException(cause);
+        } catch (TimeoutException | InterruptedException e) {
+            run.cancel(true);
+            throw e;
         }
     }
 

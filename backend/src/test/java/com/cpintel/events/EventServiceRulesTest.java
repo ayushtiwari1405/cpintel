@@ -47,6 +47,7 @@ class EventServiceRulesTest {
     private ContestProblemRepository problems;
     private ExamEventRepository examEventRepository;
     private ContestFilePolicy filePolicy;
+    private ExamAccessService access;
     private EventService service;
 
     @BeforeEach
@@ -57,6 +58,7 @@ class EventServiceRulesTest {
         problems = mock(ContestProblemRepository.class);
         examEventRepository = mock(ExamEventRepository.class);
         filePolicy = mock(ContestFilePolicy.class);
+        access = mock(ExamAccessService.class);
 
         service = new EventService(
             events, teams, assignments, problems,
@@ -67,7 +69,7 @@ class EventServiceRulesTest {
             mock(CodeSubmissionRepository.class),
             mock(UserRepository.class),
             mock(ExamEventService.class),
-            mock(ExamAccessService.class),
+            access,
             mock(ExamPasswordService.class),
             mock(AuditService.class),
             filePolicy,
@@ -492,6 +494,50 @@ class EventServiceRulesTest {
             service.delete(ADMIN, EVENT, null);
 
             verify(events).delete(draft);
+        }
+    }
+
+    @Nested
+    @DisplayName("The paper's problem list on the candidate's exam page")
+    class ProblemList {
+
+        private static final Long CANDIDATE = 9L;
+
+        private void paperStarting(Duration fromNow, boolean unlocked) {
+            Instant start = Instant.now().plus(fromNow);
+            stubDetailRead(GroupContest.builder().contestId(EVENT).classroomId(CLASSROOM)
+                .kind("EXAM").platform("DOMJUDGE").externalId(MIDSEM).name("Mid-semester")
+                .lifecycle("SCHEDULED").startsAt(start).endsAt(start.plus(Duration.ofHours(2)))
+                .build());
+            when(events.isAssignedTo(EVENT, CANDIDATE)).thenReturn(true);
+            when(access.isUnlocked(any(), eq(CANDIDATE))).thenReturn(unlocked);
+            when(problems.findByContestContestIdOrderByOrderingAscLabelAsc(EVENT)).thenReturn(
+                List.of(com.cpintel.entity.ContestProblem.builder().label("A").title("Secret")
+                    .externalId("pid").points(java.math.BigDecimal.TEN).build()));
+        }
+
+        @Test
+        @DisplayName("is withheld before the paper starts")
+        void withheldBeforeStart() {
+            paperStarting(Duration.ofMinutes(30), false);
+            assertTrue(service.myExam(CANDIDATE, EVENT).problems().isEmpty());
+        }
+
+        @Test
+        @DisplayName("is withheld while running until the room's password is given")
+        void withheldUntilUnlocked() {
+            paperStarting(Duration.ofMinutes(-10), false);
+            assertTrue(service.myExam(CANDIDATE, EVENT).problems().isEmpty());
+        }
+
+        @Test
+        @DisplayName("is shown while running once unlocked, and after the end")
+        void shownWhenOpen() {
+            paperStarting(Duration.ofMinutes(-10), true);
+            assertEquals(1, service.myExam(CANDIDATE, EVENT).problems().size());
+
+            paperStarting(Duration.ofHours(-3), false);
+            assertEquals(1, service.myExam(CANDIDATE, EVENT).problems().size());
         }
     }
 }

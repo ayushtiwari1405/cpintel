@@ -88,7 +88,10 @@ public class EventWindow {
             untilStart, running ? remaining : 0,
             running && info.submissionsOpen(),
             running ? info.submissionsClosedReason() : closedReason(event, now),
-            info.personalFilesEnabled(), info.statementFormat(), info.problems(), info.url());
+            info.personalFilesEnabled(), info.statementFormat(),
+            // Before the start the problem list is the paper's shape, and the judge may well
+            // be serving it already: a contest can hold an event that has not begun.
+            stage == GroupContest.Lifecycle.SCHEDULED ? List.of() : info.problems(), info.url());
     }
 
     private static String closedReason(GroupContest event, Instant now) {

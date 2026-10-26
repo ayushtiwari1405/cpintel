@@ -65,6 +65,26 @@ public class ExamSessionGuard {
     }
 
     /**
+     * As {@link #requireContestAccess}, for the paper itself: its statements and examples.
+     *
+     * <p>An examination session exists up to an hour before the start, so a candidate can sign
+     * in and wait. Waiting is all it is for: the countdown is served, the questions are not, and
+     * once the paper starts the room password still stands in front of them. The judge's own
+     * clock is no help here, since a paper can sit on a judge contest that is already running.
+     */
+    @Transactional(readOnly = true)
+    public void requirePaperContent(Long userId, String platform, String contestId) {
+        requireContestAccess(userId, platform, contestId);
+        Long sessionExam = SessionMode.examId();
+        if (sessionExam == null) return;
+        GroupContest paper = events.findById(sessionExam).orElseThrow(() ->
+            ApiException.forbidden("This examination no longer exists."));
+        if (paper.effectiveLifecycle(Instant.now()) == GroupContest.Lifecycle.SCHEDULED) {
+            throw ApiException.forbidden("\"" + paper.getName() + "\" has not started yet.");
+        }
+    }
+
+    /**
      * Holds a run from an examination session to its paper: its contest, and so its languages.
      * A run naming no contest would be the unrestricted practice runner.
      */
