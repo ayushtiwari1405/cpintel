@@ -482,7 +482,7 @@ public class RosterImportService {
             }
             case CREATE_AND_ADD -> {
                 String password = generatePassword();
-                User user = createAccount(planned, password);
+                User user = createAccount(planned, password, adminId);
 
                 auditService.recordIn(group.getClassroomId(), adminId, AuditService.USER_CREATED, "USER",
                     user.getUserId() + ":" + Roles.USER + ":bulk", httpReq);
@@ -507,7 +507,7 @@ public class RosterImportService {
         return planned.teamName() != null ? planned.teamName() : attached.teamName();
     }
 
-    private User createAccount(RowOutcome row, String password) {
+    private User createAccount(RowOutcome row, String password, Long adminId) {
         User user = userRepository.save(User.builder()
             .username(row.username())
             .email(row.email())
@@ -517,6 +517,7 @@ public class RosterImportService {
             // a spreadsheet column is not the place to hand out console access.
             .role(Roles.USER)
             .isActive(true)
+            .managedBy(adminId)
             // An admin typing an address is not evidence it belongs to the person, exactly as
             // for a singly-created account.
             .isVerified(false)

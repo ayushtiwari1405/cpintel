@@ -17,6 +17,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 import java.util.List;
 import java.time.Instant;
@@ -70,6 +71,8 @@ class AdminUserServiceTest {
 
         // Unless a test says otherwise, the target is in no classroom the caller does not run.
         when(classrooms.onlyInManaged(anyLong(), anyLong())).thenReturn(true);
+        // ...and was made by staff the caller works with.
+        when(classrooms.madeByStaff(anyLong(), any())).thenReturn(true);
         when(passwordEncoder.encode(any())).thenReturn("hashed");
 
         when(auditLog.lastLoginFor(anyCollection())).thenReturn(List.of());
@@ -303,6 +306,10 @@ class AdminUserServiceTest {
                 false, null);
 
             assertEquals("newbie", row.username());
+            ArgumentCaptor<User> saved = ArgumentCaptor.forClass(User.class);
+            verify(users).save(saved.capture());
+            assertEquals(ADMIN_ID, saved.getValue().getManagedBy(),
+                "the account is recorded as the admin's to manage");
         }
 
         @Test
@@ -469,6 +476,28 @@ class AdminUserServiceTest {
 
             assertEquals("user2@example.com", student.getEmail());
             verify(users, never()).save(any());
+            verify(passwordEncoder, never()).encode(any());
+        }
+
+        @Test
+        @DisplayName("an account its owner registered stays theirs once enrolled")
+        void cannotReachASelfRegisteredAccount() {
+            User student = user(OTHER_ID, "USER", true);
+            // Enrolled into the admin's classroom and nowhere else, so the classroom check
+            // passes. Nobody on staff made it.
+            when(classrooms.madeByStaff(ADMIN_ID, null)).thenReturn(false);
+
+            ApiException e = assertThrows(ApiException.class, () -> service.setPassword(ADMIN_ID,
+                OTHER_ID, new AdminDto.SetPasswordRequest(null, null), false, null));
+            assertTrue(e.getMessage().contains("not made by you"));
+            assertThrows(ApiException.class, () -> service.updateUser(ADMIN_ID, OTHER_ID,
+                new AdminDto.UpdateUserRequest(null, "mine@example.com", null, null), false, null));
+            assertThrows(ApiException.class,
+                () -> service.setActive(ADMIN_ID, OTHER_ID, active(false), false, null));
+            assertThrows(ApiException.class,
+                () -> service.revokeSessions(ADMIN_ID, OTHER_ID, false, null));
+
+            assertEquals("user2@example.com", student.getEmail());
             verify(passwordEncoder, never()).encode(any());
         }
 

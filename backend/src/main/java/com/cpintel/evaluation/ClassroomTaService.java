@@ -130,6 +130,7 @@ public class ClassroomTaService {
                 .fullName(trimToNull(req.fullName()))
                 .role(Roles.USER)
                 .isActive(true)
+                .managedBy(adminId)
                 .isVerified(false)
                 .build());
             // Mirrors registration and every other way an account is made.

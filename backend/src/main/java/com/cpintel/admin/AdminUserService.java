@@ -250,6 +250,7 @@ public class AdminUserService {
             .fullName(StringUtils.hasText(req.fullName()) ? req.fullName().trim() : null)
             .role(role)
             .isActive(true)
+            .managedBy(adminId)
             // Not verified: an admin typing an address is not evidence that it belongs to the
             // person, and the account works without it exactly as a self-registered one does.
             .isVerified(false)
@@ -505,6 +506,13 @@ public class AdminUserService {
         if (!classrooms.onlyInManaged(adminId, target.getUserId())) {
             throw ApiException.forbidden("This account is also in a classroom you do not run. "
                 + "Only a super admin may " + verb + " it.");
+        }
+        // Enrolling is open to any admin, so being in their classrooms does not make an account
+        // theirs. Its owner registered it, or another admin made it, unless staff they work with
+        // did.
+        if (!classrooms.madeByStaff(adminId, target.getManagedBy())) {
+            throw ApiException.forbidden("This account was not made by you or a fellow admin of "
+                + "your classrooms. Only a super admin may " + verb + " it.");
         }
     }
 

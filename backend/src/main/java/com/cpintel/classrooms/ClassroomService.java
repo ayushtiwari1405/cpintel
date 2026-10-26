@@ -113,6 +113,20 @@ public class ClassroomService {
             && managed.containsAll(classrooms.taClassroomIds(userId));
     }
 
+    /**
+     * Whether an account made by {@code creatorId} is {@code adminId}'s to manage: they made it,
+     * or its maker runs a classroom with them, so a co-admin can cover for the one who made it.
+     * An account with no maker is its owner's own and never is.
+     */
+    public boolean madeByStaff(Long adminId, Long creatorId) {
+        if (creatorId == null) return false;
+        if (creatorId.equals(adminId)) return true;
+        List<Long> creators = classrooms.findManagedBy(creatorId).stream()
+            .map(Classroom::getClassroomId).toList();
+        return classrooms.findManagedBy(adminId).stream()
+            .anyMatch(c -> creators.contains(c.getClassroomId()));
+    }
+
     /** As {@link #canSeeUser}, answering "no such user" so an id does not confirm an account. */
     public void requireVisibleUser(Long adminId, Long userId) {
         if (!canSeeUser(adminId, userId)) throw ApiException.notFound("No such user");

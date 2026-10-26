@@ -70,6 +70,15 @@ public class User extends BaseEntity {
     @Column(name = "password_changed_at")
     private Instant passwordChangedAt;
 
+    /**
+     * The admin who made this account, or null for one its owner registered.
+     *
+     * <p>Only staff-made accounts are an admin's to re-password: an admin can enrol anyone,
+     * so classroom membership alone does not say whose an account is.
+     */
+    @Column(name = "managed_by")
+    private Long managedBy;
+
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @Builder.Default
     private List<PlatformAccount> platformAccounts = new ArrayList<>();

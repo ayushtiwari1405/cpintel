@@ -183,6 +183,21 @@ class ClassroomServiceTest {
             signIn("ROLE_ADMIN", "ROLE_SUPER_ADMIN");
             assertTrue(service.onlyInManaged(OWNER, 6L));
         }
+
+        @Test
+        @DisplayName("an account is an admin's to manage when they or a co-admin made it")
+        void madeByStaff() {
+            Long coAdmin = 2L, stranger = 3L;
+            Classroom elsewhere = Classroom.builder().classroomId(99L).name("Other").build();
+            when(classrooms.findManagedBy(OWNER)).thenReturn(List.of(room));
+            when(classrooms.findManagedBy(coAdmin)).thenReturn(List.of(room, elsewhere));
+            when(classrooms.findManagedBy(stranger)).thenReturn(List.of(elsewhere));
+
+            assertTrue(service.madeByStaff(OWNER, OWNER));
+            assertTrue(service.madeByStaff(OWNER, coAdmin));
+            assertFalse(service.madeByStaff(OWNER, stranger));
+            assertFalse(service.madeByStaff(OWNER, null), "self-registered: nobody's but its own");
+        }
     }
 
     @Nested
