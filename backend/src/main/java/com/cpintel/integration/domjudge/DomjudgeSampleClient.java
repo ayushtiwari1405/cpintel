@@ -6,6 +6,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.reactive.function.client.WebClient;
 
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
@@ -54,6 +56,15 @@ public class DomjudgeSampleClient {
 
     /** An empty answer is held only briefly — it may be a permission, not an absence. */
     private static final Duration EMPTY_TTL = Duration.ofSeconds(60);
+
+    /*
+     * The download is capped at 16 MiB, but what it inflates to is not: deflate packs a
+     * gigabyte of one byte into about a megabyte. These bound an archive from the judge. A
+     * contest-wide one holds every problem's statement as well as its samples, hence the total.
+     */
+    static final int MAX_SAMPLE_BYTES = 4 * 1024 * 1024;
+    static final long MAX_TOTAL_BYTES = 64L * 1024 * 1024;
+    static final int MAX_ENTRIES = 4096;
 
     private final DomjudgeClient domjudge;
 
@@ -295,10 +306,12 @@ public class DomjudgeSampleClient {
             .bodyToMono(byte[].class)
             .block(Duration.ofSeconds(30));
 
+        // One pass for every problem: the archive is the same whichever label is wanted.
+        Map<String, String> files = sampleFiles(archive);
         List<PracticeDto.Sample> wanted = List.of();
         for (DjModels.ContestProblem problem : problems) {
             if (problem.getId() == null || problem.getLabel() == null) continue;
-            List<PracticeDto.Sample> found = unzip(archive, problem.getLabel());
+            List<PracticeDto.Sample> found = pair(files, problem.getLabel());
             if (problem.getId().equals(problemId)) {
                 wanted = found;
             } else if (!found.isEmpty()) {
@@ -309,31 +322,83 @@ public class DomjudgeSampleClient {
     }
 
     /** The samples in an archive, or in one folder of it when {@code folder} is given. */
-    static List<PracticeDto.Sample> unzip(byte[] archive, String folder) throws Exception {
-        if (archive == null || archive.length == 0) return List.of();
+    static List<PracticeDto.Sample> unzip(byte[] archive, String folder) throws IOException {
+        return pair(sampleFiles(archive), folder);
+    }
 
-        Map<String, String> inputs = new LinkedHashMap<>();
-        Map<String, String> outputs = new LinkedHashMap<>();
+    /**
+     * The {@code .in}, {@code .ans} and {@code .out} entries of an archive, by full name.
+     *
+     * <p>Everything else is drained unread. All of it counts toward the archive's total, since
+     * inflating a skipped entry costs the same time as reading one.
+     */
+    static Map<String, String> sampleFiles(byte[] archive) throws IOException {
+        Map<String, String> files = new LinkedHashMap<>();
+        if (archive == null || archive.length == 0) return files;
 
+        long total = 0;
+        int entries = 0;
+        byte[] buffer = new byte[8192];
         try (ZipInputStream zip = new ZipInputStream(new ByteArrayInputStream(archive))) {
             ZipEntry entry;
             while ((entry = zip.getNextEntry()) != null) {
+                if (++entries > MAX_ENTRIES) {
+                    throw new IOException("samples archive has over " + MAX_ENTRIES + " entries");
+                }
                 if (entry.isDirectory()) continue;
 
-                String name = entry.getName();
-                if (folder != null && !name.startsWith(folder + "/")) continue;
-                int slash = name.lastIndexOf('/');
-                if (slash >= 0) name = name.substring(slash + 1);
-
-                int dot = name.lastIndexOf('.');
-                if (dot <= 0) continue;
-                String base = name.substring(0, dot);
-                String ext = name.substring(dot + 1).toLowerCase();
-
-                String content = new String(zip.readAllBytes(), StandardCharsets.UTF_8);
-                if ("in".equals(ext)) inputs.put(base, content);
-                else if ("ans".equals(ext) || "out".equals(ext)) outputs.put(base, content);
+                boolean sample = isSample(entry.getName());
+                ByteArrayOutputStream content = sample ? new ByteArrayOutputStream() : null;
+                long size = 0;
+                int n;
+                while ((n = zip.read(buffer)) > 0) {
+                    size += n;
+                    total += n;
+                    if (total > MAX_TOTAL_BYTES) {
+                        throw new IOException("samples archive inflates past "
+                            + MAX_TOTAL_BYTES + " bytes");
+                    }
+                    if (sample) {
+                        if (size > MAX_SAMPLE_BYTES) {
+                            throw new IOException("sample " + entry.getName() + " is over "
+                                + MAX_SAMPLE_BYTES + " bytes");
+                        }
+                        content.write(buffer, 0, n);
+                    }
+                }
+                if (sample) files.put(entry.getName(), content.toString(StandardCharsets.UTF_8));
             }
+        }
+        return files;
+    }
+
+    private static boolean isSample(String name) {
+        String ext = extension(name);
+        return "in".equals(ext) || "ans".equals(ext) || "out".equals(ext);
+    }
+
+    /** The extension of an entry's base name, or null when it has none. */
+    private static String extension(String name) {
+        String base = name.substring(name.lastIndexOf('/') + 1);
+        int dot = base.lastIndexOf('.');
+        return dot <= 0 ? null : base.substring(dot + 1).toLowerCase();
+    }
+
+    /**
+     * Pairs inputs with answers on their base name, so {@code 1.in} pairs with {@code 1.ans}
+     * however the archive orders them.
+     */
+    private static List<PracticeDto.Sample> pair(Map<String, String> files, String folder) {
+        Map<String, String> inputs = new LinkedHashMap<>();
+        Map<String, String> outputs = new LinkedHashMap<>();
+
+        for (Map.Entry<String, String> file : files.entrySet()) {
+            String name = file.getKey();
+            if (folder != null && !name.startsWith(folder + "/")) continue;
+            name = name.substring(name.lastIndexOf('/') + 1);
+            String base = name.substring(0, name.lastIndexOf('.'));
+            if ("in".equals(extension(name))) inputs.put(base, file.getValue());
+            else outputs.put(base, file.getValue());
         }
 
         List<PracticeDto.Sample> out = new ArrayList<>();

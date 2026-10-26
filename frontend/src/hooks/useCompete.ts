@@ -107,6 +107,7 @@ export function useContestStatement(ref?: ContestRef, index?: string, enabled = 
  */
 export function useStatementPdf(ref?: ContestRef, index?: string, enabled = true) {
   const [url, setUrl] = useState<string | null>(null)
+  const [isPdf, setIsPdf] = useState(false)
   const [text, setText] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -134,6 +135,7 @@ export function useStatementPdf(ref?: ContestRef, index?: string, enabled = true
           return
         }
         objectUrl = URL.createObjectURL(blob)
+        setIsPdf((blob.type || '').startsWith('application/pdf'))
         setUrl(objectUrl)
 
         // The embed is for reading; the examples in it are only reachable as text. Best
@@ -162,7 +164,7 @@ export function useStatementPdf(ref?: ContestRef, index?: string, enabled = true
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ref?.platform, ref?.id, index, enabled])
 
-  return { url, text, error }
+  return { url, isPdf, text, error }
 }
 
 export function useContestLanguages(ref?: ContestRef, enabled = true) {

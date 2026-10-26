@@ -211,7 +211,7 @@ export default function CompetePage({ examOnly, section }: {
   const { data: statement, isLoading: statementLoading } =
     useContestStatement(contestRef ?? undefined, selected ?? undefined, started)
   const {
-    url: statementPdfUrl, text: statementText, error: statementPdfError,
+    url: statementPdfUrl, isPdf: statementIsPdf, text: statementText, error: statementPdfError,
   } = useStatementPdf(
     contestRef ?? undefined, selected ?? undefined,
     started && !!statement?.statementPdfUrl)
@@ -780,6 +780,7 @@ export default function CompetePage({ examOnly, section }: {
               problem={statement}
               isLoading={statementLoading}
               pdfUrl={statementPdfUrl}
+              pdfIsPdf={statementIsPdf}
               pdfText={statementText}
               pdfError={statementPdfError}
               samples={samples}

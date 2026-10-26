@@ -26,7 +26,7 @@ export function PastExamProblems({ exam }: { exam: MyExam }) {
 
   const { data: statement, isLoading: statementLoading } =
     useContestStatement(ref, selected ?? undefined, !!selected)
-  const { url: pdfUrl, text: pdfText, error: pdfError } =
+  const { url: pdfUrl, isPdf, text: pdfText, error: pdfError } =
     useStatementPdf(ref, selected ?? undefined, !!selected && !!statement?.statementPdfUrl)
   // As in the live workspace: a text statement's own examples stand in for sample files the
   // judge does not hand a team account.
@@ -76,6 +76,7 @@ export function PastExamProblems({ exam }: { exam: MyExam }) {
           problem={statement}
           isLoading={statementLoading}
           pdfUrl={pdfUrl}
+          pdfIsPdf={isPdf}
           pdfText={pdfText}
           pdfError={pdfError}
           samples={samples}

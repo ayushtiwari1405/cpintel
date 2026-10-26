@@ -156,6 +156,8 @@ interface Props {
    * out of the PDF. Shown only when there is no PDF to embed.
    */
   pdfText?: string | null
+  /** Whether {@link pdfUrl} is a PDF. Anything else from the judge is shown sandboxed. */
+  pdfIsPdf?: boolean
   pdfError?: string | null
   /**
    * The examples to show, when the caller has better ones than the problem carries — the ones
@@ -183,7 +185,7 @@ function readShowTags(): boolean {
 }
 
 export function StatementView({
-  problem, isLoading, pdfUrl, pdfText, pdfError, samples: samplesOverride,
+  problem, isLoading, pdfUrl, pdfIsPdf, pdfText, pdfError, samples: samplesOverride,
 }: Props) {
   const [showTags, setShowTags] = useState(readShowTags)
 
@@ -290,7 +292,8 @@ export function StatementView({
         </header>
 
         {isDocument ? (
-          <PdfStatement url={pdfUrl ?? null} text={pdfText ?? null} error={pdfError ?? null} />
+          <PdfStatement url={pdfUrl ?? null} isPdf={!!pdfIsPdf} text={pdfText ?? null}
+            error={pdfError ?? null} />
         ) : !problem.statementAvailable && (
           <MissingStatement issue={problem.statementIssue} />
         )}
@@ -374,8 +377,9 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
  * would not be if the document filled the pane exactly. A contestant who wants it full-size
  * opens it on the judge with the link in the header.
  */
-function PdfStatement({ url, text, error }: {
+function PdfStatement({ url, isPdf, text, error }: {
   url: string | null
+  isPdf: boolean
   text: string | null
   error: string | null
 }) {
@@ -396,6 +400,10 @@ function PdfStatement({ url, text, error }: {
         // a half-width pane; fit to width with the rail closed is what reads.
         src={`${url}#navpanes=0&view=FitH`}
         title="Problem statement"
+        // A blob URL has the app's own origin, so judge HTML in it would run as CPIntel. An
+        // empty sandbox gives it none and no scripts. PDFs are exempt: browsers will not show
+        // a PDF inside a sandbox, and a PDF is not the app's to run either way.
+        sandbox={isPdf ? undefined : ''}
         className="w-full h-[75vh] rounded-xl border border-gray-800 bg-white"
       />
     )

@@ -97,14 +97,19 @@ public class CompeteController {
             type = MediaType.APPLICATION_OCTET_STREAM;
         }
 
-        return ResponseEntity.ok()
+        ResponseEntity.BodyBuilder response = ResponseEntity.ok()
             .contentType(type)
             .header(HttpHeaders.CONTENT_DISPOSITION,
                 "inline; filename=\"" + index.toUpperCase() + extensionFor(type) + "\"")
             // Statements do not change mid-contest, and 200 contestants each opening four
             // problems is 800 fetches of the same handful of documents otherwise.
-            .header(HttpHeaders.CACHE_CONTROL, "private, max-age=600")
-            .body(doc.bytes());
+            .header(HttpHeaders.CACHE_CONTROL, "private, max-age=600");
+        // HTML from the judge's problem package must not run as CPIntel if this is opened
+        // directly. A PDF is left alone: browsers refuse to show one in a sandbox.
+        if (!MediaType.APPLICATION_PDF.isCompatibleWith(type)) {
+            response.header("Content-Security-Policy", "sandbox");
+        }
+        return response.body(doc.bytes());
     }
 
     /**
