@@ -141,6 +141,11 @@ public class RunEngine {
 
             List<RunDto.TestResult> results = new ArrayList<>();
             for (int i = 0; i < tests.size(); i++) {
+                // Cancelled at its deadline: nobody is waiting for the rest, so stop starting
+                // sandboxes rather than open and kill one for every remaining test.
+                if (Thread.currentThread().isInterrupted()) {
+                    return RunDto.RunResponse.unavailable("The run was stopped at its time limit.");
+                }
                 results.add(runOne(runtime, workDir, tests.get(i), i));
             }
 

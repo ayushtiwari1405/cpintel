@@ -175,6 +175,11 @@ public final class RunnerServer {
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 send(ex, 503, Map.of("error", "interrupted"));
+            } catch (RuntimeException e) {
+                // A fault in the runner itself: answer it rather than drop the connection, so
+                // the backend reports a failed Run instead of waiting on a closed socket.
+                log.error("Run failed inside the runner", e);
+                send(ex, 500, Map.of("error", "internal error"));
             } finally {
                 if (acquired) slots.release();
             }
