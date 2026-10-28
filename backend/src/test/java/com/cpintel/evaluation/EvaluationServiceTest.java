@@ -219,7 +219,20 @@ class EvaluationServiceTest {
         assertEquals("a1", saved.getValue().getSubmissionId());
         assertEquals(TA, saved.getValue().getMarkedBy());
         assertEquals(6.26, cell.marks());
-        verify(eventRepository).storeLeaderboard(EXAM, null, null);
+        verify(eventRepository).invalidateOpenLeaderboard(EXAM);
+    }
+
+    @Test
+    @DisplayName("A mark arriving after the examination was marked done elsewhere is refused")
+    void markAfterDoneIsRefused() {
+        assign("A", null, null);
+        sent("a1", 1, "A", 100, "WRONG_ANSWER");
+        // This request loaded the event while it was open; marking done committed since.
+        when(eventRepository.lockCompleted(EXAM)).thenReturn(true);
+
+        assertThrows(ApiException.class, () -> service.taMark(TA, EXAM, mark(1, "A", 6.0), null));
+        verify(marks, never()).saveAndFlush(any());
+        verify(eventRepository, never()).invalidateOpenLeaderboard(any());
     }
 
     @Test

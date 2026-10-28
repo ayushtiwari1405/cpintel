@@ -112,6 +112,28 @@ public interface GroupContestRepository extends JpaRepository<GroupContest, Long
                          @Param("snapshot") String snapshot,
                          @Param("generatedAt") Instant generatedAt);
 
+    /**
+     * Drops a stale board, but only while the event is not done: a done event's board is the
+     * one that was exported, and stays it.
+     */
+    @Modifying
+    @Transactional
+    @Query("""
+        UPDATE GroupContest c
+        SET c.leaderboardSnapshot = NULL, c.leaderboardGeneratedAt = NULL
+        WHERE c.contestId = :contestId AND c.completedAt IS NULL
+        """)
+    int invalidateOpenLeaderboard(@Param("contestId") Long contestId);
+
+    /**
+     * Locks the event's row for the rest of the transaction and says whether it is done, read
+     * from the database rather than from an entity loaded earlier. Marking done updates this
+     * row, so it waits for a mark being saved, and a mark arriving after it sees it.
+     */
+    @Query(value = "SELECT completed_at IS NOT NULL FROM group_contests WHERE contest_id = :id FOR UPDATE",
+        nativeQuery = true)
+    Boolean lockCompleted(@Param("id") Long id);
+
     /** Marks the event done, or starts its export again, without touching the rest of the row. */
     @Modifying
     @Transactional

@@ -394,6 +394,11 @@ public class EvaluationService {
                                     HttpServletRequest httpReq) {
         String state = state(event, Instant.now());
         if (!OPEN.equals(state)) throw ApiException.badRequest(stateMessage(state));
+        // The check above read the event as this request loaded it; marking done may have
+        // committed since. Re-read it under the row lock, held until this mark is saved.
+        if (Boolean.TRUE.equals(eventRepository.lockCompleted(event.getContestId()))) {
+            throw ApiException.badRequest(stateMessage(DONE));
+        }
 
         Paper paper = load(event, true);
         Target target = target(scope, paper, req.userId(), req.label());
@@ -462,7 +467,7 @@ public class EvaluationService {
         }
 
         // The stored board was ranked on the old mark; drop it so the next read re-ranks.
-        eventRepository.storeLeaderboard(eventId, null, null);
+        eventRepository.invalidateOpenLeaderboard(eventId);
         return cell(scope, paper, target.student(), problem, markerNames(paper));
     }
 
