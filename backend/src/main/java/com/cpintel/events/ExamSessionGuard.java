@@ -1,5 +1,6 @@
 package com.cpintel.events;
 
+import com.cpintel.classrooms.ClassroomService;
 import com.cpintel.entity.GroupContest;
 import com.cpintel.exception.ApiException;
 import com.cpintel.integration.domjudge.JudgeContestRef;
@@ -30,6 +31,7 @@ public class ExamSessionGuard {
     private final GroupContestRepository events;
     private final ExamAccessService access;
     private final ClassroomMemberRepository classroomMembers;
+    private final ClassroomService classrooms;
 
     /** Throws unless this session may reach this judge contest right now. */
     @Transactional(readOnly = true)
@@ -50,7 +52,9 @@ public class ExamSessionGuard {
             return;
         }
 
-        if (isAdmin()) return;
+        // Admins are not candidates, but only in the classrooms they run: anyone else's
+        // DOMjudge contest is held to the same membership and examination rules as a student's.
+        if (isAdmin() && runsClassroomOf(userId, platform, contestId)) return;
         requireClassroom(userId, platform, contestId);
         for (GroupContest event : events.findByPlatformAndExternalId(
                 platform.toUpperCase(java.util.Locale.ROOT), contestId)) {
@@ -121,6 +125,13 @@ public class ExamSessionGuard {
             throw ApiException.forbidden("This belongs to the examination session. Sign in "
                 + "with the examination password on your slip to sit the paper.");
         }
+    }
+
+    /** True off DOMjudge (no classroom owns a Codeforces contest); else the admin runs the one named. */
+    private boolean runsClassroomOf(Long userId, String platform, String contestId) {
+        if (!"DOMJUDGE".equalsIgnoreCase(platform)) return true;
+        JudgeContestRef ref = JudgeContestRef.parse(contestId);
+        return classrooms.canManage(userId, classrooms.require(ref.classroomId()));
     }
 
     private static boolean isAdmin() {
