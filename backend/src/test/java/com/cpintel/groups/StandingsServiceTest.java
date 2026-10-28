@@ -198,12 +198,33 @@ class StandingsServiceTest {
         }
 
         @Test
-        @DisplayName("Codeforces uses the linked account before any override")
-        void linkedAccountWins() {
+        @DisplayName("Codeforces uses the handle the admin set before a linked account")
+        void adminHandleWins() {
+            // Linking proves nothing about owning the handle; the admin's assignment does.
             when(accounts.findByUserUserIdAndPlatform(1L, "CODEFORCES"))
                 .thenReturn(Optional.of(PlatformAccount.builder().handle("tourist").build()));
 
-            assertEquals("tourist", service.handleFor(contest, member(1, "ignored")));
+            assertEquals("assigned", service.handleFor(contest, member(1, "assigned")));
+        }
+
+        @Test
+        @DisplayName("Codeforces uses the linked account when the admin set none")
+        void linkedAccountWhenNoneSet() {
+            when(accounts.findByUserUserIdAndPlatform(1L, "CODEFORCES"))
+                .thenReturn(Optional.of(PlatformAccount.builder().handle("tourist").build()));
+            when(accounts.countByPlatformAndHandleIgnoreCase("CODEFORCES", "tourist")).thenReturn(1L);
+
+            assertEquals("tourist", service.handleFor(contest, member(1, null)));
+        }
+
+        @Test
+        @DisplayName("a handle two accounts linked credits neither of them")
+        void sharedHandleCreditsNobody() {
+            when(accounts.findByUserUserIdAndPlatform(1L, "CODEFORCES"))
+                .thenReturn(Optional.of(PlatformAccount.builder().handle("alice_cf").build()));
+            when(accounts.countByPlatformAndHandleIgnoreCase("CODEFORCES", "alice_cf")).thenReturn(2L);
+
+            assertNull(service.handleFor(contest, member(1, null)));
         }
 
         @Test

@@ -164,20 +164,26 @@ public class StandingsService {
     /**
      * The name to look this member up under on the judge running the contest.
      *
-     * On Codeforces the linked platform account is the natural answer and the override is a
-     * fallback for someone who has not linked one. On DOMjudge there is nothing to derive from
+     * The handle an admin set on the membership comes first: linking a Codeforces handle proves
+     * nothing about owning it, so a linked one only counts when the admin set none, and not at
+     * all when another account linked the same handle. On DOMjudge there is nothing to derive from
      * — CPIntel has no concept of a DOMjudge team — so the override is the only answer, and a
      * member without one is reported as unmatched rather than silently scored zero.
      */
     String handleFor(GroupContest contest, GroupMember member) {
+        if (StringUtils.hasText(member.getExternalHandle())) return member.getExternalHandle();
         if (GroupContest.Platform.CODEFORCES.name().equals(contest.getPlatform())) {
             String linked = platformAccountRepository
                 .findByUserUserIdAndPlatform(member.getUser().getUserId(), "CODEFORCES")
                 .map(account -> account.getHandle())
                 .orElse(null);
-            if (StringUtils.hasText(linked)) return linked;
+            // Two accounts on one handle: at most one of them is its owner, so credit neither.
+            if (StringUtils.hasText(linked)
+                    && platformAccountRepository.countByPlatformAndHandleIgnoreCase("CODEFORCES", linked) == 1) {
+                return linked;
+            }
         }
-        return StringUtils.hasText(member.getExternalHandle()) ? member.getExternalHandle() : null;
+        return null;
     }
 
     /**

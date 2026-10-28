@@ -110,4 +110,17 @@ class SyncJobGuardTest {
         assertThrows(ApiException.class, () -> service.getSyncStatus(USER, 9001L));
         verify(jobs, never()).findById(9001L);
     }
+
+    @Test
+    @DisplayName("a handle another account already linked cannot be linked again")
+    void sharedHandleRefused() {
+        PlatformAccountRepository accounts = (PlatformAccountRepository)
+            org.springframework.test.util.ReflectionTestUtils.getField(service, "platformAccountRepository");
+        when(accounts.existsByUserUserIdAndPlatform(USER, "CODEFORCES")).thenReturn(false);
+        when(accounts.existsByPlatformAndHandleIgnoreCaseAndUserUserIdNot("CODEFORCES", "Alice_CF", USER))
+            .thenReturn(true);
+
+        assertThrows(ApiException.class, () -> service.linkAccount(USER, "CODEFORCES", "Alice_CF"));
+        verify(accounts, never()).save(any());
+    }
 }

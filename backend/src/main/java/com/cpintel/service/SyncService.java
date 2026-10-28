@@ -73,6 +73,10 @@ public class SyncService {
         if (platformAccountRepository.existsByUserUserIdAndPlatform(userId, platform))
             throw ApiException.conflict(platform + " account already linked");
 
+        // A handle credits its results on classroom boards, so one belongs to one account.
+        if (platformAccountRepository.existsByPlatformAndHandleIgnoreCaseAndUserUserIdNot(platform, handle.trim(), userId))
+            throw ApiException.conflict("That " + platform + " handle is already linked to another account.");
+
         // Validate handle exists on the platform
         validateHandle(platform, handle);
 

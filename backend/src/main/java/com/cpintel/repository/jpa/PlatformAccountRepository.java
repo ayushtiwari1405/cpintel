@@ -19,6 +19,11 @@ public interface PlatformAccountRepository extends JpaRepository<PlatformAccount
     Optional<PlatformAccount> findByUserUserIdAndPlatform(Long userId, String platform);
     boolean existsByUserUserIdAndPlatform(Long userId, String platform);
 
+    /** Whether some other account already linked this handle on the platform. */
+    boolean existsByPlatformAndHandleIgnoreCaseAndUserUserIdNot(String platform, String handle, Long userId);
+
+    long countByPlatformAndHandleIgnoreCase(String platform, String handle);
+
     @Query("SELECT pa FROM PlatformAccount pa WHERE pa.syncStatus = 'PENDING' OR pa.syncStatus = 'FAILED'")
     List<PlatformAccount> findAccountsPendingSync();
 
