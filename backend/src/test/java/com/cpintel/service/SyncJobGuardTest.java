@@ -101,4 +101,13 @@ class SyncJobGuardTest {
             () -> service.createJob(USER, "CODEFORCES", "INCREMENTAL"));
         assertEquals(409, e.getStatus().value());
     }
+
+    @Test
+    @DisplayName("another user's sync job reads as not found")
+    void otherUsersJobIsNotFound() {
+        // Job 9001 belongs to someone else: the owner-bound lookup finds nothing for USER.
+        when(jobs.findByJobIdAndUserUserId(9001L, USER)).thenReturn(Optional.empty());
+        assertThrows(ApiException.class, () -> service.getSyncStatus(USER, 9001L));
+        verify(jobs, never()).findById(9001L);
+    }
 }

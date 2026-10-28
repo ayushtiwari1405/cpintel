@@ -73,7 +73,7 @@ public class IntegrationController {
     public ResponseEntity<ApiResponse<SyncJobDto>> getSyncStatus(
         @AuthenticationPrincipal Long userId,
         @PathVariable Long jobId) {
-        SyncJob job = syncService.getSyncStatus(jobId);
+        SyncJob job = syncService.getSyncStatus(userId, jobId);
         return ResponseEntity.ok(ApiResponse.ok(toSyncJobDto(job)));
     }
 

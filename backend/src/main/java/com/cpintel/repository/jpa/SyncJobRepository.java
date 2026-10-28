@@ -17,6 +17,8 @@ import java.util.Optional;
 public interface SyncJobRepository extends JpaRepository<SyncJob, Long> {
     List<SyncJob> findByUserUserIdOrderByCreatedAtDesc(Long userId);
 
+    Optional<SyncJob> findByJobIdAndUserUserId(Long jobId, Long userId);
+
     @Query(value = """
         SELECT sj.* FROM sync_jobs sj
         WHERE sj.user_id = :userId AND sj.platform = :platform

@@ -357,8 +357,9 @@ public class SyncService {
         return (int) result.getModifiedCount();
     }
 
-    public SyncJob getSyncStatus(Long jobId) {
-        return syncJobRepository.findById(jobId)
+    /** Another user's job reads as not found, so job ids say nothing about other accounts. */
+    public SyncJob getSyncStatus(Long userId, Long jobId) {
+        return syncJobRepository.findByJobIdAndUserUserId(jobId, userId)
             .orElseThrow(() -> ApiException.notFound("Sync job not found"));
     }
 
