@@ -35,4 +35,15 @@ class StatementDocumentHeadersTest {
     void pdfUnchanged() {
         assertNull(serve("application/pdf").getHeaders().getFirst("Content-Security-Policy"));
     }
+
+    @Test
+    @DisplayName("a wildcard type from the judge is served as sandboxed bytes, not as a PDF")
+    void wildcardSandboxed() {
+        for (String wild : new String[]{"*/*", "application/*"}) {
+            ResponseEntity<byte[]> r = serve(wild);
+            assertEquals("sandbox", r.getHeaders().getFirst("Content-Security-Policy"), wild);
+            assertEquals(org.springframework.http.MediaType.APPLICATION_OCTET_STREAM,
+                r.getHeaders().getContentType(), wild);
+        }
+    }
 }

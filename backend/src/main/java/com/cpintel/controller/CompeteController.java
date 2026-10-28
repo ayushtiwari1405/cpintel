@@ -96,6 +96,9 @@ public class CompeteController {
         } catch (Exception e) {
             type = MediaType.APPLICATION_OCTET_STREAM;
         }
+        // A wildcard from the judge ("*/*", "application/*") is no type at all, and passes the
+        // compatibility test below as a PDF would: serve it as plain bytes instead.
+        if (!type.isConcrete()) type = MediaType.APPLICATION_OCTET_STREAM;
 
         ResponseEntity.BodyBuilder response = ResponseEntity.ok()
             .contentType(type)
@@ -106,7 +109,7 @@ public class CompeteController {
             .header(HttpHeaders.CACHE_CONTROL, "private, max-age=600");
         // HTML from the judge's problem package must not run as CPIntel if this is opened
         // directly. A PDF is left alone: browsers refuse to show one in a sandbox.
-        if (!MediaType.APPLICATION_PDF.isCompatibleWith(type)) {
+        if (!MediaType.APPLICATION_PDF.equalsTypeAndSubtype(type)) {
             response.header("Content-Security-Policy", "sandbox");
         }
         return response.body(doc.bytes());
