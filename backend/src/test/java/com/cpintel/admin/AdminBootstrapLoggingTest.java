@@ -105,13 +105,51 @@ class AdminBootstrapLoggingTest {
     @Test
     @DisplayName("promoting an existing account logs its user id")
     void promoted() {
-        when(users.findByEmail(ADDRESS)).thenReturn(Optional.of(user(23L, "USER")));
+        User verified = user(23L, "USER");
+        verified.setIsVerified(true);
+        when(users.findByEmail(ADDRESS)).thenReturn(Optional.of(verified));
 
         bootstrap.run(null);
 
         assertNoAddress();
         assertTrue(messages().contains("Promoted user 23 from USER to SUPER_ADMIN via cpintel.admin.bootstrap-email"),
             messages().toString());
+    }
+
+    @Test
+    @DisplayName("an account staff made on the configured address is not promoted")
+    void staffMadeAccountNotPromoted() {
+        // A classroom admin created it on the address after its owner moved theirs.
+        User planted = user(31L, "USER");
+        planted.setIsVerified(true);
+        planted.setManagedBy(2L);
+        when(users.findByEmail(ADDRESS)).thenReturn(Optional.of(planted));
+
+        bootstrap.run(null);
+
+        assertEquals("USER", planted.getRole());
+        verify(users, never()).save(any(User.class));
+        verify(audit, never()).record(any(), eq(AuditService.ADMIN_BOOTSTRAPPED), any(), any());
+    }
+
+    @Test
+    @DisplayName("an unverified account on the configured address is not promoted")
+    void unverifiedAccountNotPromoted() {
+        when(users.findByEmail(ADDRESS)).thenReturn(Optional.of(user(32L, "USER")));
+
+        bootstrap.run(null);
+
+        verify(users, never()).save(any(User.class));
+    }
+
+    @Test
+    @DisplayName("an admin-level account is still promoted, so the setting stays a way back in")
+    void adminStillPromoted() {
+        when(users.findByEmail(ADDRESS)).thenReturn(Optional.of(user(33L, "ADMIN")));
+
+        bootstrap.run(null);
+
+        verify(users).save(any(User.class));
     }
 
     @Test

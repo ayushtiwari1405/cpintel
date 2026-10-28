@@ -88,6 +88,20 @@ public class AdminBootstrap implements ApplicationRunner {
             return;
         }
 
+        // The grant follows the address, and a classroom admin can create an account on any
+        // free one: if the configured address is ever free (its owner moved theirs), the next
+        // start would crown whoever claimed it. So a plain account is promoted only when it
+        // shows it owns the address (verified) and was not made by staff; an admin-level one,
+        // which only a super admin can make, still is, which keeps this a way back in.
+        if (!Roles.isAdminLevel(user.getRole())
+                && (user.getManagedBy() != null || !Boolean.TRUE.equals(user.getIsVerified()))) {
+            log.error("Not promoting user {} to SUPER_ADMIN: the account holding "
+                + "cpintel.admin.bootstrap-email {} has not verified that address. Verify it, "
+                + "or point the setting at the right account, and restart.",
+                user.getUserId(), user.getManagedBy() != null ? "was made by staff and" : "");
+            return;
+        }
+
         String previous = user.getRole();
         user.setRole(Roles.SUPER_ADMIN);
         // An account nobody can sign in to is not much of an administrator. Reactivating here
