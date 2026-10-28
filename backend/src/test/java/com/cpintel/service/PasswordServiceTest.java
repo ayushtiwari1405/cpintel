@@ -271,4 +271,15 @@ class PasswordServiceTest {
             () -> service.change(user.getUserId(), "oldpassword", "a-brand-new-password", null));
         verify(refreshTokens, never()).revokeAllByUserId(any());
     }
+
+    @Test
+    @DisplayName("a second reset for the same account within a minute sends no second mail")
+    void resetMailCooldown() {
+        when(tokens.existsByUserUserIdAndTokenTypeAndUsedFalseAndCreatedAtAfter(
+            eq(user.getUserId()), eq("PASSWORD_RESET"), any())).thenReturn(true);
+
+        assertDoesNotThrow(() -> service.requestReset("ada@example.com", null));
+
+        verify(mail, never()).send(any(), any(), any(), any());
+    }
 }

@@ -21,6 +21,10 @@ public interface VerificationTokenRepository extends JpaRepository<VerificationT
      */
     Optional<VerificationToken> findByToken(String token);
 
+    /** Whether a live token of this type was issued to the account since the given instant. */
+    boolean existsByUserUserIdAndTokenTypeAndUsedFalseAndCreatedAtAfter(
+        Long userId, String tokenType, Instant after);
+
     /**
      * Retires every outstanding token of a type for one account.
      *

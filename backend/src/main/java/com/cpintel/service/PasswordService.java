@@ -64,6 +64,7 @@ public class PasswordService {
 
     /** Matches chk_vt_type in V1. */
     private static final String RESET = "PASSWORD_RESET";
+    private static final java.time.Duration RESET_COOLDOWN = java.time.Duration.ofMinutes(1);
 
     private static final int TOKEN_BYTES = 32;
 
@@ -115,6 +116,15 @@ public class PasswordService {
             // administrator, and telling them so through a mail they can act on would be
             // telling anybody who typed the address that the account exists.
             log.info("Password reset asked for deactivated account {}", user.getUserId());
+            return;
+        }
+
+        // One mail a minute per account, whatever the edge allows per address: the link already
+        // sent still works, and anybody can type somebody else's address here.
+        if (tokenRepository.existsByUserUserIdAndTokenTypeAndUsedFalseAndCreatedAtAfter(
+                user.getUserId(), RESET, Instant.now().minus(RESET_COOLDOWN))) {
+            log.info("Password reset for user {} asked again within a minute; not resent",
+                user.getUserId());
             return;
         }
 
