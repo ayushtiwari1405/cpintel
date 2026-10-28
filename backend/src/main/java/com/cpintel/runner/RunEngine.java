@@ -4,16 +4,22 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.nio.file.attribute.PosixFilePermission;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Duration;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.Deque;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -308,14 +314,54 @@ public class RunEngine {
         return stdout + "\n" + stderr;
     }
 
-    private static void deleteQuietly(Path dir) {
+    static void deleteQuietly(Path dir) {
         if (dir == null) return;
-        try (var walk = Files.walk(dir)) {
-            walk.sorted(Comparator.reverseOrder()).forEach(p -> {
-                try { Files.deleteIfExists(p); } catch (IOException ignored) { /* best effort */ }
-            });
-        } catch (IOException e) {
+        try {
+            deleteTree(dir);
+        } catch (IOException | RuntimeException e) {
             log.warn("Could not clean up {}: {}", dir, e.getMessage());
+        }
+    }
+
+    private static final Set<PosixFilePermission> OWNER_ALL = PosixFilePermissions.fromString("rwx------");
+
+    /**
+     * Removes a work directory whatever the program left in it. The program ran as the runner's
+     * own user, so it could chmod a directory shut, and a plain walk then cannot list it and
+     * leaves everything behind on the shared /tmp. Each directory is opened up before it is
+     * read; links are never followed. An explicit stack rather than recursion, so a deep tree
+     * cannot overflow the thread's stack.
+     */
+    private static void deleteTree(Path root) throws IOException {
+        List<Path> dirs = new ArrayList<>();
+        Deque<Path> pending = new ArrayDeque<>();
+        pending.push(root);
+        while (!pending.isEmpty()) {
+            Path path = pending.pop();
+            if (!Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)) {
+                Files.deleteIfExists(path);
+                continue;
+            }
+            try {
+                Files.setPosixFilePermissions(path, OWNER_ALL);
+            } catch (UnsupportedOperationException ignored) {
+                // Not a POSIX file system: nothing to open up.
+            }
+            dirs.add(path);
+            try (DirectoryStream<Path> children = Files.newDirectoryStream(path)) {
+                for (Path child : children) pending.push(child);
+            }
+        }
+        // Parents were recorded before their subdirectories, so in reverse each is empty in turn.
+        for (int i = dirs.size() - 1; i >= 0; i--) Files.deleteIfExists(dirs.get(i));
+    }
+
+    /** Work directories a crash or a restart left behind; removed when the runner starts. */
+    static void sweepLeftovers(Path tmp) {
+        try (DirectoryStream<Path> old = Files.newDirectoryStream(tmp, "cpintel-run-*")) {
+            for (Path dir : old) deleteQuietly(dir);
+        } catch (IOException | RuntimeException e) {
+            log.warn("Could not sweep old work directories in {}: {}", tmp, e.getMessage());
         }
     }
 }

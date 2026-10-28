@@ -12,6 +12,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.util.List;
 import java.util.Map;
@@ -98,6 +99,9 @@ public final class RunnerServer {
             log.error("RUNNER_TOKEN must be set (16+ characters). Refusing to start.");
             System.exit(1);
         }
+        // A run's work directory can outlive the run (a crash, or one the program made hard to
+        // delete before the cleanup could open it up); none of them belongs to a live run now.
+        RunEngine.sweepLeftovers(Path.of(System.getProperty("java.io.tmpdir")));
         int port = Integer.parseInt(env("RUNNER_PORT", "8090"));
         int concurrency = Integer.parseInt(env("RUNNER_CONCURRENCY",
             String.valueOf(Runtime.getRuntime().availableProcessors())));
