@@ -24,6 +24,9 @@
 # Nightly, as root on the server:
 #   0 2 * * * /opt/cpintel/scripts/backup.sh >> /var/log/cpintel-backup.log 2>&1
 set -euo pipefail
+# Dumps hold password hashes and sealed judge credentials: private from the moment they
+# exist, not only after the chmod at the end (a run stopped half way left one world-readable).
+umask 077
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 if [ -f "$ROOT/.env" ]; then

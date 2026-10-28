@@ -104,7 +104,7 @@ read -r -p "Type 'restore' to continue: " answer
 docker exec -i "$PG_CONTAINER" sh -c 'pg_restore -U "$POSTGRES_USER" -d cpintel \
   --clean --if-exists --no-owner --exit-on-error' < "$PG"
 docker exec -i "$MONGO_CONTAINER" sh -c "$MONGO_TOOLS_AUTH"'
-  mongorestore --quiet --archive --gzip --drop \
+  mongorestore --quiet --archive --gzip --drop --nsInclude "cpintel.*" \
     -u "$MONGO_INITDB_ROOT_USERNAME" --config "$c" --authenticationDatabase admin' < "$MONGO"
 echo "Restored $STAMP. Before starting the backend:"
 echo "  - scripts/mongo-app-user.sh --check: database accounts are not in a backup (README, MongoDB accounts)"
