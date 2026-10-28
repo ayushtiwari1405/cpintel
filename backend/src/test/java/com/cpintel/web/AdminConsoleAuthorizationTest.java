@@ -31,6 +31,9 @@ import org.springframework.http.MediaType;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
@@ -69,6 +72,7 @@ class AdminConsoleAuthorizationTest extends AuthorizationTestBase {
     @MockBean private JudgeProblemService judgeProblems;
     @MockBean private GroupMemberRepository members;
     @MockBean private com.cpintel.repository.jpa.GroupContestRepository groupContests;
+    @MockBean private com.cpintel.classrooms.ClassroomService classroomService;
 
     private static final String[] ROUTES = {
         "/api/v1/admin/overview",
@@ -163,5 +167,42 @@ class AdminConsoleAuthorizationTest extends AuthorizationTestBase {
      */
     private static org.hamcrest.Matcher<Integer> not403() {
         return org.hamcrest.Matchers.not(403);
+    }
+
+    private static final String RULE = "{\"enabled\":true,\"note\":\"x\"}";
+
+    @Test
+    @DisplayName("the deployment-wide file default is a superadmin's to move, not a classroom admin's")
+    void fileDefaultIsSuperAdminOnly() throws Exception {
+        mvc.perform(put("/api/v1/admin/contest-files/default").with(asAdmin())
+                .contentType(MediaType.APPLICATION_JSON).content("{\"enabled\":true}"))
+            .andExpect(status().isForbidden());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                .delete("/api/v1/admin/contest-files/default").with(asAdmin()))
+            .andExpect(status().isForbidden());
+        mvc.perform(put("/api/v1/admin/contest-files/default").with(asSuperAdmin())
+                .contentType(MediaType.APPLICATION_JSON).content("{\"enabled\":true}"))
+            .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("a Codeforces contest's file rule is changed only by admins of the classrooms running it")
+    void codeforcesRuleIsClassroomScoped() throws Exception {
+        // This admin runs classroom 1; classroom 2 runs an event on Codeforces contest 1234.
+        when(classroomService.managedIds(any())).thenReturn(java.util.List.of(1L));
+        when(groupContests.findByPlatformAndExternalId("CODEFORCES", "1234")).thenReturn(java.util.List.of(
+            com.cpintel.entity.GroupContest.builder().contestId(50L).classroomId(2L).name("B's round").build()));
+        when(groupContests.findByPlatformAndExternalId("CODEFORCES", "1235")).thenReturn(java.util.List.of(
+            com.cpintel.entity.GroupContest.builder().contestId(51L).classroomId(1L).name("A's round").build()));
+
+        mvc.perform(put("/api/v1/admin/contest-files/CODEFORCES/1234").with(asAdmin())
+                .contentType(MediaType.APPLICATION_JSON).content(RULE))
+            .andExpect(status().isForbidden());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                .delete("/api/v1/admin/contest-files/CODEFORCES/1234").with(asAdmin()))
+            .andExpect(status().isForbidden());
+        mvc.perform(put("/api/v1/admin/contest-files/CODEFORCES/1235").with(asAdmin())
+                .contentType(MediaType.APPLICATION_JSON).content(RULE))
+            .andExpect(status().isOk());
     }
 }

@@ -1,6 +1,8 @@
 package com.cpintel.controller;
 
+import com.cpintel.classrooms.ClassroomService;
 import com.cpintel.common.ApiResponse;
+import com.cpintel.entity.GroupContest;
 import com.cpintel.exception.ApiException;
 import com.cpintel.files.ContestFilePolicy;
 import com.cpintel.files.FilesDto;
@@ -18,6 +20,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Locale;
 
 /**
@@ -42,6 +45,33 @@ public class AdminContestFileController {
     private final ContestFilePolicy policy;
     private final AuditService auditService;
     private final GroupContestRepository events;
+    private final ClassroomService classrooms;
+
+    /**
+     * A Codeforces contest belongs to no classroom, so the path says nothing about whose rule
+     * this is; the events run on it do. An admin changes it only when they run every one of
+     * those (a DOMjudge id names its classroom, which the classroom check already enforced).
+     */
+    private void requireRunsEvents(Long adminId, String platform, String contestId) {
+        List<Long> managed = classrooms.managedIds(adminId);
+        if (managed == null || "DOMJUDGE".equals(platform)) return;
+        for (GroupContest e : events.findByPlatformAndExternalId(platform, contestId)) {
+            if (e.getClassroomId() == null || !managed.contains(e.getClassroomId())) {
+                throw ApiException.forbidden("\"" + e.getName() + "\" runs on this contest in a "
+                    + "classroom you do not run, so only its own admins can change this.");
+            }
+        }
+    }
+
+    /** A rule an admin may see: one for a contest none of the classrooms they do not run uses. */
+    private boolean visibleTo(List<Long> managed, FilesDto.ContestRule rule) {
+        if ("DOMJUDGE".equals(rule.platform())) {
+            Long classroom = classroomOf(rule.platform(), rule.contestId());
+            return classroom != null && managed.contains(classroom);
+        }
+        return events.findByPlatformAndExternalId(rule.platform(), rule.contestId()).stream()
+            .allMatch(e -> e.getClassroomId() != null && managed.contains(e.getClassroomId()));
+    }
 
     /**
      * A contest's file rule is part of the event run on it, and fixed once that has started —
@@ -61,11 +91,18 @@ public class AdminContestFileController {
 
     @GetMapping
     @Operation(summary = "The default in force and every contest that departs from it")
-    public ResponseEntity<ApiResponse<FilesDto.PolicyOverview>> overview() {
-        return ResponseEntity.ok(ApiResponse.ok(policy.overview()));
+    public ResponseEntity<ApiResponse<FilesDto.PolicyOverview>> overview(
+        @AuthenticationPrincipal Long adminId) {
+        FilesDto.PolicyOverview all = policy.overview();
+        List<Long> managed = classrooms.managedIds(adminId);
+        if (managed == null) return ResponseEntity.ok(ApiResponse.ok(all));
+        return ResponseEntity.ok(ApiResponse.ok(new FilesDto.PolicyOverview(
+            all.defaultEnabled(), all.defaultFromConfig(),
+            all.rules().stream().filter(r -> visibleTo(managed, r)).toList())));
     }
 
     @PutMapping("/default")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "Move the deployment-wide default without a redeploy")
     public ResponseEntity<ApiResponse<FilesDto.PolicyOverview>> setDefault(
         @AuthenticationPrincipal Long adminId,
@@ -78,6 +115,7 @@ public class AdminContestFileController {
     }
 
     @DeleteMapping("/default")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "Fall back to the default from configuration")
     public ResponseEntity<ApiResponse<FilesDto.PolicyOverview>> clearDefault(
         @AuthenticationPrincipal Long adminId,
@@ -97,6 +135,7 @@ public class AdminContestFileController {
         @Valid @RequestBody FilesDto.RuleRequest req,
         HttpServletRequest httpReq) {
         String normalised = platform.toUpperCase(Locale.ROOT);
+        requireRunsEvents(adminId, normalised, contestId);
         requireNotStarted(normalised, contestId);
         var rule = policy.setRule(normalised, contestId, adminId, req);
         auditService.recordIn(classroomOf(normalised, contestId), adminId,
@@ -113,6 +152,7 @@ public class AdminContestFileController {
         @PathVariable String contestId,
         HttpServletRequest httpReq) {
         String normalised = platform.toUpperCase(Locale.ROOT);
+        requireRunsEvents(adminId, normalised, contestId);
         requireNotStarted(normalised, contestId);
         policy.clearRule(normalised, contestId);
         auditService.recordIn(classroomOf(normalised, contestId), adminId,
