@@ -213,9 +213,16 @@ public class PasswordService {
      * whoever the change was made because of.
      */
     private void apply(User user, String newPassword, String how) {
-        user.setPasswordHash(passwordEncoder.encode(newPassword));
-        user.setPasswordChangedAt(Instant.now());
-        userRepository.save(user);
+        String hash = passwordEncoder.encode(newPassword);
+        Instant now = Instant.now();
+        // Only over the hash this request checked. An administrator's reset that landed while
+        // the new one was being hashed must win, not be quietly replaced by the old owner's.
+        if (userRepository.replacePasswordHash(user.getUserId(), user.getPasswordHash(), hash, now) == 0) {
+            throw ApiException.conflict("Your password was changed a moment ago, perhaps by an "
+                + "administrator. Sign in again and retry.");
+        }
+        user.setPasswordHash(hash);
+        user.setPasswordChangedAt(now);
 
         refreshTokenRepository.revokeAllByUserId(user.getUserId());
         jwtService.revokeUserTokens(user.getUserId());

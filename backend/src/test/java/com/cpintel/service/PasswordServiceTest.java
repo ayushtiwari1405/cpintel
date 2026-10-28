@@ -77,6 +77,7 @@ class PasswordServiceTest {
         when(users.findByEmailIgnoreCase("Ada@Example.com")).thenReturn(Optional.of(user));
         when(users.findById(USER_ID)).thenReturn(Optional.of(user));
         when(users.save(any())).thenAnswer(c -> c.getArgument(0));
+        when(users.replacePasswordHash(any(), any(), any(), any())).thenReturn(1);
 
         saved.clear();
         when(tokens.save(any())).thenAnswer(c -> {
@@ -260,5 +261,14 @@ class PasswordServiceTest {
             assertThrows(ApiException.class,
                 () -> service.change(USER_ID, "oldpassword", "oldpassword", null));
         }
+    }
+
+    @Test
+    @DisplayName("a password changed meanwhile (an admin's reset) is not overwritten")
+    void concurrentResetWins() {
+        when(users.replacePasswordHash(any(), any(), any(), any())).thenReturn(0);
+        assertThrows(ApiException.class,
+            () -> service.change(user.getUserId(), "oldpassword", "a-brand-new-password", null));
+        verify(refreshTokens, never()).revokeAllByUserId(any());
     }
 }

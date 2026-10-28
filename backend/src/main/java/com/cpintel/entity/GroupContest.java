@@ -1,5 +1,6 @@
 package com.cpintel.entity;
 
+import org.hibernate.annotations.DynamicUpdate;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -27,6 +28,9 @@ import java.util.List;
  * nobody owns it that way.
  */
 @Entity
+// Write only the columns a request changed. A whole-row UPDATE from an entity loaded earlier
+// put back what others had changed since: an admin's revocation, a rotated code, mark-done.
+@DynamicUpdate
 @Table(name = "group_contests")
 @Getter
 @Setter

@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -99,4 +100,12 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
     @Query("SELECT COUNT(u) FROM User u WHERE u.role IN ('ADMIN', 'SUPER_ADMIN') "
          + "AND u.isActive = true AND u.userId <> :excludingUserId")
     long countOtherActiveAdmins(@Param("excludingUserId") Long excludingUserId);
+
+    /** Sets a new password only over the one the caller verified; 0 when it changed meanwhile. */
+    @Modifying
+    @Query("UPDATE User u SET u.passwordHash = :hash, u.passwordChangedAt = :at "
+        + "WHERE u.userId = :id AND (u.passwordHash = :expected "
+        + "OR (u.passwordHash IS NULL AND :expected IS NULL))")
+    int replacePasswordHash(@Param("id") Long id, @Param("expected") String expected,
+                            @Param("hash") String hash, @Param("at") Instant at);
 }
