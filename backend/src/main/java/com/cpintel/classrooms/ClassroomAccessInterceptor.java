@@ -12,6 +12,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
 import org.springframework.web.servlet.HandlerMapping;
+import org.springframework.web.util.UrlPathHelper;
 
 import java.util.Map;
 
@@ -50,7 +51,9 @@ public class ClassroomAccessInterceptor implements HandlerInterceptor {
     @SuppressWarnings("unchecked")
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response,
                              Object handler) {
-        String path = request.getRequestURI();
+        // Decoded, as the handler mapping saw it: the raw URI of /api/v1/%61dmin/... does not
+        // start with ADMIN, yet it is routed to an admin handler.
+        String path = UrlPathHelper.defaultInstance.getPathWithinApplication(request);
         if (!path.startsWith(ADMIN)) return true;
 
         Map<String, String> vars = (Map<String, String>)

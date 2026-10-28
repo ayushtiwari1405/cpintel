@@ -14,6 +14,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 import java.util.List;
 import org.springframework.security.web.util.matcher.IpAddressMatcher;
+import org.springframework.web.util.UrlPathHelper;
 
 /**
  * Puts a ceiling on the endpoints where one caller can spend a lot of somebody else's resources.
@@ -143,11 +144,9 @@ public class RateLimitFilter extends OncePerRequestFilter {
      * cannot fall into somebody else's bucket by ending in the same word.
      */
     private String route(HttpServletRequest request) {
-        String path = request.getRequestURI();
-        String context = request.getContextPath();
-        if (context != null && !context.isEmpty() && path.startsWith(context)) {
-            path = path.substring(context.length());
-        }
+        // Decoded and without the context path, as the dispatcher routes it, so an encoded
+        // spelling such as /api/v1/auth/log%69n cannot reach a handler under another route.
+        String path = UrlPathHelper.defaultInstance.getPathWithinApplication(request);
         if (!path.startsWith("/api/")) return path;
         path = path.substring(4);                       // drop "/api"
         // Drop a version segment if there is one: /v1, /v2...

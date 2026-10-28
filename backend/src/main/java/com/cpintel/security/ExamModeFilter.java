@@ -12,6 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
+import org.springframework.web.util.UrlPathHelper;
 
 import java.io.IOException;
 import java.util.Locale;
@@ -136,11 +137,9 @@ public class ExamModeFilter extends OncePerRequestFilter {
 
     /** The path with the context, "/api" and the version segment taken off: "/exams/7". */
     private static String route(HttpServletRequest request) {
-        String path = request.getRequestURI();
-        String context = request.getContextPath();
-        if (context != null && !context.isEmpty() && path.startsWith(context)) {
-            path = path.substring(context.length());
-        }
+        // Decoded and without the context path, as the dispatcher routes it, so an encoded
+        // spelling such as /api/v1/auth/log%69n cannot reach a handler under another route.
+        String path = UrlPathHelper.defaultInstance.getPathWithinApplication(request);
         if (!path.startsWith("/api/")) return path;
         path = path.substring(4);
         int next = path.indexOf('/', 1);

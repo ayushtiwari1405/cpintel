@@ -157,4 +157,16 @@ class RateLimitRouteTest {
         assertFalse(filter.sharedNetwork("2001:db8::1"));
         assertTrue(filter.sharedNetwork("192.168.5.77"));
     }
+
+    @Test
+    @DisplayName("a percent-encoded spelling of a route lands in that route's bucket")
+    void encodedRoutesAreLimited() throws Exception {
+        // Spring decodes the path before routing, so /auth/log%69n reaches the login handler;
+        // the filter must count it as the login it is, not skip it as an unknown route.
+        post("/api/v1/auth/log%69n");
+        post("/api/v1/auth/forgot-p%61ssword");
+
+        verify(limiter).tryAcquire(eq(RateLimitFilter.LOGIN_IP), eq("10.0.0.1"), any());
+        verify(limiter).tryAcquire(eq(RateLimitFilter.RECOVERY), eq("10.0.0.1"), any());
+    }
 }

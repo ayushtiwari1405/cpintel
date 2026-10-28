@@ -123,4 +123,15 @@ class ClassroomAccessInterceptorTest {
         assertTrue(call("/api/v1/admin/contest-files/default", Map.of("platform", "CODEFORCES")));
         verifyNoInteractions(classrooms);
     }
+
+    @Test
+    @DisplayName("a percent-encoded admin path is checked like the plain one")
+    void encodedAdminPath() {
+        // The dispatcher routes /api/v1/%61dmin/... to the admin handler, so the check must
+        // see the same decoded path; on the raw URI it used to let the request straight through.
+        assertThrows(ApiException.class,
+            () -> call("/api/v1/%61dmin/events/9/passwords/exam", Map.of("eventId", "9")));
+        assertThrows(ApiException.class,
+            () -> call("/api/v1/admin/%65vents/9/passwords/exam", Map.of("eventId", "9")));
+    }
 }
