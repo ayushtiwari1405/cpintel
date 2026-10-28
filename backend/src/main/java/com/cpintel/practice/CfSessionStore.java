@@ -116,6 +116,11 @@ public class CfSessionStore {
      * what worked.
      */
     public static String sanitiseCookieHeader(String raw) {
+        // A pasted header may end in a newline, which trimming removes; one inside it is not a
+        // cookie, and it would end the curl directive the header is sent in.
+        if (CfWebFetcher.hasControl(raw.strip())) {
+            throw ApiException.badRequest("That cookie header contains a line break or another control character.");
+        }
         Map<String, String> keep = new LinkedHashMap<>();
         for (String part : raw.split(";")) {
             String chunk = part.trim();

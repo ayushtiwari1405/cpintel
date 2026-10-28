@@ -204,9 +204,21 @@ public class CfWebFetcher {
         }
     }
 
-    /** curl config values are double-quoted, with backslash escaping inside. */
+    /**
+     * curl config values are double-quoted, with backslash escaping inside. A line break ends
+     * the directive even inside the quotes, so a value carrying one would let the text after it
+     * become a curl option of its own; control characters are refused here whatever the caller.
+     */
     private static String quote(String value) {
         if (value == null) return "\"\"";
+        if (hasControl(value)) {
+            throw ApiException.badRequest("Codeforces session values cannot contain control characters.");
+        }
         return '"' + value.replace("\\", "\\\\").replace("\"", "\\\"") + '"';
+    }
+
+    /** Any C0 control character (tab included) or DEL. */
+    static boolean hasControl(String value) {
+        return value.chars().anyMatch(c -> c < 0x20 || c == 0x7f);
     }
 }

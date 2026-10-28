@@ -2,6 +2,7 @@ package com.cpintel.practice;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 import java.time.Instant;
@@ -97,7 +98,9 @@ public class PracticeDto {
          * interstitial and reads as signed out. The helper sends the browser's own; a manual
          * paste may omit it, and then a default is used.
          */
-        @Size(max = 512) String userAgent
+        @Size(max = 512)
+        @Pattern(regexp = "[^\\p{Cntrl}]*", message = "must not contain control characters")
+        String userAgent
     ) {}
 
     public record SessionStatus(
