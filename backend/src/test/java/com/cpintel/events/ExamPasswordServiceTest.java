@@ -65,6 +65,7 @@ class ExamPasswordServiceTest {
             User.builder().userId(CANDIDATE).username("ada").fullName("Ada L").build()));
 
         stored.clear();
+        when(passcodes.recordUse(any(), any(), any())).thenReturn(1);
         when(passcodes.save(any())).thenAnswer(call -> {
             ExamPasscode row = call.getArgument(0);
             stored.put(row.getUser().getUserId(), row);
@@ -256,5 +257,18 @@ class ExamPasswordServiceTest {
                 () -> service.issuePasscodes(ADMIN, EXAM, Set.of(), false, null));
             assertTrue(e.getMessage().toLowerCase().contains("assign"));
         }
+    }
+
+    @Test
+    @DisplayName("a slip code reissued while it was being checked does not sign in")
+    void reissuedDuringSignInFails() {
+        String code = service.issuePasscodes(ADMIN, EXAM, java.util.Set.of(CANDIDATE), false, null)
+            .get(0).code();
+        assertTrue(service.matchesPasscode(EXAM, CANDIDATE, code));
+
+        // The invigilator's reissue committed between the check and the count: the guarded
+        // update matches no row, and the sign-in is refused rather than written back.
+        when(passcodes.recordUse(any(), any(), any())).thenReturn(0);
+        assertFalse(service.matchesPasscode(EXAM, CANDIDATE, code));
     }
 }

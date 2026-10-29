@@ -323,11 +323,7 @@ public class ExamPasswordService {
             ok = ok & personalOk;
         }
 
-        if (ok && personal != null) {
-            personal.setUseCount((personal.getUseCount() == null ? 0 : personal.getUseCount()) + 1);
-            if (personal.getFirstUsedAt() == null) personal.setFirstUsedAt(Instant.now());
-            passcodes.save(personal);
-        }
+        if (ok && personal != null) ok = recordUse(personal);
         return ok;
     }
 
@@ -340,12 +336,15 @@ public class ExamPasswordService {
         ExamPasscode personal = passcodes.find(examId, userId).orElse(null);
         if (personal == null || typed == null) return false;
         boolean ok = constantTimeEquals(decrypt(personal.getCode()), normalise(typed));
-        if (ok) {
-            personal.setUseCount((personal.getUseCount() == null ? 0 : personal.getUseCount()) + 1);
-            if (personal.getFirstUsedAt() == null) personal.setFirstUsedAt(Instant.now());
-            passcodes.save(personal);
-        }
-        return ok;
+        return ok && recordUse(personal);
+    }
+
+    /**
+     * Counts the use, and fails the match when the code was reissued while it was being
+     * checked: the reissue holds the row until it commits, then this finds a different code.
+     */
+    private boolean recordUse(ExamPasscode personal) {
+        return passcodes.recordUse(personal.getPasscodeId(), personal.getCode(), Instant.now()) == 1;
     }
 
     /** Whether this is the room's shared password, for a paper that has one. */

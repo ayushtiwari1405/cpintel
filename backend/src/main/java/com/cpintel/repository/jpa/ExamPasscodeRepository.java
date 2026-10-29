@@ -18,6 +18,19 @@ public interface ExamPasscodeRepository extends JpaRepository<ExamPasscode, Long
     Optional<ExamPasscode> find(@Param("contestId") Long contestId,
                                 @Param("userId") Long userId);
 
+    /**
+     * Counts a sign-in with this code, only while the row still holds the code that was checked.
+     * Touches nothing else: a whole-row save from the sign-in put back a code the invigilator
+     * had just reissued, and the grant they had just revoked.
+     */
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.transaction.annotation.Transactional
+    @Query("UPDATE ExamPasscode p SET p.useCount = COALESCE(p.useCount, 0) + 1, "
+         + "p.firstUsedAt = COALESCE(p.firstUsedAt, :now) "
+         + "WHERE p.passcodeId = :id AND p.code = :code")
+    int recordUse(@Param("id") Long id, @Param("code") String code,
+                  @Param("now") java.time.Instant now);
+
     /** Records an unlock under this password generation; null takes it away. */
     @org.springframework.data.jpa.repository.Modifying
     @org.springframework.transaction.annotation.Transactional
