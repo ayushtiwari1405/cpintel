@@ -29,7 +29,7 @@ An earlier revision listed code execution, direct submission and live contest tr
 
 ### 2.1 User classes
 - **USER** - standard account, full feature access scoped to their own data. Sees group contests they are enrolled in and their own placing.
-- **ADMIN** - account administration over ordinary users, the audit trail, team, contest and examination management, and the contest-file policy. May not act on another admin's account (FR-8.2a).
+- **ADMIN** - account administration over ordinary users, the audit trail, team, contest and examination management, and the contest-file rules for contests their classrooms run (the deployment-wide rule is SUPER_ADMIN's). May not act on another admin's account (FR-8.2a).
 - **SUPER_ADMIN** - everything an admin can, plus assigning roles, creating admins and deleting accounts. There is no sign-up or in-product path to either console role; see FR-8.1.
 
 ### 2.2 Operating environment
@@ -47,7 +47,7 @@ The desktop build is the same SPA plus a main process that can observe the windo
 - FR-1.4 Refresh re-checks that the account is still active, so an account deactivated mid-session cannot renew itself.
 - FR-1.5 An administrator can retire every access token a user currently holds, so a role change or deactivation takes effect within seconds rather than at token expiry.
 - FR-1.6 A signed-in user may change their own password, which requires the current one — a valid session may be an unlocked machine, and that check is what makes the person at the keyboard the owner.
-- FR-1.7 A user who cannot sign in may request a reset link sent to the address on their account. The link is stored only as a SHA-256 digest, is valid once, expires after a configurable interval, and is retired when a new one is issued or the password changes by any route.
+- FR-1.7 A user who cannot sign in may request a reset link sent to the address on their account. The link is stored only as a SHA-256 digest, is valid once, expires after a configurable interval, and is retired when a new one is issued or the password changes by any route. At most one link is mailed to an account per minute; a request within a minute of a live link sends nothing and leaves that link valid.
 - FR-1.8 Setting a password by any route revokes every refresh token and access token the account holds, and notifies the address on the account. Somebody resetting a password they believe is known to another party has not finished until that party is signed out, and somebody whose account was taken over finds out in seconds rather than at their next sign-in.
 - FR-1.9 The reset request endpoint answers identically whether or not the address belongs to an account. It is reachable without authentication, and an answer that distinguished the two would let a caller test a list of addresses against the roster of whoever is being examined.
 - FR-1.10 With no mail transport configured, the system still operates and startup warns that delivery is off. By default an undelivered message is logged only as not sent, with its subject and the recipient masked; a reset link signs in as its recipient and is not written to a log. An operator may opt in (`CPINTEL_MAIL_LOG_UNDELIVERED=true`, exactly) to have the whole message, link included, logged so a reset can be completed by hand. A deployment on a closed network is a supported arrangement rather than a misconfiguration.
@@ -92,7 +92,7 @@ The desktop build is the same SPA plus a main process that can observe the windo
 - FR-7.4 A placement gauntlet tests the user per area in rising tiers and maps the result onto the roadmap. Marking is done on the server from the full set of answers. Placement only moves nodes forward — it never undoes one already completed — and may be retaken after a configurable interval (default 7 days).
 
 ### FR-8 Administration
-- FR-8.1 There is no registration path to ADMIN or SUPER_ADMIN and no seeded administrator account. The super administrator is named by email address in configuration: at startup an existing account with that address is promoted (and reactivated); if none exists, one is created only when a password is also supplied in configuration. No default administrator password exists anywhere in the deployment.
+- FR-8.1 There is no registration path to ADMIN or SUPER_ADMIN and no seeded administrator account. The super administrator is named by email address in configuration: at startup an existing account with that address is promoted (and reactivated) — an ordinary account only when it was not created by staff and has verified the address, an admin-level account regardless; if none exists, one is created only when a password is also supplied in configuration. No default administrator password exists anywhere in the deployment.
 - FR-8.2 Administrators may deactivate and reactivate accounts, correct account details, set a new password, and sign an account out of every device. Changing roles remains the super administrator's.
 - FR-8.2a An administrator may not act on another account holding ADMIN or SUPER_ADMIN — editing, deactivating, signing out and setting a password are all refused unless the caller is a super administrator. An administrator who can deactivate or re-password a peer can remove the person who would have stopped them, which is the escalation FR-8.2 reserves role assignment for, reached from a different screen. A super administrator has no such limit over any account in the deployment.
 - FR-8.2b A password set by an administrator is returned once and never emailed; it is stored hashed, and the owner is told by mail that an administrator did it, with no password and no link in the message. The account is recorded as not having a password its owner chose, which the console displays.
@@ -118,7 +118,7 @@ The desktop build is the same SPA plus a main process that can observe the windo
 ### FR-10 Personal files
 - FR-10.1 Users may upload their own templates, notes and reference material, subject to per-file, per-vault and file-count limits.
 - FR-10.2 Files are reachable from inside a running contest without leaving the page; text is previewed inline and images and PDFs are rendered.
-- FR-10.3 Whether a contest offers personal files is an administrator decision, resolved as: a rule for that contest, then a deployment-wide rule, then configuration. It ships enabled, so rules are written only as exceptions.
+- FR-10.3 Whether a contest offers personal files is an administrator decision, resolved as: a rule for that contest, then a deployment-wide rule, then configuration. An administrator may set a contest's rule only when every classroom running an event on it is theirs; only the super administrator sets the deployment-wide rule. It ships enabled, so rules are written only as exceptions.
 - FR-10.4 Every lookup is scoped by owner, so another user's file id reads as not-found rather than as forbidden.
 - FR-10.5 The served content type is derived from the file extension, never from what the uploading client declared.
 

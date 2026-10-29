@@ -637,7 +637,7 @@ A contestant's own reference material - a template, a snippets header, a scanned
 Two questions are kept apart deliberately, because every real request for this feature mixes them up:
 
 - **Does the deployment have the feature?** Configuration: `cpintel.files.contest-access.enabled-by-default`, which ships `true`.
-- **Does *this contest* offer it?** An admin's rule, held in `contest_file_rules` and resolved by `ContestFilePolicy` - contest rule first, then a deployment-wide rule, then the configured default.
+- **Does *this contest* offer it?** An admin's rule, held in `contest_file_rules` and resolved by `ContestFilePolicy` - contest rule first, then a deployment-wide rule, then the configured default. An admin changes a Codeforces contest's rule only when they run every classroom with an event on it (a DOMjudge contest belongs to one classroom, which the classroom check already covers), sees only the rules they may change, and the deployment-wide rule is the super admin's alone.
 
 Rules are stored as exceptions rather than a row per contest, so the admin listing is short enough to audit before a round and the normal case costs nothing.
 
@@ -667,7 +667,9 @@ unable to sign in at all, through a link emailed to the address on the account.
 Three things make that link safe enough to email. **Only its digest is stored**, so a dump of
 `verification_tokens` contains nothing redeemable — the raw token exists in the email and
 nowhere else. **It is single use and short lived**, and issuing a new one retires the last, so
-a mailbox holding four reset mails holds one working link. And **redeeming it ends every
+a mailbox holding four reset mails holds one working link; a request within a minute of a link
+that still works sends nothing, so typing somebody's address into the form repeatedly cannot
+fill their mailbox. And **redeeming it ends every
 session**, because somebody resetting a password they believe is known to somebody else has not
 finished until the other party is signed out, and making them find a "sign out everywhere"
 button afterwards means most people never will.
@@ -711,7 +713,10 @@ the console needed an answer to a question that has no good in-app solution: on 
 deployment, who opens it first?
 
 The answer is `cpintel.admin.bootstrap-email` (`CPINTEL_ADMIN_EMAIL`). At startup, an account
-with that address is promoted to SUPER_ADMIN; if there is none, one is created — but only when
+with that address is promoted to SUPER_ADMIN — an ordinary account only if it was not created by
+staff and has verified the address, because an admin can create an account on any free address
+and would otherwise be crowned at the next restart; an admin-level account, which only a super
+admin can make, is promoted regardless. If there is none, one is created — but only when
 the operator has also supplied `CPINTEL_ADMIN_PASSWORD`. There is no default for that password
 anywhere, because a default admin password is the single most reliable way to end up with a
 compromised deployment. The setting is idempotent and reactivates the account it names as well
@@ -1277,7 +1282,9 @@ Three things that assumed a single judge now carry the classroom:
 
 Access follows the classroom. The arena refuses a classroom's contests to anyone not enrolled
 in it (`ExamSessionGuard`); otherwise a service account would read any classroom's statements
-for anyone who typed the qualified id. Only a superadmin creates, archives and staffs classrooms.
+for anyone who typed the qualified id. Admins skip that check only for the classrooms they run;
+an admin opening another classroom's contest is checked like a student, so a scheduled paper
+stays closed to them. Only a superadmin creates, archives and staffs classrooms.
 Any number of admins can be added to one, and each runs only the classrooms they were added to.
 `ClassroomAccessInterceptor` enforces that on every admin route by reading the classroom, team
 or event id in the path, so a route added later is covered without its own check. Admins use the

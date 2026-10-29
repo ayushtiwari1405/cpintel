@@ -689,7 +689,7 @@ Three tiers:
 | Role | Can do |
 |---|---|
 | `USER` | The product. No console. |
-| `ADMIN` | The console: accounts, groups, audit trail, contest file policy. Can activate and deactivate accounts, and **create ordinary users** — singly or by roster import. |
+| `ADMIN` | The console: accounts, groups, audit trail, contest file rules for the contests their classrooms run (the deployment-wide default is the super admin's). Can activate and deactivate accounts, and **create ordinary users** — singly or by roster import. |
 | `SUPER_ADMIN` | Everything an admin can, **plus** assigning roles and creating other admins. |
 
 Role assignment is deliberately kept out of `ADMIN`, and so is creating an `ADMIN`. An admin who
@@ -746,6 +746,9 @@ A reset link is stored only as a SHA-256 digest, works once, expires within the 
 redeeming it signs every device out — because somebody resetting a password they believe is
 known to somebody else has not finished until the other party is signed out. Asking for a new
 link retires the previous one, so a mailbox with four reset mails in it holds one working link.
+At most one mail a minute goes to an account: a request within a minute of a link that still
+works sends nothing (the answer is the same, and that link keeps working), because anybody can
+type somebody else's address into the form.
 
 `/auth/forgot-password` answers identically whether or not the address belongs to an account.
 The endpoint is open to the internet, and an answer that distinguished the two would be a way
@@ -777,7 +780,11 @@ CPINTEL_ADMIN_PASSWORD=something-long-and-yours
 ```
 
 On the next start, an existing account with that address is promoted to `SUPER_ADMIN`; if none
-exists, one is created — but only when a password is also supplied. There is deliberately no
+exists, one is created — but only when a password is also supplied. An ordinary account is
+promoted only if its owner made it and has verified the address; one created by staff, or still
+unverified, is refused with an error in the backend log. Otherwise an admin could create an
+account on the configured address whenever it was free and be made super admin at the next
+restart. An admin-level account is promoted either way, since only a super admin can make one. There is deliberately no
 default administrator password anywhere in this deployment, because a well-known one is the
 most reliable way to end up compromised.
 
