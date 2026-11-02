@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { format } from 'date-fns'
-import { Archive, ArchiveRestore, ArrowLeft, Loader2, Save } from 'lucide-react'
+import { Archive, ArchiveRestore, ArrowLeft, Download, Loader2, Save } from 'lucide-react'
+import { questionBankApi } from '@/api/questionBankApi'
+import { useToast } from '@/components/common/Toaster'
 import { PageHeader } from '@/components/common/PageHeader'
 import { ErrorState, LoadingState } from '@/components/common/States'
 import { Panel, Pill } from '@/components/admin/AdminUi'
-import { QuestionTests } from '@/components/questions/QuestionTests'
+import { QuestionTests, packageName, saveBlob } from '@/components/questions/QuestionTests'
 import { StatementPanel } from '@/components/questions/StatementPanel'
 import { useBankQuestion, useQuestionActions } from '@/hooks/useQuestionBank'
 import type { ModelLanguage, QuestionChecker, QuestionDetail, QuestionRequest } from '@/types'
@@ -82,6 +84,19 @@ function Editor({ question, readOnly, onBack }: {
   onBack: () => void
 }) {
   const { save, setArchived } = useQuestionActions(question.questionId)
+  const toast = useToast()
+  const [exporting, setExporting] = useState(false)
+
+  async function downloadPackage() {
+    setExporting(true)
+    try {
+      saveBlob(await questionBankApi.exportPackage(question.questionId), packageName(question.title))
+    } catch {
+      toast.push('error', 'Could not build the package')
+    } finally {
+      setExporting(false)
+    }
+  }
   // What the form was filled from. A newer version arriving (someone else's save, or this
   // person's own test upload) leaves an edited form alone and refills an untouched one.
   const baseRef = useRef<Draft>(draftOf(question))
@@ -153,6 +168,13 @@ function Editor({ question, readOnly, onBack }: {
                 Save
               </button>
             )}
+            <button type="button" className="btn-secondary" onClick={downloadPackage}
+              disabled={exporting || dirty}
+              title={dirty ? 'Save your changes first: the package is built from the saved question'
+                : 'The problem package, as it will be sent to the judge'}>
+              {exporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} aria-hidden="true" />}
+              Download package
+            </button>
             {(!readOnly || question.archived) && (
               <button type="button" className="btn-secondary"
                 disabled={setArchived.isPending || dirty}

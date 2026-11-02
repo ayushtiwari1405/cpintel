@@ -15,6 +15,23 @@ export function formatBytes(n: number) {
   return `${(n / (1024 * 1024)).toFixed(1)} MB`
 }
 
+/** Hands a downloaded file to the browser to save under `name`. */
+export function saveBlob(blob: Blob, name: string) {
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = name
+  link.click()
+  URL.revokeObjectURL(url)
+}
+
+/** The file name the server gives a package, from the question's title. */
+export function packageName(title: string) {
+  const slug = title.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60).replace(/-+$/, '')
+  return `${slug || 'question'}.zip`
+}
+
 function stemOf(name: string) {
   const dot = name.lastIndexOf('.')
   return dot > 0 ? name.slice(0, dot) : name
@@ -123,12 +140,7 @@ function TestGroup({ question, sample, tests, readOnly, title, description }: {
   async function save(t: QuestionTestInfo, part: 'input' | 'answer') {
     try {
       const blob = await questionBankApi.download(question.questionId, t.testId, part)
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = `${sample ? 'sample' : 'secret'}-${t.ordinal}.${part === 'input' ? 'in' : 'ans'}`
-      link.click()
-      URL.revokeObjectURL(url)
+      saveBlob(blob, `${sample ? 'sample' : 'secret'}-${t.ordinal}.${part === 'input' ? 'in' : 'ans'}`)
     } catch {
       toast.push('error', 'Could not download that file')
     }

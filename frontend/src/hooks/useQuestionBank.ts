@@ -100,6 +100,19 @@ export function useQuestionActions(questionId: number | null) {
   return { save, setArchived, addTests, deleteTest, reorder, uploadPdf, removePdf }
 }
 
+export function useImportQuestion(classroomId: number | null) {
+  const qc = useQueryClient()
+  const toast = useToast()
+  return useMutation({
+    mutationFn: (file: File) => questionBankApi.importPackage(classroomId!, file),
+    onSuccess: r => {
+      qc.setQueryData(['question-bank', 'question', r.question.questionId], r.question)
+      qc.invalidateQueries({ queryKey: ['question-bank', 'list', r.question.classroomId] })
+    },
+    onError: err => toast.push('error', errorOf(err, 'Could not import that package')),
+  })
+}
+
 export function useCreateQuestion(classroomId: number | null) {
   const qc = useQueryClient()
   const toast = useToast()

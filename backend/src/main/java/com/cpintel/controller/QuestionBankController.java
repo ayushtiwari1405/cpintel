@@ -20,6 +20,10 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.cpintel.exception.ApiException;
+import java.io.FilterInputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -38,6 +42,9 @@ import java.util.List;
 @Tag(name = "Question bank", description = "Exam questions written in CPIntel")
 @SecurityRequirement(name = "bearerAuth")
 public class QuestionBankController {
+
+    /** The compressed package; nginx allows this route the same (see cpintel.conf.template). */
+    static final long MAX_PACKAGE_BYTES = 72L * 1024 * 1024;
 
     private final QuestionBankService bank;
     private final ObjectMapper objectMapper;
@@ -66,7 +73,39 @@ public class QuestionBankController {
             .body(ApiResponse.ok(bank.create(userId, classroomId, req, httpReq)));
     }
 
-    @GetMapping("/questions/{questionId}")
+    @PostMapping(value = "/classrooms/{classroomId}/questions/import",
+        consumes = {"application/zip", "application/x-zip-compressed", MediaType.APPLICATION_OCTET_STREAM_VALUE})
+    @Operation(summary = "Make a question from a problem package",
+        description = "The zip as the request body, as DOMjudge imports it: problem.yaml, "
+            + "domjudge-problem.ini, problem_statement/, data/sample, data/secret, submissions/accepted. "
+            + "At most 72 MB. Answers with the new question and anything the import changed or left out.")
+    public ResponseEntity<ApiResponse<QuestionBankDto.ImportResult>> importPackage(
+        @AuthenticationPrincipal Long userId, @PathVariable Long classroomId,
+        @RequestParam(required = false) String fileName, HttpServletRequest httpReq) throws IOException {
+        long declared = httpReq.getContentLengthLong();
+        if (declared > MAX_PACKAGE_BYTES) {
+            throw ApiException.badRequest("A package can be at most " + (MAX_PACKAGE_BYTES >> 20) + " MB.");
+        }
+        InputStream body = new CappedInputStream(httpReq.getInputStream(), MAX_PACKAGE_BYTES);
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(
+            bank.importPackage(userId, classroomId, body, fileName, httpReq)));
+    }
+
+    @GetMapping("/questions/{questionId}/package.zip")
+    @Operation(summary = "Download the question as a problem package",
+        description = "The same zip that publishing sends to the judge.")
+    public ResponseEntity<byte[]> exportPackage(
+        @AuthenticationPrincipal Long userId, @PathVariable Long questionId) {
+        QuestionBankDto.Download file = bank.exportPackage(userId, questionId);
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.parseMediaType("application/zip"));
+        headers.setContentDisposition(ContentDisposition.attachment()
+            .filename(file.name(), StandardCharsets.UTF_8).build());
+        headers.setContentLength(file.bytes().length);
+        return new ResponseEntity<>(file.bytes(), headers, HttpStatus.OK);
+    }
+
+        @GetMapping("/questions/{questionId}")
     @Operation(summary = "One question, with its list of tests")
     public ResponseEntity<ApiResponse<QuestionBankDto.QuestionDetail>> get(
         @AuthenticationPrincipal Long userId, @PathVariable Long questionId) {
@@ -194,5 +233,37 @@ public class QuestionBankController {
             .filename(file.name(), StandardCharsets.UTF_8).build());
         headers.setContentLength(file.bytes().length);
         return new ResponseEntity<>(file.bytes(), headers, HttpStatus.OK);
+    }
+
+    /** Stops reading a request body past a limit, whatever its Content-Length said. */
+    static final class CappedInputStream extends FilterInputStream {
+        private final long limit;
+        private long read;
+
+        CappedInputStream(InputStream in, long limit) {
+            super(in);
+            this.limit = limit;
+        }
+
+        @Override
+        public int read() throws IOException {
+            int b = super.read();
+            if (b >= 0) count(1);
+            return b;
+        }
+
+        @Override
+        public int read(byte[] buffer, int off, int len) throws IOException {
+            int n = super.read(buffer, off, len);
+            if (n > 0) count(n);
+            return n;
+        }
+
+        private void count(long n) {
+            read += n;
+            if (read > limit) {
+                throw ApiException.badRequest("A package can be at most " + (limit >> 20) + " MB.");
+            }
+        }
     }
 }

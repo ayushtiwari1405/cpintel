@@ -333,4 +333,107 @@ class QuestionBankServiceTest {
         verify(renderer).render(argThat(s -> s.markdown().equals("Typed, not saved") && s.title().equals("Sum")
             && s.timeLimitMs() == 2000 && s.samples().size() == 1 && s.samples().get(0).answer().equals("3")));
     }
+
+    // ------------------------------------------------------------------ packages
+
+    private static java.io.InputStream packageZip(Map<String, byte[]> files) throws Exception {
+        var out = new java.io.ByteArrayOutputStream();
+        try (var z = new java.util.zip.ZipOutputStream(out)) {
+            for (var e : files.entrySet()) {
+                z.putNextEntry(new java.util.zip.ZipEntry(e.getKey()));
+                z.write(e.getValue());
+                z.closeEntry();
+            }
+        }
+        return new java.io.ByteArrayInputStream(out.toByteArray());
+    }
+
+    private QuestionBankDto.ImportResult importing(long user, Map<String, byte[]> files) {
+        try {
+            return service.importPackage(user, ROOM, packageZip(files), "x.zip", null);
+        } catch (ApiException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    @Test
+    @DisplayName("Importing makes a draft question with its tests and statement PDF, audited as an import")
+    void importsPackage() throws Exception {
+        var files = new java.util.LinkedHashMap<String, byte[]>();
+        files.put("problem.yaml", "name: Sum\nlimits:\n  memory: 128\n".getBytes());
+        files.put("problem_statement/problem.pdf", blankPdf());
+        files.put("data/sample/1.in", "1 2".getBytes());
+        files.put("data/sample/1.ans", "3".getBytes());
+        files.put("data/secret/1.in", "5 5".getBytes());
+
+        QuestionBankDto.ImportResult r = service.importPackage(TA, ROOM, packageZip(files), "sum.zip", null);
+
+        assertEquals("Sum", r.question().title());
+        assertEquals(128, r.question().memoryLimitMb());
+        assertEquals(BankQuestion.StatementKind.PDF, r.question().statementKind());
+        assertEquals(BankQuestion.Status.DRAFT, r.question().status());
+        assertEquals(2, stored.size());
+        assertEquals(List.of(true, false), stored.stream().map(BankQuestionTest::getSample).toList());
+        assertTrue(r.warnings().stream().anyMatch(w -> w.contains("no answer")), r.warnings().toString());
+        verify(pdfs).save(any(BankQuestionStatementPdf.class));
+        verify(audit).recordIn(eq(ROOM), eq(TA), eq(AuditService.QUESTION_IMPORTED), eq("QUESTION"), any(), any());
+    }
+
+    @Test
+    @DisplayName("A statement PDF that fails the check is left out with a warning, not imported")
+    void importsWithoutBadPdf() throws Exception {
+        var files = new java.util.LinkedHashMap<String, byte[]>();
+        files.put("problem_statement/problem.pdf", "%PDF-1.4 broken".getBytes());
+        files.put("data/secret/1.in", "1".getBytes());
+
+        QuestionBankDto.ImportResult r = service.importPackage(TA, ROOM, packageZip(files), "x.zip", null);
+
+        assertEquals(BankQuestion.StatementKind.MARKDOWN, r.question().statementKind());
+        assertTrue(r.warnings().stream().anyMatch(w -> w.startsWith("The statement PDF was not kept")));
+        verify(pdfs, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("An import is refused whole when it breaks the bank's limits, or comes from outside the classroom")
+    void importRefusals() throws Exception {
+        var bigSample = new java.util.LinkedHashMap<String, byte[]>();
+        bigSample.put("data/sample/1.in", new byte[QuestionBankService.MAX_SAMPLE_BYTES + 1]);
+        var many = new java.util.LinkedHashMap<String, byte[]>();
+        for (int i = 0; i <= QuestionBankService.MAX_TESTS; i++) many.put("data/secret/" + i + ".in", "1".getBytes());
+        var one = Map.of("data/secret/1.in", "1".getBytes());
+
+        assertEquals(HttpStatus.BAD_REQUEST, status(() -> importing(TA, bigSample)));
+        assertEquals(HttpStatus.BAD_REQUEST, status(() -> importing(TA, many)));
+        assertEquals(HttpStatus.FORBIDDEN, status(() -> importing(STRANGER, one)));
+        verify(questions, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Exporting packs the rendered statement and every test, named from the title")
+    void exportsPackage() {
+        stored.add(BankQuestionTest.builder().testId(9L).questionId(Q).sample(true).ordinal(1)
+            .name("1").inputBytes(3).answerBytes(1).build());
+        when(testData.findAllById(any())).thenReturn(List.of(BankQuestionTestData.builder()
+            .testId(9L).input("1 2".getBytes()).answer("3".getBytes()).build()));
+        when(renderer.render(any())).thenReturn(new StatementRenderer.Result("%PDF-x".getBytes(), List.of()));
+
+        QuestionBankDto.Download d = service.exportPackage(TA, Q);
+
+        assertEquals("sum.zip", d.name());
+        ProblemPackage.Contents back = ProblemPackage.read(new java.io.ByteArrayInputStream(d.bytes()), d.name());
+        assertEquals("Sum", back.title());
+        assertEquals(1, back.tests().size());
+        assertArrayEquals("%PDF-x".getBytes(), back.statementPdf());
+        assertEquals(HttpStatus.FORBIDDEN, status(() -> service.exportPackage(STRANGER, Q)));
+    }
+
+    @Test
+    @DisplayName("Package names are plain slugs of the title")
+    void packageNames() {
+        assertEquals("sum-of-two.zip", QuestionBankService.packageName("Sum of Two!"));
+        assertEquals("cafe-a-b.zip", QuestionBankService.packageName("Café — A+B"));
+        assertEquals("question.zip", QuestionBankService.packageName("∑∑∑"));
+    }
 }

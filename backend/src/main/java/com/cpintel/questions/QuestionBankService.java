@@ -451,6 +451,128 @@ public class QuestionBankService {
         return detail(q);
     }
 
+    // ------------------------------------------------------------------ packages
+
+    /**
+     * A new draft question from a problem package. The archive is read in full and checked
+     * against the bank's limits before anything is written, so a refused package leaves nothing.
+     */
+    @Transactional
+    public QuestionBankDto.ImportResult importPackage(Long userId, Long classroomId,
+                                                      java.io.InputStream zip, String fileName,
+                                                      HttpServletRequest httpReq) {
+        requireWritable(userId, classroomId);
+        ProblemPackage.Contents p = ProblemPackage.read(zip, fileName);
+        List<String> warnings = new ArrayList<>(p.warnings());
+
+        if (p.tests().size() > MAX_TESTS) {
+            throw ApiException.badRequest("A question can have at most " + MAX_TESTS
+                + " tests; the package has " + p.tests().size() + ".");
+        }
+        long bytes = p.tests().stream()
+            .mapToLong(t -> t.input().length + (t.answer() == null ? 0L : t.answer().length)).sum();
+        if (bytes > MAX_QUESTION_BYTES) {
+            throw ApiException.badRequest("A question's tests can hold at most " + mib(MAX_QUESTION_BYTES)
+                + " in all; the package's come to " + mib(bytes) + ".");
+        }
+        for (ProblemPackage.Test t : p.tests()) {
+            long size = t.input().length + (t.answer() == null ? 0L : t.answer().length);
+            if (t.sample() && size > MAX_SAMPLE_BYTES) {
+                throw ApiException.badRequest("Sample \"" + t.name() + "\" is " + kib(size)
+                    + "; a sample can be at most " + kib(MAX_SAMPLE_BYTES) + ".");
+            }
+        }
+        int missing = (int) p.tests().stream().filter(t -> t.answer() == null).count();
+        if (missing > 0) {
+            warnings.add(missing + " test" + (missing == 1 ? " has" : "s have") + " no answer.");
+        }
+
+        Integer pages = null;
+        if (p.statementPdf() != null) {
+            try {
+                pages = StatementPdfCheck.pages(p.statementPdf());
+            } catch (ApiException e) {
+                warnings.add("The statement PDF was not kept: " + e.getMessage());
+            }
+        }
+
+        BankQuestion q = BankQuestion.builder()
+            .classroomId(classroomId)
+            .title(p.title())
+            .statement(p.statementMarkdown() == null ? "" : StatementRenderer.clean(p.statementMarkdown()))
+            .timeLimitMs(p.timeLimitMs() == null ? 1000 : p.timeLimitMs())
+            .memoryLimitMb(p.memoryLimitMb() == null ? 256 : p.memoryLimitMb())
+            .checker(p.checker())
+            .floatTolerance(p.floatTolerance())
+            .modelLanguage(p.modelLanguage())
+            .modelSource(p.modelSource())
+            .statementKind(pages != null ? BankQuestion.StatementKind.PDF : BankQuestion.StatementKind.MARKDOWN)
+            .createdBy(userId)
+            .updatedBy(userId)
+            .build();
+        q = questions.save(q);
+
+        int sample = 0;
+        int secret = 0;
+        for (ProblemPackage.Test t : p.tests()) {
+            BankQuestionTest row = tests.save(BankQuestionTest.builder()
+                .questionId(q.getQuestionId())
+                .sample(t.sample())
+                .ordinal(t.sample() ? ++sample : ++secret)
+                .name(t.name())
+                .inputBytes(t.input().length)
+                .answerBytes(t.answer() == null ? null : t.answer().length)
+                .createdBy(userId)
+                .build());
+            testData.save(BankQuestionTestData.builder()
+                .testId(row.getTestId()).input(t.input()).answer(t.answer()).build());
+        }
+        if (pages != null) {
+            statementPdfs.save(BankQuestionStatementPdf.builder()
+                .questionId(q.getQuestionId())
+                .pdf(p.statementPdf())
+                .fileName("problem.pdf")
+                .sizeBytes(p.statementPdf().length)
+                .pages(pages)
+                .uploadedBy(userId)
+                .uploadedAt(Instant.now())
+                .build());
+        }
+        auditService.recordIn(classroomId, userId, AuditService.QUESTION_IMPORTED, "QUESTION",
+            String.valueOf(q.getQuestionId()), httpReq);
+        return new QuestionBankDto.ImportResult(detail(q), List.copyOf(warnings));
+    }
+
+    /** The question as a package: the bytes publishing will send to the judge. */
+    public QuestionBankDto.Download exportPackage(Long userId, Long questionId) {
+        BankQuestion q = requireQuestion(userId, questionId);
+        byte[] statement = statement(userId, questionId).pdf();
+        List<ProblemPackage.Test> all = new ArrayList<>();
+        List<BankQuestionTest> ordered = tests.findOrdered(questionId);
+        Map<Long, BankQuestionTestData> data = testData.findAllById(
+                ordered.stream().map(BankQuestionTest::getTestId).toList()).stream()
+            .collect(Collectors.toMap(BankQuestionTestData::getTestId, Function.identity()));
+        for (BankQuestionTest t : ordered) {
+            BankQuestionTestData d = data.get(t.getTestId());
+            if (d != null) all.add(new ProblemPackage.Test(t.getName(), t.getSample(), d.getInput(), d.getAnswer()));
+        }
+        byte[] zip = ProblemPackage.write(new ProblemPackage.Source(q.getTitle(), q.getTimeLimitMs(),
+            q.getMemoryLimitMb(), q.getChecker(), q.getFloatTolerance(), statement, q.getModelLanguage(),
+            q.getModelSource(), all));
+        return new QuestionBankDto.Download(packageName(q.getTitle()), zip);
+    }
+
+    /** A file name from a title: letters, digits and dashes. */
+    static String packageName(String title) {
+        String slug = java.text.Normalizer.normalize(title == null ? "" : title, java.text.Normalizer.Form.NFKD)
+            .replaceAll("\\p{M}", "")
+            .toLowerCase(Locale.ROOT)
+            .replaceAll("[^a-z0-9]+", "-")
+            .replaceAll("^-+|-+$", "");
+        if (slug.length() > 60) slug = slug.substring(0, 60).replaceAll("-+$", "");
+        return (slug.isEmpty() ? "question" : slug) + ".zip";
+    }
+
     private List<StatementRenderer.Sample> samples(Long questionId) {
         List<BankQuestionTest> shown = tests.findOrdered(questionId).stream()
             .filter(BankQuestionTest::getSample).toList();

@@ -1,16 +1,16 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { formatDistanceToNow } from 'date-fns'
 import { clsx } from 'clsx'
-import { BookOpen, Loader2, Plus } from 'lucide-react'
+import { AlertTriangle, BookOpen, FileArchive, Loader2, Plus } from 'lucide-react'
 import { Dialog } from '@/components/common/Dialog'
 import { PageHeader } from '@/components/common/PageHeader'
 import { EmptyState, ErrorState, LoadingState } from '@/components/common/States'
 import { Pill } from '@/components/admin/AdminUi'
 import { QuestionEditor } from '@/components/questions/QuestionEditor'
 import { formatBytes } from '@/components/questions/QuestionTests'
-import { useBankClassrooms, useBankQuestions, useCreateQuestion } from '@/hooks/useQuestionBank'
-import type { BankClassroom, QuestionRequest } from '@/types'
+import { useBankClassrooms, useBankQuestions, useCreateQuestion, useImportQuestion } from '@/hooks/useQuestionBank'
+import type { BankClassroom, QuestionImport, QuestionRequest } from '@/types'
 
 const STATEMENT_TEMPLATE = `Describe the task here.
 
@@ -84,6 +84,17 @@ export default function QuestionBankPage() {
 function QuestionList({ room, onOpen }: { room: BankClassroom; onOpen: (id: number) => void }) {
   const [archived, setArchived] = useState(false)
   const [creating, setCreating] = useState(false)
+  const [imported, setImported] = useState<QuestionImport | null>(null)
+  const importer = useImportQuestion(room.classroomId)
+  const chooser = useRef<HTMLInputElement>(null)
+
+  function importFile(file: File | undefined) {
+    if (!file) return
+    importer.mutate(file, {
+      // Straight to the question unless the import has something to say first.
+      onSuccess: r => (r.warnings.length > 0 ? setImported(r) : onOpen(r.question.questionId)),
+    })
+  }
   const { data: questions, isLoading, isError, error, refetch } = useBankQuestions(room.classroomId, archived)
 
   return (
@@ -102,9 +113,22 @@ function QuestionList({ room, onOpen }: { room: BankClassroom; onOpen: (id: numb
             Show archived
           </label>
           {room.active && (
-            <button type="button" className="btn-primary btn-sm" onClick={() => setCreating(true)}>
-              <Plus size={13} aria-hidden="true" /> New question
-            </button>
+            <>
+              <input ref={chooser} type="file" accept=".zip,application/zip" className="hidden"
+                aria-label="Choose a problem package"
+                onChange={e => { importFile(e.target.files?.[0]); e.target.value = '' }} />
+              <button type="button" className="btn-secondary btn-sm" disabled={importer.isPending}
+                title="A problem package zip, as DOMjudge imports it"
+                onClick={() => chooser.current?.click()}>
+                {importer.isPending
+                  ? <Loader2 size={13} className="animate-spin" />
+                  : <FileArchive size={13} aria-hidden="true" />}
+                Import package
+              </button>
+              <button type="button" className="btn-primary btn-sm" onClick={() => setCreating(true)}>
+                <Plus size={13} aria-hidden="true" /> New question
+              </button>
+            </>
           )}
         </div>
       </header>
@@ -152,6 +176,25 @@ function QuestionList({ room, onOpen }: { room: BankClassroom; onOpen: (id: numb
             </table>
           </div>
         )}
+
+      <Dialog open={imported != null} onClose={() => setImported(null)} size="md"
+        title={imported ? `Imported "${imported.question.title}"` : ''}
+        description="The question is a draft. The import changed or left out the following:">
+        <ul className="space-y-1.5 text-sm text-gray-300">
+          {imported?.warnings.map((w, i) => (
+            <li key={i} className="flex gap-2">
+              <AlertTriangle size={14} className="mt-0.5 shrink-0 text-amber-300" aria-hidden="true" />
+              <span>{w}</span>
+            </li>
+          ))}
+        </ul>
+        <div className="mt-4 flex justify-end">
+          <button type="button" className="btn-primary"
+            onClick={() => { const id = imported!.question.questionId; setImported(null); onOpen(id) }}>
+            Open the question
+          </button>
+        </div>
+      </Dialog>
 
       <NewQuestion open={creating} classroomId={room.classroomId}
         onClose={() => setCreating(false)} onCreated={id => { setCreating(false); onOpen(id) }} />

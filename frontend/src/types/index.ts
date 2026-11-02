@@ -1565,6 +1565,12 @@ export interface QuestionDetail {
   limits: QuestionLimits
 }
 
+/** A question made from a package, and what the import changed or left out. */
+export interface QuestionImport {
+  question: QuestionDetail
+  warnings: string[]
+}
+
 export interface QuestionRequest {
   title: string
   statement: string

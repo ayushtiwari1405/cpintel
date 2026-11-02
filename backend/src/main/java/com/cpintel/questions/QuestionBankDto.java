@@ -111,6 +111,9 @@ public class QuestionBankDto {
         @NotNull @Min(16) @Max(2048) Integer memoryLimitMb
     ) {}
 
+    /** A question made from a package, and what the import had to change or leave out. */
+    public record ImportResult(QuestionDetail question, List<String> warnings) {}
+
     /** A rendered statement, with any formula that could not be drawn. */
     public record Rendered(byte[] pdf, List<String> problems) {}
 }

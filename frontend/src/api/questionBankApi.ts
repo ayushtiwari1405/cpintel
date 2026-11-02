@@ -1,6 +1,6 @@
 import { apiClient } from './client'
 import type {
-  ApiResponse, BankClassroom, QuestionDetail, QuestionRequest, QuestionSummary,
+  ApiResponse, BankClassroom, QuestionDetail, QuestionImport, QuestionRequest, QuestionSummary,
   StatementPreviewRequest,
 } from '@/types'
 
@@ -43,6 +43,17 @@ export const questionBankApi = {
   create: (classroomId: number, body: QuestionRequest) =>
     apiClient.post<ApiResponse<QuestionDetail>>(
       `/question-bank/classrooms/${classroomId}/questions`, body).then(r => r.data.data),
+
+  /** The zip itself as the body: it may be far bigger than a form upload is allowed to be. */
+  importPackage: (classroomId: number, file: File) =>
+    apiClient.post<ApiResponse<QuestionImport>>(
+      `/question-bank/classrooms/${classroomId}/questions/import`, file,
+      { params: { fileName: file.name }, headers: { 'Content-Type': 'application/zip' }, timeout: 300_000 })
+      .then(r => r.data.data),
+
+  exportPackage: (questionId: number) =>
+    apiClient.get<Blob>(`/question-bank/questions/${questionId}/package.zip`,
+      { responseType: 'blob', timeout: 120_000 }).then(r => r.data),
 
   get: (questionId: number) =>
     apiClient.get<ApiResponse<QuestionDetail>>(`/question-bank/questions/${questionId}`)

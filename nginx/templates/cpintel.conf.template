@@ -156,6 +156,14 @@ server {
         # than proxy_read_timeout gets). The page already treats 502, 504 and this JSON 503 alike
         # (api/client.ts unreachable): reads are retried, writes never are. Only the JSON is new.
         error_page 502 504 = @restarting;
+
+        # A question bank package carries a question's tests, so it may be far bigger than the
+        # 8 MB every other upload is held to. Only this route; the backend reads it as a capped
+        # stream of at most 72 MB. Headers, limits and error pages come from the block around it.
+        location ~ ^/api/v1/question-bank/classrooms/[0-9]+/questions/import$ {
+            client_max_body_size 72m;
+            proxy_pass http://backend;
+        }
     }
 
     # The backend is not answering: nearly always because it is restarting for a deploy, which

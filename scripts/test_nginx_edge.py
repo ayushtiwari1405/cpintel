@@ -115,6 +115,9 @@ import json, socket, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 class H(BaseHTTPRequestHandler):
     def _answer(self):
+        length = int(self.headers.get("Content-Length") or 0)
+        if length:                              # read what was sent, so a big upload is not reset
+            self.rfile.read(length)
         if "case=hangup" in self.path:          # closes without a response: nginx answers 502
             self.connection.shutdown(socket.SHUT_RDWR); self.close_connection = True; return
         if "case=slow" in self.path:            # slower than proxy_read_timeout: nginx answers 504
@@ -220,10 +223,10 @@ class Runtime(unittest.TestCase):
             time.sleep(0.5)
 
     @classmethod
-    def get(cls, path, method="GET", headers=None):
-        conn = http.client.HTTPSConnection("127.0.0.1", cls.port, context=cls.ctx, timeout=30)
+    def get(cls, path, method="GET", headers=None, body=None):
+        conn = http.client.HTTPSConnection("127.0.0.1", cls.port, context=cls.ctx, timeout=60)
         try:
-            conn.request(method, path, headers={"Host": "localhost", **(headers or {})})
+            conn.request(method, path, body=body, headers={"Host": "localhost", **(headers or {})})
             resp = conn.getresponse()
             return resp.status, resp.getheaders(), resp.read()
         finally:
@@ -254,6 +257,22 @@ class Runtime(unittest.TestCase):
             for name in CLEARED_FORWARDING:
                 self.assertIsNone(seen[name], f"{path}: {name}")
             self.assertNotIn("10.20.0.6", seen["X-Forwarded-For"] or "", path)
+
+    def test_only_a_package_import_takes_a_large_upload(self):
+        big = b"x" * (10 * 1024 * 1024)
+        spoof = {"Forwarded": "for=10.20.0.5", "X-Forwarded-For": "10.20.0.6",
+                 "Content-Type": "application/zip"}
+        path = "/api/v1/question-bank/classrooms/7/questions/import?case=echo"
+        status, headers, body = self.get(path, "POST", spoof, big)
+        self.assertEqual(status, 200, path)
+        # The nested location inherits the block around it: forwarding cleared, headers once.
+        seen = json.loads(body)
+        self.assertIsNone(seen["Forwarded"], path)
+        self.assertNotIn("10.20.0.6", seen["X-Forwarded-For"] or "", path)
+        self.assertEdgeHeaders(headers, path)
+        for other in ("/api/v1/files", "/api/v1/question-bank/questions/3/tests",
+                      "/api/v1/question-bank/classrooms/7/questions/import/x"):
+            self.assertEqual(self.get(other, "POST", {"Content-Type": "application/zip"}, big)[0], 413, other)
 
     def assertRestarting(self, path, method, cause):
         """The JSON restarting answer, and nginx's log saying it was for the intended reason."""

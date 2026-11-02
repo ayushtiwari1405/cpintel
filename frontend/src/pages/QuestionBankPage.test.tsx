@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import QuestionBankPage from './QuestionBankPage'
-import { batches } from '@/components/questions/QuestionTests'
+import { batches, packageName } from '@/components/questions/QuestionTests'
 import { fakeServer } from '@/test/server'
 import { renderAt, signedIn, user } from '@/test/render'
 import type { BankClassroom, QuestionDetail, QuestionSummary } from '@/types'
@@ -196,6 +196,45 @@ describe('statement', () => {
   })
 })
 
+describe('packages', () => {
+  const zip = () => new File(['PK'], 'sum.zip', { type: 'application/zip' })
+
+  it('imports a package as the request body and shows what it changed before opening it', async () => {
+    const server = open('/questions', {
+      'POST /question-bank/classrooms/5/questions/import': {
+        data: { question: question({ title: 'Sum' }), warnings: ['The package has no secret tests.'] },
+      },
+    })
+    await userEvent.upload(await screen.findByLabelText('Choose a problem package'), zip())
+
+    expect(await screen.findByText('The package has no secret tests.')).toBeInTheDocument()
+    const sent = server.calls('POST /question-bank/classrooms/5/questions/import')[0].body
+    expect(sent).toBeInstanceOf(File)
+    await userEvent.click(screen.getByRole('button', { name: 'Open the question' }))
+    expect(await screen.findByRole('button', { name: /Download package/ })).toBeInTheDocument()
+  })
+
+  it('opens an import with nothing to report straight away', async () => {
+    open('/questions', {
+      'POST /question-bank/classrooms/5/questions/import': { data: { question: question(), warnings: [] } },
+    })
+    await userEvent.upload(await screen.findByLabelText('Choose a problem package'), zip())
+    expect(await screen.findByRole('button', { name: /Download package/ })).toBeInTheDocument()
+  })
+
+  it('downloads the saved question as a package, and asks for unsaved edits to be saved first', async () => {
+    const server = open('/questions?classroom=5&q=40', {
+      'GET /question-bank/questions/40/package.zip': { data: null },
+    })
+    const download = await screen.findByRole('button', { name: /Download package/ })
+    await userEvent.click(download)
+    await waitFor(() => expect(server.calls('GET /question-bank/questions/40/package.zip')).toHaveLength(1))
+
+    await userEvent.type(screen.getByLabelText('Title'), '!')
+    expect(download).toBeDisabled()
+  })
+})
+
 describe('upload batches', () => {
   const file = (name: string, size: number) => new File([new Uint8Array(size)], name)
 
@@ -211,5 +250,13 @@ describe('upload batches', () => {
     const { batches: parts, tooBig } = batches([file('1.in', 10), file('2.in', 99)], 50)
     expect(tooBig.map(f => f.name)).toEqual(['2.in'])
     expect(parts.flat().map(f => f.name)).toEqual(['1.in'])
+  })
+})
+
+describe('package names', () => {
+  it('match the server: a plain slug of the title', () => {
+    expect(packageName('Sum of Two!')).toBe('sum-of-two.zip')
+    expect(packageName('Café — A+B')).toBe('cafe-a-b.zip')
+    expect(packageName('∑∑∑')).toBe('question.zip')
   })
 })
