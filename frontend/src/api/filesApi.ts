@@ -24,9 +24,10 @@ export const filesApi = {
     form.append('file', file)
     if (opts.label) form.append('label', opts.label)
     if (opts.replace) form.append('replace', 'true')
-    // No Content-Type here on purpose: axios drops the client's JSON default for a
-    // FormData body so the browser can set the header with its own multipart boundary.
-    return apiClient.post<ApiResponse<PersonalFile>>('/files', form, { timeout: 120_000 })
+    // Multipart, not the client's JSON default: given a JSON Content-Type, axios turns a
+    // FormData body into a JSON string. The browser then sets the header with its boundary.
+    return apiClient.post<ApiResponse<PersonalFile>>('/files', form,
+      { timeout: 120_000, headers: { 'Content-Type': 'multipart/form-data' } })
       .then(r => r.data)
   },
 
