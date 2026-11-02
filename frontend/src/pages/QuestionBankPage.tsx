@@ -2,13 +2,15 @@ import { useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { formatDistanceToNow } from 'date-fns'
 import { clsx } from 'clsx'
-import { AlertTriangle, BookOpen, FileArchive, Loader2, Plus } from 'lucide-react'
+import { AlertTriangle, BookOpen, Download, FileArchive, Loader2, Plus } from 'lucide-react'
 import { Dialog } from '@/components/common/Dialog'
 import { PageHeader } from '@/components/common/PageHeader'
 import { EmptyState, ErrorState, LoadingState } from '@/components/common/States'
 import { Pill } from '@/components/admin/AdminUi'
 import { QuestionEditor } from '@/components/questions/QuestionEditor'
-import { formatBytes } from '@/components/questions/QuestionTests'
+import { formatBytes, saveBlob } from '@/components/questions/QuestionTests'
+import { questionBankApi } from '@/api/questionBankApi'
+import { useToast } from '@/components/common/Toaster'
 import { useBankClassrooms, useBankQuestions, useCreateQuestion, useImportQuestion } from '@/hooks/useQuestionBank'
 import type { BankClassroom, QuestionImport, QuestionRequest } from '@/types'
 
@@ -87,6 +89,15 @@ function QuestionList({ room, onOpen }: { room: BankClassroom; onOpen: (id: numb
   const [imported, setImported] = useState<QuestionImport | null>(null)
   const importer = useImportQuestion(room.classroomId)
   const chooser = useRef<HTMLInputElement>(null)
+  const toast = useToast()
+
+  async function downloadTemplate() {
+    try {
+      saveBlob(await questionBankApi.packageTemplate(), 'question-package-template.zip')
+    } catch {
+      toast.push('error', 'Could not download the template')
+    }
+  }
 
   function importFile(file: File | undefined) {
     if (!file) return
@@ -112,6 +123,10 @@ function QuestionList({ room, onOpen }: { room: BankClassroom; onOpen: (id: numb
             <input type="checkbox" checked={archived} onChange={e => setArchived(e.target.checked)} />
             Show archived
           </label>
+          <button type="button" className="btn-ghost btn-sm" onClick={downloadTemplate}
+            title="An example package with every file filled in, and a README on the format">
+            <Download size={13} aria-hidden="true" /> Template
+          </button>
           {room.active && (
             <>
               <input ref={chooser} type="file" accept=".zip,application/zip" className="hidden"

@@ -51,6 +51,9 @@ export const questionBankApi = {
       { params: { fileName: file.name }, headers: { 'Content-Type': 'application/zip' }, timeout: 300_000 })
       .then(r => r.data.data),
 
+  packageTemplate: () =>
+    apiClient.get<Blob>('/question-bank/package-template.zip', { responseType: 'blob' }).then(r => r.data),
+
   exportPackage: (questionId: number) =>
     apiClient.get<Blob>(`/question-bank/questions/${questionId}/package.zip`,
       { responseType: 'blob', timeout: 120_000 }).then(r => r.data),

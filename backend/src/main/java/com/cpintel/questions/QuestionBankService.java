@@ -562,7 +562,14 @@ public class QuestionBankService {
         return new QuestionBankDto.Download(packageName(q.getTitle()), zip);
     }
 
-    /** A file name from a title: letters, digits and dashes. */
+    public static final String PACKAGE_TEMPLATE_NAME = PackageTemplate.FILE_NAME;
+
+    /** The example package, the same for everyone; nothing to check access for. */
+    public byte[] packageTemplate() {
+        return PackageTemplate.zip();
+    }
+
+        /** A file name from a title: letters, digits and dashes. */
     static String packageName(String title) {
         String slug = java.text.Normalizer.normalize(title == null ? "" : title, java.text.Normalizer.Form.NFKD)
             .replaceAll("\\p{M}", "")

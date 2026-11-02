@@ -91,7 +91,20 @@ public class QuestionBankController {
             bank.importPackage(userId, classroomId, body, fileName, httpReq)));
     }
 
-    @GetMapping("/questions/{questionId}/package.zip")
+    @GetMapping("/package-template.zip")
+    @Operation(summary = "An example package to start a question from",
+        description = "Every file the import reads, filled in for a small problem, with a README.")
+    public ResponseEntity<byte[]> packageTemplate() {
+        byte[] zip = bank.packageTemplate();
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.parseMediaType("application/zip"));
+        headers.setContentDisposition(ContentDisposition.attachment()
+            .filename(QuestionBankService.PACKAGE_TEMPLATE_NAME, StandardCharsets.UTF_8).build());
+        headers.setContentLength(zip.length);
+        return new ResponseEntity<>(zip, headers, HttpStatus.OK);
+    }
+
+        @GetMapping("/questions/{questionId}/package.zip")
     @Operation(summary = "Download the question as a problem package",
         description = "The same zip that publishing sends to the judge.")
     public ResponseEntity<byte[]> exportPackage(

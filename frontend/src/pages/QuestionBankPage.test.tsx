@@ -214,6 +214,12 @@ describe('packages', () => {
     expect(await screen.findByRole('button', { name: /Download package/ })).toBeInTheDocument()
   })
 
+  it('offers the example package to start from', async () => {
+    const server = open('/questions', { 'GET /question-bank/package-template.zip': { data: null } })
+    await userEvent.click(await screen.findByRole('button', { name: /Template/ }))
+    await waitFor(() => expect(server.calls('GET /question-bank/package-template.zip')).toHaveLength(1))
+  })
+
   it('opens an import with nothing to report straight away', async () => {
     open('/questions', {
       'POST /question-bank/classrooms/5/questions/import': { data: { question: question(), warnings: [] } },
