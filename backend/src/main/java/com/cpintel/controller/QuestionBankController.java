@@ -1,6 +1,8 @@
 package com.cpintel.controller;
 
 import com.cpintel.common.ApiResponse;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.cpintel.questions.QuestionBankDto;
 import com.cpintel.questions.QuestionBankService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -18,6 +20,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 
@@ -37,6 +40,7 @@ import java.util.List;
 public class QuestionBankController {
 
     private final QuestionBankService bank;
+    private final ObjectMapper objectMapper;
 
     @GetMapping("/classrooms")
     @Operation(summary = "The classrooms whose question bank you can open")
@@ -122,6 +126,59 @@ public class QuestionBankController {
         @AuthenticationPrincipal Long userId, @PathVariable Long questionId,
         @Valid @RequestBody QuestionBankDto.TestOrderRequest req, HttpServletRequest httpReq) {
         return ResponseEntity.ok(ApiResponse.ok(bank.reorder(userId, questionId, req, httpReq)));
+    }
+
+    @PostMapping("/questions/{questionId}/statement/preview")
+    @Operation(summary = "Render the statement as it is in the editor, without saving",
+        description = "A PDF. Formulas that could not be drawn are listed, URL-encoded JSON, in "
+            + "the X-Statement-Problems header.")
+    public ResponseEntity<byte[]> preview(
+        @AuthenticationPrincipal Long userId, @PathVariable Long questionId,
+        @Valid @RequestBody QuestionBankDto.PreviewRequest req) {
+        return pdf(bank.preview(userId, questionId, req), "preview.pdf");
+    }
+
+    @GetMapping("/questions/{questionId}/statement.pdf")
+    @Operation(summary = "The statement candidates would read, as saved")
+    public ResponseEntity<byte[]> statement(
+        @AuthenticationPrincipal Long userId, @PathVariable Long questionId) {
+        return pdf(bank.statement(userId, questionId), "statement-" + questionId + ".pdf");
+    }
+
+    @PutMapping(value = "/questions/{questionId}/statement-pdf", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "Use your own PDF as the statement")
+    public ResponseEntity<ApiResponse<QuestionBankDto.QuestionDetail>> uploadStatementPdf(
+        @AuthenticationPrincipal Long userId, @PathVariable Long questionId,
+        @RequestParam("file") MultipartFile file, @RequestParam Integer version,
+        HttpServletRequest httpReq) {
+        return ResponseEntity.ok(ApiResponse.ok(
+            bank.uploadStatementPdf(userId, questionId, version, file, httpReq)));
+    }
+
+    @DeleteMapping("/questions/{questionId}/statement-pdf")
+    @Operation(summary = "Remove the uploaded PDF and use the written statement again")
+    public ResponseEntity<ApiResponse<QuestionBankDto.QuestionDetail>> removeStatementPdf(
+        @AuthenticationPrincipal Long userId, @PathVariable Long questionId,
+        @RequestParam Integer version, HttpServletRequest httpReq) {
+        return ResponseEntity.ok(ApiResponse.ok(
+            bank.removeStatementPdf(userId, questionId, version, httpReq)));
+    }
+
+    private ResponseEntity<byte[]> pdf(QuestionBankDto.Rendered rendered, String name) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_PDF);
+        headers.setContentDisposition(ContentDisposition.inline()
+            .filename(name, StandardCharsets.UTF_8).build());
+        headers.setContentLength(rendered.pdf().length);
+        headers.setCacheControl("no-store");
+        String problems;
+        try {
+            problems = objectMapper.writeValueAsString(rendered.problems());
+        } catch (JsonProcessingException e) {
+            problems = "[]";
+        }
+        headers.set("X-Statement-Problems", URLEncoder.encode(problems, StandardCharsets.UTF_8));
+        return new ResponseEntity<>(rendered.pdf(), headers, HttpStatus.OK);
     }
 
     @GetMapping("/questions/{questionId}/tests/{testId}/{part:input|answer}")

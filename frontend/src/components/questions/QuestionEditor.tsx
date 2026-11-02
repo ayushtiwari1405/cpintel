@@ -5,6 +5,7 @@ import { PageHeader } from '@/components/common/PageHeader'
 import { ErrorState, LoadingState } from '@/components/common/States'
 import { Panel, Pill } from '@/components/admin/AdminUi'
 import { QuestionTests } from '@/components/questions/QuestionTests'
+import { StatementPanel } from '@/components/questions/StatementPanel'
 import { useBankQuestion, useQuestionActions } from '@/hooks/useQuestionBank'
 import type { ModelLanguage, QuestionChecker, QuestionDetail, QuestionRequest } from '@/types'
 
@@ -102,11 +103,11 @@ function Editor({ question, readOnly, onBack }: {
   const time = Number(draft.timeLimitMs)
   const memory = Number(draft.memoryLimitMb)
   const tolerance = Number(draft.floatTolerance)
-  const invalid =
-    !draft.title.trim()
-    || !Number.isInteger(time) || time < 100 || time > 20000
-    || !Number.isInteger(memory) || memory < 16 || memory > 2048
-    || (draft.checker === 'FLOAT' && !(tolerance > 0 && tolerance < 1))
+  const limitsValid =
+    !!draft.title.trim()
+    && Number.isInteger(time) && time >= 100 && time <= 20000
+    && Number.isInteger(memory) && memory >= 16 && memory <= 2048
+  const invalid = !limitsValid || (draft.checker === 'FLOAT' && !(tolerance > 0 && tolerance < 1))
 
   function submit() {
     setConflict(false)
@@ -190,19 +191,12 @@ function Editor({ question, readOnly, onBack }: {
         </p>
       )}
 
-      <Panel title="Question" description="What candidates read, and how their output is judged">
+      <Panel title="Question" description="Its title, limits, and how output is judged">
         <fieldset disabled={readOnly} className="grid gap-3 p-4 sm:grid-cols-2">
           <label className={`${label} sm:col-span-2`}>
             <span className={caption}>Title</span>
             <input className="input" value={draft.title} maxLength={200}
               onChange={e => set('title', e.target.value)} />
-          </label>
-          <label className={`${label} sm:col-span-2`}>
-            <span className={caption}>
-              Statement, in Markdown. Use $…$ for maths, for example $1 \le n \le 2 \cdot 10^5$.
-            </span>
-            <textarea className="input min-h-72 font-mono text-[13px] leading-relaxed" value={draft.statement}
-              maxLength={100000} spellCheck onChange={e => set('statement', e.target.value)} />
           </label>
           <label className={label}>
             <span className={caption}>Time limit (milliseconds, 100–20000)</span>
@@ -231,6 +225,12 @@ function Editor({ question, readOnly, onBack }: {
           )}
         </fieldset>
       </Panel>
+
+      <StatementPanel question={question} statement={draft.statement} readOnly={readOnly}
+        onStatementChange={value => set('statement', value)}
+        preview={limitsValid ? {
+          title: draft.title.trim(), statement: draft.statement, timeLimitMs: time, memoryLimitMb: memory,
+        } : null} />
 
       <Panel title="Model solution" description="A correct solution, used to check the tests before the question is used">
         <fieldset disabled={readOnly} className="grid gap-3 p-4">

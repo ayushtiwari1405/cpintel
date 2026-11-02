@@ -27,6 +27,9 @@ public class BankQuestion {
 
     public enum Status { DRAFT, READY }
 
+    /** Whether candidates read the rendered Markdown or the setter's own PDF. */
+    public enum StatementKind { MARKDOWN, PDF }
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "question_id")
@@ -41,6 +44,11 @@ public class BankQuestion {
     @Column(name = "statement", nullable = false, columnDefinition = "TEXT")
     @Builder.Default
     private String statement = "";
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "statement_kind", nullable = false, length = 16)
+    @Builder.Default
+    private StatementKind statementKind = StatementKind.MARKDOWN;
 
     @Column(name = "time_limit_ms", nullable = false)
     @Builder.Default

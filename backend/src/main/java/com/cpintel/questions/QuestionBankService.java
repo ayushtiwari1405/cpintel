@@ -2,6 +2,7 @@ package com.cpintel.questions;
 
 import com.cpintel.classrooms.ClassroomService;
 import com.cpintel.entity.BankQuestion;
+import com.cpintel.entity.BankQuestionStatementPdf;
 import com.cpintel.entity.BankQuestionTest;
 import com.cpintel.entity.BankQuestionTestData;
 import com.cpintel.entity.Classroom;
@@ -9,6 +10,7 @@ import com.cpintel.entity.User;
 import com.cpintel.evaluation.UsernameOrder;
 import com.cpintel.exception.ApiException;
 import com.cpintel.repository.jpa.BankQuestionRepository;
+import com.cpintel.repository.jpa.BankQuestionStatementPdfRepository;
 import com.cpintel.repository.jpa.BankQuestionTestDataRepository;
 import com.cpintel.repository.jpa.BankQuestionTestRepository;
 import com.cpintel.repository.jpa.ClassroomRepository;
@@ -75,6 +77,8 @@ public class QuestionBankService {
     private final BankQuestionTestDataRepository testData;
     private final UserRepository users;
     private final AuditService auditService;
+    private final BankQuestionStatementPdfRepository statementPdfs;
+    private final StatementRenderer renderer;
 
     // ------------------------------------------------------------------ access
 
@@ -367,6 +371,107 @@ public class QuestionBankService {
                 + " in this question."));
     }
 
+    // ------------------------------------------------------------------ statement
+
+    /*
+     * Rendering takes up to a second or so of CPU, so these two are not transactional: the
+     * reads before it each take their own short transaction instead of holding a connection
+     * open for the whole render.
+     */
+
+    /** The editor's current text rendered, unsaved, with the question's saved samples. */
+    public QuestionBankDto.Rendered preview(Long userId, Long questionId,
+                                            QuestionBankDto.PreviewRequest req) {
+        BankQuestion q = requireQuestion(userId, questionId);
+        String title = StringUtils.hasText(req.title()) ? req.title().strip() : q.getTitle();
+        return rendered(renderer.render(new StatementRenderer.Statement(title,
+            req.statement() == null ? "" : req.statement(), req.timeLimitMs(), req.memoryLimitMb(),
+            samples(questionId))));
+    }
+
+    /** The statement as candidates would read it: the uploaded PDF, or the saved Markdown rendered. */
+    public QuestionBankDto.Rendered statement(Long userId, Long questionId) {
+        BankQuestion q = requireQuestion(userId, questionId);
+        if (q.getStatementKind() == BankQuestion.StatementKind.PDF) {
+            return statementPdfs.findById(questionId)
+                .map(p -> new QuestionBankDto.Rendered(p.getPdf(), List.of()))
+                .orElseThrow(() -> ApiException.notFound("The uploaded statement is missing."));
+        }
+        return rendered(renderer.render(new StatementRenderer.Statement(q.getTitle(),
+            q.getStatement(), q.getTimeLimitMs(), q.getMemoryLimitMb(), samples(questionId))));
+    }
+
+    /** Uses the setter's own PDF as the statement, replacing any uploaded before. */
+    @Transactional
+    public QuestionBankDto.QuestionDetail uploadStatementPdf(Long userId, Long questionId,
+                                                             Integer version, MultipartFile file,
+                                                             HttpServletRequest httpReq) {
+        if (version == null) {
+            throw ApiException.badRequest("Say which version of the question you are changing.");
+        }
+        if (file == null || file.isEmpty()) throw ApiException.badRequest("Choose a PDF.");
+        BankQuestion q = lockForEdit(userId, questionId, version);
+        byte[] bytes = bytes(file);
+        int pages = StatementPdfCheck.pages(bytes);
+        String name = baseName(file.getOriginalFilename());
+        if (name.isEmpty()) name = "statement.pdf";
+        if (name.length() > 200) name = name.substring(name.length() - 200);
+
+        BankQuestionStatementPdf row = statementPdfs.findById(questionId)
+            .orElseGet(() -> BankQuestionStatementPdf.builder().questionId(questionId).build());
+        row.setPdf(bytes);
+        row.setFileName(name);
+        row.setSizeBytes(bytes.length);
+        row.setPages(pages);
+        row.setUploadedBy(userId);
+        row.setUploadedAt(Instant.now());
+        statementPdfs.save(row);
+
+        q.setStatementKind(BankQuestion.StatementKind.PDF);
+        q.touched(userId);
+        auditService.recordIn(q.getClassroomId(), userId, AuditService.QUESTION_UPDATED, "QUESTION",
+            String.valueOf(questionId), httpReq);
+        return detail(q);
+    }
+
+    /** Back to the written statement; the uploaded PDF is removed. */
+    @Transactional
+    public QuestionBankDto.QuestionDetail removeStatementPdf(Long userId, Long questionId,
+                                                             Integer version,
+                                                             HttpServletRequest httpReq) {
+        if (version == null) {
+            throw ApiException.badRequest("Say which version of the question you are changing.");
+        }
+        BankQuestion q = lockForEdit(userId, questionId, version);
+        statementPdfs.findById(questionId).ifPresent(statementPdfs::delete);
+        q.setStatementKind(BankQuestion.StatementKind.MARKDOWN);
+        q.touched(userId);
+        auditService.recordIn(q.getClassroomId(), userId, AuditService.QUESTION_UPDATED, "QUESTION",
+            String.valueOf(questionId), httpReq);
+        return detail(q);
+    }
+
+    private List<StatementRenderer.Sample> samples(Long questionId) {
+        List<BankQuestionTest> shown = tests.findOrdered(questionId).stream()
+            .filter(BankQuestionTest::getSample).toList();
+        if (shown.isEmpty()) return List.of();
+        Map<Long, BankQuestionTestData> data = testData.findAllById(
+                shown.stream().map(BankQuestionTest::getTestId).toList()).stream()
+            .collect(Collectors.toMap(BankQuestionTestData::getTestId, Function.identity()));
+        List<StatementRenderer.Sample> out = new ArrayList<>();
+        for (BankQuestionTest t : shown) {
+            BankQuestionTestData d = data.get(t.getTestId());
+            if (d == null) continue;
+            out.add(new StatementRenderer.Sample(StatementRenderer.utf8(d.getInput()),
+                StatementRenderer.utf8(d.getAnswer())));
+        }
+        return out;
+    }
+
+    private static QuestionBankDto.Rendered rendered(StatementRenderer.Result r) {
+        return new QuestionBankDto.Rendered(r.pdf(), r.problems());
+    }
+
     // ------------------------------------------------------------------ uploads
 
     private record Pair(byte[] input, byte[] answer) {
@@ -430,11 +535,16 @@ public class QuestionBankService {
             list.add(new QuestionBankDto.TestInfo(t.getTestId(), t.getSample(), t.getOrdinal(),
                 t.getName(), t.getInputBytes(), t.getAnswerBytes()));
         }
+        var pdf = statementPdfs.findInfo(q.getQuestionId()).orElse(null);
         Map<Long, String> names = names(List.of(
             Objects.requireNonNullElse(q.getCreatedBy(), 0L),
-            Objects.requireNonNullElse(q.getUpdatedBy(), 0L)));
+            Objects.requireNonNullElse(q.getUpdatedBy(), 0L),
+            pdf == null || pdf.getUploadedBy() == null ? 0L : pdf.getUploadedBy()));
+        QuestionBankDto.StatementPdfInfo pdfInfo = pdf == null ? null
+            : new QuestionBankDto.StatementPdfInfo(pdf.getFileName(), pdf.getSizeBytes(), pdf.getPages(),
+                pdf.getUploadedAt(), names.get(pdf.getUploadedBy()));
         return new QuestionBankDto.QuestionDetail(q.getQuestionId(), q.getClassroomId(), q.getTitle(),
-            q.getStatement(), q.getTimeLimitMs(), q.getMemoryLimitMb(), q.getChecker(),
+            q.getStatement(), q.getStatementKind(), pdfInfo, q.getTimeLimitMs(), q.getMemoryLimitMb(), q.getChecker(),
             q.getFloatTolerance(), q.getModelLanguage(), q.getModelSource(), q.getStatus(),
             q.getVersion(), Boolean.TRUE.equals(q.getArchived()), q.getCreatedAt(),
             names.get(q.getCreatedBy()), q.getUpdatedAt(), names.get(q.getUpdatedBy()), list, LIMITS);

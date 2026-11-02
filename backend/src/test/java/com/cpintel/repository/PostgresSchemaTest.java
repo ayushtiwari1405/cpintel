@@ -3,10 +3,12 @@ package com.cpintel.repository;
 import com.cpintel.analytics.MaterializedViewRefresher;
 import com.cpintel.evaluation.EvaluationLocks;
 import com.cpintel.entity.BankQuestion;
+import com.cpintel.entity.BankQuestionStatementPdf;
 import com.cpintel.entity.BankQuestionTest;
 import com.cpintel.entity.BankQuestionTestData;
 import com.cpintel.entity.Classroom;
 import com.cpintel.repository.jpa.BankQuestionRepository;
+import com.cpintel.repository.jpa.BankQuestionStatementPdfRepository;
 import com.cpintel.repository.jpa.BankQuestionTestDataRepository;
 import com.cpintel.repository.jpa.BankQuestionTestRepository;
 import com.cpintel.repository.jpa.ClassroomRepository;
@@ -77,6 +79,7 @@ class PostgresSchemaTest {
     @Autowired private BankQuestionRepository questions;
     @Autowired private BankQuestionTestRepository bankTests;
     @Autowired private BankQuestionTestDataRepository bankTestData;
+    @Autowired private BankQuestionStatementPdfRepository statementPdfs;
 
     // ------------------------------------------------------------------- fixtures
 
@@ -200,6 +203,12 @@ class PostgresSchemaTest {
 
         assertThat(questions.findForUpdate(q.getQuestionId())).isPresent();
         assertThat(bankTestData.findById(t2.getTestId()).orElseThrow().getAnswer()).isNull();
+
+        // An uploaded statement is described without reading its bytes, and goes with the question.
+        statementPdfs.saveAndFlush(BankQuestionStatementPdf.builder().questionId(q.getQuestionId())
+            .pdf(new byte[] {1, 2}).fileName("s.pdf").sizeBytes(2).pages(1).uploadedBy(author).build());
+        assertThat(statementPdfs.findInfo(q.getQuestionId())).get()
+            .extracting(BankQuestionStatementPdfRepository.Info::getFileName).isEqualTo("s.pdf");
 
         // Deleting a test takes its bytes with it.
         bankTests.deleteById(t1.getTestId());

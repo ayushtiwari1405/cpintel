@@ -86,7 +86,18 @@ export function useQuestionActions(questionId: number | null) {
     onSuccess: store,
     onError: onError('Could not reorder the tests'),
   })
-  return { save, setArchived, addTests, deleteTest, reorder }
+  const uploadPdf = useMutation({
+    mutationFn: ({ file, version }: { file: File; version: number }) =>
+      questionBankApi.uploadStatementPdf(questionId!, file, version),
+    onSuccess: q => { store(q); toast.push('success', 'The PDF is now the statement') },
+    onError: onError('Could not use that PDF'),
+  })
+  const removePdf = useMutation({
+    mutationFn: (version: number) => questionBankApi.removeStatementPdf(questionId!, version),
+    onSuccess: q => { store(q); toast.push('success', 'Back to the written statement') },
+    onError: onError('Could not remove the PDF'),
+  })
+  return { save, setArchived, addTests, deleteTest, reorder, uploadPdf, removePdf }
 }
 
 export function useCreateQuestion(classroomId: number | null) {

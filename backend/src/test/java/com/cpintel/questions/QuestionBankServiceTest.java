@@ -2,11 +2,13 @@ package com.cpintel.questions;
 
 import com.cpintel.classrooms.ClassroomService;
 import com.cpintel.entity.BankQuestion;
+import com.cpintel.entity.BankQuestionStatementPdf;
 import com.cpintel.entity.BankQuestionTest;
 import com.cpintel.entity.BankQuestionTestData;
 import com.cpintel.entity.Classroom;
 import com.cpintel.exception.ApiException;
 import com.cpintel.repository.jpa.BankQuestionRepository;
+import com.cpintel.repository.jpa.BankQuestionStatementPdfRepository;
 import com.cpintel.repository.jpa.BankQuestionTestDataRepository;
 import com.cpintel.repository.jpa.BankQuestionTestRepository;
 import com.cpintel.repository.jpa.ClassroomRepository;
@@ -44,6 +46,8 @@ class QuestionBankServiceTest {
     private final BankQuestionTestRepository tests = mock(BankQuestionTestRepository.class);
     private final BankQuestionTestDataRepository testData = mock(BankQuestionTestDataRepository.class);
     private final AuditService audit = mock(AuditService.class);
+    private final BankQuestionStatementPdfRepository pdfs = mock(BankQuestionStatementPdfRepository.class);
+    private final StatementRenderer renderer = mock(StatementRenderer.class);
     private QuestionBankService service;
 
     private Classroom room;
@@ -53,7 +57,8 @@ class QuestionBankServiceTest {
     @BeforeEach
     void setUp() {
         service = new QuestionBankService(classrooms, classroomRepository, questions, tests,
-            testData, mock(UserRepository.class), audit);
+            testData, mock(UserRepository.class), audit, pdfs, renderer);
+        when(pdfs.findInfo(anyLong())).thenReturn(Optional.empty());
         room = Classroom.builder().classroomId(ROOM).name("DSA").isActive(true).build();
         when(classrooms.require(ROOM)).thenReturn(room);
         when(classrooms.canManage(eq(ADMIN), any())).thenReturn(true);
@@ -257,5 +262,75 @@ class QuestionBankServiceTest {
 
         assertEquals(HttpStatus.NOT_FOUND, status(() -> service.download(TA, Q, 55L, false)));
         assertEquals(HttpStatus.FORBIDDEN, status(() -> service.download(STRANGER, Q, 55L, false)));
+    }
+
+    // ------------------------------------------------------------------ statement
+
+    private static byte[] blankPdf() throws Exception {
+        try (var doc = new org.apache.pdfbox.pdmodel.PDDocument();
+             var out = new java.io.ByteArrayOutputStream()) {
+            doc.addPage(new org.apache.pdfbox.pdmodel.PDPage());
+            doc.save(out);
+            return out.toByteArray();
+        }
+    }
+
+    @Test
+    @DisplayName("An uploaded PDF becomes the statement; removing it goes back to the written one")
+    void statementPdf() throws Exception {
+        var pdf = new MockMultipartFile("file", "dir/Sum.pdf", "application/pdf", blankPdf());
+
+        QuestionBankDto.QuestionDetail d = service.uploadStatementPdf(TA, Q, 3, pdf, null);
+        assertEquals(BankQuestion.StatementKind.PDF, d.statementKind());
+        assertEquals(4, d.version());
+        verify(pdfs).save(argThat(p -> p.getFileName().equals("Sum.pdf") && p.getPages() == 1
+            && p.getUploadedBy() == TA));
+
+        when(pdfs.findById(Q)).thenReturn(Optional.of(BankQuestionStatementPdf.builder().questionId(Q).build()));
+        d = service.removeStatementPdf(TA, Q, 4, null);
+        assertEquals(BankQuestion.StatementKind.MARKDOWN, d.statementKind());
+        verify(pdfs).delete(any());
+    }
+
+    @Test
+    @DisplayName("Only a real PDF is accepted, and only by someone who may edit, at the current version")
+    void statementPdfRefusals() throws Exception {
+        var notPdf = new MockMultipartFile("file", "x.pdf", "application/pdf", "hello".getBytes());
+        var pdf = new MockMultipartFile("file", "x.pdf", "application/pdf", blankPdf());
+
+        assertEquals(HttpStatus.BAD_REQUEST, status(() -> service.uploadStatementPdf(TA, Q, 3, notPdf, null)));
+        assertEquals(HttpStatus.CONFLICT, status(() -> service.uploadStatementPdf(TA, Q, 2, pdf, null)));
+        assertEquals(HttpStatus.FORBIDDEN, status(() -> service.uploadStatementPdf(STRANGER, Q, 3, pdf, null)));
+        verify(pdfs, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("The saved statement of a PDF question is the uploaded file, not a render")
+    void statementServed() {
+        question.setStatementKind(BankQuestion.StatementKind.PDF);
+        byte[] bytes = {1, 2, 3};
+        when(pdfs.findById(Q)).thenReturn(Optional.of(
+            BankQuestionStatementPdf.builder().questionId(Q).pdf(bytes).build()));
+
+        assertArrayEquals(bytes, service.statement(TA, Q).pdf());
+        verifyNoInteractions(renderer);
+        assertEquals(HttpStatus.FORBIDDEN, status(() -> service.statement(STRANGER, Q)));
+    }
+
+    @Test
+    @DisplayName("A preview renders the editor's text with the question's saved samples")
+    void previewUsesSamples() {
+        stored.add(BankQuestionTest.builder().testId(9L).questionId(Q).sample(true).ordinal(1)
+            .name("1").inputBytes(3).answerBytes(1).build());
+        when(testData.findAllById(any())).thenReturn(List.of(BankQuestionTestData.builder()
+            .testId(9L).input("1 2".getBytes()).answer("3".getBytes()).build()));
+        when(renderer.render(any())).thenReturn(new StatementRenderer.Result(new byte[] {7}, List.of("p")));
+
+        QuestionBankDto.Rendered r = service.preview(TA, Q,
+            new QuestionBankDto.PreviewRequest(null, "Typed, not saved", 2000, 128));
+
+        assertEquals(List.of("p"), r.problems());
+        verify(renderer).render(argThat(s -> s.markdown().equals("Typed, not saved") && s.title().equals("Sum")
+            && s.timeLimitMs() == 2000 && s.samples().size() == 1 && s.samples().get(0).answer().equals("3")));
     }
 }

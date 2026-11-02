@@ -40,6 +40,8 @@ public class QuestionBankDto {
         Long classroomId,
         String title,
         String statement,
+        BankQuestion.StatementKind statementKind,
+        StatementPdfInfo statementPdf,
         int timeLimitMs,
         int memoryLimitMb,
         BankQuestion.Checker checker,
@@ -93,4 +95,22 @@ public class QuestionBankDto {
     ) {}
 
     public record Download(String name, byte[] bytes) {}
+
+    /** The setter's own statement PDF, when there is one; it may be kept while Markdown is used. */
+    public record StatementPdfInfo(String fileName, int sizeBytes, int pages, Instant uploadedAt,
+                                   String uploadedBy) {}
+
+    /**
+     * What the editor holds right now, rendered without saving: so the preview follows the
+     * typing. The question's saved samples are added.
+     */
+    public record PreviewRequest(
+        @Size(max = 200) String title,
+        @Size(max = 100_000) String statement,
+        @NotNull @Min(100) @Max(20_000) Integer timeLimitMs,
+        @NotNull @Min(16) @Max(2048) Integer memoryLimitMb
+    ) {}
+
+    /** A rendered statement, with any formula that could not be drawn. */
+    public record Rendered(byte[] pdf, List<String> problems) {}
 }

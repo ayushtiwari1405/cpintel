@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it } from 'vitest'
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import QuestionBankPage from './QuestionBankPage'
@@ -9,11 +9,18 @@ import type { BankClassroom, QuestionDetail, QuestionSummary } from '@/types'
 
 type Routes = Parameters<typeof fakeServer>[0]
 
+// jsdom has no object URLs; the iframe only needs some address.
+beforeAll(() => {
+  URL.createObjectURL = () => 'blob:preview'
+  URL.revokeObjectURL = () => {}
+})
+
 const ROOM: BankClassroom = { classroomId: 5, name: 'DSA', role: 'TA', active: true }
 
 function question(overrides: Partial<QuestionDetail> = {}): QuestionDetail {
   return {
     questionId: 40, classroomId: 5, title: 'Sum of two', statement: 'Add $a$ and $b$.',
+    statementKind: 'MARKDOWN', statementPdf: null,
     timeLimitMs: 1000, memoryLimitMb: 256, checker: 'EXACT', floatTolerance: null,
     modelLanguage: 'cpp', modelSource: 'int main(){}', status: 'DRAFT', version: 3,
     archived: false, createdAt: '2026-11-01T10:00:00Z', createdBy: 'Asha',
@@ -39,6 +46,7 @@ function open(path: string, routes: Routes = {}) {
     'GET /question-bank/classrooms': { data: [ROOM] },
     'GET /question-bank/classrooms/5/questions': { data: [summary] },
     'GET /question-bank/questions/40': { data: question() },
+    'POST /question-bank/questions/40/statement/preview': { data: null },
     ...routes,
   })
   renderAt(path, <QuestionBankPage />)
@@ -128,6 +136,63 @@ describe('question bank', () => {
     expect(await screen.findByLabelText('Title')).toBeDisabled()
     expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Add tests/ })).not.toBeInTheDocument()
+  })
+})
+
+describe('statement', () => {
+  it('renders the typed statement, unsaved, and lists formulas that could not be drawn', async () => {
+    const server = open('/questions?classroom=5&q=40', {
+      'POST /question-bank/questions/40/statement/preview': req => ({ data: null, status: 200, ...(req && {}) }),
+    })
+    const editor = await screen.findByLabelText('Statement')
+    await waitFor(() => expect(server.calls('POST /question-bank/questions/40/statement/preview').length).toBeGreaterThan(0), { timeout: 3000 })
+
+    await userEvent.type(editor, ' More.')
+    await waitFor(() => {
+      const calls = server.calls('POST /question-bank/questions/40/statement/preview')
+      expect((calls[calls.length - 1].body as Record<string, unknown>).statement).toBe('Add $a$ and $b$. More.')
+    }, { timeout: 3000 })
+    expect(await screen.findByTitle('Statement preview')).toBeInTheDocument()
+  })
+
+  it('inserts a section where the cursor is', async () => {
+    open('/questions?classroom=5&q=40')
+    const editor = await screen.findByLabelText('Statement')
+    await userEvent.click(screen.getByRole('button', { name: 'Output' }))
+    expect((editor as HTMLTextAreaElement).value).toContain('## Output')
+  })
+
+  it('a question whose statement is an uploaded PDF shows it, and asks before going back', async () => {
+    const pdfQuestion = question({
+      statementKind: 'PDF',
+      statementPdf: { fileName: 'sum.pdf', sizeBytes: 2048, pages: 2, uploadedAt: '2026-11-02T10:00:00Z', uploadedBy: 'Asha' },
+    })
+    const server = open('/questions?classroom=5&q=40', {
+      'GET /question-bank/questions/40': { data: pdfQuestion },
+      'GET /question-bank/questions/40/statement.pdf': { data: null },
+      'DELETE /question-bank/questions/40/statement-pdf': { data: question({ version: 4 }) },
+    })
+    expect(await screen.findByText('sum.pdf')).toBeInTheDocument()
+    expect(screen.getByText(/2 pages/)).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Use the written statement' }))
+    expect(server.calls('DELETE /question-bank/questions/40/statement-pdf')).toHaveLength(0)
+    await userEvent.click(screen.getByRole('button', { name: 'Remove' }))
+    await waitFor(() => expect(server.calls('DELETE /question-bank/questions/40/statement-pdf')).toHaveLength(1))
+  })
+
+  it('uploads a chosen PDF with the current version', async () => {
+    const server = open('/questions?classroom=5&q=40', {
+      'PUT /question-bank/questions/40/statement-pdf': { data: question({ version: 4, statementKind: 'PDF' }) },
+      'GET /question-bank/questions/40/statement.pdf': { data: null },
+    })
+    const chooser = await screen.findByLabelText('Choose a statement PDF')
+    await userEvent.upload(chooser, new File(['%PDF-1.7'], 'mine.pdf', { type: 'application/pdf' }))
+
+    await waitFor(() => expect(server.calls('PUT /question-bank/questions/40/statement-pdf')).toHaveLength(1))
+    const form = server.calls('PUT /question-bank/questions/40/statement-pdf')[0].body as FormData
+    expect(form.get('version')).toBe('3')
+    expect((form.get('file') as File).name).toBe('mine.pdf')
   })
 })
 

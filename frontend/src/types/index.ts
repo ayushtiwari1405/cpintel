@@ -1483,6 +1483,24 @@ export type BankRole = 'ADMIN' | 'TA'
 export type QuestionChecker = 'EXACT' | 'IGNORE_CASE' | 'FLOAT'
 export type QuestionStatus = 'DRAFT' | 'READY'
 export type ModelLanguage = 'c' | 'cpp' | 'python3'
+/** Whether candidates read the rendered Markdown or the setter's own PDF. */
+export type StatementKind = 'MARKDOWN' | 'PDF'
+
+export interface StatementPdfInfo {
+  fileName: string
+  sizeBytes: number
+  pages: number
+  uploadedAt: string
+  uploadedBy: string | null
+}
+
+/** What the editor holds, rendered without saving. */
+export interface StatementPreviewRequest {
+  title: string
+  statement: string
+  timeLimitMs: number
+  memoryLimitMb: number
+}
 
 /** A classroom whose question bank this person may open, and why. */
 export interface BankClassroom {
@@ -1528,6 +1546,8 @@ export interface QuestionDetail {
   classroomId: number
   title: string
   statement: string
+  statementKind: StatementKind
+  statementPdf: StatementPdfInfo | null
   timeLimitMs: number
   memoryLimitMb: number
   checker: QuestionChecker
