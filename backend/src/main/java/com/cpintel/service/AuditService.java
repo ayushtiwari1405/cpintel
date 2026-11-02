@@ -118,6 +118,13 @@ public class AuditService {
     public static final String EXAM_MARK_REOPENED    = "ADMIN_EXAM_MARK_REOPENED";
     public static final String EXAM_MARK_REOPEN_CLOSED = "ADMIN_EXAM_MARK_REOPEN_CLOSED";
 
+    // The question bank, by an admin or a TA of the classroom
+    public static final String QUESTION_CREATED       = "QUESTION_CREATED";
+    public static final String QUESTION_UPDATED       = "QUESTION_UPDATED";
+    public static final String QUESTION_ARCHIVED      = "QUESTION_ARCHIVED";
+    public static final String QUESTION_RESTORED      = "QUESTION_RESTORED";
+    public static final String QUESTION_TESTS_CHANGED = "QUESTION_TESTS_CHANGED";
+
     // Admin actions on the contest file policy
     public static final String FILE_POLICY_DEFAULT = "ADMIN_FILE_POLICY_DEFAULT";
     public static final String FILE_POLICY_RULE    = "ADMIN_FILE_POLICY_RULE";

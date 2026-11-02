@@ -27,6 +27,20 @@ function matchMedia(query: string): MediaQueryList {
 }
 window.matchMedia = matchMedia
 
+/**
+ * jsdom has <dialog> but not its modal methods. These open and close it the way a browser
+ * does, minus the inert backdrop, so a component built on <Dialog> can be driven in a test.
+ */
+if (!HTMLDialogElement.prototype.showModal) {
+  HTMLDialogElement.prototype.showModal = function showModal(this: HTMLDialogElement) {
+    this.setAttribute('open', '')
+  }
+  HTMLDialogElement.prototype.close = function close(this: HTMLDialogElement) {
+    this.removeAttribute('open')
+    this.dispatchEvent(new Event('close'))
+  }
+}
+
 afterEach(() => {
   cleanup()
   // The auth store is a module singleton persisted to localStorage: put both back so no test

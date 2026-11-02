@@ -3,7 +3,7 @@ import { forwardRef } from 'react'
 import {
   ArrowLeft, LayoutDashboard, BarChart2, Map, Link2, User, PanelLeftClose, PanelLeftOpen,
   LogOut, Code2, Swords, Shield, Users, ScrollText, FolderCog, UsersRound, FileText, School,
-  ClipboardCheck, Monitor, X, CalendarCheck, type LucideIcon } from 'lucide-react'
+  ClipboardCheck, Monitor, X, CalendarCheck, Library, type LucideIcon } from 'lucide-react'
 import { useLogout } from '@/hooks/useAuth'
 import { ThemeToggle } from './ThemeToggle'
 import { BrandLockup } from './BrandMark'
@@ -11,6 +11,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { isAdmin, isSuperAdmin, roleLabel } from '@/utils/roles'
 import { clsx } from 'clsx'
 import { useMyEvaluationExams } from '@/hooks/useEvaluation'
+import { useBankClassrooms } from '@/hooks/useQuestionBank'
 import { isDesktop } from '@/utils/desktopBridge'
 
 interface Item { to: string; icon: LucideIcon; label: string }
@@ -27,6 +28,7 @@ const COMPETE:   Item = { to: '/compete',   icon: Swords,          label: 'Compe
 const EXAMS:     Item = { to: '/exams',     icon: FileText,        label: 'Exams' }
 const TEAMS:     Item = { to: '/teams',     icon: UsersRound,      label: 'Teams' }
 const EVALUATE:  Item = { to: '/evaluate',  icon: ClipboardCheck,  label: 'Evaluate' }
+const QUESTIONS: Item = { to: '/questions', icon: Library,         label: 'Question bank' }
 const PLATFORMS: Item = { to: '/platforms', icon: Link2,           label: 'Platforms' }
 const PROFILE:   Item = { to: '/profile',   icon: User,            label: 'Profile' }
 const DESKTOP:   Item = { to: '/download',  icon: Monitor,         label: 'Desktop app' }
@@ -39,6 +41,7 @@ const adminItems: Item[] = [
   { to: '/admin/classrooms',    icon: School,     label: 'Classrooms' },
   { to: '/admin/teams',         icon: UsersRound, label: 'Teams' },
   { to: '/admin/exams',         icon: FileText,   label: 'Examinations' },
+  QUESTIONS,
   { to: '/admin/audit',         icon: ScrollText, label: 'Audit trail' },
   { to: '/admin/contest-files', icon: FolderCog,  label: 'Contest files' },
 ]
@@ -77,13 +80,16 @@ export const Sidebar = forwardRef<HTMLElement, Props>(function Sidebar(
   // Teaching assistants get a marking page; everyone else never sees the link.
   const { data: marking } = useMyEvaluationExams()
   const marks = !!marking && marking.length > 0
+  // So do they get the question bank of each classroom they TA in.
+  const { data: banks } = useBankClassrooms(!showAdmin)
+  const writes = !showAdmin && !!banks && banks.length > 0
   // Labels everywhere except a collapsed wide sidebar; the drawer is always full width.
   const expanded = wide ? open : true
 
   const studentGroups: Group[] = [
     { label: 'Train',       items: [DASHBOARD, ANALYTICS, ROADMAP, PLAN] },
     { label: 'Solve',       items: [PRACTICE, COMPETE, EXAMS] },
-    { label: 'Collaborate', items: marks ? [TEAMS, EVALUATE] : [TEAMS] },
+    { label: 'Collaborate', items: [TEAMS, ...(marks ? [EVALUATE] : []), ...(writes ? [QUESTIONS] : [])] },
     // Where to get the desktop app — pointless inside it.
     { label: 'Account',     items: isDesktop() ? [PLATFORMS, PROFILE] : [PLATFORMS, PROFILE, DESKTOP] },
   ]

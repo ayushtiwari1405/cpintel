@@ -17,8 +17,12 @@ function links() {
   return within(nav()).getAllByRole('link').map(a => `${a.textContent?.trim()} -> ${a.getAttribute('href')}`)
 }
 
-function as(role: Role, taExams: unknown[] = []) {
-  const server = fakeServer({ 'GET /users/me': { data: user(role) }, 'GET /evaluation/exams': { data: taExams } })
+function as(role: Role, taExams: unknown[] = [], banks: unknown[] = []) {
+  const server = fakeServer({
+    'GET /users/me': { data: user(role) },
+    'GET /evaluation/exams': { data: taExams },
+    'GET /question-bank/classrooms': { data: banks },
+  })
   signedIn(user(role))
   return server
 }
@@ -30,7 +34,7 @@ const STUDENT = [
 ]
 const CONSOLE = [
   'Overview -> /admin', 'Users -> /admin/users', 'Classrooms -> /admin/classrooms', 'Teams -> /admin/teams',
-  'Examinations -> /admin/exams', 'Audit trail -> /admin/audit', 'Contest files -> /admin/contest-files',
+  'Examinations -> /admin/exams', 'Question bank -> /questions', 'Audit trail -> /admin/audit', 'Contest files -> /admin/contest-files',
   'Profile -> /profile',
 ]
 
@@ -46,6 +50,20 @@ describe('sidebar navigation by role', () => {
     as('USER', [{ eventId: 3, name: 'Midterm' }])
     renderSidebar()
     await waitFor(() => expect(links()).toContain('Evaluate -> /evaluate'))
+  })
+
+  it('a teaching assistant gets the question bank of the classrooms they TA in', async () => {
+    as('USER', [], [{ classroomId: 5, name: 'DSA', role: 'TA', active: true }])
+    renderSidebar()
+    await waitFor(() => expect(links()).toContain('Question bank -> /questions'))
+    expect(links()).not.toContain('Evaluate -> /evaluate')
+  })
+
+  it('a student with no classroom to write questions for is not offered the bank', async () => {
+    const server = as('USER')
+    renderSidebar()
+    await waitFor(() => expect(server.calls('GET /question-bank/classrooms')).toHaveLength(1))
+    expect(links()).not.toContain('Question bank -> /questions')
   })
 
   it('a student who marks nothing is not offered the marking page', async () => {
@@ -75,6 +93,7 @@ describe('sidebar navigation by role', () => {
       expect(links().some(l => l.startsWith('Practice plan'))).toBe(false)
       // Admins are not teaching assistants here; the marking list is not even asked for.
       expect(server.calls('GET /evaluation/exams')).toHaveLength(0)
+      expect(server.calls('GET /question-bank/classrooms')).toHaveLength(0)
     })
 
   it('an examination session is offered nothing but its paper', () => {

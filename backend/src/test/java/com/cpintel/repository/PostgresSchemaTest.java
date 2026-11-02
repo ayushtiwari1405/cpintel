@@ -2,7 +2,13 @@ package com.cpintel.repository;
 
 import com.cpintel.analytics.MaterializedViewRefresher;
 import com.cpintel.evaluation.EvaluationLocks;
+import com.cpintel.entity.BankQuestion;
+import com.cpintel.entity.BankQuestionTest;
+import com.cpintel.entity.BankQuestionTestData;
 import com.cpintel.entity.Classroom;
+import com.cpintel.repository.jpa.BankQuestionRepository;
+import com.cpintel.repository.jpa.BankQuestionTestDataRepository;
+import com.cpintel.repository.jpa.BankQuestionTestRepository;
 import com.cpintel.repository.jpa.ClassroomRepository;
 import com.cpintel.repository.jpa.ContestSummaryRepository;
 import com.cpintel.repository.jpa.ExamTaAssignmentRepository;
@@ -68,6 +74,9 @@ class PostgresSchemaTest {
     @Autowired private SyncJobRepository syncJobs;
     @Autowired private EvaluationLocks locks;
     @Autowired private MaterializedViewRefresher views;
+    @Autowired private BankQuestionRepository questions;
+    @Autowired private BankQuestionTestRepository bankTests;
+    @Autowired private BankQuestionTestDataRepository bankTestData;
 
     // ------------------------------------------------------------------- fixtures
 
@@ -158,6 +167,54 @@ class PostgresSchemaTest {
 
         assertThat(classrooms.removeTa(room, ta)).isEqualTo(1);
         assertThat(classrooms.removeTa(room, ta)).isZero();
+    }
+
+    // ------------------------------------------------------------------- question bank
+
+    @Test
+    @DisplayName("question bank: tests list in order, counts add up, and a reorder may swap positions")
+    void questionBank() {
+        long author = user("setter");
+        long room = classroom("Bank", null);
+        BankQuestion q = questions.saveAndFlush(BankQuestion.builder()
+            .classroomId(room).title("Sum").createdBy(author).updatedBy(author).build());
+
+        BankQuestionTest s1 = bankTest(q.getQuestionId(), true, 1, 4, 2);
+        BankQuestionTest t1 = bankTest(q.getQuestionId(), false, 1, 10, 3);
+        BankQuestionTest t2 = bankTest(q.getQuestionId(), false, 2, 20, null);
+
+        assertThat(bankTests.findOrdered(q.getQuestionId())).extracting(BankQuestionTest::getTestId)
+            .containsExactly(s1.getTestId(), t1.getTestId(), t2.getTestId());
+        List<Object[]> counts = bankTests.countsFor(List.of(q.getQuestionId()));
+        assertThat(counts).hasSize(1);
+        assertThat(((Number) counts.get(0)[1]).intValue()).isEqualTo(1);
+        assertThat(((Number) counts.get(0)[2]).intValue()).isEqualTo(2);
+        assertThat(((Number) counts.get(0)[3]).longValue()).isEqualTo(4 + 2 + 10 + 3 + 20);
+
+        // The unique position is checked at commit, so two tests can trade places in one go.
+        t1.setOrdinal(2);
+        t2.setOrdinal(1);
+        bankTests.saveAllAndFlush(List.of(t1, t2));
+        assertThat(bankTests.findOrdered(q.getQuestionId())).extracting(BankQuestionTest::getTestId)
+            .containsExactly(s1.getTestId(), t2.getTestId(), t1.getTestId());
+
+        assertThat(questions.findForUpdate(q.getQuestionId())).isPresent();
+        assertThat(bankTestData.findById(t2.getTestId()).orElseThrow().getAnswer()).isNull();
+
+        // Deleting a test takes its bytes with it.
+        bankTests.deleteById(t1.getTestId());
+        bankTests.flush();
+        assertThat(count("SELECT count(*) FROM bank_question_test_data WHERE test_id = ?",
+            t1.getTestId())).isZero();
+    }
+
+    private BankQuestionTest bankTest(long questionId, boolean sample, int ordinal, int in, Integer ans) {
+        BankQuestionTest t = bankTests.saveAndFlush(BankQuestionTest.builder()
+            .questionId(questionId).sample(sample).ordinal(ordinal).name("t" + ordinal)
+            .inputBytes(in).answerBytes(ans).build());
+        bankTestData.saveAndFlush(BankQuestionTestData.builder().testId(t.getTestId())
+            .input(new byte[in]).answer(ans == null ? null : new byte[ans]).build());
+        return t;
     }
 
     // ------------------------------------------------------------------- analytics

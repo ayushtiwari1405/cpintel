@@ -1476,3 +1476,84 @@ export interface RevisionItem {
   queuePosition: number | null
   problems: PlanProblem[]
 }
+
+// ------------------------------------------------------------------ question bank
+
+export type BankRole = 'ADMIN' | 'TA'
+export type QuestionChecker = 'EXACT' | 'IGNORE_CASE' | 'FLOAT'
+export type QuestionStatus = 'DRAFT' | 'READY'
+export type ModelLanguage = 'c' | 'cpp' | 'python3'
+
+/** A classroom whose question bank this person may open, and why. */
+export interface BankClassroom {
+  classroomId: number
+  name: string
+  role: BankRole
+  active: boolean
+}
+
+export interface QuestionSummary {
+  questionId: number
+  classroomId: number
+  title: string
+  status: QuestionStatus
+  samples: number
+  secretTests: number
+  testBytes: number
+  version: number
+  archived: boolean
+  updatedAt: string
+  updatedBy: string | null
+}
+
+export interface QuestionTestInfo {
+  testId: number
+  sample: boolean
+  ordinal: number
+  name: string
+  inputBytes: number
+  /** Null while the answer is missing. */
+  answerBytes: number | null
+}
+
+export interface QuestionLimits {
+  maxTests: number
+  maxQuestionBytes: number
+  maxFileBytes: number
+  maxSampleBytes: number
+}
+
+export interface QuestionDetail {
+  questionId: number
+  classroomId: number
+  title: string
+  statement: string
+  timeLimitMs: number
+  memoryLimitMb: number
+  checker: QuestionChecker
+  floatTolerance: number | null
+  modelLanguage: ModelLanguage | null
+  modelSource: string | null
+  status: QuestionStatus
+  version: number
+  archived: boolean
+  createdAt: string
+  createdBy: string | null
+  updatedAt: string
+  updatedBy: string | null
+  tests: QuestionTestInfo[]
+  limits: QuestionLimits
+}
+
+export interface QuestionRequest {
+  title: string
+  statement: string
+  timeLimitMs: number
+  memoryLimitMb: number
+  checker: QuestionChecker
+  floatTolerance: number | null
+  modelLanguage: ModelLanguage | null
+  modelSource: string | null
+  /** The version the editor loaded; omitted when creating. */
+  version?: number
+}
