@@ -5,6 +5,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.cpintel.questions.QuestionBankDto;
 import com.cpintel.questions.QuestionBankService;
+import com.cpintel.questions.QuestionCheckService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -47,6 +48,7 @@ public class QuestionBankController {
     static final long MAX_PACKAGE_BYTES = 72L * 1024 * 1024;
 
     private final QuestionBankService bank;
+    private final QuestionCheckService checks;
     private final ObjectMapper objectMapper;
 
     @GetMapping("/classrooms")
@@ -180,7 +182,26 @@ public class QuestionBankController {
         return ResponseEntity.ok(ApiResponse.ok(bank.reorder(userId, questionId, req, httpReq)));
     }
 
-    @PostMapping("/questions/{questionId}/statement/preview")
+    @PostMapping("/questions/{questionId}/check")
+    @Operation(summary = "Check the model solution against every test",
+        description = "Runs in the background; poll GET .../check. With generateMissing, tests without "
+            + "an answer first get the model solution's output as theirs. A pass makes the question ready.")
+    public ResponseEntity<ApiResponse<QuestionBankDto.Check>> startCheck(
+        @AuthenticationPrincipal Long userId, @PathVariable Long questionId,
+        @RequestBody(required = false) QuestionBankDto.CheckRequest req, HttpServletRequest httpReq) {
+        boolean generate = req != null && req.generateMissing();
+        return ResponseEntity.status(HttpStatus.ACCEPTED)
+            .body(ApiResponse.ok(checks.start(userId, questionId, generate, httpReq)));
+    }
+
+    @GetMapping("/questions/{questionId}/check")
+    @Operation(summary = "The latest check of the model solution, or null if there has been none")
+    public ResponseEntity<ApiResponse<QuestionBankDto.Check>> latestCheck(
+        @AuthenticationPrincipal Long userId, @PathVariable Long questionId) {
+        return ResponseEntity.ok(ApiResponse.ok(checks.latest(userId, questionId)));
+    }
+
+        @PostMapping("/questions/{questionId}/statement/preview")
     @Operation(summary = "Render the statement as it is in the editor, without saving",
         description = "A PDF. Formulas that could not be drawn are listed, URL-encoded JSON, in "
             + "the X-Statement-Problems header.")

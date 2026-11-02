@@ -1,6 +1,7 @@
 package com.cpintel.questions;
 
 import com.cpintel.entity.BankQuestion;
+import com.cpintel.entity.BankQuestionCheck;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -114,6 +115,26 @@ public class QuestionBankDto {
     /** A question made from a package, and what the import had to change or leave out. */
     public record ImportResult(QuestionDetail question, List<String> warnings) {}
 
-    /** A rendered statement, with any formula that could not be drawn. */
+    /** Start a check; with {@code generateMissing}, missing answers come from the model solution first. */
+    public record CheckRequest(boolean generateMissing) {}
+
+    /** The latest check of a question's model solution. */
+    public record Check(
+        BankQuestionCheck.Status status,
+        boolean generate,
+        /** The question version the result is about; compare with the question's own. */
+        int version,
+        String startedBy,
+        Instant startedAt,
+        Instant finishedAt,
+        String summary,
+        Integer maxTimeMs,
+        List<CheckedTest> results
+    ) {}
+
+    /** One test's outcome. {@code verdict} is a QuestionCheckService.Verdict name. */
+    public record CheckedTest(Long testId, boolean sample, int ordinal, String verdict, Long timeMs, String message) {}
+
+        /** A rendered statement, with any formula that could not be drawn. */
     public record Rendered(byte[] pdf, List<String> problems) {}
 }

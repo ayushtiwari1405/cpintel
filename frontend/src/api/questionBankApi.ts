@@ -1,6 +1,6 @@
 import { apiClient } from './client'
 import type {
-  ApiResponse, BankClassroom, QuestionDetail, QuestionImport, QuestionRequest, QuestionSummary,
+  ApiResponse, BankClassroom, QuestionCheck, QuestionDetail, QuestionImport, QuestionRequest, QuestionSummary,
   StatementPreviewRequest,
 } from '@/types'
 
@@ -49,6 +49,14 @@ export const questionBankApi = {
     apiClient.post<ApiResponse<QuestionImport>>(
       `/question-bank/classrooms/${classroomId}/questions/import`, file,
       { params: { fileName: file.name }, headers: { 'Content-Type': 'application/zip' }, timeout: 300_000 })
+      .then(r => r.data.data),
+
+  startCheck: (questionId: number, generateMissing: boolean) =>
+    apiClient.post<ApiResponse<QuestionCheck>>(`/question-bank/questions/${questionId}/check`, { generateMissing })
+      .then(r => r.data.data),
+
+  latestCheck: (questionId: number) =>
+    apiClient.get<ApiResponse<QuestionCheck | null>>(`/question-bank/questions/${questionId}/check`)
       .then(r => r.data.data),
 
   packageTemplate: () =>

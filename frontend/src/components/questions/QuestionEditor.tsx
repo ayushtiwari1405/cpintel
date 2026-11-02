@@ -8,6 +8,7 @@ import { ErrorState, LoadingState } from '@/components/common/States'
 import { Panel, Pill } from '@/components/admin/AdminUi'
 import { QuestionTests, packageName, saveBlob } from '@/components/questions/QuestionTests'
 import { StatementPanel } from '@/components/questions/StatementPanel'
+import { CheckPanel } from '@/components/questions/CheckPanel'
 import { useBankQuestion, useQuestionActions } from '@/hooks/useQuestionBank'
 import type { ModelLanguage, QuestionChecker, QuestionDetail, QuestionRequest } from '@/types'
 
@@ -208,8 +209,7 @@ function Editor({ question, readOnly, onBack }: {
       {question.status === 'DRAFT' && (
         <p className="text-xs text-gray-500">
           A question becomes ready for an examination once its model solution has been run on
-          every test and agrees with each answer. That check comes in a later update; until then
-          every question stays a draft.
+          every test and agrees with each answer: use Check, below.
         </p>
       )}
 
@@ -270,6 +270,8 @@ function Editor({ question, readOnly, onBack }: {
           </label>
         </fieldset>
       </Panel>
+
+      <CheckPanel question={question} readOnly={readOnly} unsaved={dirty} />
 
       {dirty && !readOnly && (
         <p className="text-xs text-amber-300">You have unsaved changes above.</p>

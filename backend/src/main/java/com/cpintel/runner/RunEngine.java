@@ -42,6 +42,24 @@ public class RunEngine {
     public record Limits(long timeLimitMs, long compileTimeLimitMs, int memoryLimitMb,
                          int outputLimitBytes) {}
 
+    /**
+     * The most an internal run may ask for, whatever this engine's defaults: checking a question's
+     * model solution needs that question's own time and memory limits, and room for its whole
+     * output to be compared. The compile limit is never raised.
+     */
+    public static final long MAX_TIME_LIMIT_MS = 20_000;
+    public static final int MAX_MEMORY_LIMIT_MB = 1024;
+    public static final int MAX_OUTPUT_LIMIT_BYTES = 16 * 1024 * 1024;
+
+    /** These limits within the caps above, keeping this engine's compile limit. */
+    public Limits clamp(long timeLimitMs, int memoryLimitMb, int outputLimitBytes) {
+        return new Limits(
+            Math.max(100, Math.min(timeLimitMs, MAX_TIME_LIMIT_MS)),
+            limits.compileTimeLimitMs(),
+            Math.max(16, Math.min(memoryLimitMb, MAX_MEMORY_LIMIT_MB)),
+            Math.max(1024, Math.min(outputLimitBytes, MAX_OUTPUT_LIMIT_BYTES)));
+    }
+
     private final Map<String, LanguageRuntime> runtimes;
     private final Sandbox sandbox;
     private final Limits limits;
@@ -93,11 +111,21 @@ public class RunEngine {
      * (the sandbox's own wall clock has some slack), and setting up and tearing down.
      */
     public Duration deadline(int tests) {
+        return deadline(tests, limits);
+    }
+
+    public static Duration deadline(int tests, Limits limits) {
         return Duration.ofMillis(limits.compileTimeLimitMs()
             + 2L * Math.max(1, tests) * limits.timeLimitMs()).plusSeconds(30);
     }
 
     public RunDto.RunResponse run(String language, String source, List<RunDto.TestCase> tests) {
+        return run(language, source, tests, limits);
+    }
+
+    /** A run under the given limits, which the caller has already clamped. */
+    public RunDto.RunResponse run(String language, String source, List<RunDto.TestCase> tests,
+                                  Limits limits) {
         String blocked = blockedReason();
         if (blocked != null) return RunDto.RunResponse.unavailable(blocked);
 
@@ -122,15 +150,17 @@ public class RunEngine {
             String compileOutput = null;
 
             if (compile.isPresent()) {
+                // The engine's own limits, not the run's: a question's 64 MB memory limit is for
+                // the program, and g++ needs more than that to build it.
                 Sandbox.ExecResult built = sandbox.exec(compile.get(), workDir, "",
-                    new Sandbox.Limits(Duration.ofMillis(limits.compileTimeLimitMs()),
-                        limits.memoryLimitMb(), false, limits.outputLimitBytes()));
+                    new Sandbox.Limits(Duration.ofMillis(this.limits.compileTimeLimitMs()),
+                        this.limits.memoryLimitMb(), false, this.limits.outputLimitBytes()));
                 compileMs = built.durationMs();
                 compileOutput = merge(built.stdout(), built.stderr());
 
                 if (built.timedOut()) {
                     return RunDto.RunResponse.failedToCompile(
-                        "Compilation timed out after " + limits.compileTimeLimitMs() + " ms.",
+                        "Compilation timed out after " + this.limits.compileTimeLimitMs() + " ms.",
                         compileMs);
                 }
                 if (!built.ok()) {
@@ -146,7 +176,7 @@ public class RunEngine {
                 if (Thread.currentThread().isInterrupted()) {
                     return RunDto.RunResponse.unavailable("The run was stopped at its time limit.");
                 }
-                results.add(runOne(runtime, workDir, tests.get(i), i));
+                results.add(runOne(runtime, workDir, tests.get(i), i, limits));
             }
 
             // Warnings are worth surfacing on success; a clean build should say nothing.
@@ -163,7 +193,7 @@ public class RunEngine {
     }
 
     private RunDto.TestResult runOne(LanguageRuntime runtime, Path workDir,
-                                     RunDto.TestCase test, int index) throws IOException {
+                                     RunDto.TestCase test, int index, Limits limits) throws IOException {
         String label = (test.label() == null || test.label().isBlank())
             ? "Test " + (index + 1) : test.label();
 
@@ -188,8 +218,8 @@ public class RunEngine {
         if (exec.timedOut()) {
             verdict = RunDto.Verdict.TIME_LIMIT_EXCEEDED;
         } else if (exec.exitCode() != 0) {
-            verdict = outOfMemory(exec.stderr()) || nearLimit(peakKb, runtime)
-                || imageTooBig(runtime, workDir)
+            verdict = outOfMemory(exec.stderr()) || nearLimit(peakKb, runtime, limits)
+                || imageTooBig(runtime, workDir, limits)
                 ? RunDto.Verdict.MEMORY_LIMIT_EXCEEDED : RunDto.Verdict.RUNTIME_ERROR;
         } else if (test.expected() == null) {
             verdict = RunDto.Verdict.NO_EXPECTED;
@@ -217,7 +247,7 @@ public class RunEngine {
      * from any other crash; that stays a runtime error. A global array too big for the cap is
      * caught by {@link #imageTooBig} instead.
      */
-    private boolean nearLimit(Long peakKb, LanguageRuntime runtime) {
+    private static boolean nearLimit(Long peakKb, LanguageRuntime runtime, Limits limits) {
         return peakKb != null && runtime.limitAddressSpace()
             && peakKb >= limits.memoryLimitMb() * 1024L * 9 / 10;
     }
@@ -228,7 +258,7 @@ public class RunEngine {
      * first word of the run command, relative to the work directory; anything that is not an
      * ELF there (an interpreter, a script) is never taken for one.
      */
-    private boolean imageTooBig(LanguageRuntime runtime, Path workDir) {
+    private static boolean imageTooBig(LanguageRuntime runtime, Path workDir, Limits limits) {
         if (!runtime.limitAddressSpace()) return false;
         List<String> command = runtime.runCommand(workDir);
         if (command.isEmpty()) return false;

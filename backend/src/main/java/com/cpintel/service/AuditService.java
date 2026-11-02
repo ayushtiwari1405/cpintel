@@ -125,6 +125,7 @@ public class AuditService {
     public static final String QUESTION_RESTORED      = "QUESTION_RESTORED";
     public static final String QUESTION_TESTS_CHANGED = "QUESTION_TESTS_CHANGED";
     public static final String QUESTION_IMPORTED      = "QUESTION_IMPORTED";
+    public static final String QUESTION_CHECK_STARTED = "QUESTION_CHECK_STARTED";
 
     // Admin actions on the contest file policy
     public static final String FILE_POLICY_DEFAULT = "ADMIN_FILE_POLICY_DEFAULT";

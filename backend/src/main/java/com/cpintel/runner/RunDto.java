@@ -40,7 +40,13 @@ public final class RunDto {
         @Size(max = 100) String contestId
     ) {}
 
-    /** What happened to one test. */
+    /**
+     * Limits for one run, from the backend's own checks (never from a user's Run): a question's
+     * time and memory limits, and room for its full output. Clamped by the engine.
+     */
+    public record RunLimits(long timeLimitMs, int memoryLimitMb, int outputLimitBytes) {}
+
+        /** What happened to one test. */
     public enum Verdict {
         OK,
         WRONG_ANSWER,

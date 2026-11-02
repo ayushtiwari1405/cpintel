@@ -62,14 +62,22 @@ public final class RunnerServer {
     /** How long a run may wait for a free slot before being turned away. */
     public static final long QUEUE_WAIT_MS = 20_000;
 
-    /** Largest request accepted: a 256 KB source plus fifty tests' input, with margin. */
-    private static final int MAX_BODY_BYTES = 4 * 1024 * 1024;
+    /**
+     * Largest request accepted: a 256 KB source plus the tests' input. Checking a question's
+     * model solution sends its real tests, which can be a few megabytes each. Read only after
+     * the token has been checked.
+     */
+    private static final int MAX_BODY_BYTES = 24 * 1024 * 1024;
 
     private static final int MAX_SOURCE_CHARS = 262_144;
     private static final int MAX_TESTS = 50;
 
-    /** The shape of a run request. Event rules are the backend's business, not this one's. */
-    record Request(String language, String source, List<RunDto.TestCase> tests) {}
+    /**
+     * The shape of a run request. Event rules are the backend's business, not this one's.
+     * {@code limits} is optional: the backend's own checks of a question pass that question's,
+     * and they are clamped to the engine's caps here whatever they say.
+     */
+    record Request(String language, String source, List<RunDto.TestCase> tests, RunDto.RunLimits limits) {}
 
     private final RunEngine engine;
     private final byte[] token;
@@ -188,10 +196,15 @@ public final class RunnerServer {
 
     private RunDto.RunResponse runBounded(Request req)
             throws InterruptedException, TimeoutException {
-        Future<RunDto.RunResponse> run = workers.submit(
-            () -> engine.run(req.language(), req.source(), req.tests()));
+        RunEngine.Limits limits = req.limits() == null ? null : engine.clamp(
+            req.limits().timeLimitMs(), req.limits().memoryLimitMb(), req.limits().outputLimitBytes());
+        Future<RunDto.RunResponse> run = workers.submit(() -> limits == null
+            ? engine.run(req.language(), req.source(), req.tests())
+            : engine.run(req.language(), req.source(), req.tests(), limits));
         try {
-            return run.get(engine.deadline(req.tests().size()).toMillis(), TimeUnit.MILLISECONDS);
+            long deadline = (limits == null ? engine.deadline(req.tests().size())
+                : RunEngine.deadline(req.tests().size(), limits)).toMillis();
+            return run.get(deadline, TimeUnit.MILLISECONDS);
         } catch (ExecutionException e) {
             Throwable cause = e.getCause();
             if (cause instanceof RuntimeException re) throw re;

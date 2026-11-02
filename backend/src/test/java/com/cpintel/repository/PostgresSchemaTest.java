@@ -3,10 +3,12 @@ package com.cpintel.repository;
 import com.cpintel.analytics.MaterializedViewRefresher;
 import com.cpintel.evaluation.EvaluationLocks;
 import com.cpintel.entity.BankQuestion;
+import com.cpintel.entity.BankQuestionCheck;
 import com.cpintel.entity.BankQuestionStatementPdf;
 import com.cpintel.entity.BankQuestionTest;
 import com.cpintel.entity.BankQuestionTestData;
 import com.cpintel.entity.Classroom;
+import com.cpintel.repository.jpa.BankQuestionCheckRepository;
 import com.cpintel.repository.jpa.BankQuestionRepository;
 import com.cpintel.repository.jpa.BankQuestionStatementPdfRepository;
 import com.cpintel.repository.jpa.BankQuestionTestDataRepository;
@@ -80,6 +82,7 @@ class PostgresSchemaTest {
     @Autowired private BankQuestionTestRepository bankTests;
     @Autowired private BankQuestionTestDataRepository bankTestData;
     @Autowired private BankQuestionStatementPdfRepository statementPdfs;
+    @Autowired private BankQuestionCheckRepository checks;
 
     // ------------------------------------------------------------------- fixtures
 
@@ -209,6 +212,14 @@ class PostgresSchemaTest {
             .pdf(new byte[] {1, 2}).fileName("s.pdf").sizeBytes(2).pages(1).uploadedBy(author).build());
         assertThat(statementPdfs.findInfo(q.getQuestionId())).get()
             .extracting(BankQuestionStatementPdfRepository.Info::getFileName).isEqualTo("s.pdf");
+
+        // A check left running by a restart is closed off; a finished one is not touched.
+        checks.saveAndFlush(BankQuestionCheck.builder().questionId(q.getQuestionId()).version(0)
+            .status(BankQuestionCheck.Status.RUNNING).startedAt(Instant.now()).startedBy(author).build());
+        assertThat(checks.abandonActive(Instant.now())).isEqualTo(1);
+        checks.flush();
+        assertThat(count("SELECT count(*) FROM bank_question_checks WHERE status = 'ERROR'")).isEqualTo(1);
+        assertThat(checks.abandonActive(Instant.now())).isZero();
 
         // Deleting a test takes its bytes with it.
         bankTests.deleteById(t1.getTestId());

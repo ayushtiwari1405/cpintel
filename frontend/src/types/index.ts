@@ -1565,6 +1565,33 @@ export interface QuestionDetail {
   limits: QuestionLimits
 }
 
+export type CheckStatus = 'QUEUED' | 'RUNNING' | 'PASSED' | 'FAILED' | 'ERROR'
+export type CheckVerdict = 'OK' | 'WRONG_ANSWER' | 'TIME_LIMIT' | 'CLOSE_TO_LIMIT' | 'RUNTIME_ERROR'
+  | 'MEMORY_LIMIT' | 'OUTPUT_TOO_LARGE' | 'NO_ANSWER' | 'NOT_RUN'
+
+export interface CheckedTest {
+  testId: number
+  sample: boolean
+  ordinal: number
+  verdict: CheckVerdict
+  timeMs: number | null
+  message: string | null
+}
+
+/** The latest check of a question's model solution against its tests. */
+export interface QuestionCheck {
+  status: CheckStatus
+  generate: boolean
+  /** The question version the result is about. */
+  version: number
+  startedBy: string | null
+  startedAt: string
+  finishedAt: string | null
+  summary: string | null
+  maxTimeMs: number | null
+  results: CheckedTest[]
+}
+
 /** A question made from a package, and what the import changed or left out. */
 export interface QuestionImport {
   question: QuestionDetail

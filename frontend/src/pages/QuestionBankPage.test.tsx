@@ -47,6 +47,7 @@ function open(path: string, routes: Routes = {}) {
     'GET /question-bank/classrooms/5/questions': { data: [summary] },
     'GET /question-bank/questions/40': { data: question() },
     'POST /question-bank/questions/40/statement/preview': { data: null },
+    'GET /question-bank/questions/40/check': { data: null },
     ...routes,
   })
   renderAt(path, <QuestionBankPage />)
@@ -238,6 +239,53 @@ describe('packages', () => {
 
     await userEvent.type(screen.getByLabelText('Title'), '!')
     expect(download).toBeDisabled()
+  })
+})
+
+describe('check', () => {
+  const finished = (overrides: Record<string, unknown> = {}) => ({
+    status: 'FAILED', generate: false, version: 3, startedBy: 'Asha',
+    startedAt: '2026-11-02T10:00:00Z', finishedAt: '2026-11-02T10:00:05Z',
+    summary: '1 of 2 tests failed. First: secret test 1, wrong answer: token 1: expected "3", got "4"',
+    maxTimeMs: 40,
+    results: [
+      { testId: 1, sample: true, ordinal: 1, verdict: 'OK', timeMs: 30, message: null },
+      { testId: 2, sample: false, ordinal: 1, verdict: 'WRONG_ANSWER', timeMs: 40, message: 'wrong answer: token 1: expected "3", got "4"' },
+    ],
+    ...overrides,
+  })
+
+  it('shows the last result with only the failing tests', async () => {
+    open('/questions?classroom=5&q=40', { 'GET /question-bank/questions/40/check': { data: finished() } })
+    expect(await screen.findByText('failed')).toBeInTheDocument()
+    expect(screen.getByText('Wrong answer')).toBeInTheDocument()
+    expect(screen.queryByText('Passed')).not.toBeInTheDocument()
+  })
+
+  it('starts a check, asking to fill in missing answers when the setter ticks it', async () => {
+    const server = open('/questions?classroom=5&q=40', {
+      'POST /question-bank/questions/40/check': { data: finished({ status: 'QUEUED', finishedAt: null, summary: null, results: [] }) },
+    })
+    await userEvent.click(await screen.findByLabelText(/Fill in the 1 missing answer/))
+    await userEvent.click(screen.getByRole('button', { name: /Check against all tests/ }))
+
+    await waitFor(() => expect(server.calls('POST /question-bank/questions/40/check')).toHaveLength(1))
+    expect(server.calls('POST /question-bank/questions/40/check')[0].body).toEqual({ generateMissing: true })
+    expect(await screen.findByText('waiting for its turn')).toBeInTheDocument()
+  })
+
+  it('says when the result is about an older version', async () => {
+    open('/questions?classroom=5&q=40', {
+      'GET /question-bank/questions/40/check': { data: finished({ status: 'PASSED', version: 2, results: [], summary: 'All 2 tests pass.' }) },
+    })
+    expect(await screen.findByText(/has changed since \(it is now version 3\)/)).toBeInTheDocument()
+  })
+
+  it('will not check unsaved changes', async () => {
+    open('/questions?classroom=5&q=40')
+    await userEvent.type(await screen.findByLabelText('Title'), '!')
+    expect(screen.getByRole('button', { name: /Check against all tests/ })).toBeDisabled()
+    expect(screen.getByText(/the check runs the saved question/)).toBeInTheDocument()
   })
 })
 

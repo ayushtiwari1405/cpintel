@@ -116,23 +116,46 @@ public class CodeRunnerService {
             return RunDto.RunResponse.unavailable("Running code is turned off on this deployment.");
         }
         RunDto.RunResponse response = remote()
-            ? runRemote(request)
+            ? runRemote(request.language(), request.source(), request.tests(), null)
             : failedIfError(local.run(request.language(), request.source(), request.tests()));
+        record(response);
+        return response;
+    }
+
+    /**
+     * A run for the backend's own purposes, under the given limits (clamped by the engine):
+     * checking a question bank solution against its tests. Never reachable from a user's Run,
+     * which always gets the deployment's limits.
+     */
+    public RunDto.RunResponse runWithLimits(String language, String source, List<RunDto.TestCase> tests,
+                                            RunDto.RunLimits limits) {
+        if (!enabled) {
+            return RunDto.RunResponse.unavailable("Running code is turned off on this deployment.");
+        }
+        RunDto.RunResponse response = remote()
+            ? runRemote(language, source, tests, limits)
+            : failedIfError(local.run(language, source, tests,
+                local.clamp(limits.timeLimitMs(), limits.memoryLimitMb(), limits.outputLimitBytes())));
         record(response);
         return response;
     }
 
     // ── remote ─────────────────────────────────────────────────────────────
 
-    private RunDto.RunResponse runRemote(RunDto.RunRequest request) {
+    private RunDto.RunResponse runRemote(String language, String source, List<RunDto.TestCase> tests,
+                                         RunDto.RunLimits limits) {
+        long perTest = limits == null ? timeLimitMs
+            : Math.min(limits.timeLimitMs(), RunEngine.MAX_TIME_LIMIT_MS);
         // Long enough for the queue the runner may hold this in, the compile, and every test.
         Duration budget = Duration.ofMillis(RunnerServer.QUEUE_WAIT_MS + compileTimeLimitMs
-            + (timeLimitMs + 1000) * Math.max(1, request.tests().size()) + 5000);
+            + (perTest + 1000) * Math.max(1, tests.size()) + 5000);
         try {
-            String body = json.writeValueAsString(Map.of(
-                "language", request.language(),
-                "source", request.source(),
-                "tests", request.tests()));
+            Map<String, Object> payload = new java.util.LinkedHashMap<>();
+            payload.put("language", language);
+            payload.put("source", source);
+            payload.put("tests", tests);
+            if (limits != null) payload.put("limits", limits);
+            String body = json.writeValueAsString(payload);
             HttpResponse<String> res = http.send(HttpRequest.newBuilder()
                     .uri(URI.create(remoteUrl + "/run"))
                     .timeout(budget)

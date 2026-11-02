@@ -436,4 +436,34 @@ class QuestionBankServiceTest {
         assertEquals("cafe-a-b.zip", QuestionBankService.packageName("Café — A+B"));
         assertEquals("question.zip", QuestionBankService.packageName("∑∑∑"));
     }
+
+    // ------------------------------------------------------------------ for the check
+
+    @Test
+    @DisplayName("Generated answers are stored as a new version, and only on the version that was run")
+    void storesGeneratedAnswers() {
+        BankQuestionTest t = BankQuestionTest.builder().testId(9L).questionId(Q).sample(false).ordinal(1)
+            .name("1").inputBytes(1).build();
+        BankQuestionTestData d = BankQuestionTestData.builder().testId(9L).input("1".getBytes()).build();
+        when(tests.findById(9L)).thenReturn(Optional.of(t));
+        when(testData.findById(9L)).thenReturn(Optional.of(d));
+
+        assertEquals(HttpStatus.CONFLICT, status(() -> service.storeGeneratedAnswers(Q, 2, Map.of(9L, "x".getBytes()), TA)));
+        assertNull(d.getAnswer());
+
+        assertEquals(4, service.storeGeneratedAnswers(Q, 3, Map.of(9L, "42\n".getBytes()), TA));
+        assertArrayEquals("42\n".getBytes(), d.getAnswer());
+        assertEquals(3, t.getAnswerBytes());
+        assertEquals(BankQuestion.Status.DRAFT, question.getStatus());
+    }
+
+    @Test
+    @DisplayName("Only the version that passed becomes ready, without a new version")
+    void marksReady() {
+        assertFalse(service.markReady(Q, 2));
+        assertEquals(BankQuestion.Status.DRAFT, question.getStatus());
+        assertTrue(service.markReady(Q, 3));
+        assertEquals(BankQuestion.Status.READY, question.getStatus());
+        assertEquals(3, question.getVersion());
+    }
 }

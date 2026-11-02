@@ -123,7 +123,14 @@ public class QuestionBankService {
         return classroom;
     }
 
-    private BankQuestion requireQuestion(Long userId, Long questionId) {
+    /** The question, for someone who may change it now. For the check, before it starts. */
+    BankQuestion requireEditable(Long userId, Long questionId) {
+        BankQuestion q = requireQuestion(userId, questionId);
+        requireWritable(userId, q.getClassroomId());
+        return q;
+    }
+
+    BankQuestion requireQuestion(Long userId, Long questionId) {
         BankQuestion q = questions.findById(questionId)
             .orElseThrow(() -> ApiException.notFound("No question with id " + questionId + "."));
         requireBank(userId, q.getClassroomId());
@@ -599,6 +606,44 @@ public class QuestionBankService {
 
     private static QuestionBankDto.Rendered rendered(StatementRenderer.Result r) {
         return new QuestionBankDto.Rendered(r.pdf(), r.problems());
+    }
+
+    // ------------------------------------------------------------------ for the check
+
+    /**
+     * Answers the model solution produced, stored as the tests' answers: a new version of the
+     * question, as any other change is. Refused if the question moved on from {@code version}
+     * while the solution ran.
+     */
+    @Transactional
+    int storeGeneratedAnswers(Long questionId, int version, Map<Long, byte[]> answers, Long userId) {
+        BankQuestion q = questions.findForUpdate(questionId)
+            .orElseThrow(() -> ApiException.notFound("No question with id " + questionId + "."));
+        if (q.getVersion() != version) {
+            throw ApiException.conflict("The question changed while its answers were being generated.");
+        }
+        for (Map.Entry<Long, byte[]> e : answers.entrySet()) {
+            BankQuestionTest test = tests.findById(e.getKey())
+                .filter(t -> t.getQuestionId().equals(questionId))
+                .orElseThrow(() -> ApiException.conflict("A test was removed while its answer was being generated."));
+            BankQuestionTestData data = testData.findById(e.getKey())
+                .orElseThrow(() -> ApiException.conflict("A test's data is missing."));
+            data.setAnswer(e.getValue());
+            test.setAnswerBytes(e.getValue().length);
+        }
+        q.touched(userId);
+        auditService.recordIn(q.getClassroomId(), userId, AuditService.QUESTION_TESTS_CHANGED, "QUESTION",
+            String.valueOf(questionId), null);
+        return q.getVersion();
+    }
+
+    /** Marks the question ready if it is still the version that passed; says whether it was. */
+    @Transactional
+    boolean markReady(Long questionId, int version) {
+        BankQuestion q = questions.findForUpdate(questionId).orElse(null);
+        if (q == null || q.getVersion() != version) return false;
+        q.setStatus(BankQuestion.Status.READY);
+        return true;
     }
 
     // ------------------------------------------------------------------ uploads

@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { questionBankApi } from '@/api/questionBankApi'
 import { useToast } from '@/components/common/Toaster'
@@ -98,6 +99,40 @@ export function useQuestionActions(questionId: number | null) {
     onError: onError('Could not remove the PDF'),
   })
   return { save, setArchived, addTests, deleteTest, reorder, uploadPdf, removePdf }
+}
+
+/**
+ * The latest check of a question, polled while one is waiting or running. When it finishes the
+ * question is reloaded: a pass makes it ready, and generated answers make a new version.
+ */
+export function useQuestionCheck(questionId: number) {
+  const qc = useQueryClient()
+  const query = useQuery({
+    queryKey: ['question-bank', 'check', questionId],
+    queryFn: () => questionBankApi.latestCheck(questionId),
+    refetchInterval: q => (q.state.data && ['QUEUED', 'RUNNING'].includes(q.state.data.status) ? 2000 : false),
+  })
+  const status = query.data?.status
+  const active = status === 'QUEUED' || status === 'RUNNING'
+  const wasActive = useRef(false)
+  useEffect(() => {
+    if (wasActive.current && !active) {
+      qc.invalidateQueries({ queryKey: ['question-bank', 'question', questionId] })
+      qc.invalidateQueries({ queryKey: ['question-bank', 'list'] })
+    }
+    wasActive.current = active
+  }, [active, qc, questionId])
+  return query
+}
+
+export function useStartCheck(questionId: number) {
+  const qc = useQueryClient()
+  const toast = useToast()
+  return useMutation({
+    mutationFn: (generateMissing: boolean) => questionBankApi.startCheck(questionId, generateMissing),
+    onSuccess: c => qc.setQueryData(['question-bank', 'check', questionId], c),
+    onError: err => toast.push('error', errorOf(err, 'Could not start the check')),
+  })
 }
 
 export function useImportQuestion(classroomId: number | null) {
