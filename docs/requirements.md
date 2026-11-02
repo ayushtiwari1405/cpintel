@@ -102,11 +102,13 @@ enters these details in the admin console, not in `.env`.
 - [ ] **Each classroom's DOMjudge URL, as seen from the CPIntel server** — *Required.*
 - [ ] **One DOMjudge account per candidate per classroom** — *Required.* Username and password
   for each. A CPIntel admin attaches them to the students' CPIntel accounts.
-- [ ] **The DOMjudge contests themselves** — *Required.* Contest IDs, with start and end times
-  that match what is set in CPIntel.
+- [ ] **The DOMjudge contests themselves** — *Required,* except for examinations published from
+  the question bank, whose contests CPIntel creates. Contest IDs, with start and end times that
+  match what is set in CPIntel.
 - [ ] **A DOMjudge service account per classroom** — *Optional.* Recommended for large sittings: one request
   then serves the whole room instead of one per student. Check its permissions first with
-  `scripts/domjudge-probe.sh`.
+  `scripts/domjudge-probe.sh`. *Required, with DOMjudge's admin role,* to publish examinations
+  from the question bank: CPIntel then creates the contests and problems itself.
 
 ### 1.5 Secrets and settings
 
