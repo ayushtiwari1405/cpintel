@@ -38,7 +38,7 @@ the reasoning behind the harder decisions, and [`docs/SRS.md`](docs/SRS.md) for 
 | Document DB | MongoDB — raw submission history, personal files, contest snapshots |
 | Cache | Redis — sessions, JWT blacklist, per-user token revocation, analytics cache |
 | Integrations | Codeforces REST + scraping, DOMjudge REST v4 |
-| Migrations | Flyway — 31 versioned migrations (schema, indexes, materialized views, audit indexes, groups, super admin role, scheduler locks, node-level mastery, examinations, examination access, placement results, Codeforces-only cleanup, examination-mode sessions, several events per judge contest, examination leaderboards, classrooms, audit log by classroom, DOMjudge logins in PostgreSQL, marking an event done, rejudging a problem, TA marking, freezing TA marks, refresh-token digests and families, skill ratings, one sync at a time, examination grants kept in PostgreSQL, desktop-app-only examinations, which admin made each account, the classroom question bank, uploaded statement PDFs, model-solution checks) |
+| Migrations | Flyway — 32 versioned migrations (schema, indexes, materialized views, audit indexes, groups, super admin role, scheduler locks, node-level mastery, examinations, examination access, placement results, Codeforces-only cleanup, examination-mode sessions, several events per judge contest, examination leaderboards, classrooms, audit log by classroom, DOMjudge logins in PostgreSQL, marking an event done, rejudging a problem, TA marking, freezing TA marks, refresh-token digests and families, skill ratings, one sync at a time, examination grants kept in PostgreSQL, desktop-app-only examinations, which admin made each account, the classroom question bank, uploaded statement PDFs, model-solution checks, publishing examinations to the judge) |
 | Containerization | Docker Compose — 11 services: 3 behind the `monitoring` profile and certbot behind `letsencrypt`. `docker-compose.prod.yml` swaps the builds for CI images |
 | Editor | Monaco, bundled locally (no CDN) — shared by the Practice, Compete and examination workspaces |
 | Code runner | g++, gcc and CPython under bubblewrap + rlimits, in its own locked-down container on a server; judged against the statement's sample tests |
@@ -926,6 +926,50 @@ DOMjudge-related is read from `.env`.
 5. `/admin/teams/{id}` lists the team's contests; opening one shows the team's ranking. Standings refresh on a timer while the contest is live, or on
    demand.
 
+### Question bank
+
+Exam questions can be written in CPIntel instead of on DOMjudge, at **Question bank** in the
+sidebar. A classroom's bank is open to its admins and to any of its TAs; putting questions on
+the judge is the admins' step.
+
+- **Writing.** A question has a title, a statement in Markdown with `$…$` maths (a live
+  preview shows the PDF candidates will read), time and memory limits, how output is compared
+  (exact, ignoring case, or numbers within a tolerance), a model solution, and its sample and
+  secret tests (`name.in` with `name.ans`). A ready-made PDF can replace the written statement.
+  Two people saving the same question cannot overwrite each other unknowingly; every edit is in
+  the audit trail.
+- **Packages.** **Import package** takes the zip DOMjudge imports (problem.yaml,
+  domjudge-problem.ini, problem_statement/, data/sample, data/secret, submissions/accepted), up
+  to 72 MB; **Template** downloads a complete example with a README on the format; **Download
+  package** gives a question back in the same form.
+- **Checking.** **Check** runs the model solution on every test in the code runner, under the
+  question's own limits, and compares each output the way the judge will. A test passes when the
+  output matches, the run is clean, and it took at most half the time limit. It can first fill
+  in missing answers from the model solution. A pass marks the question **ready**; any edit
+  makes it a draft again. Checks run one at a time, so they never crowd out candidates' runs.
+- **Publishing.** On a DOMjudge examination's **Questions** tab an admin picks ready questions
+  in order and publishes. CPIntel creates the contest the examination names (once; it never
+  publishes into a contest it did not create), uploads each question as `cpi-e<exam>-q<question>`,
+  labels them A, B, C…, and sets the examination's problem list, keeping marks already given.
+  Publishing again before the start brings the judge in line with the choice.
+- **During the paper.** The problems are fixed, but a question corrected and checked again can
+  replace its published version in place (same problem, same label), with a notice to every
+  candidate; then rejudge that problem. **Notices to candidates** can also be sent on their own;
+  they appear in the examination within about a minute.
+
+What the judge needs, and what its API cannot do:
+
+- The classroom's service account must have DOMjudge's **admin** role; on 9.0 the narrower
+  roles are refused for creating contests and problems.
+- An imported contest is **open to every team** on the judge (only DOMjudge's web pages can
+  narrow it): the judge should hold only this course's teams.
+- Its duration cannot be changed afterwards, so it is created to run three hours past the
+  examination's end; an extension beyond that is made in DOMjudge's jury pages. Its start can be
+  moved (by publishing again) until shortly before it.
+- A contest cannot be deleted through the API; one made by mistake stays on the judge.
+
+`scripts/question-bank-e2e.py` runs all of this against a real judge (see its header).
+
 ### Running an examination
 
 1. `/admin/exams` — create it. It needs a name, the DOMjudge contest id, and a start and end.
@@ -940,9 +984,10 @@ DOMjudge-related is read from `.env`.
    **Reload from DOMjudge** re-reads the judge's list and keeps the marks you already gave. The
    judge is read through the service account, or else as an assigned candidate's attached login —
    if neither exists, enter the problems by hand using the judge's labels (A, B, C…), since
-   submissions are recorded under those. Statements, test data and verdicts stay on DOMjudge;
-   duplicating them here would create a second source of truth for the one thing the judge is
-   actually authoritative about.
+   submissions are recorded under those. For a contest set up on DOMjudge, statements, test
+   data and verdicts stay there. For questions written in the **question bank** (below), CPIntel
+   is the source and the judge holds the published copy: the **Questions** tab publishes them
+   and fills this list in for you.
 4. **Languages** — which languages the paper accepts. Leave everything unticked, which is the
    default, and it takes whatever the judge offers.
 

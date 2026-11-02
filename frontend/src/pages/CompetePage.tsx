@@ -323,6 +323,25 @@ export default function CompetePage({ examOnly, section }: {
    * well — so it is the one an examination uses.
    */
   const examSession = useExamSession({ exam: inExam ? exam : null, lockdown })
+  // The invigilators' notices, beside the session's own. Dismissed ones stay dismissed for
+  // this paper in this tab; a new notice has a new id, so it always shows.
+  const [dismissedNotices, setDismissedNotices] = useState<string[]>(() => {
+    try { return JSON.parse(sessionStorage.getItem('cpintel.exam.dismissed') ?? '[]') } catch { return [] }
+  })
+  const notices = useMemo(() => [
+    ...(exam?.announcements ?? [])
+      .map(a => ({ id: `announcement-${a.id}`, tone: 'info' as const, title: 'From the invigilators', body: a.message }))
+      .filter(n => !dismissedNotices.includes(n.id)),
+    ...examSession.notices,
+  ], [exam?.announcements, dismissedNotices, examSession.notices])
+  const dismissNotice = (id: string) => {
+    if (!id.startsWith('announcement-')) { examSession.dismiss(id); return }
+    setDismissedNotices(list => {
+      const next = [...list, id]
+      try { sessionStorage.setItem('cpintel.exam.dismissed', JSON.stringify(next)) } catch { /* private mode */ }
+      return next
+    })
+  }
 
   // Tells the app's frame a paper is live, so it stops offering other pages. Cleared on the way
   // out, including when the paper ends while this page is still open.
@@ -922,7 +941,7 @@ export default function CompetePage({ examOnly, section }: {
               leading-relaxed text-gray-400 whitespace-pre-line">{exam.rules}</p>
           )}
 
-          <ExamNotices notices={examSession.notices} onDismiss={examSession.dismiss} />
+          <ExamNotices notices={notices} onDismiss={dismissNotice} />
         </div>
       )}
 

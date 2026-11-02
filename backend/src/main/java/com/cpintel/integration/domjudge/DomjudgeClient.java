@@ -16,6 +16,7 @@ import org.springframework.web.reactive.function.client.WebClientResponseExcepti
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
@@ -706,6 +707,202 @@ public class DomjudgeClient {
                 "DOMjudge does not recognise that contest, problem or team. " + detail);
             default -> ApiException.badRequest("DOMjudge rejected the submission: " + detail);
         };
+    }
+
+    // ------------------------------------------------- publishing (admin role)
+
+    /*
+     * What the question bank needs to set up an examination on the judge, as the classroom's
+     * service account. Every one of these needs DOMjudge's admin role: on 9.0 the narrower
+     * api_writer, jury and api_reader are all refused (403) for creating contests and problems.
+     * Contest import is never sent penalty_time, which DOMjudge writes to its judge-wide
+     * configuration rather than to the contest.
+     */
+
+    /** Whether the service account holds DOMjudge's admin role. */
+    public boolean serviceAccountIsAdmin() {
+        DjModels.User me = whoami(null);
+        return me != null && me.getRoles() != null && me.getRoles().contains("admin");
+    }
+
+    /** The contest, or null when the judge has none with that id. */
+    public DjModels.Contest findContest(String contestId) {
+        try {
+            return getContest(null, contestId);
+        } catch (WebClientResponseException e) {
+            if (e.getStatusCode().value() == 404) return null;
+            throw adminError("read the contest", e);
+        }
+    }
+
+    /**
+     * A new contest, not public. DOMjudge makes an imported contest open to every team on the
+     * judge; only its web pages can narrow that.
+     */
+    public void createContest(String contestId, String name, Instant start, Duration duration) {
+        Map<String, Object> spec = new java.util.LinkedHashMap<>();
+        spec.put("id", contestId);
+        spec.put("name", name);
+        spec.put("formal_name", name);
+        spec.put("start_time", judgeTime(start));
+        spec.put("duration", clock(duration));
+        spec.put("scoreboard_freeze_duration", "0:00:00.000");
+        spec.put("public", false);
+        MultipartBodyBuilder body = new MultipartBodyBuilder();
+        body.part("json", jsonPart(spec, "contest.json"));
+        try {
+            client().post().uri("/contests")
+                .contentType(MediaType.MULTIPART_FORM_DATA)
+                .body(BodyInserters.fromMultipartData(body.build()))
+                .retrieve().toBodilessEntity()
+                .block(Duration.ofSeconds(60));
+        } catch (WebClientResponseException e) {
+            throw adminError("create the contest", e);
+        }
+    }
+
+    /** Moves a contest's start. DOMjudge refuses within 30 seconds of the old start. */
+    public void setContestStart(String contestId, Instant start) {
+        try {
+            client().patch().uri("/contests/{cid}", contestId)
+                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                .body(BodyInserters.fromFormData("id", contestId).with("start_time", judgeTime(start)))
+                .retrieve().toBodilessEntity()
+                .block(Duration.ofSeconds(30));
+        } catch (WebClientResponseException e) {
+            throw adminError("move the contest's start", e);
+        }
+    }
+
+    /**
+     * Uploads a problem package into the contest and returns the problem's id.
+     *
+     * <p>DOMjudge names a new problem after the zip's file name and refuses a second one with an
+     * id already used anywhere on the judge; an existing problem is updated (and linked to the
+     * contest again if it was not) only when its id is given. So: as new first, unless known to
+     * exist, and as an update when the judge says the id is taken.
+     */
+    public String uploadProblem(String contestId, String problemId, byte[] zip, boolean exists) {
+        if (!exists) {
+            try {
+                return postProblem(contestId, problemId, zip, false);
+            } catch (WebClientResponseException e) {
+                String detail = e.getResponseBodyAsString();
+                if (detail == null || !detail.contains("already used")) throw adminError("upload " + problemId, e);
+            }
+        }
+        try {
+            return postProblem(contestId, problemId, zip, true);
+        } catch (WebClientResponseException e) {
+            throw adminError("upload " + problemId, e);
+        }
+    }
+
+    private String postProblem(String contestId, String problemId, byte[] zip, boolean update) {
+        MultipartBodyBuilder body = new MultipartBodyBuilder();
+        body.part("zip", new ByteArrayResource(zip) {
+            @Override
+            public String getFilename() {
+                return problemId + ".zip";
+            }
+        }).contentType(MediaType.parseMediaType("application/zip"));
+        if (update) body.part("problem", problemId);
+        Map<?, ?> answer = client().post().uri("/contests/{cid}/problems", contestId)
+            .contentType(MediaType.MULTIPART_FORM_DATA)
+            .body(BodyInserters.fromMultipartData(body.build()))
+            .retrieve().bodyToMono(Map.class)
+            .block(Duration.ofMinutes(5));
+        Object id = answer == null ? null : answer.get("problem_id");
+        return id == null ? problemId : String.valueOf(id);
+    }
+
+    /** Gives a linked problem its label (A, B, …). Linking again is how DOMjudge 9 sets one. */
+    public void labelProblem(String contestId, String problemId, String label) {
+        try {
+            unlinkProblem(contestId, problemId);
+            client().put().uri("/contests/{cid}/problems/{id}", contestId, problemId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("label", label, "points", 1))
+                .retrieve().toBodilessEntity()
+                .block(Duration.ofSeconds(30));
+        } catch (WebClientResponseException e) {
+            throw adminError("label " + problemId, e);
+        }
+    }
+
+    /** Takes a problem out of the contest; the problem itself stays on the judge. */
+    public void unlinkProblem(String contestId, String problemId) {
+        try {
+            client().delete().uri("/contests/{cid}/problems/{id}", contestId, problemId)
+                .retrieve().toBodilessEntity()
+                .block(Duration.ofSeconds(30));
+        } catch (WebClientResponseException e) {
+            if (e.getStatusCode().value() == 404) return;
+            throw adminError("remove " + problemId, e);
+        }
+    }
+
+    /**
+     * The reason in a DOMjudge error body. A problem import's {@code message} is itself JSON
+     * ({@code {"danger":["Error: …"]}}); anything else is passed on as it is, shortened.
+     */
+    static String refusalOf(String body) {
+        if (body == null || body.isBlank()) return null;
+        String detail = body;
+        try {
+            com.fasterxml.jackson.databind.ObjectMapper json = new com.fasterxml.jackson.databind.ObjectMapper();
+            com.fasterxml.jackson.databind.JsonNode root = json.readTree(body);
+            String message = root.path("message").asText(null);
+            if (message != null) {
+                detail = message;
+                if (message.startsWith("{")) {
+                    com.fasterxml.jackson.databind.JsonNode danger = json.readTree(message).path("danger");
+                    if (danger.isArray() && !danger.isEmpty()) detail = danger.get(0).asText();
+                }
+            }
+        } catch (Exception ignored) {
+            // Not JSON: the body as it is.
+        }
+        detail = detail.replace('\n', ' ').strip();
+        return detail.length() > 300 ? detail.substring(0, 300) : detail;
+    }
+
+    /** A time DOMjudge can parse: whole seconds, UTC. It refuses fractional seconds. */
+    static String judgeTime(Instant at) {
+        return at.truncatedTo(java.time.temporal.ChronoUnit.SECONDS).toString();
+    }
+
+    /** "H:MM:SS.000", as DOMjudge writes durations. */
+    static String clock(Duration d) {
+        long s = Math.max(0, d.getSeconds());
+        return String.format(java.util.Locale.ROOT, "%d:%02d:%02d.000", s / 3600, (s % 3600) / 60, s % 60);
+    }
+
+    private ByteArrayResource jsonPart(Map<String, Object> value, String fileName) {
+        byte[] bytes;
+        try {
+            bytes = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsBytes(value);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            throw new IllegalStateException(e);
+        }
+        return new ByteArrayResource(bytes) {
+            @Override
+            public String getFilename() {
+                return fileName;
+            }
+        };
+    }
+
+    /** DOMjudge's refusal, in words an admin can act on. */
+    private ApiException adminError(String doing, WebClientResponseException e) {
+        String detail = refusalOf(e.getResponseBodyAsString());
+        int status = e.getStatusCode().value();
+        if (status == 401 || status == 403) {
+            return ApiException.badRequest("The judge refused to " + doing + ": the classroom's service "
+                + "account needs DOMjudge's admin role to publish examinations.");
+        }
+        return ApiException.badRequest("The judge could not " + doing + ": "
+            + (detail == null || detail.isBlank() ? "HTTP " + status : detail));
     }
 
     // ---------------------------------------------------------- statements

@@ -3,12 +3,18 @@ package com.cpintel.repository;
 import com.cpintel.analytics.MaterializedViewRefresher;
 import com.cpintel.evaluation.EvaluationLocks;
 import com.cpintel.entity.BankQuestion;
+import com.cpintel.entity.ExamAnnouncement;
+import com.cpintel.entity.ExamBankQuestion;
+import com.cpintel.entity.ExamPublication;
 import com.cpintel.entity.BankQuestionCheck;
 import com.cpintel.entity.BankQuestionStatementPdf;
 import com.cpintel.entity.BankQuestionTest;
 import com.cpintel.entity.BankQuestionTestData;
 import com.cpintel.entity.Classroom;
 import com.cpintel.repository.jpa.BankQuestionCheckRepository;
+import com.cpintel.repository.jpa.ExamAnnouncementRepository;
+import com.cpintel.repository.jpa.ExamBankQuestionRepository;
+import com.cpintel.repository.jpa.ExamPublicationRepository;
 import com.cpintel.repository.jpa.BankQuestionRepository;
 import com.cpintel.repository.jpa.BankQuestionStatementPdfRepository;
 import com.cpintel.repository.jpa.BankQuestionTestDataRepository;
@@ -83,6 +89,9 @@ class PostgresSchemaTest {
     @Autowired private BankQuestionTestDataRepository bankTestData;
     @Autowired private BankQuestionStatementPdfRepository statementPdfs;
     @Autowired private BankQuestionCheckRepository checks;
+    @Autowired private ExamBankQuestionRepository examQuestions;
+    @Autowired private ExamPublicationRepository publications;
+    @Autowired private ExamAnnouncementRepository announcements;
 
     // ------------------------------------------------------------------- fixtures
 
@@ -220,6 +229,19 @@ class PostgresSchemaTest {
         checks.flush();
         assertThat(count("SELECT count(*) FROM bank_question_checks WHERE status = 'ERROR'")).isEqualTo(1);
         assertThat(checks.abandonActive(Instant.now())).isZero();
+
+        // An examination's choice, its publication and its announcements.
+        long exam = event(room, "midterm");
+        examQuestions.saveAndFlush(ExamBankQuestion.builder().contestId(exam).questionId(q.getQuestionId())
+            .ordinal(1).judgeProblemId("cpi-e" + exam + "-q" + q.getQuestionId()).label("A").publishedVersion(0).build());
+        assertThat(examQuestions.findByContestIdOrderByOrdinalAsc(exam)).hasSize(1);
+        assertThat(examQuestions.findByQuestionId(q.getQuestionId())).hasSize(1);
+        assertThat(examQuestions.findById(new ExamBankQuestion.Key(exam, q.getQuestionId()))).isPresent();
+        publications.saveAndFlush(ExamPublication.builder().contestId(exam).judgeContestId("midterm")
+            .contestCreated(true).status(ExamPublication.Status.PUBLISHED).build());
+        announcements.saveAndFlush(ExamAnnouncement.builder().contestId(exam).message("Test 3 fixed").build());
+        assertThat(announcements.findByContestIdOrderByCreatedAtAsc(exam)).extracting(ExamAnnouncement::getMessage)
+            .containsExactly("Test 3 fixed");
 
         // Deleting a test takes its bytes with it.
         bankTests.deleteById(t1.getTestId());

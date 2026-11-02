@@ -53,7 +53,8 @@ class PasscodeSessionTest {
             mock(CodeSubmissionRepository.class), mock(UserRepository.class),
             mock(ExamEventService.class), access, passwords, mock(AuditService.class),
             mock(ContestFilePolicy.class), new ObjectMapper(),
-            mock(com.cpintel.classrooms.ClassroomService.class));
+            mock(com.cpintel.classrooms.ClassroomService.class),
+            mock(com.cpintel.repository.jpa.ExamAnnouncementRepository.class));
 
         when(passcodes.findAllForContest(EXAM)).thenReturn(List.of(row(CANDIDATE), row(OTHER)));
         when(assignments.participantsByTeam(EXAM)).thenReturn(List.of(CANDIDATE, OTHER));

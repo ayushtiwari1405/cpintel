@@ -303,8 +303,16 @@ public class EventsDto {
          * True when the current session was signed in for this paper with its examination
          * password. An ordinary session sees the paper's details and never its inside.
          */
-        boolean examSession
+        boolean examSession,
+        /** What the invigilators told everyone, oldest first. Empty before the paper starts. */
+        List<Announcement> announcements
     ) {}
+
+    /** A message to everyone sitting an examination. */
+    public record Announcement(Long id, String message, java.time.Instant createdAt) {}
+
+    /** A message to send to everyone sitting an examination. */
+    public record AnnouncementRequest(@NotBlank @Size(max = 1000) String message) {}
 
     /** What a candidate types to open a paper. Never logged, never echoed back. */
     public record UnlockRequest(

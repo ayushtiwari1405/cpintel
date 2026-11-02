@@ -398,7 +398,11 @@ public class QuestionBankService {
 
     /** The statement as candidates would read it: the uploaded PDF, or the saved Markdown rendered. */
     public QuestionBankDto.Rendered statement(Long userId, Long questionId) {
-        BankQuestion q = requireQuestion(userId, questionId);
+        return statementOf(requireQuestion(userId, questionId));
+    }
+
+    private QuestionBankDto.Rendered statementOf(BankQuestion q) {
+        Long questionId = q.getQuestionId();
         if (q.getStatementKind() == BankQuestion.StatementKind.PDF) {
             return statementPdfs.findById(questionId)
                 .map(p -> new QuestionBankDto.Rendered(p.getPdf(), List.of()))
@@ -552,8 +556,18 @@ public class QuestionBankService {
 
     /** The question as a package: the bytes publishing will send to the judge. */
     public QuestionBankDto.Download exportPackage(Long userId, Long questionId) {
-        BankQuestion q = requireQuestion(userId, questionId);
-        byte[] statement = statement(userId, questionId).pdf();
+        return new QuestionBankDto.Download(packageName(requireQuestion(userId, questionId).getTitle()),
+            buildPackage(questionId));
+    }
+
+    /**
+     * The question's package as it is saved now. For publishing, which has already decided who
+     * may do it; nothing here checks access.
+     */
+    byte[] buildPackage(Long questionId) {
+        BankQuestion q = questions.findById(questionId)
+            .orElseThrow(() -> ApiException.notFound("No question with id " + questionId + "."));
+        byte[] statement = statementOf(q).pdf();
         List<ProblemPackage.Test> all = new ArrayList<>();
         List<BankQuestionTest> ordered = tests.findOrdered(questionId);
         Map<Long, BankQuestionTestData> data = testData.findAllById(
@@ -563,10 +577,9 @@ public class QuestionBankService {
             BankQuestionTestData d = data.get(t.getTestId());
             if (d != null) all.add(new ProblemPackage.Test(t.getName(), t.getSample(), d.getInput(), d.getAnswer()));
         }
-        byte[] zip = ProblemPackage.write(new ProblemPackage.Source(q.getTitle(), q.getTimeLimitMs(),
+        return ProblemPackage.write(new ProblemPackage.Source(q.getTitle(), q.getTimeLimitMs(),
             q.getMemoryLimitMb(), q.getChecker(), q.getFloatTolerance(), statement, q.getModelLanguage(),
             q.getModelSource(), all));
-        return new QuestionBankDto.Download(packageName(q.getTitle()), zip);
     }
 
     public static final String PACKAGE_TEMPLATE_NAME = PackageTemplate.FILE_NAME;

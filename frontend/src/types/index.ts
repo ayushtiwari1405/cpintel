@@ -941,6 +941,57 @@ export interface MyExam {
   canReviewSubmissions: boolean
   /** True when this session was signed in for this paper with its examination password. */
   examSession: boolean
+  /** What the invigilators told everyone, oldest first. Empty before the paper starts. */
+  announcements: ExamAnnouncement[]
+}
+
+/** A message to everyone sitting an examination. */
+export interface ExamAnnouncement {
+  id: number
+  message: string
+  createdAt: string
+}
+
+/** An examination's questions from the bank, and what of them is on the judge. */
+export interface ExamBankState {
+  /** True before the start: the choice and the whole contest can still change. */
+  editable: boolean
+  scheduled: boolean
+  judgeContestId: string
+  publication: ExamPublication | null
+  chosen: ExamChosenQuestion[]
+  available: ExamAvailableQuestion[]
+  announcements: ExamAnnouncement[]
+}
+
+export interface ExamPublication {
+  status: 'PUBLISHED' | 'FAILED'
+  contestCreated: boolean
+  judgeStart: string | null
+  judgeEnd: string | null
+  publishedAt: string | null
+  publishedBy: string | null
+  note: string | null
+}
+
+export interface ExamChosenQuestion {
+  questionId: number
+  title: string
+  status: QuestionStatus
+  version: number
+  archived: boolean
+  label: string | null
+  judgeProblemId: string | null
+  publishedVersion: number | null
+  publishedAt: string | null
+  changedSincePublished: boolean
+}
+
+export interface ExamAvailableQuestion {
+  questionId: number
+  title: string
+  status: QuestionStatus
+  version: number
 }
 
 /** What a candidate submitted into a past examination. Their own work, and nothing else. */

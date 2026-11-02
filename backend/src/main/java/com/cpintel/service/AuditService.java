@@ -127,6 +127,12 @@ public class AuditService {
     public static final String QUESTION_IMPORTED      = "QUESTION_IMPORTED";
     public static final String QUESTION_CHECK_STARTED = "QUESTION_CHECK_STARTED";
 
+    // Examinations from the question bank, admin only
+    public static final String EXAM_QUESTIONS_CHOSEN     = "ADMIN_EXAM_QUESTIONS_CHOSEN";
+    public static final String EXAM_PUBLISHED            = "ADMIN_EXAM_PUBLISHED";
+    public static final String EXAM_QUESTION_REPUBLISHED = "ADMIN_EXAM_QUESTION_REPUBLISHED";
+    public static final String EXAM_ANNOUNCED            = "ADMIN_EXAM_ANNOUNCED";
+
     // Admin actions on the contest file policy
     public static final String FILE_POLICY_DEFAULT = "ADMIN_FILE_POLICY_DEFAULT";
     public static final String FILE_POLICY_RULE    = "ADMIN_FILE_POLICY_RULE";

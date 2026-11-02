@@ -3,11 +3,11 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useParams } from 'react-router-dom'
 import {
   AlertTriangle, ArrowLeft, CheckCircle2, ClipboardCheck, Code2, Download, Eye, Flag, KeyRound, Loader2, Lock,
-  Monitor, Plus, Save, RefreshCw, ScrollText, Settings2, Trash2, Trophy, Users, Laptop,
-} from 'lucide-react'
+  Monitor, Plus, Save, RefreshCw, ScrollText, Settings2, Trash2, Trophy, Users, Laptop, Library } from 'lucide-react'
 import { clsx } from 'clsx'
 
 import { Ago, EmptyRow, Pager, Panel, Pill, StatCard } from '@/components/admin/AdminUi'
+import { ExamQuestionsTab } from '@/components/admin/ExamQuestionsTab'
 import { ExamPasswordsTab } from '@/components/admin/ExamPasswordsTab'
 import { EvaluationTab } from '@/components/evaluation/EvaluationTab'
 import { ExamLeaderboardView } from '@/components/exam/ExamLeaderboardView'
@@ -27,7 +27,7 @@ import type {
 } from '@/types'
 import { ErrorState, LoadingState } from '@/components/common/States'
 
-type Tab = 'settings' | 'people' | 'problems' | 'passwords' | 'monitor' | 'logs' | 'leaderboard'
+type Tab = 'settings' | 'people' | 'problems' | 'questions' | 'passwords' | 'monitor' | 'logs' | 'leaderboard'
   | 'evaluation'
 
 /**
@@ -58,6 +58,8 @@ export default function AdminExamDetailPage() {
     { id: 'settings', label: 'Settings', icon: Settings2 },
     { id: 'people',   label: 'Who sits it', icon: Users },
     { id: 'problems', label: 'Problems', icon: Plus },
+    // Questions written in CPIntel's bank, published to the judge from here.
+    ...(exam && event.platform === 'DOMJUDGE' ? [{ id: 'questions' as Tab, label: 'Questions', icon: Library }] : []),
     ...(exam ? [
       // Only an examination has passwords. A contest is open to whoever it is assigned to for
       // as long as its window is open, and a tab offering to lock one would suggest otherwise.
@@ -125,6 +127,7 @@ export default function AdminExamDetailPage() {
       {tab === 'settings' && <SettingsTab detail={detail} />}
       {tab === 'people'   && <PeopleTab detail={detail} />}
       {tab === 'problems' && <ProblemsTab detail={detail} />}
+      {tab === 'questions' && <ExamQuestionsTab detail={detail} />}
       {tab === 'passwords' && <ExamPasswordsTab eventId={id} />}
       {tab === 'monitor'  && <MonitorTab eventId={id} live={event.lifecycle === 'ACTIVE'} />}
       {tab === 'logs'     && <LogsTab eventId={id} live={event.lifecycle === 'ACTIVE'} />}

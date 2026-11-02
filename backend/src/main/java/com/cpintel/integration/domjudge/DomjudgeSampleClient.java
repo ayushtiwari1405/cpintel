@@ -131,6 +131,11 @@ public class DomjudgeSampleClient {
         return found;
     }
 
+    /** Forgets a problem's samples, after its package was replaced on the judge. */
+    public void evict(String contestId, String problemId) {
+        cache.remove(contestId + "/" + problemId);
+    }
+
     private List<PracticeDto.Sample> fetch(DomjudgeCredentialStore.Stored as, String contestId,
                                            String problemId) {
         Route remembered = known.get();

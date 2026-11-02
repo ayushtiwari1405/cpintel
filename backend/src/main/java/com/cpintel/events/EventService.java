@@ -82,6 +82,7 @@ public class EventService {
     private final ContestFilePolicy filePolicy;
     private final ObjectMapper json;
     private final com.cpintel.classrooms.ClassroomService classrooms;
+    private final com.cpintel.repository.jpa.ExamAnnouncementRepository announcements;
 
     // ------------------------------------------------------------ admin reads
     //
@@ -592,7 +593,13 @@ public class EventService {
             // be a second window on the same work, and there is nothing to recover: the editor
             // still has it.
             stage == GroupContest.Lifecycle.ENDED || stage == GroupContest.Lifecycle.ARCHIVED,
-            com.cpintel.security.SessionMode.isExamSessionFor(eventId));
+            com.cpintel.security.SessionMode.isExamSessionFor(eventId),
+            // Only once the paper has begun: before then a notice could say what is in it.
+            event.hasStarted(now)
+                ? announcements.findByContestIdOrderByCreatedAtAsc(eventId).stream()
+                    .map(a -> new EventsDto.Announcement(a.getAnnouncementId(), a.getMessage(), a.getCreatedAt()))
+                    .toList()
+                : List.of());
     }
 
     /**

@@ -74,7 +74,8 @@ class EventServiceRulesTest {
             mock(AuditService.class),
             filePolicy,
             new ObjectMapper(),
-            classrooms());
+            classrooms(),
+            mock(com.cpintel.repository.jpa.ExamAnnouncementRepository.class));
 
         when(teams.findById(TEAM)).thenReturn(Optional.of(
             ContestGroup.builder().groupId(TEAM).classroomId(CLASSROOM).name("Second years").isActive(true).build()));
