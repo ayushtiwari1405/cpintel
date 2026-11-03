@@ -136,7 +136,7 @@ class PersonalDataLoggingTest {
         AuthDto.RegisterRequest req = new AuthDto.RegisterRequest();
         req.setUsername("ada");
         req.setEmail(ADDRESS);
-        req.setPassword("correct horse battery");
+        req.setPassword("Correct horse battery 9");
         req.setFullName("Ada Lovelace");
 
         auth.register(req, new MockHttpServletRequest());

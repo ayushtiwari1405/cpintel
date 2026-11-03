@@ -105,7 +105,7 @@ class ApiErrorContractTest extends AuthorizationTestBase {
         r = mvc.perform(post("/api/v1/auth/reset-password").contentType(MediaType.APPLICATION_JSON)
                 .content("{\"token\":\"" + RESET_TOKEN + "\",\"newPassword\":\"short\"}"))
             .andExpect(status().isBadRequest())
-            .andExpect(jsonPath("$.errors.newPassword").value("A password has to be at least 8 characters"))
+            .andExpect(jsonPath("$.errors.newPassword").value("A password has to be at least 10 characters"))
             .andReturn();
         assertSafe(r, RESET_TOKEN, "short\"");
         verifyNoInteractions(passwordService);

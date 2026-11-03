@@ -641,7 +641,7 @@ Everything below has a working default; only the secrets in `.env` genuinely nee
 | `CPINTEL_MAIL_LOG_UNDELIVERED` | `false` | With no `SMTP_HOST`: `true` writes each undelivered message whole, reset link included, to the backend log for an operator to pass on. Anything else, a typo included, is off |
 | `CPINTEL_ALERT_EMAIL` | `CPINTEL_ADMIN_EMAIL` | Where the monitoring profile's Alertmanager emails firing alerts, through the SMTP server above |
 | `CPINTEL_PUBLIC_URL` | `http://localhost:5173` | Where a link in an email points — the address people open CPIntel at, not the backend's own |
-| `CPINTEL_RESET_TOKEN_MINUTES` | `60` | How long a password reset link is worth |
+| `CPINTEL_RESET_TOKEN_MINUTES` | `5` | How long a password reset link is worth |
 
 ### Secrets
 
@@ -742,7 +742,14 @@ The admin user list has a **Password** column showing whether each account still
 password it was issued. Until somebody changes their own, the administrator who created it
 knows it, and a column of "as issued" is a room that has not been asked to change theirs.
 
-A reset link is stored only as a SHA-256 digest, works once, expires within the hour, and
+A password its owner sets (registering, resetting, or changing it from the profile) has to be
+strong: at least 10 characters with a lower-case letter, an upper-case letter, a digit and a
+symbol, not a common password even when decorated (`P@ssw0rd!2026` is refused), and not built on
+the account's username or email address. The server enforces this (`PasswordPolicy`); the forms
+tick the rules off as they are typed. Passwords an administrator sets are not checked — they are
+usually generated, and the owner is asked to replace them.
+
+A reset link is stored only as a SHA-256 digest, works once, expires after 5 minutes, and
 redeeming it signs every device out — because somebody resetting a password they believe is
 known to somebody else has not finished until the other party is signed out. Asking for a new
 link retires the previous one, so a mailbox with four reset mails in it holds one working link.

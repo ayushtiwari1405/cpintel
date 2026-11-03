@@ -2,9 +2,8 @@ import { useState } from 'react'
 import { KeyRound, Loader2, ShieldCheck } from 'lucide-react'
 
 import { useChangePassword } from '@/hooks/useAuth'
-
-/** The floor the server enforces, stated so the button explains itself before it is pressed. */
-const MIN_LENGTH = 8
+import { isStrongPassword } from '@/utils/passwordPolicy'
+import { PasswordChecklist } from './PasswordChecklist'
 
 /**
  * Changing your own password, from your own profile.
@@ -28,9 +27,9 @@ export function ChangePasswordCard({ neverChanged }: { neverChanged?: boolean })
   const [confirm, setConfirm] = useState('')
   const change = useChangePassword()
 
-  const tooShort = next.length > 0 && next.length < MIN_LENGTH
+  const weak = next.length > 0 && !isStrongPassword(next)
   const mismatch = confirm.length > 0 && next !== confirm
-  const ready = current.length > 0 && next.length >= MIN_LENGTH && next === confirm
+  const ready = current.length > 0 && isStrongPassword(next) && next === confirm
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -85,15 +84,13 @@ export function ChangePasswordCard({ neverChanged }: { neverChanged?: boolean })
             type="password"
             className="input"
             aria-describedby="pw-new-hint"
-            aria-invalid={tooShort || undefined}
+            aria-invalid={weak || undefined}
             value={next}
             onChange={e => setNext(e.target.value)}
             autoComplete="new-password"
             placeholder="••••••••"
           />
-          <p id="pw-new-hint" className={`mt-1 text-xs ${tooShort ? 'text-amber-400' : 'text-gray-500'}`}>
-            At least {MIN_LENGTH} characters.
-          </p>
+          <PasswordChecklist id="pw-new-hint" password={next} />
         </div>
 
         <div>

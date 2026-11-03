@@ -11,6 +11,7 @@ import com.cpintel.repository.jpa.RefreshTokenRepository;
 import com.cpintel.repository.jpa.UnifiedScoreRepository;
 import com.cpintel.repository.jpa.UserRepository;
 import com.cpintel.security.JwtService;
+import com.cpintel.security.PasswordPolicy;
 import com.cpintel.config.AppMetrics;
 import com.cpintel.security.RateLimitService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -72,6 +73,7 @@ public class AuthService {
             throw ApiException.conflict("Email already registered");
         if (userRepository.existsByUsername(req.getUsername()))
             throw ApiException.conflict("Username already taken");
+        PasswordPolicy.require(req.getPassword(), req.getUsername(), req.getEmail());
 
         User user = User.builder()
             .username(req.getUsername())

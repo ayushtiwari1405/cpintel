@@ -178,9 +178,9 @@ class PasswordServiceTest {
         void resetWorks() {
             String raw = requestAndReadLink();
 
-            service.completeReset(raw, "a-brand-new-password", null);
+            service.completeReset(raw, "A-brand-new-pass9", null);
 
-            assertEquals("hash:a-brand-new-password", user.getPasswordHash());
+            assertEquals("hash:A-brand-new-pass9", user.getPasswordHash());
             assertNotNull(user.getPasswordChangedAt());
             // Both halves, and for the reason the reset was asked for in the first place.
             verify(refreshTokens).revokeAllByUserId(USER_ID);
@@ -191,10 +191,10 @@ class PasswordServiceTest {
         @DisplayName("a link works once")
         void singleUse() {
             String raw = requestAndReadLink();
-            service.completeReset(raw, "a-brand-new-password", null);
+            service.completeReset(raw, "A-brand-new-pass9", null);
 
             ApiException e = assertThrows(ApiException.class,
-                () -> service.completeReset(raw, "another-password", null));
+                () -> service.completeReset(raw, "Another-pass-77", null));
             assertTrue(e.getMessage().toLowerCase().contains("already been used"));
         }
 
@@ -205,7 +205,7 @@ class PasswordServiceTest {
             saved.values().iterator().next().setExpiresAt(Instant.now().minusSeconds(1));
 
             ApiException e = assertThrows(ApiException.class,
-                () -> service.completeReset(raw, "a-brand-new-password", null));
+                () -> service.completeReset(raw, "A-brand-new-pass9", null));
             assertTrue(e.getMessage().toLowerCase().contains("expired"));
         }
 
@@ -213,7 +213,7 @@ class PasswordServiceTest {
         @DisplayName("a token nobody issued is refused")
         void unknownTokenRefused() {
             assertThrows(ApiException.class,
-                () -> service.completeReset("made-up", "a-brand-new-password", null));
+                () -> service.completeReset("made-up", "A-brand-new-pass9", null));
             verify(users, never()).save(any());
         }
 
@@ -225,6 +225,17 @@ class PasswordServiceTest {
             assertThrows(ApiException.class, () -> service.completeReset(raw, "short", null));
             assertEquals("hash:oldpassword", user.getPasswordHash());
         }
+        @Test
+        @DisplayName("a long but weak password is refused before anything is spent")
+        void weakPasswordRefused() {
+            String raw = requestAndReadLink();
+
+            ApiException e = assertThrows(ApiException.class,
+                () -> service.completeReset(raw, "alllowercaseletters", null));
+            assertTrue(e.getMessage().contains("upper-case"), e.getMessage());
+            assertEquals("hash:oldpassword", user.getPasswordHash());
+            assertFalse(saved.values().iterator().next().getUsed());
+        }
     }
 
     @Nested
@@ -235,7 +246,7 @@ class PasswordServiceTest {
         @DisplayName("knowing the current password is what makes it yours to change")
         void currentPasswordRequired() {
             ApiException e = assertThrows(ApiException.class,
-                () -> service.change(USER_ID, "not-the-password", "a-brand-new-one", null));
+                () -> service.change(USER_ID, "not-the-password", "A-brand-new-one4", null));
 
             assertTrue(e.getMessage().toLowerCase().contains("current password"));
             assertEquals("hash:oldpassword", user.getPasswordHash());
@@ -245,9 +256,9 @@ class PasswordServiceTest {
         @Test
         @DisplayName("changing it signs every device out, including this one")
         void changeEndsSessions() {
-            service.change(USER_ID, "oldpassword", "a-brand-new-one", null);
+            service.change(USER_ID, "oldpassword", "A-brand-new-one4", null);
 
-            assertEquals("hash:a-brand-new-one", user.getPasswordHash());
+            assertEquals("hash:A-brand-new-one4", user.getPasswordHash());
             verify(refreshTokens).revokeAllByUserId(USER_ID);
             verify(jwt).revokeUserTokens(USER_ID);
             // And the owner is told, which is how somebody whose account was taken over finds
@@ -268,7 +279,7 @@ class PasswordServiceTest {
     void concurrentResetWins() {
         when(users.replacePasswordHash(any(), any(), any(), any())).thenReturn(0);
         assertThrows(ApiException.class,
-            () -> service.change(user.getUserId(), "oldpassword", "a-brand-new-password", null));
+            () -> service.change(user.getUserId(), "oldpassword", "A-brand-new-pass9", null));
         verify(refreshTokens, never()).revokeAllByUserId(any());
     }
 

@@ -206,7 +206,7 @@ services:
       # Where a link in an email points. Must be the address people open CPIntel at, not the
       # backend's own — behind nginx these are not the same thing.
       CPINTEL_PUBLIC_URL: ${CPINTEL_PUBLIC_URL:-http://localhost}
-      CPINTEL_RESET_TOKEN_MINUTES: ${CPINTEL_RESET_TOKEN_MINUTES:-60}
+      CPINTEL_RESET_TOKEN_MINUTES: ${CPINTEL_RESET_TOKEN_MINUTES:-5}
       SPRING_PROFILES_ACTIVE: prod
     ports:
       # Loopback only. nginx reaches the backend over the compose network, so publishing this

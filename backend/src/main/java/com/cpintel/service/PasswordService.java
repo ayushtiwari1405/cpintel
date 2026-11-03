@@ -9,6 +9,7 @@ import com.cpintel.repository.jpa.RefreshTokenRepository;
 import com.cpintel.repository.jpa.UserRepository;
 import com.cpintel.repository.jpa.VerificationTokenRepository;
 import com.cpintel.security.JwtService;
+import com.cpintel.security.PasswordPolicy;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -16,7 +17,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.StringUtils;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -79,7 +79,7 @@ public class PasswordService {
     private final SecureRandom random = new SecureRandom();
 
     /** How long a link is worth. Long enough to find the mail, short enough to matter. */
-    @Value("${cpintel.auth.reset-token-minutes:60}")
+    @Value("${cpintel.auth.reset-token-minutes:5}")
     private long resetMinutes;
 
     // ------------------------------------------------------------- forgotten
@@ -170,7 +170,7 @@ public class PasswordService {
                 "This account is deactivated. Ask an administrator to reactivate it.");
         }
 
-        requireUsablePassword(newPassword);
+        PasswordPolicy.require(newPassword, user.getUsername(), user.getEmail());
 
         token.setUsed(true);
         tokenRepository.save(token);
@@ -205,7 +205,7 @@ public class PasswordService {
             throw ApiException.badRequest("That is already your password.");
         }
 
-        requireUsablePassword(newPassword);
+        PasswordPolicy.require(newPassword, user.getUsername(), user.getEmail());
         apply(user, newPassword, "from your profile");
 
         auditService.record(userId, AuditService.PASSWORD_CHANGED, "USER",
@@ -262,23 +262,6 @@ public class PasswordService {
             .build());
 
         return raw;
-    }
-
-    /**
-     * Rejects the passwords that are not worth the trouble of hashing.
-     *
-     * A length floor and nothing else. Composition rules — a digit, a symbol, a capital — push
-     * people towards one predictable mutation of a word they already use, and this deployment's
-     * real exposure is a shared first password that nobody changed, which no rule about
-     * punctuation addresses.
-     */
-    private void requireUsablePassword(String password) {
-        if (!StringUtils.hasText(password) || password.length() < 8) {
-            throw ApiException.badRequest("A password has to be at least 8 characters.");
-        }
-        if (password.length() > 200) {
-            throw ApiException.badRequest("That password is too long.");
-        }
     }
 
     private String hash(String raw) {

@@ -218,7 +218,7 @@ cpintel:
     registration-enabled: ${CPINTEL_REGISTRATION_ENABLED:false}
     # How long a password reset link is worth. Long enough to go and find the mail, short
     # enough that one left in an inbox is not a standing key to the account.
-    reset-token-minutes: ${CPINTEL_RESET_TOKEN_MINUTES:60}
+    reset-token-minutes: ${CPINTEL_RESET_TOKEN_MINUTES:5}
   admin:
     # Names the super administrator — the only account that can assign roles or create others.
     # An existing account with this address is promoted at startup. If none exists, one is

@@ -1,5 +1,6 @@
 package com.cpintel.dto;
 
+import com.cpintel.security.PasswordPolicy;
 import com.fasterxml.jackson.annotation.JsonAlias;
 import jakarta.validation.constraints.*;
 import lombok.*;
@@ -19,7 +20,8 @@ public class AuthDto {
         private String email;
 
         @NotBlank(message = "Password is required")
-        @Size(min = 8, message = "Password must be at least 8 characters")
+        @Size(min = PasswordPolicy.MIN_LENGTH, max = PasswordPolicy.MAX_LENGTH,
+            message = "A password has to be at least " + PasswordPolicy.MIN_LENGTH + " characters")
         private String password;
 
         @Size(max = 100)
@@ -81,7 +83,8 @@ public class AuthDto {
         private String token;
 
         @NotBlank(message = "A new password is required")
-        @Size(min = 8, max = 200, message = "A password has to be at least 8 characters")
+        @Size(min = PasswordPolicy.MIN_LENGTH, max = PasswordPolicy.MAX_LENGTH,
+            message = "A password has to be at least " + PasswordPolicy.MIN_LENGTH + " characters")
         private String newPassword;
     }
 
@@ -92,7 +95,8 @@ public class AuthDto {
         private String currentPassword;
 
         @NotBlank(message = "A new password is required")
-        @Size(min = 8, max = 200, message = "A password has to be at least 8 characters")
+        @Size(min = PasswordPolicy.MIN_LENGTH, max = PasswordPolicy.MAX_LENGTH,
+            message = "A password has to be at least " + PasswordPolicy.MIN_LENGTH + " characters")
         private String newPassword;
     }
 }

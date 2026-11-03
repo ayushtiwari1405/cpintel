@@ -5,9 +5,8 @@ import { AlertTriangle, ArrowLeft, Eye, EyeOff } from 'lucide-react'
 import { BrandLockup } from '@/components/common/BrandMark'
 import { useResetPassword } from '@/hooks/useAuth'
 import { ThemeToggle } from '@/components/common/ThemeToggle'
-
-/** The floor the server enforces. Stated here so the button explains itself before it is used. */
-const MIN_LENGTH = 8
+import { PasswordChecklist } from '@/components/common/PasswordChecklist'
+import { isStrongPassword } from '@/utils/passwordPolicy'
 
 /**
  * Setting a new password from a link in an email.
@@ -29,9 +28,8 @@ export default function ResetPasswordPage() {
   const [showPass, setShowPass] = useState(false)
   const reset = useResetPassword()
 
-  const tooShort = password.length > 0 && password.length < MIN_LENGTH
   const mismatch = confirm.length > 0 && password !== confirm
-  const ready = password.length >= MIN_LENGTH && password === confirm
+  const ready = isStrongPassword(password) && password === confirm
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -79,6 +77,7 @@ export default function ResetPasswordPage() {
                     className="input pr-10"
                     placeholder="••••••••"
                     autoComplete="new-password"
+                    aria-describedby="reset-pw-hint"
                     required
                     autoFocus
                   />
@@ -91,9 +90,7 @@ export default function ResetPasswordPage() {
                     {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
-                <p className={`mt-1 text-xs ${tooShort ? 'text-amber-400' : 'text-gray-600'}`}>
-                  At least {MIN_LENGTH} characters.
-                </p>
+                <PasswordChecklist id="reset-pw-hint" password={password} />
               </div>
 
               <div>
