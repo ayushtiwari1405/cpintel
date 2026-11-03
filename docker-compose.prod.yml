@@ -23,18 +23,18 @@ services:
     ports: !reset []
 
   backend:
-    image: ghcr.io/${CPINTEL_IMAGE_REPO:-ayushtiwari1405/cpintel}-backend:${CPINTEL_VERSION:?set CPINTEL_VERSION to the image tag to run}
+    image: ghcr.io/${CPINTEL_IMAGE_REPO:-iiitbangalore/safe-exam-app}-backend:${CPINTEL_VERSION:?set CPINTEL_VERSION to the image tag to run}
     build: !reset null
     ports: !reset []
 
   runner:
-    image: ghcr.io/${CPINTEL_IMAGE_REPO:-ayushtiwari1405/cpintel}-runner:${CPINTEL_VERSION:?set CPINTEL_VERSION}
+    image: ghcr.io/${CPINTEL_IMAGE_REPO:-iiitbangalore/safe-exam-app}-runner:${CPINTEL_VERSION:?set CPINTEL_VERSION}
     build: !reset null
 
   frontend:
-    image: ghcr.io/${CPINTEL_IMAGE_REPO:-ayushtiwari1405/cpintel}-frontend:${CPINTEL_VERSION:?set CPINTEL_VERSION}
+    image: ghcr.io/${CPINTEL_IMAGE_REPO:-iiitbangalore/safe-exam-app}-frontend:${CPINTEL_VERSION:?set CPINTEL_VERSION}
     build: !reset null
 
   nginx:
-    image: ghcr.io/${CPINTEL_IMAGE_REPO:-ayushtiwari1405/cpintel}-nginx:${CPINTEL_VERSION:?set CPINTEL_VERSION}
+    image: ghcr.io/${CPINTEL_IMAGE_REPO:-iiitbangalore/safe-exam-app}-nginx:${CPINTEL_VERSION:?set CPINTEL_VERSION}
     build: !reset null

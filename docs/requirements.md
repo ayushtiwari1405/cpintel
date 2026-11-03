@@ -242,7 +242,7 @@ and survived a page reload with no Content-Security-Policy violations.
   with auto-renewal, a campus certificate in `nginx/certs/`, or a temporary self-signed one,
   picked up within a minute without a restart.
 - [x] **Production compose file.** `docker-compose.prod.yml` pulls
-  `ghcr.io/ayushtiwari1405/cpintel-{backend,runner,frontend,nginx}`, tagged by commit; nothing but
+  `ghcr.io/iiitbangalore/safe-exam-app-{backend,runner,frontend,nginx}`, tagged by commit; nothing but
   nginx is published on public interfaces.
 - [x] **Deploy script.** `./deploy.sh <version>` backs up both databases, pulls, restarts, waits
   for the health check and rolls back on failure; `./deploy.sh --rollback` returns to the
