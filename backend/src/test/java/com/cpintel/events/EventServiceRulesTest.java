@@ -185,13 +185,58 @@ class EventServiceRulesTest {
         }
 
         @Test
-        @DisplayName("an examination runs on the judge this deployment controls")
-        void domjudgeOnly() {
-            // Codeforces cannot be asked to hold a contest open for one class at one time.
-            ApiException thrown = assertThrows(ApiException.class,
-                () -> service.create(ADMIN, request("EXAM", "CODEFORCES", "TEAMS"), null));
+        @DisplayName("with no DOMjudge contest id, CPIntel names one from the event's name")
+        void judgeIdGenerated() {
+            EventsDto.EventRequest base = request("EXAM", "DOMJUDGE", null);
+            service.create(ADMIN, new EventsDto.EventRequest(
+                base.kind(), base.platform(), "  ", base.name(), null, null, null,
+                base.startsAt(), base.endsAt(), null, null, null, null, null, TEAM, null, null,
+                null, null, CLASSROOM), null);
 
-            assertTrue(thrown.getMessage().contains("DOMjudge"), thrown.getMessage());
+            String id = created().getExternalId();
+            assertTrue(id.matches(CLASSROOM + "~mid-semester-practical-[0-9a-z]{4}"), id);
+        }
+
+        @Test
+        @DisplayName("a generated judge id stays a valid DOMjudge id, whatever the name")
+        void judgeIdShape() {
+            assertTrue(EventService.newJudgeId("Ünïcode!! & Co.").matches("[a-z0-9-]{1,60}"));
+            assertTrue(EventService.newJudgeId("   ").startsWith("contest-"));
+            assertTrue(EventService.newJudgeId("x".repeat(200)).length() <= 45);
+        }
+
+        @Test
+        @DisplayName("an examination can run on Codeforces, set from the contest link")
+        void codeforcesFromLink() {
+            EventsDto.EventRequest base = request("EXAM", "CODEFORCES", null);
+            String link = "https://codeforces.com/group/abc123/contest/612345";
+            service.create(ADMIN, new EventsDto.EventRequest(
+                base.kind(), base.platform(), link, base.name(), null, null, null,
+                base.startsAt(), base.endsAt(), null, null, null, null, null, TEAM, null, null,
+                null, null, CLASSROOM), null);
+
+            assertEquals("abc123~612345", created().getExternalId());
+            assertEquals(link, created().getUrl());
+        }
+
+        @Test
+        @DisplayName("a Codeforces examination gets no problems or marks before it starts")
+        void codeforcesProblemsWaitForStart() {
+            EventsDto.EventRequest base = request("EXAM", "CODEFORCES", null);
+            List<EventsDto.ProblemRequest> list =
+                List.of(new EventsDto.ProblemRequest("A", "Sum", "A", 0, 10.0));
+
+            assertThrows(ApiException.class, () -> service.create(ADMIN, new EventsDto.EventRequest(
+                base.kind(), base.platform(), "2259", base.name(), null, null, null,
+                base.startsAt(), base.endsAt(), null, null, null, null, null, TEAM, null, null,
+                list, null, CLASSROOM), null));
+
+            stubDetailRead(GroupContest.builder().classroomId(CLASSROOM).contestId(EVENT)
+                .kind("EXAM").lifecycle("SCHEDULED").platform("CODEFORCES").externalId("2259")
+                .name("Paper").startsAt(base.startsAt()).endsAt(base.endsAt()).build());
+            ApiException thrown = assertThrows(ApiException.class, () -> service.setProblems(
+                ADMIN, EVENT, new EventsDto.ProblemsRequest(list), null));
+            assertTrue(thrown.getMessage().contains("once the paper starts"), thrown.getMessage());
         }
 
         @Test
@@ -372,6 +417,19 @@ class EventServiceRulesTest {
 
             assertThrows(ApiException.class, () -> service.setProblems(ADMIN, EVENT,
                 new EventsDto.ProblemsRequest(List.of()), null));
+        }
+
+        @Test
+        @DisplayName("on Codeforces, its problems and marks are set now")
+        void codeforcesMarkedOnceStarted() {
+            GroupContest exam = running();
+            exam.setPlatform("CODEFORCES");
+            exam.setExternalId("2259");
+
+            service.setProblems(ADMIN, EVENT, new EventsDto.ProblemsRequest(
+                List.of(new EventsDto.ProblemRequest("A", "Sum", "A", 0, 10.0))), null);
+
+            verify(problems, atLeastOnce()).saveAll(any());
         }
     }
 

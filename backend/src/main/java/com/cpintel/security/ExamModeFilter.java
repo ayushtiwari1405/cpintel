@@ -130,12 +130,25 @@ public class ExamModeFilter extends OncePerRequestFilter {
 
         // Read-only status the workspace asks for on the way in.
         if (path.equals("/groups/contests/active") || path.equals("/practice/cf-session")) {
-            return read;
+            return read || (path.equals("/practice/cf-session") && "POST".equals(method)
+                && onCodeforces(examId));
+        }
+        // A Codeforces paper is sat through the candidate's own Codeforces account: connecting
+        // it, and the pages the desktop app or extension fetches from Codeforces for statements
+        // and submissions (a hosted server cannot fetch them). Those routes hold each statement
+        // and submission to this paper's contest, window and monitoring themselves.
+        if (path.startsWith("/cf-browser/") && "POST".equals(method)) {
+            return onCodeforces(examId);
         }
         return false;
     }
 
     /** The path with the context, "/api" and the version segment taken off: "/exams/7". */
+    private boolean onCodeforces(long examId) {
+        GroupContest paper = events.getObject().findById(examId).orElse(null);
+        return paper != null && GroupContest.Platform.CODEFORCES.name().equals(paper.getPlatform());
+    }
+
     private static String route(HttpServletRequest request) {
         // Decoded and without the context path, as the dispatcher routes it, so an encoded
         // spelling such as /api/v1/auth/log%69n cannot reach a handler under another route.

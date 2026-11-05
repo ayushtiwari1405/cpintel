@@ -32,6 +32,15 @@ export const adminClassroomsApi = {
   restore: (id: number) =>
     apiClient.post<ApiResponse<void>>(`/admin/classrooms/${id}/restore`).then(r => r.data),
 
+  /** Codeforces checks the key before it is stored; both blank removes it. */
+  setCodeforcesKey: (id: number, key: string, secret: string) =>
+    apiClient.put<ApiResponse<ClassroomSummary>>(`/admin/classrooms/${id}/codeforces-key`,
+      { key, secret }, { timeout: 60_000 }).then(r => r.data),
+
+  setTaQuestions: (id: number, allowed: boolean) =>
+    apiClient.put<ApiResponse<ClassroomSummary>>(`/admin/classrooms/${id}/ta-questions`, { allowed })
+      .then(r => r.data),
+
   check: (id: number) =>
     apiClient.post<ApiResponse<JudgeCheck>>(`/admin/classrooms/${id}/check`, undefined,
       { timeout: 60_000 }).then(r => r.data),

@@ -203,7 +203,11 @@ Decisions and routines the college owns rather than the software.
   - Click **Issue passwords**, download the spreadsheet and print one slip per candidate. These
     exam sign-in passwords are new for every exam and work from one hour before the start until
     the end.
-  - Optionally, generate a room password to read out at the start.
+  - Optionally, generate a room password. It also works before the start, so candidates can
+    enter early, wait and connect Codeforces; the questions appear only when the paper starts.
+  - For a Codeforces exam on a private group contest: save a group manager's API key on the
+    classroom page, have candidates join the group, and run **Check candidates** on the exam's
+    People tab.
 - [ ] **No updates while an exam is running** — *Required.* The backend is down for the half
   minute it takes to start: nobody is signed out and nothing saved is lost, and pages retry their
   reads, but submissions wait. `./deploy.sh` refuses while an examination is running or starts

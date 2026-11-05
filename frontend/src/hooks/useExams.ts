@@ -172,6 +172,23 @@ export function useExamFlags(eventId: number | null, live = true) {
  * The linked DOMjudge contest's problems. Fetched on demand only: it is a read made through the
  * judge, and the tab asks for it once rather than on every render.
  */
+/** A Codeforces event's readiness; polled while a background check is running. */
+export function useCodeforcesReadiness(eventId: number, enabled: boolean) {
+  const qc = useQueryClient()
+  const query = useQuery({
+    queryKey: ['admin', 'cf-readiness', eventId],
+    queryFn: () => adminEventsApi.codeforcesReadiness(eventId).then(r => r.data),
+    enabled,
+    retry: false,
+    refetchInterval: q => (q.state.data?.checking ? 3000 : false),
+  })
+  const check = useMutation({
+    mutationFn: () => adminEventsApi.checkCodeforcesReadiness(eventId).then(r => r.data),
+    onSuccess: data => qc.setQueryData(['admin', 'cf-readiness', eventId], data),
+  })
+  return { ...query, check }
+}
+
 export function useJudgeProblems(eventId: number | null, enabled: boolean) {
   const isAdmin = useIsAdmin()
   return useQuery({

@@ -52,6 +52,7 @@ public class AdminEventController {
     private final ExamLeaderboardService leaderboard;
     private final ExamPasswordService passwords;
     private final JudgeProblemService judgeProblems;
+    private final com.cpintel.events.CodeforcesReadinessService readiness;
     private final com.cpintel.events.EventCompletionService completion;
     private final com.cpintel.events.EventRejudgeService rejudge;
 
@@ -175,6 +176,22 @@ public class AdminEventController {
     public ResponseEntity<ApiResponse<List<EventsDto.JudgeProblem>>> judgeProblems(
         @PathVariable Long eventId) {
         return ResponseEntity.ok(ApiResponse.ok(judgeProblems.problems(eventId)));
+    }
+
+    @GetMapping("/{eventId}/codeforces-readiness")
+    @Operation(summary = "Whether a Codeforces event's candidates can sit it",
+        description = "The classroom's key, the contest's window against the paper's, and per "
+            + "candidate: Codeforces connected, and (once checked) able to open the contest.")
+    public ResponseEntity<ApiResponse<EventsDto.CodeforcesReadiness>> codeforcesReadiness(
+        @PathVariable Long eventId) {
+        return ResponseEntity.ok(ApiResponse.ok(readiness.state(eventId)));
+    }
+
+    @PostMapping("/{eventId}/codeforces-readiness")
+    @Operation(summary = "Check, in the background, that each connected candidate can open the contest")
+    public ResponseEntity<ApiResponse<EventsDto.CodeforcesReadiness>> checkCodeforcesReadiness(
+        @PathVariable Long eventId) {
+        return ResponseEntity.ok(ApiResponse.ok(readiness.check(eventId)));
     }
 
     @PutMapping("/{eventId}/problems")

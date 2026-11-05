@@ -1242,6 +1242,35 @@ export interface ClassroomSummary {
   groupCount: number
   eventCount: number
   createdAt: string
+  /** A Codeforces group manager's API key is stored; its first characters, to recognise it. */
+  codeforcesKeySet: boolean
+  codeforcesKeyHint: string | null
+  /** Whether the classroom's TAs may add and change questions in its bank. */
+  tasWriteQuestions: boolean
+}
+
+/** Whether a Codeforces exam's candidates can sit it; the two problems are sentences or null. */
+export interface CodeforcesReadiness {
+  groupContest: boolean
+  keySet: boolean
+  contestName: string | null
+  contestStartsAt: string | null
+  contestDurationSeconds: number | null
+  contestProblem: string | null
+  windowProblem: string | null
+  checking: boolean
+  checkedAt: string | null
+  candidates: CandidateReadiness[]
+}
+
+export interface CandidateReadiness {
+  userId: number
+  username: string
+  fullName: string | null
+  connected: boolean
+  handle: string | null
+  /** Null until checked. */
+  canOpen: boolean | null
 }
 
 export interface ClassroomRequest {
@@ -1559,6 +1588,8 @@ export interface BankClassroom {
   name: string
   role: BankRole
   active: boolean
+  /** Active, and an admin, or a TA whom the classroom's admins let add questions. */
+  canEdit: boolean
 }
 
 export interface QuestionSummary {

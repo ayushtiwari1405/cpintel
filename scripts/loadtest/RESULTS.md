@@ -1,4 +1,44 @@
-# Load test results, 16 Oct 2026
+# Load test results
+
+## 5 Nov 2026: 200 candidates again, on this round's code
+
+Same machine and layout as 16 October (CPIntel on four efficiency cores, 4–7, with the production
+memory limits; DOMjudge 9.0.0 on its own cores; the simulator on 0–2), built from the working tree
+with this round's changes (Codeforces exams, CPIntel-created DOMjudge contests, the question bank
+switches). A 25-candidate warm-up, then 200 candidates on a 30-minute paper, 15 minutes of it
+simulated after the bell, 120 s sign-in spread.
+
+**Every one of 26,059 requests returned 2xx; no backend ERROR lines; no alert fired or pending.**
+
+| | 16 Oct, 200 | 5 Nov, 200 |
+|---|---|---|
+| heartbeat p99 | 83 ms | 29 ms |
+| paper (GET exam) p99 | 131 ms | 29 ms |
+| unlock at the bell p99 | 89 ms | 67 ms |
+| exam-code sign-in p99 | 66 ms | 40 ms |
+| submissions list p50 / p90 | — / 1.2 s | 60 ms / 497 ms |
+| Run p50 / p90 / max | 1.1 / 26.7 / 56 s | 0.67 / 13.1 / 24.2 s |
+| submit → verdict p50 / p90 | 119 s ‡ | 15.9 / 30.3 s |
+
+Resources over the 200 run (sampled every 15 s): all of CPIntel together peaked at 340% of the
+four cores (p50 45%, p90 157%) and 1.8 GB of memory. Backend 966 MB of 2.5 GB, runner 344 MB of
+2 GB (it is the only part that uses the cores in earnest, up to three at the bell's Run burst),
+MongoDB 236 MB, PostgreSQL 96 MB, Redis 5 MB. No zombies in the runner.
+
+Run is still the one number that grows with the room (three runner slots), but every Run
+finished: nginx logged 200 for all of them, none 503 "busy".
+
+**Two simulator faults, found by the first 200 run and fixed in `exam_sim.py`:**
+- It gave Run the 30 s every other request gets, so 21 runs taking 30–41 s were counted as
+  "no reply" (nginx 499: the simulator hung up; the server finished them). The examination page
+  waits 120 s for Run; so does the simulator now.
+- A candidate whose last Run ended after the paper's simulated end still submitted, after its
+  heartbeat had stopped; CPIntel refused 14 of those as "nothing is reporting from your machine",
+  which is the monitoring working. Candidates now start nothing in the last seconds of their time.
+
+The first run's report is kept as `out/report-200-sim-30s-timeout.txt`.
+
+# 16 Oct 2026
 
 One laptop (Intel Core 5 120U, 14.5 GB): CPIntel on four efficiency cores (4–7) with the
 production limits, DOMjudge 9.0.0 on 3, 8 (database and domserver) and 9–11 (three judgehosts),

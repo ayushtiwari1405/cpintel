@@ -56,6 +56,7 @@ public class ClassroomService {
     private final DomjudgeCredentialStore credentials;
     private final DomjudgeJudges judges;
     private final AuditService auditService;
+    private final com.cpintel.integration.codeforces.CodeforcesClient codeforces;
 
     // ------------------------------------------------------------------ access
 
@@ -279,6 +280,48 @@ public class ClassroomService {
             classroomId + ":" + (active ? "restored" : "archived"), httpReq);
     }
 
+    /**
+     * Stores, replaces or (both blank) removes the classroom's Codeforces API key. Codeforces
+     * is asked to accept it first, so a typo is caught here rather than on the day of the paper.
+     */
+    @Transactional
+    public ClassroomsDto.ClassroomSummary setCodeforcesKey(Long adminId, Long classroomId,
+                                                           ClassroomsDto.CodeforcesKeyRequest req,
+                                                           HttpServletRequest httpReq) {
+        Classroom classroom = requireManaged(adminId, classroomId);
+        String key = trimToNull(req.key());
+        String secret = trimToNull(req.secret());
+        if (key == null && secret == null) {
+            classroom.setCfApiKey(null);
+            classroom.setCfApiSecret(null);
+        } else if (key == null || secret == null) {
+            throw ApiException.badRequest("Give both the API key and its secret.");
+        } else {
+            try {
+                codeforces.checkApiKey(new com.cpintel.integration.codeforces.CodeforcesClient.ApiKey(key, secret));
+            } catch (ApiException e) {
+                throw ApiException.badRequest("Codeforces did not accept that key. " + e.getMessage());
+            } catch (Exception e) {
+                throw ApiException.badRequest("Codeforces could not be reached to check the key. Try again.");
+            }
+            classroom.setCfApiKey(key);
+            classroom.setCfApiSecret(credentials.seal(secret));
+        }
+        classrooms.save(classroom);
+        auditService.recordIn(classroomId, adminId, AuditService.CLASSROOM_UPDATED, "CLASSROOM",
+            classroomId + (key == null ? ":codeforces-key-removed" : ":codeforces-key"), httpReq);
+        return summarise(classroom);
+    }
+
+    /** The classroom's Codeforces API key, opened, or null when none is stored. */
+    @Transactional(readOnly = true)
+    public com.cpintel.integration.codeforces.CodeforcesClient.ApiKey codeforcesKey(Long classroomId) {
+        Classroom c = classrooms.findById(classroomId).orElse(null);
+        if (c == null || c.getCfApiKey() == null || c.getCfApiSecret() == null) return null;
+        return new com.cpintel.integration.codeforces.CodeforcesClient.ApiKey(
+            c.getCfApiKey(), credentials.open(c.getCfApiSecret()));
+    }
+
     /** Re-checks a saved classroom's judge, for the admin page's status line. */
     public ClassroomsDto.JudgeCheck checkJudge(Long adminId, Long classroomId) {
         Classroom classroom = requireManaged(adminId, classroomId);
@@ -426,7 +469,22 @@ public class ClassroomService {
             c.getDomjudgeUrl(), c.getServiceUsername(), c.getServicePassword() != null,
             Boolean.TRUE.equals(c.getIsActive()), c.getOwnerId(),
             members.countByClassroomId(id), groups.countByClassroomId(id),
-            events.countByClassroomId(id), c.getCreatedAt());
+            events.countByClassroomId(id), c.getCreatedAt(),
+            c.getCfApiKey() != null,
+            c.getCfApiKey() == null ? null : c.getCfApiKey().substring(0, Math.min(4, c.getCfApiKey().length())),
+            Boolean.TRUE.equals(c.getTasWriteQuestions()));
+    }
+
+    /** Whether the classroom's TAs may add and change questions in its bank. */
+    @Transactional
+    public ClassroomsDto.ClassroomSummary setTasWriteQuestions(Long adminId, Long classroomId, boolean allowed,
+                                                               HttpServletRequest httpReq) {
+        Classroom classroom = requireManaged(adminId, classroomId);
+        classroom.setTasWriteQuestions(allowed);
+        classrooms.save(classroom);
+        auditService.recordIn(classroomId, adminId, AuditService.CLASSROOM_UPDATED, "CLASSROOM",
+            classroomId + (allowed ? ":tas-write-questions" : ":tas-read-questions"), httpReq);
+        return summarise(classroom);
     }
 
     private void requireUrlFree(String url, Long self) {

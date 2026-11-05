@@ -43,6 +43,7 @@ public class CodeforcesStandingsProvider implements StandingsProvider {
 
     private final CodeforcesClient codeforces;
     private final ObjectMapper objectMapper;
+    private final org.springframework.beans.factory.ObjectProvider<com.cpintel.compete.CfManagerApi> manager;
 
     @Override
     public String platform() {
@@ -51,10 +52,10 @@ public class CodeforcesStandingsProvider implements StandingsProvider {
 
     @Override
     public List<Result> fetch(GroupContest contest, List<Competitor> competitors) {
-        int contestId;
+        com.cpintel.integration.codeforces.CfContestRef contestId;
         try {
-            contestId = Integer.parseInt(contest.getExternalId().trim());
-        } catch (NumberFormatException e) {
+            contestId = com.cpintel.integration.codeforces.CfContestRef.parse(contest.getExternalId());
+        } catch (Exception e) {
             throw new IllegalArgumentException(
                 "'" + contest.getExternalId() + "' is not a Codeforces contest id");
         }
@@ -73,16 +74,24 @@ public class CodeforcesStandingsProvider implements StandingsProvider {
      * person could not be read, not that the refresh failed. Letting one bad handle abort the
      * whole group would make the board disappear for everyone else.
      */
-    private Result fetchOne(int contestId, Instant startsAt, Competitor competitor) {
+    private Result fetchOne(com.cpintel.integration.codeforces.CfContestRef contestId, Instant startsAt,
+                            Competitor competitor) {
         if (!StringUtils.hasText(competitor.handle())) {
             return new Result(competitor.userId(), null, false, 0, 0, null, null);
         }
 
         List<CfModels.Submission> submissions;
         try {
-            var response = codeforces.getContestStatus(contestId, competitor.handle());
-            submissions = response == null || response.getResult() == null
-                ? List.of() : response.getResult();
+            // A private group contest is read with its classroom's key; the anonymous API refuses it.
+            List<CfModels.Submission> managed = contestId.inGroup()
+                ? manager.getObject().statusOf(contestId, competitor.handle()) : null;
+            if (managed != null) {
+                submissions = managed;
+            } else {
+                var response = codeforces.getContestStatus(contestId.id(), competitor.handle());
+                submissions = response == null || response.getResult() == null
+                    ? List.of() : response.getResult();
+            }
         } catch (Exception e) {
             log.debug("CF standings: could not read {} in contest {}: {}",
                 competitor.handle(), contestId, e.getMessage());

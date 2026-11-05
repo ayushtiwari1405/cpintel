@@ -1,5 +1,6 @@
 import { apiClient } from './client'
 import type {
+  CodeforcesReadiness,
   ApiResponse, EventDetail, EventKind, EventLifecycle, EventProblem, EventSummary, JudgeProblem,
   ExamClientEvent, ExamFlagReport, ExamLeaderboard, ExamLeaderboardSettings, ExamLogPage,
   ExamMonitorSnapshot, ExamPasswordStatus, ExamEventType,
@@ -18,7 +19,8 @@ import type {
 export interface EventBody {
   kind: EventKind
   platform: 'CODEFORCES' | 'DOMJUDGE'
-  externalId: string
+  /** Blank on DOMjudge: CPIntel names the contest and creates it on publish. */
+  externalId: string | null
   name: string
   description?: string | null
   rules?: string | null
@@ -186,6 +188,15 @@ export const adminEventsApi = {
       `/admin/events/${eventId}/assignments/users/${userId}`).then(r => r.data),
 
   /** The linked DOMjudge contest's problems, which the Problems tab starts from. */
+  codeforcesReadiness: (eventId: number) =>
+    apiClient.get<ApiResponse<CodeforcesReadiness>>(`/admin/events/${eventId}/codeforces-readiness`)
+      .then(r => r.data),
+
+  /** Starts checking, in the background, that each connected candidate can open the contest. */
+  checkCodeforcesReadiness: (eventId: number) =>
+    apiClient.post<ApiResponse<CodeforcesReadiness>>(`/admin/events/${eventId}/codeforces-readiness`,
+      undefined, { timeout: 60_000 }).then(r => r.data),
+
   judgeProblems: (eventId: number) =>
     apiClient.get<ApiResponse<JudgeProblem[]>>(`/admin/events/${eventId}/judge-problems`)
       .then(r => r.data),

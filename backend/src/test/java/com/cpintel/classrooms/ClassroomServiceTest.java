@@ -41,6 +41,7 @@ class ClassroomServiceTest {
     private ClassroomMemberRepository members;
     private GroupContestRepository events;
     private DomjudgeJudges judges;
+    private com.cpintel.integration.codeforces.CodeforcesClient codeforces;
     private ClassroomService service;
     private Classroom room;
 
@@ -55,9 +56,10 @@ class ClassroomServiceTest {
         when(credentials.open(anyString())).thenAnswer(c ->
             c.<String>getArgument(0).replace("sealed:", ""));
 
+        codeforces = mock(com.cpintel.integration.codeforces.CodeforcesClient.class);
         service = new ClassroomService(classrooms, members, mock(ContestGroupRepository.class),
             events, mock(GroupMemberRepository.class), mock(UserRepository.class), credentials,
-            judges, mock(AuditService.class));
+            judges, mock(AuditService.class), codeforces);
 
         room = Classroom.builder().classroomId(ROOM).name("DSA").domjudgeUrl(URL)
             .ownerId(OWNER).isActive(true).build();
@@ -79,6 +81,57 @@ class ClassroomServiceTest {
 
     private ClassroomsDto.ClassroomRequest request(String url) {
         return new ClassroomsDto.ClassroomRequest("DSA", null, url, null, null);
+    }
+
+    @Nested
+    @DisplayName("the Codeforces API key")
+    class CodeforcesKey {
+
+        @Test
+        @DisplayName("is checked with Codeforces, then stored with its secret sealed")
+        void stored() {
+            ClassroomsDto.ClassroomSummary out = service.setCodeforcesKey(OWNER, ROOM,
+                new ClassroomsDto.CodeforcesKeyRequest(" abcd1234 ", "s3cret"), null);
+
+            verify(codeforces).checkApiKey(new com.cpintel.integration.codeforces.CodeforcesClient.ApiKey("abcd1234", "s3cret"));
+            assertEquals("abcd1234", room.getCfApiKey());
+            assertEquals("sealed:s3cret", room.getCfApiSecret());
+            assertTrue(out.codeforcesKeySet());
+            assertEquals("abcd", out.codeforcesKeyHint());
+            assertEquals("s3cret", service.codeforcesKey(ROOM).secret());
+        }
+
+        @Test
+        @DisplayName("is refused when Codeforces turns it down, or half of it is missing")
+        void refused() {
+            doThrow(ApiException.badRequest("Codeforces refused it: apiKey: Incorrect API key"))
+                .when(codeforces).checkApiKey(any());
+            ApiException e = assertThrows(ApiException.class, () -> service.setCodeforcesKey(OWNER, ROOM,
+                new ClassroomsDto.CodeforcesKeyRequest("bad", "bad"), null));
+            assertTrue(e.getMessage().contains("Incorrect API key"), e.getMessage());
+            assertThrows(ApiException.class, () -> service.setCodeforcesKey(OWNER, ROOM,
+                new ClassroomsDto.CodeforcesKeyRequest("abcd", " "), null));
+            assertNull(room.getCfApiKey());
+        }
+
+        @Test
+        @DisplayName("is removed when both halves are blank")
+        void removed() {
+            room.setCfApiKey("abcd");
+            room.setCfApiSecret("sealed:x");
+            service.setCodeforcesKey(OWNER, ROOM, new ClassroomsDto.CodeforcesKeyRequest("", ""), null);
+            assertNull(room.getCfApiKey());
+            assertNull(service.codeforcesKey(ROOM));
+            verify(codeforces, never()).checkApiKey(any());
+        }
+    }
+
+    @Test
+    @DisplayName("TAs add questions only once an admin allows it")
+    void taQuestions() {
+        assertFalse(Boolean.TRUE.equals(room.getTasWriteQuestions()));
+        assertTrue(service.setTasWriteQuestions(OWNER, ROOM, true, null).tasWriteQuestions());
+        assertTrue(room.getTasWriteQuestions());
     }
 
     @Nested

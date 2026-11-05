@@ -185,6 +185,33 @@ public class EventsDto {
 
     public record ProblemsRequest(@NotNull List<ProblemRequest> problems) {}
 
+    /**
+     * Whether a Codeforces event's candidates can sit it. {@code contestProblem} and
+     * {@code windowProblem} are plain sentences for the admin, or null when there is nothing wrong.
+     */
+    public record CodeforcesReadiness(
+        boolean groupContest,
+        boolean keySet,
+        String contestName,
+        Instant contestStartsAt,
+        Long contestDurationSeconds,
+        String contestProblem,
+        String windowProblem,
+        boolean checking,
+        Instant checkedAt,
+        List<CandidateReadiness> candidates
+    ) {}
+
+    /** {@code canOpen} is null until checked, then whether Codeforces let this account in. */
+    public record CandidateReadiness(
+        Long userId,
+        String username,
+        String fullName,
+        boolean connected,
+        String handle,
+        Boolean canOpen
+    ) {}
+
     /** One problem of the linked judge contest: its label, its name, the judge's own id. */
     public record JudgeProblem(String label, String title, String externalId) {}
 
@@ -199,9 +226,13 @@ public class EventsDto {
     public record EventRequest(
         /** CONTEST or EXAM. */
         @NotNull String kind,
-        /** CODEFORCES or DOMJUDGE. Examinations run on DOMjudge. */
+        /** CODEFORCES or DOMJUDGE. For Codeforces, externalId may be the contest link. */
         @NotNull String platform,
-        @NotBlank @Size(max = 100) String externalId,
+        /**
+         * The judge contest. Blank on DOMjudge means CPIntel names one and creates it on the
+         * judge when the questions are published; on an update, blank keeps the current one.
+         */
+        @Size(max = 500) String externalId,
         @NotBlank @Size(max = 200) String name,
         @Size(max = 2000) String description,
         @Size(max = 4000) String rules,

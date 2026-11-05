@@ -48,18 +48,18 @@ export default function ForgotPasswordPage() {
               </div>
               <h1 className="text-xl font-semibold text-gray-50 mt-4">Check your email</h1>
               <p className="text-sm leading-relaxed text-gray-400 mt-2">
-                If an account uses <span className="text-gray-300">{email}</span>, a reset link is
-                on its way. It works once and expires within the hour.
+                If <span className="text-gray-300">{email}</span> has an account, a reset link is
+                on its way. Single use, expires in 5 minutes.
               </p>
               <p className="text-xs leading-relaxed text-gray-600 mt-4">
-                Nothing arrived? Check your spam folder, or ask your administrator to reset it.
+                Nothing arrived? Check spam, or ask your administrator.
               </p>
             </div>
           ) : (
             <>
               <h1 className="text-2xl font-semibold text-gray-50 mb-1">Forgot your password?</h1>
               <p className="text-gray-400 text-sm mb-6">
-                Enter your account's email address to receive a reset link.
+                Enter your email to get a reset link.
               </p>
 
               <form onSubmit={handleSubmit} className="space-y-4">

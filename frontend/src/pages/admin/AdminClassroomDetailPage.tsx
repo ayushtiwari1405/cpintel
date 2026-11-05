@@ -4,7 +4,7 @@ import {
   AlertCircle, ArrowLeft, CheckCircle2, Copy, Loader2, RefreshCw, Save, UserMinus, UserPlus,
 } from 'lucide-react'
 import {
-  useAdminClassroom, useArchiveClassroom, useCheckJudge, useClassroomMemberActions,
+  useAdminClassroom, useArchiveClassroom, useCheckJudge, useClassroomMemberActions, useClassroomSettings,
   useClassroomMembers, useClassroomStaff, useClassroomStaffActions, useUpdateClassroom,
 } from '@/hooks/useClassrooms'
 import { useAdminUsers, useIsSuperAdmin } from '@/hooks/useAdmin'
@@ -48,10 +48,11 @@ export default function AdminClassroomDetailPage() {
           : 'No judge set.'}
         className="mb-2" />
       <Settings room={room} />
+      <CodeforcesKey room={room} />
       <Teams classroomId={id} />
       <Members classroomId={id} />
       <Staff classroomId={id} />
-      <TeachingAssistants classroomId={id} />
+      <TeachingAssistants classroomId={id} room={room} />
     </div>
   )
 }
@@ -185,6 +186,60 @@ function Settings({ room }: { room: ClassroomSummary }) {
               <AlertCircle size={12} /> {check.data.message}
             </span>
           ))}
+        </div>
+      </div>
+    </Panel>
+  )
+}
+
+/**
+ * A Codeforces group manager's API key, for exams on the classroom's private group contests.
+ * Write-only: the secret never comes back, only the key's first characters to recognise it.
+ */
+function CodeforcesKey({ room }: { room: ClassroomSummary }) {
+  const { codeforcesKey } = useClassroomSettings(room.classroomId)
+  const [key, setKey] = useState('')
+  const [secret, setSecret] = useState('')
+  const save = (k: string, s: string) => codeforcesKey.mutate({ key: k, secret: s }, {
+    onSuccess: () => { setKey(''); setSecret('') },
+  })
+  return (
+    <Panel title="Codeforces API key"
+      description="Needed for exams on a private Codeforces group contest"
+      actions={room.codeforcesKeySet
+        ? <Pill tone="green">key {room.codeforcesKeyHint}…</Pill>
+        : <Pill tone="gray">none</Pill>}>
+      <div className="space-y-3 p-4">
+        <p className="text-xs leading-relaxed text-gray-500">
+          From a manager of the group, at codeforces.com/settings/api. CPIntel reads the group
+          contest's problems and verdicts with it. Codeforces checks it before it is saved.
+        </p>
+        <div className="flex flex-wrap items-end gap-2">
+          <label className="flex min-w-48 flex-1 flex-col gap-1">
+            <span className="text-xs text-gray-500">Key</span>
+            <input value={key} onChange={e => setKey(e.target.value)} maxLength={100}
+              autoComplete="off" className={`${field} font-mono`} />
+          </label>
+          <label className="flex min-w-48 flex-1 flex-col gap-1">
+            <span className="text-xs text-gray-500">Secret</span>
+            <input type="password" value={secret} onChange={e => setSecret(e.target.value)}
+              maxLength={200} autoComplete="new-password" className={`${field} font-mono`} />
+          </label>
+          <button type="button" onClick={() => save(key.trim(), secret.trim())}
+            disabled={!key.trim() || !secret.trim() || codeforcesKey.isPending}
+            className="flex items-center gap-1.5 rounded-lg bg-accent-600 px-3 py-2 text-sm
+              font-medium text-white hover:bg-accent-500 disabled:opacity-40">
+            {codeforcesKey.isPending ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+            {room.codeforcesKeySet ? 'Replace' : 'Save'}
+          </button>
+          {room.codeforcesKeySet && (
+            <button type="button" onClick={() => { if (confirm('Remove the Codeforces key?')) save('', '') }}
+              disabled={codeforcesKey.isPending}
+              className="rounded-lg border border-gray-800 px-3 py-2 text-sm text-gray-400
+                hover:border-gray-700 hover:text-gray-200">
+              Remove
+            </button>
+          )}
         </div>
       </div>
     </Panel>
@@ -345,7 +400,8 @@ function Staff({ classroomId }: { classroomId: number }) {
  * and linked; otherwise a new one is created and its password shown here, once. What each TA
  * marks is set per examination, on its Evaluation tab.
  */
-function TeachingAssistants({ classroomId }: { classroomId: number }) {
+function TeachingAssistants({ classroomId, room }: { classroomId: number; room: ClassroomSummary }) {
+  const { taQuestions } = useClassroomSettings(classroomId)
   const { data: tas, isLoading } = useClassroomTas(classroomId)
   const { add, remove } = useClassroomTaActions(classroomId)
   const [email, setEmail] = useState('')
@@ -370,7 +426,14 @@ function TeachingAssistants({ classroomId }: { classroomId: number }) {
 
   return (
     <Panel title="Teaching assistants"
-      description="Assign questions or students to each TA on an examination's Evaluation tab">
+      description="Assign questions or students to each TA on an examination's Evaluation tab"
+      actions={
+        <label className="flex items-center gap-2 text-xs text-gray-400">
+          <input type="checkbox" checked={room.tasWriteQuestions} disabled={taQuestions.isPending}
+            onChange={e => taQuestions.mutate(e.target.checked)} />
+          Can add questions to the bank
+        </label>
+      }>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <tbody className="divide-y divide-gray-800">

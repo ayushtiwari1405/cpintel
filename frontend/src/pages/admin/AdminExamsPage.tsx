@@ -38,7 +38,12 @@ export default function AdminExamsPage() {
     classrooms?.find(c => c.classroomId === id)?.name ?? `Classroom ${id}`
 
   const [name, setName] = useState('')
+  // Chosen first: the rest of the form depends on the judge.
+  const [platform, setPlatform] = useState<Platform | null>(null)
   const [externalId, setExternalId] = useState('')
+  // On DOMjudge CPIntel names and creates the contest; linking one made on the judge is optional.
+  const [linking, setLinking] = useState(false)
+  const needsId = platform === 'CODEFORCES' || linking
   const [startsAt, setStartsAt] = useState('')
   const [endsAt, setEndsAt] = useState('')
   const [teamId, setTeamId] = useState<number | ''>('')
@@ -50,14 +55,12 @@ export default function AdminExamsPage() {
   const filesAllowed = files === '' ? !exam : files === 'allow'
 
   const submit = () => {
-    if (!name.trim() || !externalId.trim() || classroomId == null) return
+    if (!platform || !name.trim() || (needsId && !externalId.trim()) || classroomId == null) return
     create.mutate({
       classroomId,
       kind,
-      // An examination runs on the judge this deployment controls; the server refuses anything
-      // else, and offering the choice here would only produce a rejected form.
-      platform: exam ? 'DOMJUDGE' : 'DOMJUDGE',
-      externalId: externalId.trim(),
+      platform,
+      externalId: needsId ? externalId.trim() : null,
       name: name.trim(),
       startsAt: startsAt ? new Date(startsAt).toISOString() : null,
       endsAt: endsAt ? new Date(endsAt).toISOString() : null,
@@ -66,7 +69,7 @@ export default function AdminExamsPage() {
     }, {
       onSuccess: () => {
         setName(''); setExternalId(''); setStartsAt(''); setEndsAt(''); setTeamId('')
-        setFiles('')
+        setFiles(''); setPlatform(null); setLinking(false)
       },
     })
   }
@@ -174,8 +177,30 @@ export default function AdminExamsPage() {
 
       <Panel
         title={exam ? 'New examination' : 'New contest'}
-        description="Created as a draft; hidden until published"
+        description={platform
+          ? `On ${JUDGES[platform].name} · created as a draft`
+          : 'Choose the judge it runs on'}
+        actions={platform && (
+          <button onClick={() => { setPlatform(null); setExternalId(''); setLinking(false) }}
+            className="text-xs text-accent-400 hover:text-accent-300">
+            Change judge
+          </button>
+        )}
       >
+        {!platform ? (
+          <div className="grid gap-2 p-4 sm:grid-cols-2">
+            {(Object.keys(JUDGES) as Platform[]).map(value => (
+              <button key={value} onClick={() => setPlatform(value)}
+                className="rounded-lg border border-gray-800 bg-gray-900 p-4 text-left
+                  transition-colors hover:border-accent-600 focus-visible:border-accent-600">
+                <span className="block text-sm font-medium text-gray-100">
+                  {JUDGES[value].name}
+                </span>
+                <span className="mt-1 block text-xs text-gray-500">{JUDGES[value].hint}</span>
+              </button>
+            ))}
+          </div>
+        ) : (
         <div className="flex flex-wrap items-end gap-2 p-4">
           <Field label="Classroom" className="min-w-48">
             <ClassroomSelect value={classroomId} onChange={id => { setClassroomId(id); setTeamId('') }} />
@@ -189,15 +214,19 @@ export default function AdminExamsPage() {
               className={INPUT}
             />
           </Field>
-          <Field label="DOMjudge contest id" className="min-w-40">
-            <input
-              value={externalId}
-              onChange={e => setExternalId(e.target.value)}
-              placeholder="midsem24"
-              maxLength={100}
-              className={INPUT}
-            />
-          </Field>
+          {needsId && (
+            <Field label={platform === 'CODEFORCES' ? 'Contest link' : 'Existing DOMjudge contest id'}
+              className="min-w-56">
+              <input
+                value={externalId}
+                onChange={e => setExternalId(e.target.value)}
+                placeholder={platform === 'CODEFORCES'
+                  ? 'https://codeforces.com/contest/2259' : 'midsem24'}
+                maxLength={platform === 'CODEFORCES' ? 500 : 100}
+                className={INPUT}
+              />
+            </Field>
+          )}
           <Field label="Starts" className="min-w-48">
             <input type="datetime-local" value={startsAt}
               onChange={e => setStartsAt(e.target.value)} className={INPUT} />
@@ -230,7 +259,7 @@ export default function AdminExamsPage() {
           </Field>
           <button
             onClick={submit}
-            disabled={!name.trim() || !externalId.trim() || classroomId == null
+            disabled={!name.trim() || (needsId && !externalId.trim()) || classroomId == null
               || create.isPending}
             className="flex items-center gap-1.5 rounded-lg bg-accent-600 px-3 py-2 text-sm
                        font-medium text-white transition-colors hover:bg-accent-500
@@ -239,16 +268,41 @@ export default function AdminExamsPage() {
             {create.isPending ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
             Create draft
           </button>
+          {platform === 'DOMJUDGE' && (
+            <p className="basis-full text-xs text-gray-500">
+              {linking
+                ? 'Links a contest already on the judge. Bank questions can only go into contests CPIntel creates. '
+                : 'CPIntel creates the contest on DOMjudge when you publish its questions. '}
+              <button type="button" onClick={() => { setLinking(!linking); setExternalId('') }}
+                className="text-accent-400 hover:text-accent-300">
+                {linking ? 'Create it from CPIntel instead' : 'Link an existing contest instead'}
+              </button>
+            </p>
+          )}
         </div>
+        )}
       </Panel>
 
       <p className="flex items-start gap-2 px-1 text-xs leading-relaxed text-gray-600">
         <ShieldCheck size={13} className="mt-0.5 shrink-0" />
-        DOMjudge supplies the clock and verdicts. CPIntel controls who may sit and records each
-        session; its log is a set of observations, not findings.
+        The judge supplies verdicts. CPIntel controls who may sit and records each session. On
+        Codeforces, candidates submit through their own connected account.
       </p>
     </div>
   )
+}
+
+type Platform = 'DOMJUDGE' | 'CODEFORCES'
+
+const JUDGES: Record<Platform, { name: string, hint: string }> = {
+  DOMJUDGE: {
+    name: 'DOMjudge',
+    hint: "The classroom's judge. CPIntel creates the contest from the question bank.",
+  },
+  CODEFORCES: {
+    name: 'Codeforces',
+    hint: 'A Codeforces contest link. Candidates submit with their own account; marks are set once it starts.',
+  },
 }
 
 const INPUT = 'rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 text-sm text-gray-200 '

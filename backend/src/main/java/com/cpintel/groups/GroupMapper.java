@@ -56,7 +56,9 @@ public final class GroupMapper {
             contest.getGroup() == null ? null : contest.getGroup().getName(),
             contest.getPlatform(),
             contest.getExternalId(),
-            com.cpintel.integration.domjudge.JudgeContestRef.judgeIdOf(contest.getExternalId()),
+            "DOMJUDGE".equals(contest.getPlatform())
+                ? com.cpintel.integration.domjudge.JudgeContestRef.judgeIdOf(contest.getExternalId())
+                : contest.getExternalId(),
             contest.getName(),
             contest.getUrl(),
             contest.getStartsAt(),

@@ -8,6 +8,7 @@ import Store from 'electron-store'
 import { Lockdown, disposeOnQuit, type LockdownPolicy, type LockdownState } from './lockdown'
 import {
   connectCodeforces, fetchCodeforces, forgetCodeforces, openCodeforces, signInCodeforces,
+  verifyCodeforces,
 } from './cfSession'
 import { isOpenableExternal } from './externalUrl'
 import * as localRunner from './localRunner'
@@ -299,31 +300,48 @@ handle('cf:connect', async (_e, apiBase: string, token: string, handle?: string)
 /**
  * Signing in in the app's own Codeforces window. Only says whether it happened: the page then
  * connects by reading codeforces.com through cf:fetch, so no session leaves this computer.
- * Refused during a locked-down contest, like cf:connect.
  */
 handle('cf:signIn', async () => {
-  if (lockdown.isEngaged()) {
-    lockdown.countBlocked()
-    return { ok: false, error: 'Codeforces cannot be connected during a locked-down contest. '
-      + 'Connect before the round starts.' }
+  // Allowed during a lockdown, so a Codeforces examination can be connected from inside it,
+  // but the window is then held to the sign-in page and Cloudflare's check.
+  const done = lockdown.excuse()
+  let ok: boolean
+  try {
+    ok = await signInCodeforces(mainWindow ?? undefined, lockdown.isEngaged())
+  } finally {
+    done()
   }
-  const ok = await signInCodeforces(mainWindow ?? undefined)
   return ok ? { ok: true } : { ok: false, error: 'The sign-in window was closed.' }
 })
 
 /**
- * Codeforces' browser check, passed in the app's own window so the app's requests carry it. The
- * same rule as any outside link during an examination that refuses them.
+ * Codeforces' browser check, passed in the app's own window so the app's requests carry it.
+ * During a lockdown only the home page and the check itself can be opened.
  */
 handle('cf:open', async (_e, url: string) => {
-  if (lockdown.blocksExternalApps()) {
-    lockdown.countBlocked()
-    return { ok: false, error: 'Not available during this examination.' }
-  }
   try {
-    return { ok: await openCodeforces(url, mainWindow ?? undefined) }
+    return { ok: await openCodeforces(url, mainWindow ?? undefined, lockdown.isEngaged()) }
   } catch (e: any) {
     return { ok: false, error: e?.message ?? String(e) }
+  }
+})
+
+/**
+ * Codeforces' anti-bot check on a submit page, passed in the app's own window: answers the
+ * page's submit form with the check's token in it. Allowed during a lockdown, held to that page.
+ */
+handle('cf:verify', async (_e, url: string) => {
+  try {
+    const done = lockdown.excuse()
+    let fields: Record<string, string> | null
+    try {
+      fields = await verifyCodeforces(url, mainWindow ?? undefined, lockdown.isEngaged())
+    } finally {
+      done()
+    }
+    return fields ? { fields } : { error: 'The Codeforces check window was closed.' }
+  } catch (e: any) {
+    return { error: e?.message ?? String(e) }
   }
 })
 

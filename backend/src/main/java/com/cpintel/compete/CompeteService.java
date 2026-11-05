@@ -168,6 +168,34 @@ public class CompeteService {
      * <p>It runs before the provider is asked for anything, so a refused submission never
      * reaches the judge and never lands in the archive.
      */
+    /** What {@link #statement} checks, for a Codeforces statement the user's browser fetched. */
+    public void requireBrowserStatement(Long userId, String contestId) {
+        examGuard.requirePaperContent(userId, CompeteDto.Platform.CODEFORCES.name(), contestId);
+    }
+
+    /**
+     * What {@link #submit} checks, for a Codeforces submission the user's browser posts itself
+     * (the desktop app or the extension, since a hosted server cannot reach Codeforces' pages).
+     * {@code offered} is the compiler list off the submit page that browser fetched.
+     */
+    public void requireBrowserSubmit(Long userId, String contestId, String languageId,
+                                     List<PracticeDto.LanguageOption> offered) {
+        String platform = CompeteDto.Platform.CODEFORCES.name();
+        examGuard.requireContestAccess(userId, platform, contestId);
+        eventWindow.requireOpen(userId, platform, contestId);
+        proctoring.requireMonitored(userId, platform, contestId);
+        Set<String> allowed = languagePolicy.restrictionFor(userId, platform, contestId);
+        if (!allowed.isEmpty()) {
+            languagePolicy.requireAllowed(allowed, languageId, languagePolicy.filter(offered, allowed));
+        }
+    }
+
+    /** Logs a browser-posted Codeforces submission in the examination session, as submit does. */
+    public void recordBrowserSubmission(Long userId, String contestId, String index, long submissionId) {
+        examSessions.recordSubmission(userId, CompeteDto.Platform.CODEFORCES.name(), contestId, index,
+            String.valueOf(submissionId));
+    }
+
     public CompeteDto.ContestSubmission submit(Long userId, String platform, String contestId,
                                                CompeteDto.ContestSubmitRequest req) {
         examGuard.requireContestAccess(userId, platform, contestId);

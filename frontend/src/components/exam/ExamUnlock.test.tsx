@@ -68,9 +68,16 @@ describe('unlocking an examination', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent("That is not this paper's password.")
   })
 
-  it('before the paper starts, nothing can be typed or sent', async () => {
-    const server = open(paper({ lifecycle: 'SCHEDULED' }))
-    expect(screen.getByText('Not open yet')).toBeInTheDocument()
+  it('before the paper starts, it can be entered to wait and connect Codeforces', async () => {
+    const early = paper({ lifecycle: 'SCHEDULED' })
+    const server = open(early, { 'POST /exams/7/unlock': { data: early } })
+    expect(screen.getByText(/The questions appear when it starts/)).toBeInTheDocument()
+    await userEvent.type(screen.getByLabelText('Examination password'), 'ABCD-1234{Enter}')
+    expect(server.calls('POST /exams/7/unlock')[0].body).toEqual({ examPassword: 'ABCD-1234' })
+  })
+
+  it('once the paper has ended, nothing can be typed or sent', async () => {
+    const server = open(paper({ lifecycle: 'ENDED' }))
     expect(screen.getByLabelText('Examination password')).toBeDisabled()
     const submit = screen.getByRole('button', { name: 'Open the examination' })
     expect(submit).toBeDisabled()

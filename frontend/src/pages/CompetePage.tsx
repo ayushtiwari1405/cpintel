@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { clsx } from 'clsx'
 import {
-  CheckCircle2, Clock, Eye, FileText, FolderOpen, ListOrdered, Loader2, Maximize, Send, Swords,
-  Trophy,
+  CheckCircle2, Clock, Eye, FileText, FolderOpen, ListOrdered, Loader2, LogIn, Maximize, RefreshCw,
+  Send, ShieldAlert, ShieldCheck, Swords, Trophy,
 } from 'lucide-react'
 
 import { CfSessionCard } from '@/components/practice/CfSessionCard'
@@ -29,6 +30,7 @@ import {
   useTicker,
 } from '@/hooks/useCompete'
 import { useCfSession } from '@/hooks/usePractice'
+import { useCfSignIn } from '@/hooks/useCfSignIn'
 import { useEnterExam, useMyExam, useMyExamLeaderboard, useMyExams } from '@/hooks/useExams'
 import { useSelectedClassroom } from '@/hooks/useClassrooms'
 import { ClassroomSwitcher } from '@/components/common/ClassroomSwitcher'
@@ -44,6 +46,7 @@ import { archiveApi } from '@/api/archiveApi'
 import { useToast } from '@/components/common/Toaster'
 import { useAuthStore } from '@/store/authStore'
 import { useExamMode } from '@/store/examModeStore'
+import { useExamSidebarSlot } from '@/store/examSidebarSlot'
 import type {
   CompetePlatform, ContestRef, ContestSubmission, MyExam, VerdictResponse,
 } from '@/types'
@@ -125,6 +128,10 @@ export default function CompetePage({ examOnly, section }: {
   section?: Mode
 } = {}) {
   const qc = useQueryClient()
+  const examSidebar = useExamSidebarSlot()
+  const [refreshing, setRefreshing] = useState(false)
+  const cfSignIn = useCfSignIn()
+  const [showCfCard, setShowCfCard] = useState(false)
   const logout = useLogout()
 
   const [mode, setMode] =
@@ -620,6 +627,16 @@ export default function CompetePage({ examOnly, section }: {
               This session cannot open or submit to the paper. Afterwards, your code appears
               under Past examinations.
             </p>
+            {exam.event.platform === 'CODEFORCES' && (
+              <p className="mt-2 text-xs text-amber-300">
+                {session?.connected
+                  ? 'Runs on Codeforces. Your account is connected.'
+                  : 'Runs on Codeforces. Connect your account now — you cannot during the paper.'}
+              </p>
+            )}
+            {exam.event.platform === 'CODEFORCES' && !session?.connected && (
+              <div className="mt-3"><CfSessionCard /></div>
+            )}
             <button onClick={() => setExamId(null)}
               className="mt-5 rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 text-sm
                 text-gray-300 transition-colors hover:bg-gray-800">
@@ -841,8 +858,49 @@ export default function CompetePage({ examOnly, section }: {
     </div>
   )
 
+  // What the candidate must read — connecting Codeforces, what is recorded, the rules, the
+  // invigilators' notices — sits in the sidebar beside the paper when it is open, and above the
+  // paper when it is not, so the code area starts at the top.
+  const examAside = inExam && exam ? (
+    <>
+      {(exam.event.lockdownRequired || examSession.focusLosses > 0) && (
+        <p className="flex items-start gap-2 rounded-lg border border-gray-800 bg-gray-900/60 px-3 py-2
+          text-xs leading-relaxed text-gray-400">
+          <ShieldCheck size={13} className="mt-0.5 shrink-0 text-gray-500" />
+          <span>
+            {exam.event.lockdownRequired && (
+              <>Monitored: up to {exam.event.awayThresholdSeconds}s away is allowed.</>
+            )}
+            {examSession.focusLosses > 0 && (
+              <> {examSession.focusLosses} focus loss{examSession.focusLosses === 1 ? '' : 'es'} recorded.</>
+            )}
+          </span>
+        </p>
+      )}
+      {exam.rules && (
+        <p className="rounded-lg border border-gray-800 bg-gray-900/60 px-3 py-2 text-xs
+          leading-relaxed text-gray-400 whitespace-pre-line">{exam.rules}</p>
+      )}
+      <ExamNotices notices={notices} onDismiss={dismissNotice} />
+    </>
+  ) : null
+
+  const cfSignedOut = inExam && needsCfSession && !!session && !session.connected
+
+  // Reloads everything the paper shows without reloading the page: a page reload always takes
+  // the browser out of full screen, which the examination records and covers the paper for.
+  const refreshPaper = async () => {
+    setRefreshing(true)
+    try {
+      await qc.invalidateQueries()
+    } finally {
+      setRefreshing(false)
+    }
+  }
+
   return (
     <div className="flex flex-col flex-1 min-h-0">
+      {examAside && examSidebar && createPortal(examAside, examSidebar)}
       {/* The paper is covered, not merely warned about, until it is full screen: a notice is
           easy to dismiss and read past; a cover is not. Nothing underneath is lost — the
           buffers stay in state and the editor is still mounted behind it. */}
@@ -883,15 +941,39 @@ export default function CompetePage({ examOnly, section }: {
               <p className="truncate text-sm font-medium text-gray-200">{exam.event.name}</p>
               <p className="text-xs text-gray-500">
                 Examination
-                {exam.event.lockdownRequired && (
-                  <> · monitored, {exam.event.awayThresholdSeconds}s away allowed</>
-                )}
-                {examSession.focusLosses > 0 && (
-                  <> · {examSession.focusLosses} focus loss
-                    {examSession.focusLosses === 1 ? '' : 'es'} recorded</>
+                {needsCfSession && session?.connected && session.handle && (
+                  <> · Codeforces: {session.handle}</>
                 )}
               </p>
             </div>
+            <div className="flex flex-wrap items-center gap-2">
+            {cfSignedOut && (
+              <>
+                <span role="alert" className="flex items-center gap-1.5 rounded-lg border border-amber-900/50
+                  bg-amber-950/30 px-2.5 py-1.5 text-xs text-amber-200">
+                  <ShieldAlert size={13} /> Not signed in to Codeforces
+                </span>
+                <button
+                  onClick={() => (cfSignIn.available ? cfSignIn.signIn() : setShowCfCard(v => !v))}
+                  disabled={cfSignIn.busy}
+                  className="flex items-center gap-1.5 rounded-lg bg-accent-600 px-3 py-1.5 text-xs
+                             font-medium text-white transition-colors hover:bg-accent-500 disabled:opacity-60"
+                >
+                  {cfSignIn.busy ? <Loader2 size={13} className="animate-spin" /> : <LogIn size={13} />}
+                  {cfSignIn.busy ? 'Waiting for sign-in…' : 'Sign in to Codeforces'}
+                </button>
+              </>
+            )}
+            <button
+              onClick={refreshPaper}
+              disabled={refreshing}
+              title="Reload the paper without leaving full screen"
+              className="flex items-center gap-1.5 rounded-lg border border-gray-800 bg-gray-900
+                         px-3 py-1.5 text-xs text-gray-300 transition-colors hover:bg-gray-800
+                         disabled:opacity-60"
+            >
+              <RefreshCw size={13} className={refreshing ? 'animate-spin' : undefined} /> Refresh
+            </button>
             {/* Asked in the page rather than with window.confirm: a native dialog takes
                 focus from the window, which the desktop lock would record as leaving it. */}
             {confirmFinish ? (
@@ -934,14 +1016,17 @@ export default function CompetePage({ examOnly, section }: {
                 <CheckCircle2 size={13} /> I have finished
               </button>
             )}
+            </div>
           </div>
 
-          {exam.rules && (
-            <p className="rounded-lg border border-gray-800 bg-gray-900/60 px-3 py-2 text-xs
-              leading-relaxed text-gray-400 whitespace-pre-line">{exam.rules}</p>
+          {cfSignedOut && cfSignIn.error && (
+            <p className="flex items-start gap-1.5 px-1 text-xs text-red-300">
+              <ShieldAlert size={13} className="mt-0.5 shrink-0" /> {cfSignIn.error.message}
+            </p>
           )}
+          {cfSignedOut && !cfSignIn.available && showCfCard && <CfSessionCard />}
 
-          <ExamNotices notices={notices} onDismiss={dismissNotice} />
+          {!examSidebar && examAside}
         </div>
       )}
 

@@ -155,8 +155,7 @@ function ContestSection({ title, contests }: {
                   <Lock size={12} className="mt-0.5 shrink-0 text-amber-400" aria-hidden="true" />
                   <span>
                     <span className="font-medium text-amber-200">Monitored.</span> Leaving the
-                    contest window gives a warning after ten seconds; longer absences are reported
-                    to the team's organiser.
+                    window for over {contest.awayThresholdSeconds}s is reported to the organiser.
                   </span>
                 </p>
               )}
@@ -180,7 +179,7 @@ function ContestSection({ title, contests }: {
               )}
               {myRank == null && contest.status !== 'SCHEDULED' && (
                 <p className="mt-2 text-xs text-gray-500">
-                  No placing yet — the board lags the judge by a few minutes.
+                  No rank yet — the board lags a few minutes.
                 </p>
               )}
             </li>

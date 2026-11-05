@@ -60,7 +60,12 @@ public class CfContestScraper {
      * how "registered but not started" is detected, since no API reports it.
      */
     public ContestPage dashboard(String cookieHeader, int contestId) {
-        Document doc = fetch(cookieHeader, webUrl + "/contest/" + contestId);
+        return dashboard(cookieHeader, new com.cpintel.integration.codeforces.CfContestRef(null, contestId));
+    }
+
+    /** The dashboard of a public or group contest. */
+    public ContestPage dashboard(String cookieHeader, com.cpintel.integration.codeforces.CfContestRef ref) {
+        Document doc = fetch(cookieHeader, webUrl + ref.path());
         if (doc == null) {
             return new ContestPage(false, false, null, null, List.of());
         }
@@ -96,11 +101,11 @@ public class CfContestScraper {
      * than the whole ranklist. The row is absent until the first submission lands, which is
      * normal rather than an error.
      */
-    public CompeteDto.RankInfo rank(String cookieHeader, int contestId, String handle,
-                                    boolean virtual, int solvedFallback) {
+    public CompeteDto.RankInfo rank(String cookieHeader, com.cpintel.integration.codeforces.CfContestRef ref,
+                                    String handle, boolean virtual, int solvedFallback) {
         String path = virtual
-            ? "/contest/" + contestId + "/standings/participant/true"
-            : "/contest/" + contestId + "/standings";
+            ? ref.path() + "/standings/participant/true"
+            : ref.path() + "/standings";
 
         Document doc = fetch(cookieHeader, webUrl + path);
         if (doc != null) {
@@ -121,6 +126,18 @@ public class CfContestScraper {
         // Not on the board yet — still report what we know from the user's own submissions.
         return new CompeteDto.RankInfo(null, null, null, solvedFallback, false, true,
             java.time.Instant.now());
+    }
+
+    /**
+     * Whether this session can open the contest at all: signed in, and (for a group contest) a
+     * member of the group. Codeforces sends anyone else elsewhere — the sign-in page or the
+     * group's own page — so the test is where the request ended up.
+     */
+    public boolean canOpen(String cookieHeader, com.cpintel.integration.codeforces.CfContestRef ref) {
+        Document doc = fetch(cookieHeader, webUrl + ref.path());
+        if (doc == null) return false;
+        String landed = doc.location() == null ? "" : doc.location();
+        return landed.contains(ref.path()) && doc.selectFirst("form#enterForm") == null;
     }
 
     // ---------------------------------------------------------------- helpers

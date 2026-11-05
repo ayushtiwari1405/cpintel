@@ -57,8 +57,9 @@ public class CfBrowserService {
     }
 
     /** A statement page the browser fetched, read for this user only. */
-    public PracticeDto.ProblemDetail statement(int contestId, String index, boolean contest,
-                                               String pageHtml) {
+    public PracticeDto.ProblemDetail statement(com.cpintel.integration.codeforces.CfContestRef ref, String index,
+                                               boolean contest, String pageHtml) {
+        int contestId = ref.id();
         Integer rating = null;
         List<String> tags = List.of();
         if (!contest) {
@@ -84,15 +85,18 @@ public class CfBrowserService {
      * The form to post for a submission, with the code archived first — so a submission the
      * browser never manages to send still leaves the user their code.
      */
-    public BrowserSubmission prepare(Long userId, int contestId, String index, boolean contest,
-                                     String languageId, String source, String submitPageHtml) {
+    public BrowserSubmission prepare(Long userId, com.cpintel.integration.codeforces.CfContestRef ref, String index,
+                                     boolean contest, String languageId, String source, String submitPageHtml) {
         if (source == null || source.isBlank()) {
             throw ApiException.badRequest("There is no code to submit.");
         }
-        CfWebSubmitClient.BrowserForm form = submitClient.submitForm(
-            submitPageHtml, contestId, index, contest, languageId, source);
+        CfWebSubmitClient.BrowserForm form = contest
+            ? submitClient.submitForm(submitPageHtml, ref, index, languageId, source)
+            : submitClient.submitForm(submitPageHtml, ref.id(), index, false, languageId, source);
+        // Filed under the contest's stored id (a group contest's carries its group), which is
+        // what an examination's leaderboard and archive read it back by.
         String archiveId = archive.recordAttempt(userId, SubmissionArchive.CODEFORCES,
-            String.valueOf(contestId), index, null, languageId, null, source);
+            contest ? ref.encoded() : String.valueOf(ref.id()), index, null, languageId, null, source);
         return new BrowserSubmission(archiveId, form.url(), form.fields());
     }
 
@@ -100,6 +104,15 @@ public class CfBrowserService {
     public long complete(Long userId, String archiveId, boolean contest, String resultHtml) {
         // Throws not-found unless the row is this user's.
         archive.source(userId, archiveId);
+        return completeOwned(archiveId, contest, resultHtml);
+    }
+
+    /** The archived attempt this browser submission belongs to: its contest and problem. */
+    public com.cpintel.archive.ArchiveDto.Source attempt(Long userId, String archiveId) {
+        return archive.source(userId, archiveId);
+    }
+
+    private long completeOwned(String archiveId, boolean contest, String resultHtml) {
         try {
             long id = submitClient.submittedId(resultHtml, contest);
             archive.attachExternalId(archiveId, id);

@@ -1,4 +1,5 @@
 import { BrowserWindow, session, type Cookie, type Session } from 'electron'
+import { allowedWhileLocked, READ_VERIFIED_FORM } from './cfConfine'
 
 /**
  * Connecting Codeforces from inside the desktop app, without a helper process.
@@ -207,10 +208,12 @@ export function connectCodeforces(
 function codeforcesWindow(
   url: string, title: string, parent: BrowserWindow | undefined,
   done: (win: BrowserWindow) => Promise<boolean>,
+  confined = false,
+  pollMs = 0,
+  size: { width: number; height: number } = { width: 1000, height: 760 },
 ): Promise<boolean> {
   const win = new BrowserWindow({
-    width: 1000,
-    height: 760,
+    ...size,
     parent,
     title,
     backgroundColor: '#ffffff',
@@ -226,9 +229,19 @@ function codeforcesWindow(
   // Links Codeforces opens in a new tab (its Google sign-in among them) stay in a window of
   // this session too, rather than going to a browser whose sign-in the app cannot see.
   win.webContents.setWindowOpenHandler(({ url: next }) => {
-    if (/^https:\/\//i.test(next)) win.loadURL(next)
+    if (confined ? allowedWhileLocked(next) : /^https:\/\//i.test(next)) win.loadURL(next)
     return { action: 'deny' }
   })
+  if (confined) {
+    // During a locked-down examination the window is for signing in and nothing more.
+    const keepIn = (event: Electron.Event, next: string) => {
+      if (!allowedWhileLocked(next)) event.preventDefault()
+    }
+    win.webContents.on('will-navigate', keepIn)
+    win.webContents.on('will-redirect', keepIn)
+    // Over an examination window that may itself be held on top.
+    win.setAlwaysOnTop(true, 'screen-saver')
+  }
 
   return new Promise(resolve => {
     let settled = false
@@ -246,7 +259,10 @@ function codeforcesWindow(
     }
     win.webContents.on('did-finish-load', check)
     win.webContents.on('did-navigate-in-page', check)
+    // For what changes without a navigation, like a widget filling in a token.
+    const timer = pollMs > 0 ? setInterval(check, pollMs) : null
     win.on('closed', () => {
+      if (timer) clearInterval(timer)
       if (!settled) { settled = true; resolve(false) }
     })
     win.loadURL(url).catch(() => { /* reported by the page itself */ })
@@ -269,19 +285,45 @@ const IS_SIGNED_IN = `!!document.querySelector('a[href*="/logout"]')`
  * The server checking a copied cookie from its own address is what used to fail: Cloudflare ties
  * the cookie to the browser that earned it, so a sign-in that worked never connected.
  */
-export function signInCodeforces(parent?: BrowserWindow): Promise<boolean> {
+export function signInCodeforces(parent?: BrowserWindow, confined = false): Promise<boolean> {
   return codeforcesWindow(SIGN_IN_URL, 'Sign in to Codeforces', parent, async win =>
     !win.webContents.getURL().includes('/enter')
-      && await win.webContents.executeJavaScript(IS_SIGNED_IN) === true)
+      && await win.webContents.executeJavaScript(IS_SIGNED_IN) === true, confined)
 }
 
 /** Shows Codeforces until its browser check has passed, then closes. */
-export function openCodeforces(url: string, parent?: BrowserWindow): Promise<boolean> {
+export function openCodeforces(url: string, parent?: BrowserWindow, confined = false): Promise<boolean> {
   if (new URL(url).origin !== 'https://codeforces.com') {
     return Promise.reject(new Error('Only https://codeforces.com can be opened.'))
   }
+  if (confined && !allowedWhileLocked(url)) {
+    return Promise.reject(new Error('Not available during this examination.'))
+  }
   return codeforcesWindow(url, 'Codeforces', parent, async win =>
-    await win.webContents.executeJavaScript(IS_CHECK_PAGE) === false)
+    await win.webContents.executeJavaScript(IS_CHECK_PAGE) === false, confined)
+}
+
+/**
+ * Passes Codeforces' anti-bot check on a submit page, in the app's own window, and returns that
+ * page's submit form with the check's token in it. Null if the window is closed first.
+ *
+ * <p>The token is made by Cloudflare's widget running in a real page, so a fetched copy of the
+ * page never has one. Usually it fills in by itself; sometimes it wants a click, which the
+ * student makes in this window. It closes itself as soon as the token is there.
+ */
+export async function verifyCodeforces(url: string, parent?: BrowserWindow,
+                                       confined = false): Promise<Record<string, string> | null> {
+  if (!allowedWhileLocked(url) || new URL(url).pathname.endsWith('/enter')) {
+    throw new Error('Only a Codeforces submit page can be verified.')
+  }
+  let fields: Record<string, string> | null = null
+  const ok = await codeforcesWindow(url, 'Codeforces check', parent, async win => {
+    const found = await win.webContents.executeJavaScript(READ_VERIFIED_FORM)
+    if (found && typeof found === 'object') fields = found as Record<string, string>
+    return fields !== null
+    // Only the widget needs to be on screen: a small window, scrolled to it.
+  }, confined, 500, { width: 480, height: 360 })
+  return ok ? fields : null
 }
 
 /** Forget the stored Codeforces sign-in, so the next connect starts from a clean window. */

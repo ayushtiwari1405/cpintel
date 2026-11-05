@@ -181,19 +181,27 @@ class ExamAccessServiceTest {
         }
 
         @Test
-        @DisplayName("a paper that has not started cannot be unlocked early")
-        void notYetOpen() {
+        @DisplayName("a paper that has not started can be entered early, to wait and connect")
+        void enteredBeforeTheStart() {
             paperAsksForAPassword();
             exam.setStartsAt(Instant.now().plusSeconds(600));
             when(passwords.matchesExamPassword(any(), any())).thenReturn(true);
 
-            ApiException e = assertThrows(ApiException.class,
-                () -> service.unlock(exam, USER, "right", null, null));
+            service.unlock(exam, USER, "right", null, null);
 
-            // Somebody who got hold of the password early must not be able to read the paper
-            // before the room does.
-            assertTrue(e.getMessage().toLowerCase().contains("not open"));
-            verify(passwords, never()).matchesExamPassword(any(), any());
+            // The questions stay closed until the start: ExamSessionGuard.requirePaperContent.
+            assertTrue(service.isUnlocked(exam, USER));
+        }
+
+        @Test
+        @DisplayName("a wrong password before the start is still refused")
+        void wrongPasswordBeforeTheStart() {
+            paperAsksForAPassword();
+            exam.setStartsAt(Instant.now().plusSeconds(600));
+            when(passwords.matchesExamPassword(any(), any())).thenReturn(false);
+
+            assertThrows(ApiException.class, () -> service.unlock(exam, USER, "wrong", null, null));
+            assertFalse(service.isUnlocked(exam, USER));
         }
 
         @Test

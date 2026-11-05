@@ -192,9 +192,8 @@ export default function AdminGroupContestPage() {
 
           {computed && (
             <p className="border-t border-gray-800 px-4 py-3 text-xs text-gray-500">
-              Computed from members' submissions: problems solved plus ten penalty minutes per
-              rejected attempt on a solved problem. Matches the official board for ICPC-mode
-              rounds; for rated rounds the order can differ from Codeforces.
+              Ranked by problems solved, then penalty: solve time plus 10 minutes per wrong
+              attempt on a solved problem. Rated rounds may order differently on Codeforces.
             </p>
           )}
         </Panel>

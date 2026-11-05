@@ -190,13 +190,14 @@ class ExamPublishServiceTest {
     }
 
     @Test
-    @DisplayName("Publishing is refused: questions not checked, no admin account, started, no window, a bad id")
+    @DisplayName("Publishing is refused: tests without answers, no admin account, started, no window, a bad id")
     void refusals() {
-        BankQuestion q = question(10, "Sum", BankQuestion.Status.DRAFT);
+        question(10, "Sum", BankQuestion.Status.DRAFT);
+        when(bank.missingForJudge(10L)).thenReturn("2 tests have no answer");
         String draft = assertThrows(ApiException.class, () -> service.publish(ADMIN, EXAM, null)).getMessage();
-        assertTrue(draft.contains("\"Sum\""), draft);
+        assertTrue(draft.contains("\"Sum\" (2 tests have no answer)"), draft);
 
-        q.setStatus(BankQuestion.Status.READY);
+        when(bank.missingForJudge(10L)).thenReturn(null);
         when(judge.serviceAccountIsAdmin()).thenReturn(false);
         assertTrue(assertThrows(ApiException.class, () -> service.publish(ADMIN, EXAM, null)).getMessage().contains("admin role"));
         when(judge.serviceAccountIsAdmin()).thenReturn(true);
@@ -239,7 +240,7 @@ class ExamPublishServiceTest {
     }
 
     @Test
-    @DisplayName("During the paper, a checked new version replaces the problem in place, with a notice")
+    @DisplayName("During the paper, a new version replaces the problem in place, with a notice")
     void liveFix() {
         BankQuestion q = question(10, "Sum", BankQuestion.Status.READY);
         service.publish(ADMIN, EXAM, null);
@@ -255,11 +256,13 @@ class ExamPublishServiceTest {
 
         q.setVersion(3);
         q.setTitle("Sum (corrected)");
-        q.setStatus(BankQuestion.Status.DRAFT);
+        when(bank.missingForJudge(10L)).thenReturn("no tests");
         assertEquals(HttpStatus.BAD_REQUEST, status(() -> service.republish(ADMIN, EXAM, 10L,
-            new ExamBankDto.RepublishRequest(true, null), null)), "not checked");
+            new ExamBankDto.RepublishRequest(true, null), null)), "not ready for the judge");
 
-        q.setStatus(BankQuestion.Status.READY);
+        // Not checked against a model solution is fine once every test has an answer.
+        when(bank.missingForJudge(10L)).thenReturn(null);
+        q.setStatus(BankQuestion.Status.DRAFT);
         clearInvocations(judge);
         service.republish(ADMIN, EXAM, 10L, new ExamBankDto.RepublishRequest(true, "Test 3 of A was wrong."), null);
 

@@ -1,3 +1,4 @@
+import { cfWindowOpen, onCfWindowChange } from '@/utils/cfWindowExcuse'
 import { useEffect, useRef, useState } from 'react'
 import { isDesktop, type LockdownState } from '@/utils/desktopBridge'
 
@@ -135,6 +136,8 @@ export function useAwayMonitor(active: boolean,
 
     const onHide = () => {
       if (awaySince.current !== null) return
+      // Focus went to the Codeforces window this page opened, not away from the examination.
+      if (cfWindowOpen()) return
       awaySince.current = Date.now()
       focusLosses.current++
       nextWarningAt.current = Date.now() + threshold
@@ -165,6 +168,10 @@ export function useAwayMonitor(active: boolean,
     // application often only fires blur, and leaving the contest is leaving it either way.
     document.addEventListener('visibilitychange', onVisibility)
     window.addEventListener('blur', onHide)
+    // When that window closes with the candidate somewhere else, they are away from then on.
+    const stopWatchingCf = onCfWindowChange(() => {
+      if (!cfWindowOpen() && (document.visibilityState === 'hidden' || !document.hasFocus())) onHide()
+    })
     window.addEventListener('focus', onShow)
     window.addEventListener('pointerdown', askForPermission)
     window.addEventListener('keydown', askForPermission)
@@ -194,6 +201,7 @@ export function useAwayMonitor(active: boolean,
     return () => {
       document.removeEventListener('visibilitychange', onVisibility)
       window.removeEventListener('blur', onHide)
+      stopWatchingCf()
       window.removeEventListener('focus', onShow)
       window.removeEventListener('pointerdown', askForPermission)
       window.removeEventListener('keydown', askForPermission)

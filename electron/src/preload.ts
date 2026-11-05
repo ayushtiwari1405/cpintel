@@ -44,6 +44,7 @@ contextBridge.exposeInMainWorld('cpintelDesktop', {
     forget: () => ipcRenderer.invoke('cf:forget'),
     signIn: () => ipcRenderer.invoke('cf:signIn'),
     open: (url: string) => ipcRenderer.invoke('cf:open', url),
+    verify: (url: string) => ipcRenderer.invoke('cf:verify', url),
     fetch: (request: { method?: 'GET' | 'POST'; url: string; form?: Record<string, string> }) =>
       ipcRenderer.invoke('cf:fetch', request),
   },

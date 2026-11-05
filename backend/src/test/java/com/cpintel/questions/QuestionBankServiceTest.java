@@ -59,7 +59,8 @@ class QuestionBankServiceTest {
         service = new QuestionBankService(classrooms, classroomRepository, questions, tests,
             testData, mock(UserRepository.class), audit, pdfs, renderer);
         when(pdfs.findInfo(anyLong())).thenReturn(Optional.empty());
-        room = Classroom.builder().classroomId(ROOM).name("DSA").isActive(true).build();
+        room = Classroom.builder().classroomId(ROOM).name("DSA").isActive(true)
+            .tasWriteQuestions(true).build();
         when(classrooms.require(ROOM)).thenReturn(room);
         when(classrooms.canManage(eq(ADMIN), any())).thenReturn(true);
         when(classroomRepository.isTa(ROOM, TA)).thenReturn(true);
@@ -118,6 +119,24 @@ class QuestionBankServiceTest {
         assertEquals(BankQuestion.Status.DRAFT, d.status());
         verify(audit).recordIn(eq(ROOM), eq(TA), eq(AuditService.QUESTION_CREATED), eq("QUESTION"),
             eq(String.valueOf(Q)), any());
+    }
+
+    @Test
+    @DisplayName("Until an admin allows it, a TA reads the bank but cannot add or change questions")
+    void taNeedsAdminsLeave() {
+        room.setTasWriteQuestions(false);
+        when(questions.findById(Q)).thenReturn(Optional.of(question));
+
+        assertEquals(HttpStatus.FORBIDDEN, status(() -> service.create(TA, ROOM, request(null), null)));
+        assertEquals(HttpStatus.FORBIDDEN, status(() -> service.update(TA, Q, request(3), null)));
+        when(classrooms.managedIds(TA)).thenReturn(List.of());
+        when(classroomRepository.taClassroomIds(TA)).thenReturn(List.of(ROOM));
+        when(classroomRepository.findAllById(List.of())).thenReturn(List.of());
+        when(classroomRepository.findAllById(List.of(ROOM))).thenReturn(List.of(room));
+        List<QuestionBankDto.BankClassroom> mine = service.myClassrooms(TA);
+        assertEquals(1, mine.size());
+        assertFalse(mine.get(0).canEdit());
+        service.create(ADMIN, ROOM, request(null), null);
     }
 
     @Test

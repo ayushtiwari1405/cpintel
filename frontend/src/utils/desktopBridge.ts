@@ -69,6 +69,11 @@ declare global {
         signIn?: () => Promise<{ ok: boolean; error?: string }>
         /** Codeforces in the app's own window, until its browser check has passed. */
         open?: (url: string) => Promise<{ ok: boolean; error?: string }>
+        /**
+         * Codeforces' anti-bot check on a submit page, passed in the app's own window: the
+         * page's submit form with the check's token. Absent from builds older than it.
+         */
+        verify?: (url: string) => Promise<{ fields: Record<string, string> } | { error: string }>
         /** A codeforces.com request made with the app's own Codeforces session. */
         fetch?: (request: { method?: 'GET' | 'POST'; url: string; form?: Record<string, string> })
           => Promise<{ status: number; url: string; body: string } | { error: string }>

@@ -38,7 +38,7 @@ the reasoning behind the harder decisions, and [`docs/SRS.md`](docs/SRS.md) for 
 | Document DB | MongoDB — raw submission history, personal files, contest snapshots |
 | Cache | Redis — sessions, JWT blacklist, per-user token revocation, analytics cache |
 | Integrations | Codeforces REST + scraping, DOMjudge REST v4 |
-| Migrations | Flyway — 32 versioned migrations (schema, indexes, materialized views, audit indexes, groups, super admin role, scheduler locks, node-level mastery, examinations, examination access, placement results, Codeforces-only cleanup, examination-mode sessions, several events per judge contest, examination leaderboards, classrooms, audit log by classroom, DOMjudge logins in PostgreSQL, marking an event done, rejudging a problem, TA marking, freezing TA marks, refresh-token digests and families, skill ratings, one sync at a time, examination grants kept in PostgreSQL, desktop-app-only examinations, which admin made each account, the classroom question bank, uploaded statement PDFs, model-solution checks, publishing examinations to the judge) |
+| Migrations | Flyway — 33 versioned migrations (schema, indexes, materialized views, audit indexes, groups, super admin role, scheduler locks, node-level mastery, examinations, examination access, placement results, Codeforces-only cleanup, examination-mode sessions, several events per judge contest, examination leaderboards, classrooms, audit log by classroom, DOMjudge logins in PostgreSQL, marking an event done, rejudging a problem, TA marking, freezing TA marks, refresh-token digests and families, skill ratings, one sync at a time, examination grants kept in PostgreSQL, desktop-app-only examinations, which admin made each account, the classroom question bank, uploaded statement PDFs, model-solution checks, publishing examinations to the judge, classroom Codeforces keys and TA question permission) |
 | Containerization | Docker Compose — 11 services: 3 behind the `monitoring` profile and certbot behind `letsencrypt`. `docker-compose.prod.yml` swaps the builds for CI images |
 | Editor | Monaco, bundled locally (no CDN) — shared by the Practice, Compete and examination workspaces |
 | Code runner | g++, gcc and CPython under bubblewrap + rlimits, in its own locked-down container on a server; judged against the statement's sample tests |
@@ -136,14 +136,22 @@ ordinary contest in four ways, and nothing else:
   passwords are issued for every examination, and none is ever emailed. It works from an hour
   before the start until the end. The two modes cannot reach into each other: a normal session
   cannot open, unlock or submit to a scheduled or running examination, and an examination
-  session cannot touch anything outside it. Optionally the paper also has a **room password**
-  read out when the invigilator starts it; until it is typed the candidate sees the clock and
-  the rules and nothing else, not even the problem list
+  session cannot touch anything outside it. Optionally the paper also has a **room password**.
+  It is accepted before the start too, so candidates can enter, wait and connect Codeforces;
+  until it is typed the candidate sees the clock and the rules and nothing else, and the problem
+  list and statements appear only when the paper starts
 - **It is monitored, and the candidate is told so on the screen where it happens.** Focus
   losses, returns, absences past the paper's own away threshold, problems opened, submissions
   and verdicts are all recorded. The threshold and the desktop restrictions are set per
-  examination. **Only examinations are monitored** — an ordinary contest is practice among
-  people who chose to enter it, and nothing watches one
+  examination. Time in a Codeforces window CPIntel itself opened (signing in, or Codeforces'
+  anti-bot check when submitting) is not counted as away; those windows stay on Codeforces'
+  sign-in, check and submit pages and close themselves. **Only examinations are monitored** — an
+  ordinary contest is practice among people who chose to enter it, and nothing watches one
+- **The exam page keeps the code area clear.** The top bar has the paper's name, **Refresh**
+  (reloads the paper's data without reloading the page, so full screen is kept), and *I have
+  finished*; on a Codeforces paper it also says when the candidate is not signed in to
+  Codeforces, with a **Sign in to Codeforces** button. The rules, notices and what is monitored
+  sit in the sidebar, or above the paper when the sidebar is closed
 - **It holds its candidates for its whole window.** From the start of the paper to its end,
   somebody assigned to it cannot sign in with their account password or renew a normal session,
   and any normal session they already held is ended (`EXAM_IN_PROGRESS`). The slip is the only
@@ -810,12 +818,25 @@ browser check. So CPIntel never asks for your password and never signs in on you
 reuses a session you created yourself, in a real browser.
 
 **Desktop app.** Press *Sign in to Codeforces*. A window opens on codeforces.com, you sign in
-there as you would anywhere, and the app reads the cookies of the session that window created
-and hands them to the backend. The cookie never passes through the page, and no other browser
-on the machine is touched.
+there as you would anywhere, and the app then reads codeforces.com itself and tells the server
+which handle is signed in. The server keeps the handle, never the cookies; statements and
+submissions go through the app's own Codeforces session.
 
-**Web build.** A page cannot read an HttpOnly cookie belonging to another origin, so the session
-has to be fetched by something outside the browser. Run the helper, then press *Connect*:
+**Website, with the CPIntel extension** (the way on a hosted server; see `extension/README.md`).
+Press *Connect with this browser*. It uses the Codeforces account signed in on that browser; if
+none is, a small sign-in window opens and connecting finishes once you have signed in. Again
+only the handle reaches the server.
+
+**Submitting and the anti-bot check.** Codeforces' submit form now carries Cloudflare's
+anti-bot check, which only a real page can pass. When a submission is refused for it, the app
+or extension opens that submit page in a small window, the check fills in (usually with no
+click), and the same submission is sent again; the window closes itself. After the first time,
+each later submission passes the check first. A submission the server makes from stored cookies
+cannot pass it.
+
+**Local development without the extension.** A page cannot read an HttpOnly cookie belonging to
+another origin, so the session has to be fetched by something outside the browser. Run the
+helper, then press *Connect*:
 
 ```bash
 ./scripts/grab-cf-cookie.py --serve
@@ -835,7 +856,8 @@ its API. A request naming any other API address is refused before a cookie is re
 browser check lives hours; the session CPIntel stores lives a fortnight. When it expires, the
 account still reads as connected while statements and submits start failing. Problem pages say
 so and link back to `/platforms` to reconnect; the desktop app usually needs one click, since it
-keeps you signed in to Codeforces in its own window.
+keeps you signed in to Codeforces in its own window. (This applies to cookie sessions; a session
+connected through the app or the extension holds only the handle and lives in that browser.)
 
 The stored cookie is encrypted at rest with `CPINTEL_SESSION_KEY`, kept in Redis only, never
 returned by any endpoint, and dropped by *Disconnect* here or from Codeforces' own
@@ -936,8 +958,9 @@ DOMjudge-related is read from `.env`.
 ### Question bank
 
 Exam questions can be written in CPIntel instead of on DOMjudge, at **Question bank** in the
-sidebar. A classroom's bank is open to its admins and to any of its TAs; putting questions on
-the judge is the admins' step.
+sidebar. A classroom's bank is open to its admins and its TAs. TAs can only read it until an
+admin ticks **Can add questions to the bank** on the classroom page; putting questions on the
+judge is always the admins' step.
 
 - **Writing.** A question has a title, a statement in Markdown with `$…$` maths (a live
   preview shows the PDF candidates will read), time and memory limits, how output is compared
@@ -952,14 +975,15 @@ the judge is the admins' step.
 - **Checking.** **Check** runs the model solution on every test in the code runner, under the
   question's own limits, and compares each output the way the judge will. A test passes when the
   output matches, the run is clean, and it took at most half the time limit. It can first fill
-  in missing answers from the model solution. A pass marks the question **ready**; any edit
-  makes it a draft again. Checks run one at a time, so they never crowd out candidates' runs.
-- **Publishing.** On a DOMjudge examination's **Questions** tab an admin picks ready questions
-  in order and publishes. CPIntel creates the contest the examination names (once; it never
+  in missing answers from the model solution. The check is optional: a pass marks the question
+  **checked**, and any edit makes it a draft again. Checks run one at a time, so they never crowd out candidates' runs.
+- **Publishing.** On a DOMjudge examination's or contest's **Questions** tab an admin picks
+  questions in order and publishes; each needs at least one test, and every test an answer
+  (a passing check is not required). CPIntel creates the contest the examination names (once; it never
   publishes into a contest it did not create), uploads each question as `cpi-e<exam>-q<question>`,
   labels them A, B, C…, and sets the examination's problem list, keeping marks already given.
   Publishing again before the start brings the judge in line with the choice.
-- **During the paper.** The problems are fixed, but a question corrected and checked again can
+- **During the paper.** The problems are fixed, but a corrected question can
   replace its published version in place (same problem, same label), with a notice to every
   candidate; then rejudge that problem. **Notices to candidates** can also be sent on their own;
   they appear in the examination within about a minute.
@@ -979,7 +1003,20 @@ What the judge needs, and what its API cannot do:
 
 ### Running an examination
 
-1. `/admin/exams` — create it. It needs a name, the DOMjudge contest id, and a start and end.
+1. `/admin/exams` — create it: choose the judge, then give a name and a start and end. On
+   DOMjudge, CPIntel names the contest and creates it when you publish its questions (or you
+   link one already on the judge). On Codeforces you paste the contest link; candidates submit
+   through their own connected account, and problems and marks are set once it starts.
+   A **private group contest** (`codeforces.com/group/<code>/contest/<id>`) also needs a group
+   manager's API key (codeforces.com/settings/api) saved on the classroom page: the public API
+   refuses group contests, so verdicts and problems are read with it. Candidates must join the
+   group on Codeforces. They connect Codeforces in CPIntel beforehand, or from the exam page
+   itself (its **Sign in to Codeforces** button; candidates may enter before the start for
+   this). The exam's **People** tab shows who has connected, and **Check candidates** opens
+   the contest as each of them to find anyone not in the group; it also warns when the
+   contest's own window does not cover the paper's. Codeforces now asks for an anti-bot check
+   on submitting: the desktop app and the extension pass it in a small window on the submit
+   page, which usually needs no click.
    It is created as a **draft**: invisible to candidates however close its start time is, so
    saving a half-written paper is never the same click as publishing it to two hundred people.
 2. **Who sits it** — assign teams, individuals, or both. An examination for four candidates who

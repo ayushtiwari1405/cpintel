@@ -18,7 +18,8 @@ public class QuestionBankDto {
     private QuestionBankDto() {}
 
     /** A classroom whose bank this person may open, and why. */
-    public record BankClassroom(Long classroomId, String name, Role role, boolean active) {}
+    /** {@code canEdit}: active, and an admin, or a TA whom the admins let add questions. */
+    public record BankClassroom(Long classroomId, String name, Role role, boolean active, boolean canEdit) {}
 
     public enum Role { ADMIN, TA }
 

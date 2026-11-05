@@ -169,6 +169,19 @@ public class CfWebSubmitClient {
      */
     public BrowserForm submitForm(String submitPageHtml, int contestId, String index,
                                   boolean contest, String programTypeId, String source) {
+        return submitFormAt(submitPageHtml, submitPageUrl(contestId, contest), String.valueOf(contestId),
+            index, contest, programTypeId, source);
+    }
+
+    /** The contest submission form for a public or group contest, read off its submit page. */
+    public BrowserForm submitForm(String submitPageHtml, com.cpintel.integration.codeforces.CfContestRef ref,
+                                  String index, String programTypeId, String source) {
+        return submitFormAt(submitPageHtml, webUrl + ref.path() + "/submit", ref.encoded(), index, true,
+            programTypeId, source);
+    }
+
+    private BrowserForm submitFormAt(String submitPageHtml, String submitUrl, String contestId, String index,
+                                     boolean contest, String programTypeId, String source) {
         assertEnabled();
         if (submitPageHtml == null || isLoginPage(submitPageHtml)) {
             throw new ApiException(HttpStatus.UNAUTHORIZED, "CF_SESSION_INVALID",
@@ -209,7 +222,7 @@ public class CfWebSubmitClient {
         form.put("tabSize", "4");
         form.put("sourceFile", "");
 
-        return new BrowserForm(submitPageUrl(contestId, contest)
+        return new BrowserForm(submitUrl
             + "?csrf_token=" + URLEncoder.encode(csrf, StandardCharsets.UTF_8), form);
     }
 
@@ -279,12 +292,19 @@ public class CfWebSubmitClient {
      */
     public long submitToContest(String cookieHeader, String userAgent, int contestId, String index,
                                 String programTypeId, String source) {
+        return submitToContest(cookieHeader, userAgent, "/contest/" + contestId, String.valueOf(contestId),
+            index, programTypeId, source);
+    }
+
+    /** As above, for the contest at {@code contestPath} (e.g. a group contest's path). */
+    public long submitToContest(String cookieHeader, String userAgent, String contestPath, String label,
+                                String index, String programTypeId, String source) {
         assertEnabled();
 
-        String page = get(cookieHeader, userAgent, submitPageUrl(contestId, true));
-        BrowserForm form = submitForm(page, contestId, index, true, programTypeId, source);
-        String result = postMultipart(cookieHeader, userAgent, form.url(), form.fields(),
-            submitPageUrl(contestId, true));
+        String submitUrl = webUrl + contestPath + "/submit";
+        String page = get(cookieHeader, userAgent, submitUrl);
+        BrowserForm form = submitFormAt(page, submitUrl, label, index, true, programTypeId, source);
+        String result = postMultipart(cookieHeader, userAgent, form.url(), form.fields(), submitUrl);
         return submittedId(result, true);
     }
 
@@ -293,8 +313,8 @@ public class CfWebSubmitClient {
      * problemset page does, so this must be read per contest rather than reused.
      */
     public List<PracticeDto.LanguageOption> scrapeContestLanguages(String cookieHeader, String userAgent,
-                                                                   int contestId) {
-        return languagesOn(get(cookieHeader, userAgent, webUrl + "/contest/" + contestId + "/submit"));
+                                                                   String contestPath) {
+        return languagesOn(get(cookieHeader, userAgent, webUrl + contestPath + "/submit"));
     }
 
     /**
@@ -302,12 +322,12 @@ public class CfWebSubmitClient {
      * Used as the registration check — CF exposes no API for "am I registered", but it only
      * renders the problem select to an account that may submit.
      */
-    public boolean canSubmitTo(String cookieHeader, String userAgent, int contestId) {
+    public boolean canSubmitTo(String cookieHeader, String userAgent, String contestPath) {
         try {
-            String page = get(cookieHeader, userAgent, webUrl + "/contest/" + contestId + "/submit");
+            String page = get(cookieHeader, userAgent, webUrl + contestPath + "/submit");
             return !isLoginPage(page) && !problemIndexesOn(page).isEmpty();
         } catch (Exception e) {
-            log.debug("Contest {} availability check failed: {}", contestId, e.getMessage());
+            log.debug("Contest {} availability check failed: {}", contestPath, e.getMessage());
             return false;
         }
     }
@@ -351,6 +371,12 @@ public class CfWebSubmitClient {
      */
     public SubmissionDetail fetchSubmission(String cookieHeader, String userAgent, int contestId,
                                             long submissionId) {
+        return fetchSubmission(cookieHeader, userAgent, "/contest/" + contestId, submissionId);
+    }
+
+    /** As above, for a submission in the contest at {@code contestPath}. */
+    public SubmissionDetail fetchSubmission(String cookieHeader, String userAgent, String contestPath,
+                                            long submissionId) {
         String csrf = csrfForSession(cookieHeader, userAgent);
         if (csrf != null) {
             SubmissionDetail detail = detailFromAjax(cookieHeader, userAgent, csrf, submissionId);
@@ -359,7 +385,7 @@ public class CfWebSubmitClient {
 
         // Fallback: whatever the page is willing to render. Source only — the per-test data
         // lives in the JSON response, never in the page markup.
-        String url = webUrl + "/contest/" + contestId + "/submission/" + submissionId;
+        String url = webUrl + contestPath + "/submission/" + submissionId;
         String page = get(cookieHeader, userAgent, url);
         if (isLoginPage(page)) {
             throw new ApiException(HttpStatus.UNAUTHORIZED, "CF_SESSION_INVALID",

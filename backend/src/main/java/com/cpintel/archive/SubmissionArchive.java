@@ -76,6 +76,7 @@ public class SubmissionArchive {
     private final CfSessionStore sessionStore;
     private final CfWebSubmitClient submitClient;
     private final CodeforcesClient codeforcesClient;
+    private final org.springframework.beans.factory.ObjectProvider<com.cpintel.compete.CfManagerApi> manager;
 
     // ------------------------------------------------------------- write path
 
@@ -310,19 +311,15 @@ public class SubmissionArchive {
                 "Everything CPIntel sent to the judge for you is here.");
         }
 
-        int cfContestId;
-        try {
-            cfContestId = Integer.parseInt(contestId);
-        } catch (NumberFormatException e) {
-            throw ApiException.badRequest("'" + contestId + "' is not a Codeforces contest id.");
-        }
+        com.cpintel.integration.codeforces.CfContestRef cfContest =
+            com.cpintel.integration.codeforces.CfContestRef.parse(contestId);
 
         CfSessionStore.StoredSession session = sessionStore.find(userId);
         if (session == null) {
             notice = "Connect your Codeforces account to also see submissions you made "
                 + "outside CPIntel.";
         } else {
-            List<CfModels.Submission> remote = remoteAttempts(cfContestId, problemIndex, session);
+            List<CfModels.Submission> remote = remoteAttempts(cfContest, problemIndex, session);
             reachable = remote != null;
             if (remote == null) {
                 notice = "Codeforces could not be reached, so this is only what CPIntel has "
@@ -336,7 +333,7 @@ public class SubmissionArchive {
                         syncFromRemote(local, s);
                         out.add(toAttempt(local, contestId));
                     } else {
-                        out.add(remoteOnlyAttempt(s, cfContestId, problemIndex));
+                        out.add(remoteOnlyAttempt(s, cfContest.encoded(), problemIndex));
                     }
                 }
             }
@@ -407,7 +404,8 @@ public class SubmissionArchive {
 
         // One metadata lookup so the cached row is complete — verdict, problem name and
         // compiler — rather than a bare blob of code with no context next to it.
-        List<CfModels.Submission> remote = remoteAttempts(contestId, null, session);
+        List<CfModels.Submission> remote = remoteAttempts(
+            new com.cpintel.integration.codeforces.CfContestRef(null, contestId), null, session);
         CfModels.Submission meta = remote == null ? null : remote.stream()
             .filter(s -> s.getId() != null && s.getId() == submissionId)
             .findFirst().orElse(null);
@@ -494,7 +492,8 @@ public class SubmissionArchive {
             // This path is Codeforces-only — it re-reads a submission page — so the stored
             // text id is parsed back to the number Codeforces uses.
             detail = submitClient.fetchSubmission(session.cookieHeader(), session.userAgent(),
-                Integer.parseInt(row.getContestId()), row.getExternalId());
+                com.cpintel.integration.codeforces.CfContestRef.parse(row.getContestId()).path(),
+                row.getExternalId());
         } catch (ApiException e) {
             if ("CF_SESSION_INVALID".equals(e.getCode())) sessionStore.delete(userId);
             return new ArchiveDto.TestReport(false, List.of(), null, failedOnTest(row), null,
@@ -574,20 +573,27 @@ public class SubmissionArchive {
      * asked. Null and empty mean different things here — nothing submitted versus no answer —
      * and the UI says something different for each.
      */
-    private List<CfModels.Submission> remoteAttempts(int contestId, String problemIndex,
+    private List<CfModels.Submission> remoteAttempts(com.cpintel.integration.codeforces.CfContestRef contest,
+                                                     String problemIndex,
                                                      CfSessionStore.StoredSession session) {
         try {
-            CfSubmissionsResponse resp =
-                codeforcesClient.getContestStatus(contestId, session.handle());
-            if (resp == null || resp.getResult() == null) return null;
-            return resp.getResult().stream()
+            // A private group contest is refused to the anonymous API; its classroom's key reads it.
+            List<CfModels.Submission> rows = contest.inGroup()
+                ? manager.getObject().statusOf(contest, session.handle()) : null;
+            if (rows == null) {
+                CfSubmissionsResponse resp =
+                    codeforcesClient.getContestStatus(contest.id(), session.handle());
+                if (resp == null || resp.getResult() == null) return null;
+                rows = resp.getResult();
+            }
+            return rows.stream()
                 .filter(s -> problemIndex == null
                     || (s.getProblem() != null
                         && problemIndex.equalsIgnoreCase(s.getProblem().getIndex())))
                 .toList();
         } catch (Exception e) {
             log.debug("Codeforces submission list for contest {} failed: {}",
-                contestId, e.getMessage());
+                contest, e.getMessage());
             return null;
         }
     }
@@ -632,10 +638,10 @@ public class SubmissionArchive {
                 row.getExternalId()));
     }
 
-    private ArchiveDto.Attempt remoteOnlyAttempt(CfModels.Submission s, int contestId,
+    private ArchiveDto.Attempt remoteOnlyAttempt(CfModels.Submission s, String contestId,
                                                  String problemIndex) {
         return new ArchiveDto.Attempt(
-            null, s.getId(), CODEFORCES, String.valueOf(contestId),
+            null, s.getId(), CODEFORCES, contestId,
             s.getProblem() == null ? problemIndex : s.getProblem().getIndex(),
             s.getProblem() == null ? null : s.getProblem().getName(),
             null, s.getProgrammingLanguage(),
@@ -644,7 +650,7 @@ public class SubmissionArchive {
             s.getCreationTimeSeconds() == null
                 ? null : Instant.ofEpochSecond(s.getCreationTimeSeconds()),
             null, null, false, false,
-            submissionUrl(String.valueOf(contestId), s.getId()));
+            submissionUrl(contestId, s.getId()));
     }
 
     /**
@@ -672,7 +678,13 @@ public class SubmissionArchive {
 
     private static String submissionUrl(String contestId, Long submissionId) {
         if (contestId == null || submissionId == null) return null;
-        return "https://codeforces.com/contest/" + contestId + "/submission/" + submissionId;
+        try {
+            return "https://codeforces.com"
+                + com.cpintel.integration.codeforces.CfContestRef.parse(contestId).path()
+                + "/submission/" + submissionId;
+        } catch (RuntimeException e) {
+            return null;
+        }
     }
 
     private static String sha256(String s) {

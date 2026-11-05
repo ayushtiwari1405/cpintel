@@ -142,9 +142,10 @@ public class ExamAccessService {
     /**
      * Checks what the candidate typed and, if it is right, lets them in for the sitting.
      *
-     * <p>Refused before the window opens and after it closes, because a password is not a key
-     * to a paper that is not running — somebody who obtained one early must not be able to
-     * read the questions before the room does.
+     * <p>Accepted before the start, so a candidate can enter, wait in the paper and connect
+     * Codeforces: the questions themselves stay closed until the start
+     * ({@code ExamSessionGuard.requirePaperContent}), so an early password reads nothing.
+     * Refused once the paper has ended, and for a draft or an archived one.
      */
     public void unlock(GroupContest exam, Long userId, String examPassword, String passcode,
                        HttpServletRequest httpReq) {
@@ -155,10 +156,10 @@ public class ExamAccessService {
                 + "then sign in with your username and the examination password on your slip.");
         }
 
-        if (!exam.isOpenForParticipation(now)) {
-            throw ApiException.forbidden(
-                "This examination is not open. It can only be unlocked while its window is "
-                + "running — wait for your invigilator to start it.");
+        GroupContest.Lifecycle stage = exam.effectiveLifecycle(now);
+        if (stage != GroupContest.Lifecycle.ACTIVE && stage != GroupContest.Lifecycle.SCHEDULED) {
+            throw ApiException.forbidden("This examination is not open: it has ended, or it "
+                + "has not been published.");
         }
 
         if (!requiresUnlock(exam, userId)) {

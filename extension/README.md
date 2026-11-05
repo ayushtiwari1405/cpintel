@@ -9,6 +9,14 @@ rest. The desktop app does the same through its own Codeforces window and needs 
 It can only fetch `https://codeforces.com`, only runs on the CPIntel site it was built for, and
 keeps nothing. CPIntel never receives the Codeforces cookies.
 
+Since 0.3.0 it can also open two small Codeforces windows for CPIntel, each closing itself when
+done: the **sign-in** page, when the browser is not signed in to Codeforces, and a **submit
+page**, to pass Codeforces' anti-bot check (Cloudflare Turnstile) when a submission is refused
+for it — the check's token and the page's form fields are read back and the submission sent
+again. Either window closes as soon as it leaves Codeforces' home, sign-in, check or submit
+pages, and gives up after three minutes. Time in them is not counted as away during an
+examination. This needs the `scripting` permission, so an update asks for it.
+
 ## How users get it
 
 They do not need anything from this folder. Somebody who tries to connect Codeforces on the
@@ -36,7 +44,9 @@ Edge and Brave.
 
 ## Using it
 
-Install it (see above), sign in at codeforces.com in the same browser, then press **Connect
-with this browser** on CPIntel's Platforms page. If Codeforces shows its "checking your browser" page to
+Install it (see above), then press **Connect with this browser** on CPIntel's Platforms page,
+or **Sign in to Codeforces** on an exam page; if the browser is not signed in to Codeforces, the
+sign-in window opens. Older versions (before 0.3.0) need the browser signed in to Codeforces
+first, and cannot pass the anti-bot check; CPIntel asks for an update then. If Codeforces shows its "checking your browser" page to
 the extension, CPIntel offers to open codeforces.com in a tab; pass the check there once and
 retry.

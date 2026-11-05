@@ -57,7 +57,7 @@ export default function QuestionBankPage() {
   }
 
   if (questionId != null) {
-    return <QuestionEditor questionId={questionId} readOnly={!room.active} onBack={() => open(null)} />
+    return <QuestionEditor questionId={questionId} readOnly={!room.canEdit} onBack={() => open(null)} />
   }
 
   return (
@@ -115,7 +115,8 @@ function QuestionList({ room, onOpen }: { room: BankClassroom; onOpen: (id: numb
           <h2 className="text-sm font-medium text-gray-100">{room.name}</h2>
           <p className="mt-0.5 text-xs text-gray-500">
             You are {room.role === 'ADMIN' ? 'an admin' : 'a TA'} here
-            {!room.active && ' · archived classroom, read only'}
+            {!room.active ? ' · archived classroom, read only'
+              : !room.canEdit && ' · read only (the admins have not let TAs add questions)'}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -127,7 +128,7 @@ function QuestionList({ room, onOpen }: { room: BankClassroom; onOpen: (id: numb
             title="An example package with every file filled in, and a README on the format">
             <Download size={13} aria-hidden="true" /> Template
           </button>
-          {room.active && (
+          {room.canEdit && (
             <>
               <input ref={chooser} type="file" accept=".zip,application/zip" className="hidden"
                 aria-label="Choose a problem package"

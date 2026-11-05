@@ -81,7 +81,7 @@ export function useContestStatement(ref?: ContestRef, index?: string, enabled = 
       const detail = (await competeApi.statement(ref!, index!)).data
       if (detail.statementAvailable || !viaBrowser(ref)) return detail
       try {
-        return await browserStatement(Number(ref!.id), index!, true)
+        return await browserStatement(ref!.id, index!, true)
       } catch (e: any) {
         return { ...detail,
           statementIssue: e?.browserCheck ? 'BROWSER_CHECK' as const : 'UNAVAILABLE' as const }
@@ -172,7 +172,7 @@ export function useContestLanguages(ref?: ContestRef, enabled = true) {
     queryKey: ['compete', 'languages', ...keyOf(ref)],
     queryFn: async () => {
       if (viaBrowser(ref)) {
-        const scraped = await browserLanguages(Number(ref!.id), true).catch(() => [])
+        const scraped = await browserLanguages(ref!.id, true).catch(() => [])
         if (scraped.length > 0) return scraped
       }
       return competeApi.languages(ref!).then(r => r.data)
@@ -223,7 +223,7 @@ export function useContestSubmit(ref?: ContestRef) {
     mutationFn: async (body: { index: string; languageId: string; source: string }) => {
       if (!viaBrowser(ref)) return competeApi.submit(ref!, body)
       const submissionId = await browserSubmit({
-        contestId: Number(ref!.id), contest: true, ...body })
+        contestId: ref!.id, contest: true, ...body })
       // The submissions list reads the verdict from the public API; this is enough to say so.
       return { data: { id: String(submissionId), index: body.index.toUpperCase() } } as
         Awaited<ReturnType<typeof competeApi.submit>>

@@ -254,13 +254,21 @@ public class CfStatementScraper {
      */
     public PracticeDto.ProblemDetail fetchForContest(int contestId, String index,
                                                      String cookieHeader, String userAgent) {
-        String key = "contest:" + contestId + "/" + index.toUpperCase();
+        return fetchForContest(new com.cpintel.integration.codeforces.CfContestRef(null, contestId),
+            index, cookieHeader, userAgent);
+    }
+
+    /** A problem of a public or group contest, read as the given session. */
+    public PracticeDto.ProblemDetail fetchForContest(com.cpintel.integration.codeforces.CfContestRef ref,
+                                                     String index, String cookieHeader, String userAgent) {
+        int contestId = ref.id();
+        String key = "contest:" + ref.encoded() + "/" + index.toUpperCase();
         Entry cached = cache.get(key);
         if (cached != null && Instant.now().isBefore(cached.at().plus(TTL))) {
             return cached.detail();
         }
 
-        String url = contestProblemUrl(contestId, index);
+        String url = webUrl + ref.path() + "/problem/" + index.toUpperCase();
 
         boolean hasSession = cookieHeader != null && !cookieHeader.isBlank();
         CfWebFetcher.Response res = fetcher.get(url, cookieHeader, uaOr(userAgent),

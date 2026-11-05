@@ -85,6 +85,28 @@ public class AdminClassroomController {
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
 
+    @PutMapping("/{classroomId}/codeforces-key")
+    @Operation(summary = "Store, replace or remove the classroom's Codeforces API key")
+    public ResponseEntity<ApiResponse<ClassroomsDto.ClassroomSummary>> codeforcesKey(
+        @AuthenticationPrincipal Long adminId,
+        @PathVariable Long classroomId,
+        @Valid @RequestBody ClassroomsDto.CodeforcesKeyRequest req,
+        HttpServletRequest httpReq) {
+        return ResponseEntity.ok(ApiResponse.ok(
+            classrooms.setCodeforcesKey(adminId, classroomId, req, httpReq)));
+    }
+
+    @PutMapping("/{classroomId}/ta-questions")
+    @Operation(summary = "Let the classroom's TAs add and change bank questions, or not")
+    public ResponseEntity<ApiResponse<ClassroomsDto.ClassroomSummary>> taQuestions(
+        @AuthenticationPrincipal Long adminId,
+        @PathVariable Long classroomId,
+        @Valid @RequestBody ClassroomsDto.TaQuestionsRequest req,
+        HttpServletRequest httpReq) {
+        return ResponseEntity.ok(ApiResponse.ok(
+            classrooms.setTasWriteQuestions(adminId, classroomId, req.allowed(), httpReq)));
+    }
+
     @PostMapping("/{classroomId}/check")
     @Operation(summary = "Check that the classroom's judge answers")
     public ResponseEntity<ApiResponse<ClassroomsDto.JudgeCheck>> check(

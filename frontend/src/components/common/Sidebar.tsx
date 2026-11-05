@@ -10,6 +10,7 @@ import { BrandLockup } from './BrandMark'
 import { useAuth } from '@/contexts/AuthContext'
 import { isAdmin, isSuperAdmin, roleLabel } from '@/utils/roles'
 import { clsx } from 'clsx'
+import { setExamSidebarSlot } from '@/store/examSidebarSlot'
 import { useMyEvaluationExams } from '@/hooks/useEvaluation'
 import { useBankClassrooms } from '@/hooks/useQuestionBank'
 import { isDesktop } from '@/utils/desktopBridge'
@@ -180,7 +181,7 @@ export const Sidebar = forwardRef<HTMLElement, Props>(function Sidebar(
       )}
 
       {examMode ? (
-        <div className="flex-1 p-3">
+        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
           {expanded ? (
             <p className="rounded-lg border border-accent-800/60 bg-accent-950/40 px-3 py-2.5
                           text-xs leading-relaxed text-accent-200">
@@ -189,6 +190,8 @@ export const Sidebar = forwardRef<HTMLElement, Props>(function Sidebar(
           ) : (
             <span className="sr-only">Examination mode: only this paper is available.</span>
           )}
+          {/* The paper's rules and notices, beside it rather than above the code. */}
+          {wide && open && <div ref={setExamSidebarSlot} className="flex flex-col gap-3" />}
         </div>
       ) : (
         <nav

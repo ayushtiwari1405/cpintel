@@ -14,7 +14,11 @@ window.addEventListener('message', (event) => {
 
   const forward = message.kind === 'open'
     ? { type: 'cf-open' }
-    : { type: 'cf-fetch', request: message.request }
+    : message.kind === 'signin'
+      ? { type: 'cf-signin' }
+      : message.kind === 'verify'
+      ? { type: 'cf-verify', url: message.url }
+      : { type: 'cf-fetch', request: message.request }
 
   chrome.runtime.sendMessage(forward, (response) => {
     const failure = chrome.runtime.lastError

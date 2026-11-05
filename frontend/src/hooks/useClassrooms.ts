@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { adminClassroomsApi, classroomsApi } from '@/api/classroomsApi'
 import { useToast } from '@/components/common/Toaster'
 import { useIsAdmin } from '@/hooks/useAdmin'
-import type { ClassroomRequest } from '@/types'
+import type { ClassroomRequest, ClassroomSummary } from '@/types'
 
 // ------------------------------------------------------------------ student
 
@@ -124,6 +124,30 @@ export function useArchiveClassroom(id: number) {
     },
     onError: err => toast.push('error', errorOf(err, 'Could not change the classroom')),
   })
+}
+
+/** The classroom's Codeforces key and whether its TAs may add questions. */
+export function useClassroomSettings(id: number) {
+  const qc = useQueryClient()
+  const toast = useToast()
+  const saved = (message: string) => (room: ClassroomSummary) => {
+    qc.invalidateQueries({ queryKey: ['admin', 'classrooms'] })
+    qc.setQueryData(['admin', 'classroom', id], room)
+    toast.push('info', message)
+  }
+  return {
+    codeforcesKey: useMutation({
+      mutationFn: ({ key, secret }: { key: string, secret: string }) =>
+        adminClassroomsApi.setCodeforcesKey(id, key, secret).then(r => r.data),
+      onSuccess: room => saved(room.codeforcesKeySet ? 'Codeforces key saved' : 'Codeforces key removed')(room),
+      onError: err => toast.push('error', errorOf(err, 'Could not save the key')),
+    }),
+    taQuestions: useMutation({
+      mutationFn: (allowed: boolean) => adminClassroomsApi.setTaQuestions(id, allowed).then(r => r.data),
+      onSuccess: room => saved(room.tasWriteQuestions ? 'TAs can add questions' : 'TAs can only read questions')(room),
+      onError: err => toast.push('error', errorOf(err, 'Could not change it')),
+    }),
+  }
 }
 
 export function useCheckJudge(id: number) {

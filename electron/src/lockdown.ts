@@ -281,8 +281,30 @@ export class Lockdown {
     return this.isInternalUrl(url)
   }
 
+  /**
+   * Excuses focus going to a Codeforces window the app opened for the contestant (sign-in, or
+   * the anti-bot check on submitting) until the returned function is called. Those windows hold
+   * to Codeforces' sign-in, check and submit pages and close themselves. Closing with the main
+   * window still unfocused starts the absence then.
+   */
+  excuse(): () => void {
+    this.excused++
+    let done = false
+    return () => {
+      if (done) return
+      done = true
+      this.excused--
+      if (this.excused === 0 && this.engaged && this.win && !this.win.isDestroyed()
+          && !this.win.isFocused()) {
+        this.onBlur()
+      }
+    }
+  }
+
+  private excused = 0
+
   private onBlur(): void {
-    if (!this.engaged) return
+    if (!this.engaged || this.excused > 0) return
     this.tracker.onBlur(Date.now())
     // Read now, compare on the way back. Anything that appears in the clipboard while the
     // window is away came from somewhere else. The read is kept as a promise (clipboard reads

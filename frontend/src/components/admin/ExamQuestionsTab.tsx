@@ -11,11 +11,13 @@ import type { EventDetail, ExamBankState, ExamChosenQuestion } from '@/types'
 const when = (iso: string | null) => (iso ? format(new Date(iso), 'd MMM yyyy, HH:mm') : '—')
 
 /**
- * The examination's questions from the classroom's question bank: choose them, publish them to
- * the judge, correct one during the paper, and tell candidates.
+ * An exam's or contest's questions from the classroom's question bank: choose them, publish
+ * them to the judge, correct one while it runs, and (exams only) tell candidates.
  */
 export function ExamQuestionsTab({ detail }: { detail: EventDetail }) {
   const eventId = detail.event.eventId
+  // Notices reach candidates through the examination screen only.
+  const exam = detail.event.kind === 'EXAM'
   const { data: state, isLoading, isError, error, refetch } = useExamBank(eventId)
   if (isLoading) return <LoadingState label="Loading the questions…" />
   if (isError || !state) return <ErrorState title="Could not load the questions" error={error} onRetry={() => refetch()} />
@@ -24,8 +26,8 @@ export function ExamQuestionsTab({ detail }: { detail: EventDetail }) {
       <Publication state={state} eventId={eventId} classroomId={detail.event.classroomId} />
       {state.editable
         ? <Choice state={state} eventId={eventId} />
-        : <Published state={state} eventId={eventId} />}
-      <Announcements state={state} eventId={eventId} />
+        : <Published state={state} eventId={eventId} exam={exam} />}
+      {exam && <Announcements state={state} eventId={eventId} />}
     </div>
   )
 }
@@ -33,14 +35,15 @@ export function ExamQuestionsTab({ detail }: { detail: EventDetail }) {
 function Publication({ state, eventId, classroomId }: { state: ExamBankState; eventId: number; classroomId: number }) {
   const { publish } = useExamBankActions(eventId)
   const pub = state.publication
-  const notReady = state.chosen.filter(q => q.status !== 'READY' || q.archived)
+  // A model-solution check is optional; the server refuses a question with tests lacking answers.
+  const archived = state.chosen.filter(q => q.archived)
   const blocked = !state.scheduled ? 'Set the start and end in Settings first.'
     : state.chosen.length === 0 ? 'Choose the questions first.'
-    : notReady.length > 0 ? `${notReady.length} chosen question${notReady.length === 1 ? ' has' : 's have'} not passed a check.`
+    : archived.length > 0 ? `${archived.length} chosen question${archived.length === 1 ? ' is' : 's are'} archived.`
     : null
   return (
     <Panel title="On the judge"
-      description={`Publishing creates contest "${state.judgeContestId}" on the classroom's judge, uploads each question, and sets this examination's problems.`}
+      description={`Publishing creates contest "${state.judgeContestId}" on the classroom's judge and uploads each question.`}
       actions={state.editable && (
         <button type="button" className="btn-primary btn-sm" disabled={blocked != null || publish.isPending}
           title={blocked ?? undefined} onClick={() => publish.mutate()}>
@@ -153,7 +156,7 @@ function Choice({ state, eventId }: { state: ExamBankState; eventId: number }) {
 }
 
 /** After the start: the problems are fixed, but a checked correction can replace one. */
-function Published({ state, eventId }: { state: ExamBankState; eventId: number }) {
+function Published({ state, eventId, exam }: { state: ExamBankState; eventId: number; exam: boolean }) {
   const { republish } = useExamBankActions(eventId)
   const rejudge = useRejudgeProblem()
   const [fixing, setFixing] = useState<number | null>(null)
@@ -171,10 +174,10 @@ function Published({ state, eventId }: { state: ExamBankState; eventId: number }
               <span className="min-w-0 flex-1 truncate text-gray-100">{q.title}</span>
               <span className="text-xs text-gray-500">judge has version {q.publishedVersion ?? '—'}</span>
               {q.changedSincePublished && <StatusPill q={q} />}
-              {q.changedSincePublished && q.status === 'READY' && fixing !== q.questionId && (
+              {q.changedSincePublished && fixing !== q.questionId && (
                 <button type="button" className="btn-secondary btn-sm" onClick={() => {
                   setFixing(q.questionId)
-                  setNotice(`Question ${q.label} has been corrected. Your submissions to it will be judged again.`)
+                  setNotice(exam ? `Question ${q.label} has been corrected. Your submissions to it will be judged again.` : '')
                 }}>
                   <RefreshCw size={13} aria-hidden="true" /> Publish the correction
                 </button>
@@ -184,14 +187,16 @@ function Published({ state, eventId }: { state: ExamBankState; eventId: number }
               <div role="group" aria-label={`Correct question ${q.label}`}
                 className="mt-2 space-y-2 rounded-lg border border-amber-800/70 bg-amber-950/30 p-3">
                 <p className="text-xs text-amber-200">
-                  Candidates are sitting this paper. The judge will use version {q.version} of "{q.title}" for every
+                  It is running. The judge will use version {q.version} of "{q.title}" for every
                   submission from now on. Earlier submissions keep their verdicts until you rejudge the problem.
                 </p>
-                <label className="flex flex-col gap-1">
-                  <span className="text-xs text-gray-400">Notice to every candidate (leave empty to send none)</span>
-                  <textarea className="input min-h-16 text-sm" maxLength={1000} value={notice}
-                    onChange={e => setNotice(e.target.value)} />
-                </label>
+                {exam && (
+                  <label className="flex flex-col gap-1">
+                    <span className="text-xs text-gray-400">Notice to every candidate (leave empty to send none)</span>
+                    <textarea className="input min-h-16 text-sm" maxLength={1000} value={notice}
+                      onChange={e => setNotice(e.target.value)} />
+                  </label>
+                )}
                 <div className="flex gap-2">
                   <button type="button" className="btn-danger btn-sm" disabled={republish.isPending}
                     onClick={() => republish.mutate({ questionId: q.questionId, notice: notice.trim() || null }, {

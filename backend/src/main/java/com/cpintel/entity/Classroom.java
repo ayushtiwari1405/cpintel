@@ -50,6 +50,19 @@ public class Classroom extends BaseEntity {
     @Column(name = "service_password", length = 500)
     private String servicePassword;
 
+    /** A Codeforces group manager's API key, for the classroom's private group contests. */
+    @Column(name = "cf_api_key", length = 100)
+    private String cfApiKey;
+
+    /** Its secret, sealed like the service password. Written only through ClassroomService. */
+    @Column(name = "cf_api_secret", length = 500)
+    private String cfApiSecret;
+
+    /** Whether the classroom's TAs may add and change bank questions; its admins decide. */
+    @Builder.Default
+    @Column(name = "tas_write_questions", nullable = false)
+    private Boolean tasWriteQuestions = false;
+
     @Column(name = "owner_id")
     private Long ownerId;
 

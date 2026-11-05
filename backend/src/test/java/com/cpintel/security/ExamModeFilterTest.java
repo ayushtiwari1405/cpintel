@@ -44,6 +44,8 @@ class ExamModeFilterTest {
         GroupContestRepository events = mock(GroupContestRepository.class);
         when(events.findById(7L)).thenReturn(Optional.of(GroupContest.builder()
             .contestId(7L).kind("EXAM").platform("DOMJUDGE").externalId("midsem").build()));
+        when(events.findById(9L)).thenReturn(Optional.of(GroupContest.builder()
+            .contestId(9L).kind("EXAM").platform("CODEFORCES").externalId("grp~730484").build()));
         ObjectProvider<GroupContestRepository> provider = mock(ObjectProvider.class);
         when(provider.getObject()).thenReturn(events);
         lockout = mock(ExamLockoutService.class);
@@ -80,9 +82,25 @@ class ExamModeFilterTest {
         "GET,  /api/v1/admin/users,                          403",
         "GET,  /api/v1/roadmaps/current,                     403",
         "POST, /api/v1/auth/logout,                          200",
+        "POST, /api/v1/practice/cf-session,                  403",
+        "POST, /api/v1/cf-browser/connect,                   403",
     })
     void examSession(String method, String uri, int expected) throws Exception {
         assertEquals(expected, status(method.trim(), uri.trim(), 7L));
+    }
+
+    @ParameterizedTest(name = "Codeforces paper: {0} {1} → {2}")
+    @DisplayName("a Codeforces paper can connect Codeforces and use the browser's own fetches")
+    @CsvSource({
+        "GET,    /api/v1/compete/CODEFORCES/grp~730484/problems/A, 200",
+        "POST,   /api/v1/practice/cf-session,                      200",
+        "DELETE, /api/v1/practice/cf-session,                      403",
+        "POST,   /api/v1/cf-browser/connect,                       200",
+        "POST,   /api/v1/cf-browser/submit/prepare,                200",
+        "GET,    /api/v1/practice/problems,                        403",
+    })
+    void codeforcesPaper(String method, String uri, int expected) throws Exception {
+        assertEquals(expected, status(method.trim(), uri.trim(), 9L));
     }
 
     @ParameterizedTest(name = "ordinary session: {0} {1}")

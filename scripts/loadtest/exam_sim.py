@@ -38,6 +38,9 @@ import time
 import uuid
 import zipfile
 from collections import Counter
+
+# The examination page's own Run timeout (frontend api), which nginx's matches.
+RUN_TIMEOUT_S = 120
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -87,6 +90,10 @@ class Candidate:
         self.samples = samples
         self.rng = rng
         self.client = Client(exam["api"], timeout=args.timeout, verify_tls=not args.insecure)
+        # Run waits as long as the examination page does (its own 120 s, matching nginx), not
+        # the 30 s every other request gets: a slow Run is a wait, not a failure.
+        self.run_client = Client(exam["api"], timeout=max(args.timeout, RUN_TIMEOUT_S),
+                                 verify_tls=not args.insecure)
         self.token = None
         self.refresh_cookie = None
         self.refreshed_at = 0.0
@@ -96,9 +103,10 @@ class Candidate:
 
     # ── plumbing ───────────────────────────────────────────────────────────
 
-    def call(self, label: str, method: str, path: str, **kw) -> Response | None:
+    def call(self, label: str, method: str, path: str, client: Client | None = None,
+             **kw) -> Response | None:
         try:
-            r = self.client.request(method, path, token=self.token, **kw)
+            r = (client or self.client).request(method, path, token=self.token, **kw)
         except Exception as e:                                   # noqa: BLE001
             self.metrics.record_transport(label)
             self.metrics.note_error(f"{self.entry['username']} {label}: {type(e).__name__}: {e}")
@@ -172,7 +180,7 @@ class Candidate:
                  for n, (i, a) in enumerate(self.samples.get(letter, []))]
         if not tests:
             return
-        r = self.call("POST /run", "POST", "/run", body={
+        r = self.call("POST /run", "POST", "/run", client=self.run_client, body={
             "language": "cpp", "source": source, "tests": tests,
             "platform": "DOMJUDGE", "contestId": self.ref})
         if r is not None and r.status == 503:
@@ -216,13 +224,24 @@ class Candidate:
         self.think(60, 300)
         first = self.rng.choices([v for v, _ in FIRST_TRY], [w for _, w in FIRST_TRY])[0]
         source = self.solutions.get(letter, {}).get(first) or self.solutions[letter]["AC"]
-        if self.rng.random() < 0.8:
+        # Nothing starts once this candidate's time is up: the heartbeat stops at the deadline,
+        # so a submission sent after it is (rightly) refused as coming from a silent machine.
+        if self.rng.random() < 0.8 and not self.out_of_time():
             self.run_samples(letter, source)
+        if self.out_of_time():
+            return
         verdict = self.submit_and_wait(letter, first)
         if verdict is not None and verdict.upper() not in ("CORRECT", "ACCEPTED", "OK", "AC"):
             self.think(60, 240)
-            self.run_samples(letter, self.solutions[letter]["AC"])
-            self.submit_and_wait(letter, "AC")
+            if not self.out_of_time():
+                self.run_samples(letter, self.solutions[letter]["AC"])
+            if not self.out_of_time():
+                self.submit_and_wait(letter, "AC")
+
+    def out_of_time(self) -> bool:
+        # Leaves the heartbeat's 45 s of grace unused, so a submit just before the end is still
+        # one the server sees from a machine that is reporting.
+        return STOP.is_set() or time.time() >= self.deadline - 5
 
     def think(self, lo: float, hi: float) -> None:
         end = time.time() + self.rng.uniform(lo, hi) * self.args.think

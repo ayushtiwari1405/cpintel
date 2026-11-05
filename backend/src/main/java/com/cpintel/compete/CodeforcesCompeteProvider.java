@@ -3,6 +3,7 @@ package com.cpintel.compete;
 import com.cpintel.archive.SubmissionArchive;
 import com.cpintel.exception.ApiException;
 import com.cpintel.files.ContestFilePolicy;
+import com.cpintel.integration.codeforces.CfContestRef;
 import com.cpintel.integration.codeforces.CfModels;
 import com.cpintel.integration.codeforces.CfStandingsResponse;
 import com.cpintel.integration.codeforces.CfSubmissionsResponse;
@@ -26,8 +27,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * Runs a Codeforces contest — live or virtual — from a single page.
@@ -53,9 +52,6 @@ public class CodeforcesCompeteProvider implements CompeteProvider {
     private static final Set<String> PENDING_VERDICTS = Set.of("TESTING", "SUBMITTED");
 
     /** Accepts a contest URL, a problem/countdown URL inside one, or a bare contest id. */
-    private static final Pattern CONTEST_ID = Pattern.compile(
-        "(?:contests?|gym)/(\\d+)|^\\s*(\\d{2,7})\\s*$");
-
     private static final Duration META_TTL = Duration.ofMinutes(10);
 
     private final CodeforcesClient codeforcesClient;
@@ -65,6 +61,7 @@ public class CodeforcesCompeteProvider implements CompeteProvider {
     private final CfContestScraper contestScraper;
     private final SubmissionArchive archive;
     private final ContestFilePolicy filePolicy;
+    private final CfManagerApi manager;
 
     /** contest.list is one call for every contest that exists, so it is worth holding onto. */
     private final Map<Integer, Cached> metaCache = new ConcurrentHashMap<>();
@@ -83,26 +80,12 @@ public class CodeforcesCompeteProvider implements CompeteProvider {
 
     @Override
     public String parseContestId(Long userId, Long classroomId, String raw) {
-        if (raw == null || raw.isBlank()) {
-            throw ApiException.badRequest("Paste a Codeforces contest link.");
-        }
-        Matcher m = CONTEST_ID.matcher(raw.trim());
-        if (!m.find()) {
-            throw ApiException.badRequest(
-                "That does not look like a Codeforces contest link. Expected something like "
-                    + "https://codeforces.com/contest/2259");
-        }
-        return m.group(1) != null ? m.group(1) : m.group(2);
+        return contestIdOf(raw);
     }
 
-    /** Codeforces numbers its contests; anything else never came from {@link #parseContestId}. */
-    private int numericId(String contestId) {
-        try {
-            return Integer.parseInt(contestId.trim());
-        } catch (NumberFormatException e) {
-            throw ApiException.badRequest(
-                "'" + contestId + "' is not a Codeforces contest id.");
-        }
+    /** The stored id of a Codeforces contest or group-contest link: see {@link CfContestRef}. */
+    public static String contestIdOf(String raw) {
+        return CfContestRef.fromLink(raw).encoded();
     }
 
     /**
@@ -113,18 +96,25 @@ public class CodeforcesCompeteProvider implements CompeteProvider {
      */
     @Override
     public CompeteDto.ContestInfo contestInfo(Long userId, String rawContestId) {
-        int contestId = numericId(rawContestId);
+        CfContestRef ref = CfContestRef.parse(rawContestId);
+        int contestId = ref.id();
         CfSessionStore.StoredSession session = sessionStore.find(userId);
 
-        CfStandingsResponse.Contest meta = contestMeta(contestId);
+        CfStandingsResponse.Contest meta = contestMeta(ref);
 
-        CfContestScraper.ContestPage page = session == null
+        // A session connected through the desktop app or the extension has a handle and no
+        // cookies: its browser fetches the pages, so the server reads nothing from them here and
+        // takes the problem list from the API. Codeforces itself refuses an unregistered submit.
+        boolean relayed = session != null
+            && (session.cookieHeader() == null || session.cookieHeader().isBlank());
+        CfContestScraper.ContestPage page = session == null || relayed
             ? new CfContestScraper.ContestPage(false, false, null, null, List.of())
-            : contestScraper.dashboard(session.cookieHeader(), contestId);
+            : contestScraper.dashboard(session.cookieHeader(), ref);
 
         if (meta == null && !page.reachable()) {
             throw ApiException.notFound("Codeforces has no contest " + contestId
-                + ", or it is not visible to this account.");
+                + ", or it is not visible to this account"
+                + (ref.inGroup() ? " (it is in a private group: join the group first)." : "."));
         }
 
         String officialPhase = meta == null || meta.getPhase() == null ? "UNKNOWN" : meta.getPhase();
@@ -158,7 +148,8 @@ public class CodeforcesCompeteProvider implements CompeteProvider {
                 ? Math.max(0, startsAt.getEpochSecond() + duration - now) : 0;
         }
 
-        List<CompeteDto.ContestProblem> problems = new ArrayList<>(page.problems());
+        List<CompeteDto.ContestProblem> problems = new ArrayList<>(
+            relayed ? problemsWithoutSession(ref) : page.problems());
         problems.sort(Comparator.comparing(CompeteDto.ContestProblem::index,
             Comparator.nullsLast(Comparator.naturalOrder())));
 
@@ -168,11 +159,21 @@ public class CodeforcesCompeteProvider implements CompeteProvider {
             closedReason = "Auto-submit is disabled on this deployment.";
         } else if (session == null) {
             closedReason = "Connect your Codeforces session to compete.";
+        } else if (relayed) {
+            canSubmit = officialLive;
+            if (!canSubmit) {
+                closedReason = switch (officialPhase) {
+                    case "BEFORE" -> "The contest has not started yet.";
+                    case "PENDING_SYSTEM_TEST", "SYSTEM_TEST" -> "The contest is being system-tested.";
+                    default -> "This contest has finished. Start a virtual participation on "
+                        + "Codeforces to compete on it.";
+                };
+            }
         } else if (waiting) {
             closedReason = "Your contest has not started yet — Codeforces is still counting down.";
         } else {
             // The only trustworthy answer: does CF render the problem select for this account.
-            canSubmit = submitClient.canSubmitTo(session.cookieHeader(), session.userAgent(), contestId);
+            canSubmit = submitClient.canSubmitTo(session.cookieHeader(), session.userAgent(), ref.path());
             if (!canSubmit) {
                 closedReason = switch (officialPhase) {
                     case "FINISHED" -> "This contest has finished. Start a virtual "
@@ -189,15 +190,45 @@ public class CodeforcesCompeteProvider implements CompeteProvider {
             : (page.name() != null ? page.name() : "Contest " + contestId);
 
         return new CompeteDto.ContestInfo(
-            String.valueOf(contestId), name, CompeteDto.Platform.CODEFORCES.name(),
+            ref.encoded(), name, CompeteDto.Platform.CODEFORCES.name(),
             phase, running, meta != null && Boolean.TRUE.equals(meta.getFrozen()),
             startsAt, duration, untilStart, remaining,
             canSubmit, closedReason,
-            filePolicy.enabledFor(CompeteDto.Platform.CODEFORCES.name(),
-                String.valueOf(contestId)),
+            filePolicy.enabledFor(CompeteDto.Platform.CODEFORCES.name(), ref.encoded()),
             CompeteDto.StatementFormat.HTML,
             problems,
-            "https://codeforces.com/contest/" + contestId);
+            "https://codeforces.com" + ref.path());
+    }
+
+    /**
+     * The problems, read without a member's cookies: a group contest's from its manager's
+     * standings, a public one's from the page anyone can open.
+     */
+    private List<CompeteDto.ContestProblem> problemsWithoutSession(CfContestRef ref) {
+        try {
+            if (!ref.inGroup()) return contestScraper.dashboard(null, ref).problems();
+            CfStandingsResponse.Result result = manager.standings(ref);
+            if (result == null || result.getProblems() == null) return List.of();
+            return result.getProblems().stream()
+                .map(p -> new CompeteDto.ContestProblem(p.getIndex() == null ? null : p.getIndex().toUpperCase(),
+                    p.getName(), p.getPoints(), p.getRating()))
+                .toList();
+        } catch (Exception e) {
+            log.debug("Problems of {} could not be read: {}", ref, e.getMessage());
+            return List.of();
+        }
+    }
+
+    /** Group contests are read as their manager; public ones from the public contest list. */
+    private CfStandingsResponse.Contest contestMeta(CfContestRef ref) {
+        if (!ref.inGroup()) return contestMeta(ref.id());
+        try {
+            CfStandingsResponse.Result result = manager.standings(ref);
+            return result == null ? null : result.getContest();
+        } catch (Exception e) {
+            log.debug("Group contest {} metadata lookup failed: {}", ref, e.getMessage());
+            return null;
+        }
     }
 
     private CfStandingsResponse.Contest contestMeta(int contestId) {
@@ -219,22 +250,22 @@ public class CodeforcesCompeteProvider implements CompeteProvider {
 
     @Override
     public PracticeDto.ProblemDetail statement(Long userId, String rawContestId, String index) {
-        int contestId = numericId(rawContestId);
+        CfContestRef ref = CfContestRef.parse(rawContestId);
         CfSessionStore.StoredSession session = sessionStore.find(userId);
         String cookies = session == null ? null : session.cookieHeader();
         String userAgent = session == null ? null : session.userAgent();
-        return scraper.fetchForContest(contestId, index, cookies, userAgent);
+        return scraper.fetchForContest(ref, index, cookies, userAgent);
     }
 
     @Override
     public List<PracticeDto.LanguageOption> languages(Long userId, String rawContestId) {
-        int contestId = numericId(rawContestId);
+        CfContestRef ref = CfContestRef.parse(rawContestId);
         CfSessionStore.StoredSession session = sessionStore.find(userId);
         if (session == null) return List.of();
         try {
-            return submitClient.scrapeContestLanguages(session.cookieHeader(), session.userAgent(), contestId);
+            return submitClient.scrapeContestLanguages(session.cookieHeader(), session.userAgent(), ref.path());
         } catch (Exception e) {
-            log.debug("Contest {} language scrape failed: {}", contestId, e.getMessage());
+            log.debug("Contest {} language scrape failed: {}", ref, e.getMessage());
             return List.of();
         }
     }
@@ -244,7 +275,7 @@ public class CodeforcesCompeteProvider implements CompeteProvider {
     @Override
     public CompeteDto.ContestSubmission submit(Long userId, String rawContestId,
                                                CompeteDto.ContestSubmitRequest req) {
-        int contestId = numericId(rawContestId);
+        CfContestRef ref = CfContestRef.parse(rawContestId);
         if (!submitEnabled) {
             throw ApiException.forbidden("Auto-submit is disabled on this deployment.");
         }
@@ -258,12 +289,12 @@ public class CodeforcesCompeteProvider implements CompeteProvider {
         // refused submission is recoverable at all — the user cannot open Codeforces to go
         // and copy it back.
         String archiveId = archive.recordAttempt(userId, SubmissionArchive.CODEFORCES,
-            String.valueOf(contestId), req.index(), null, req.languageId(), null, req.source());
+            ref.encoded(), req.index(), null, req.languageId(), null, req.source());
 
         long submissionId;
         try {
-            submissionId = submitClient.submitToContest(session.cookieHeader(), session.userAgent(), contestId,
-                req.index(), req.languageId(), req.source());
+            submissionId = submitClient.submitToContest(session.cookieHeader(), session.userAgent(), ref.path(),
+                ref.encoded(), req.index(), req.languageId(), req.source());
         } catch (ApiException e) {
             if ("CF_SESSION_INVALID".equals(e.getCode())) {
                 sessionStore.delete(userId);
@@ -286,7 +317,7 @@ public class CodeforcesCompeteProvider implements CompeteProvider {
             .orElse(new CompeteDto.ContestSubmission(
                 wanted, req.index().toUpperCase(), null, null, "TESTING",
                 null, null, null, Instant.now(), false,
-                "https://codeforces.com/contest/" + contestId + "/submission/" + submissionId));
+                "https://codeforces.com" + ref.path() + "/submission/" + submissionId));
     }
 
     /**
@@ -297,25 +328,18 @@ public class CodeforcesCompeteProvider implements CompeteProvider {
      */
     @Override
     public List<CompeteDto.ContestSubmission> submissions(Long userId, String rawContestId) {
-        int contestId = numericId(rawContestId);
+        CfContestRef ref = CfContestRef.parse(rawContestId);
         CfSessionStore.StoredSession session = sessionStore.require(userId);
 
-        CfSubmissionsResponse resp;
-        try {
-            resp = codeforcesClient.getContestStatus(contestId, session.handle());
-        } catch (Exception e) {
-            log.debug("Contest {} status failed: {}", contestId, e.getMessage());
-            return List.of();
-        }
-        if (resp == null || resp.getResult() == null) return List.of();
+        List<CfModels.Submission> rows = remoteSubmissions(ref, session.handle());
+        if (rows == null) return List.of();
 
         // One pass to keep the archived copies' verdicts honest, so code read back later
         // still carries the result it actually got.
-        archive.syncVerdicts(userId, SubmissionArchive.CODEFORCES,
-            String.valueOf(contestId), resp.getResult());
+        archive.syncVerdicts(userId, SubmissionArchive.CODEFORCES, ref.encoded(), rows);
 
         List<CompeteDto.ContestSubmission> out = new ArrayList<>();
-        for (CfModels.Submission s : resp.getResult()) {
+        for (CfModels.Submission s : rows) {
             String verdict = s.getVerdict() == null ? "TESTING" : s.getVerdict();
             out.add(new CompeteDto.ContestSubmission(
                 s.getId() == null ? null : String.valueOf(s.getId()),
@@ -329,9 +353,28 @@ public class CodeforcesCompeteProvider implements CompeteProvider {
                 s.getCreationTimeSeconds() == null
                     ? null : Instant.ofEpochSecond(s.getCreationTimeSeconds()),
                 isFinished(verdict),
-                "https://codeforces.com/contest/" + contestId + "/submission/" + s.getId()));
+                "https://codeforces.com" + ref.path() + "/submission/" + s.getId()));
         }
         return out;
+    }
+
+    /**
+     * One handle's submissions, newest first, or null when Codeforces could not be asked. A group
+     * contest is read with its classroom's manager key (the anonymous API refuses it); a public
+     * contest, or a group one with no key, through the anonymous API as before.
+     */
+    public List<CfModels.Submission> remoteSubmissions(CfContestRef ref, String handle) {
+        try {
+            if (ref.inGroup()) {
+                List<CfModels.Submission> managed = manager.statusOf(ref, handle);
+                if (managed != null) return managed;
+            }
+            CfSubmissionsResponse resp = codeforcesClient.getContestStatus(ref.id(), handle);
+            return resp == null || resp.getResult() == null ? null : resp.getResult();
+        } catch (Exception e) {
+            log.debug("Contest {} status failed: {}", ref, e.getMessage());
+            return null;
+        }
     }
 
     // ------------------------------------------------------------------- rank
@@ -346,7 +389,7 @@ public class CodeforcesCompeteProvider implements CompeteProvider {
      */
     @Override
     public CompeteDto.RankInfo rank(Long userId, String rawContestId) {
-        int contestId = numericId(rawContestId);
+        CfContestRef ref = CfContestRef.parse(rawContestId);
         CfSessionStore.StoredSession session = sessionStore.require(userId);
 
         Set<String> solved = new HashSet<>();
@@ -354,14 +397,14 @@ public class CodeforcesCompeteProvider implements CompeteProvider {
             if ("OK".equals(s.verdict()) && s.index() != null) solved.add(s.index());
         }
 
-        CfStandingsResponse.Contest meta = contestMeta(contestId);
+        CfStandingsResponse.Contest meta = contestMeta(ref);
         boolean virtual = meta == null || !"CODING".equals(meta.getPhase());
 
         try {
-            return contestScraper.rank(session.cookieHeader(), contestId, session.handle(),
+            return contestScraper.rank(session.cookieHeader(), ref, session.handle(),
                 virtual, solved.size());
         } catch (Exception e) {
-            log.debug("Contest {} rank scrape failed: {}", contestId, e.getMessage());
+            log.debug("Contest {} rank scrape failed: {}", ref, e.getMessage());
             return new CompeteDto.RankInfo(null, null, null, solved.size(), false, true,
                 Instant.now());
         }

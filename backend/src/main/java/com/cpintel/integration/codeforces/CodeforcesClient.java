@@ -199,6 +199,88 @@ public class CodeforcesClient {
     private void throttle() {
     }
 
+    // ------------------------------------------------------- signed (manager) calls
+
+    /**
+     * A Codeforces API key and its secret, from codeforces.com/settings/api. Calls signed with
+     * it see what its owner may see: a private group's contests, as that group's manager.
+     */
+    public record ApiKey(String key, String secret) {
+        @Override
+        public String toString() {
+            return "ApiKey[" + (key == null ? "" : key.substring(0, Math.min(4, key.length()))) + "…]";
+        }
+    }
+
+    /** Every submission in a contest, as its manager sees them (newest first). */
+    public CfSubmissionsResponse getContestStatusAsManager(int contestId, ApiKey key) {
+        return signed("contest.status", Map.of("contestId", String.valueOf(contestId),
+            "asManager", "true", "from", "1", "count", "10000"), key, CfSubmissionsResponse.class);
+    }
+
+    /** A contest's details and problems as its manager sees them; one row of the board at most. */
+    public CfStandingsResponse getStandingsAsManager(int contestId, ApiKey key) {
+        return signed("contest.standings", Map.of("contestId", String.valueOf(contestId),
+            "asManager", "true", "from", "1", "count", "1"), key, CfStandingsResponse.class);
+    }
+
+    /** Throws unless Codeforces accepts the key (user.friends needs an authorised caller). */
+    public void checkApiKey(ApiKey key) {
+        signed("user.friends", Map.of("onlyOnline", "false"), key, Map.class);
+    }
+
+    private <T> T signed(String method, Map<String, String> params, ApiKey key, Class<T> type) {
+        java.util.TreeMap<String, String> all = new java.util.TreeMap<>(params);
+        all.put("apiKey", key.key());
+        all.put("time", String.valueOf(java.time.Instant.now().getEpochSecond()));
+        String sig = apiSig(randomPrefix(), method, all, key.secret());
+        log.debug("Signed Codeforces call {} for contest {}", method, params.get("contestId"));
+        return timed(method, () -> client().get()
+            .uri(b -> {
+                b.path("/" + method);
+                all.forEach(b::queryParam);
+                b.queryParam("apiSig", sig);
+                return b.build();
+            })
+            .retrieve()
+            .onStatus(status -> status.is4xxClientError(), resp -> resp.bodyToMono(Map.class)
+                .defaultIfEmpty(Map.of())
+                .map(body -> (Throwable) ApiException.badRequest("Codeforces refused it: "
+                    + body.getOrDefault("comment", "HTTP " + resp.statusCode().value()))))
+            .bodyToMono(type)
+            .retryWhen(retry(2, Duration.ofSeconds(3)))
+            .block(Duration.ofSeconds(20)));
+    }
+
+    /**
+     * Codeforces' request signature: six characters, then the SHA-512 hex of
+     * {@code <rand>/<method>?<params sorted by name>#<secret>}.
+     */
+    static String apiSig(String rand, String method, java.util.SortedMap<String, String> params,
+                         String secret) {
+        StringBuilder text = new StringBuilder(rand).append('/').append(method).append('?');
+        boolean first = true;
+        for (Map.Entry<String, String> e : params.entrySet()) {
+            if (!first) text.append('&');
+            text.append(e.getKey()).append('=').append(e.getValue());
+            first = false;
+        }
+        text.append('#').append(secret);
+        try {
+            byte[] hash = java.security.MessageDigest.getInstance("SHA-512")
+                .digest(text.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            return rand + java.util.HexFormat.of().formatHex(hash);
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-512 is not available", e);
+        }
+    }
+
+    private static final java.security.SecureRandom SIG_RANDOM = new java.security.SecureRandom();
+
+    private static String randomPrefix() {
+        return String.format("%06d", SIG_RANDOM.nextInt(1_000_000));
+    }
+
     public boolean handleExists(String handle) {
         try {
             CfUserInfoResponse r = getUserInfo(handle);

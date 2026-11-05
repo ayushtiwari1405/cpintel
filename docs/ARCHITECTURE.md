@@ -536,6 +536,53 @@ site as raw text and read by `extension/build.mjs` for a store package, so there
 The page then gives the browser's steps for an extension that did not come from its store, and
 notices once the extension is running (`data-cpintel-cf` on the document).
 
+Two things need a real Codeforces page rather than a fetched copy, and both get a small window of
+their own (`cfWindow` in the extension, `codeforcesWindow` in `electron/src/cfSession.ts`):
+
+- **Signing in.** `browserConnect` reads codeforces.com; when it shows no signed-in account, the
+  extension (0.3.0+) opens `/enter` and closes it once a logout link appears. The desktop app has
+  its own sign-in window (`cf:signIn`).
+- **The anti-bot check on submitting.** Codeforces' submit form carries a Cloudflare Turnstile
+  token that only its widget, running in a real page, produces. `browserSubmit` posts as before;
+  if the answer says "anti-bot verification", the submit page opens in a 480×360 window
+  (`cf:verify` / the extension's `cf-verify`), which waits until a field named like `turnstile`
+  or `captcha` has a value, then returns the page's form fields. `withVerifiedFields` keeps the
+  fields the server filled in (code, problem, language, CSRF) and takes the rest from the live
+  page; the same archived attempt is posted again and completed as usual. Once seen, later
+  submissions from that page pass the check first.
+
+Either window may only show Codeforces' home, sign-in, `/cdn-cgi/` check and submit pages
+(`allowedWhileLocked` in `electron/src/cfConfine.ts`; `allowedHere` in the extension), and is
+closed if it goes anywhere else. That is what lets the examination excuse the time spent in it:
+`whileCfWindowOpen` (`utils/cfWindowExcuse.ts`) marks the window as open, `useAwayMonitor`
+ignores blur meanwhile, and the desktop lock's `excuse()` does the same in the main process; if
+the window closes with the candidate elsewhere, the absence starts then.
+
+A session connected this way has no cookies, so the server does not scrape Codeforces' pages
+for it: `CodeforcesCompeteProvider.contestInfo` takes the problems and phase from the API (the
+classroom's manager key for a group contest) and lets Codeforces itself refuse an unregistered
+submission.
+
+## Examinations on Codeforces
+
+A Codeforces examination is created from a contest link. `CfContestRef` stores a public contest
+as its number and a private group's as `<group>~<id>`, with `path()` giving
+`/contest/<id>` or `/group/<group>/contest/<id>` for every page URL. The public API refuses group
+contests, so `CfManagerApi` reads them with a group manager's key, held per classroom
+(`classrooms.cf_api_key`, the secret sealed, migration V33) and signed per Codeforces'
+`apiSig` rule with `asManager=true`: `contest.standings` for the contest and its problems,
+`contest.status` for verdicts. `CodeforcesReadinessService` checks before the paper that the key
+reads the contest, that the contest's window covers the paper's, and, in the background, that
+each candidate with a cookie session can open the contest.
+
+Problems and marks are set once a Codeforces paper starts (`requireCodeforcesStarted`), because
+a mashup's problems are often only final then; a DOMjudge paper's are fixed before the start.
+In an examination session, `ExamModeFilter` lets a Codeforces paper reach the connect routes
+(`/practice/cf-session`, `/cf-browser/*`), so a candidate can connect from the exam page;
+`CompeteService.requireBrowserSubmit` holds a browser-relayed submission to the same gates as a
+server one (paper access, window, proctoring heartbeat, permitted languages) and records it in
+the session log.
+
 ## The problem-solving workspace
 
 Practice, Compete and examinations are the same shape, and share their components: a draggable divider with
@@ -863,6 +910,11 @@ minutes after the paper ends. Two layers hold the line:
   enter, unlock, heartbeat or submit to a paper that is scheduled or running. Once it has
   ended, the normal session is where the candidate reads their code back, under *Past
   examinations*.
+
+An examination session may unlock its paper (room password and code) before the start as well
+as during it, so a candidate can wait inside and connect Codeforces; `requirePaperContent`
+refuses the statements and the problem list until the start, and submissions stay closed by
+the event window.
 
 So a candidate cannot use their everyday session to reach into the paper, and cannot use the
 paper's session to reach anything else. The login tries the account password first, then the

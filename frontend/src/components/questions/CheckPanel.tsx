@@ -40,7 +40,7 @@ export function CheckPanel({ question, readOnly, unsaved }: {
     : null
 
   return (
-    <Panel title="Check" description="Runs the model solution on every test, as the judge will. A pass makes the question ready.">
+    <Panel title="Check" description="Optional. Runs the model solution on every test, as the judge will.">
       <div className="space-y-3 p-4">
         <div className="flex flex-wrap items-center gap-3">
           {!readOnly && (

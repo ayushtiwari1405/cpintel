@@ -246,8 +246,10 @@ public class GroupService {
                                                HttpServletRequest httpReq) {
         ContestGroup group = require(groupId);
         String platform = platformOf(req.platform());
-        String externalId = com.cpintel.integration.domjudge.JudgeContestRef.qualify(
-            platform, group.getClassroomId(), req.externalId());
+        String externalId = GroupContest.Platform.CODEFORCES.name().equals(platform)
+            ? com.cpintel.integration.codeforces.CfContestRef.fromLink(req.externalId()).encoded()
+            : com.cpintel.integration.domjudge.JudgeContestRef.qualify(
+                platform, group.getClassroomId(), req.externalId());
 
         if (req.startsAt() != null && req.endsAt() != null && !req.endsAt().isAfter(req.startsAt())) {
             throw ApiException.badRequest("The contest must end after it starts.");

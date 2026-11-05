@@ -33,13 +33,18 @@ public class CfBrowserController {
     private static final int MAX_PAGE = 3 * 1024 * 1024;
 
     private final CfBrowserService browser;
+    private final com.cpintel.compete.CompeteService compete;
+    private final com.cpintel.practice.CfWebSubmitClient submitClient;
 
     public record PageRequest(@NotNull @Size(max = MAX_PAGE) String html) {}
 
-    public record StatementRequest(@NotNull Integer contestId, @NotBlank @Size(max = 8) String index,
+    /** {@code group}: the group's code for a private group contest, else null. */
+    public record StatementRequest(@NotNull Integer contestId, @Size(max = 40) String group,
+                                   @NotBlank @Size(max = 8) String index,
                                    boolean contest, @NotNull @Size(max = MAX_PAGE) String html) {}
 
-    public record PrepareRequest(@NotNull Integer contestId, @NotBlank @Size(max = 8) String index,
+    public record PrepareRequest(@NotNull Integer contestId, @Size(max = 40) String group,
+                                 @NotBlank @Size(max = 8) String index,
                                  boolean contest, @NotBlank @Size(max = 20) String languageId,
                                  @NotNull @Size(max = 65_536) String source,
                                  @NotNull @Size(max = MAX_PAGE) String html) {}
@@ -57,9 +62,13 @@ public class CfBrowserController {
     @PostMapping("/statement")
     @Operation(summary = "Read a statement page the browser fetched")
     public ResponseEntity<ApiResponse<PracticeDto.ProblemDetail>> statement(
+        @AuthenticationPrincipal Long userId,
         @Valid @RequestBody StatementRequest req) {
+        var ref = ref(req.group(), req.contestId());
+        // A contest's statements are held to the same examination rules as the server's own read.
+        if (req.contest()) compete.requireBrowserStatement(userId, ref.encoded());
         return ResponseEntity.ok(ApiResponse.ok(
-            browser.statement(req.contestId(), req.index(), req.contest(), req.html())));
+            browser.statement(ref, req.index(), req.contest(), req.html())));
     }
 
     @PostMapping("/languages")
@@ -73,7 +82,14 @@ public class CfBrowserController {
     @Operation(summary = "Archive the code and return the form the browser should post")
     public ResponseEntity<ApiResponse<CfBrowserService.BrowserSubmission>> prepare(
         @AuthenticationPrincipal Long userId, @Valid @RequestBody PrepareRequest req) {
-        return ResponseEntity.ok(ApiResponse.ok(browser.prepare(userId, req.contestId(),
+        var ref = ref(req.group(), req.contestId());
+        // The same gates as a submission through the server: the examination, its window, its
+        // monitoring and its languages. The browser posts the form, so this is the last word.
+        if (req.contest()) {
+            compete.requireBrowserSubmit(userId, ref.encoded(), req.languageId(),
+                submitClient.languagesOn(req.html()));
+        }
+        return ResponseEntity.ok(ApiResponse.ok(browser.prepare(userId, ref,
             req.index(), req.contest(), req.languageId(), req.source(), req.html())));
     }
 
@@ -81,7 +97,19 @@ public class CfBrowserController {
     @Operation(summary = "Read the submission id off Codeforces' answer and archive it")
     public ResponseEntity<ApiResponse<Map<String, Long>>> complete(
         @AuthenticationPrincipal Long userId, @Valid @RequestBody CompleteRequest req) {
+        var attempt = browser.attempt(userId, req.archiveId());
         long id = browser.complete(userId, req.archiveId(), req.contest(), req.html());
+        if (req.contest() && attempt.contestId() != null) {
+            compete.recordBrowserSubmission(userId, attempt.contestId(), attempt.problemIndex(), id);
+        }
         return ResponseEntity.ok(ApiResponse.ok(Map.of("submissionId", id)));
+    }
+
+    private static com.cpintel.integration.codeforces.CfContestRef ref(String group, int contestId) {
+        String g = group == null || group.isBlank() ? null : group.trim();
+        if (g != null && !g.matches("[A-Za-z0-9]{1,40}")) {
+            throw com.cpintel.exception.ApiException.badRequest("That is not a Codeforces group code.");
+        }
+        return new com.cpintel.integration.codeforces.CfContestRef(g, contestId);
     }
 }

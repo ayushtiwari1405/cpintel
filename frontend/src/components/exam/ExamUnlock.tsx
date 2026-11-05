@@ -37,6 +37,9 @@ export function ExamUnlock({ exam, onLeave }: Props) {
   const personalId = useId()
 
   const live = exam.event.lifecycle === 'ACTIVE'
+  // Before the start the paper can be entered to wait in and to connect Codeforces; its
+  // questions stay closed until it starts.
+  const open = live || exam.event.lifecycle === 'SCHEDULED'
   const wantsShared = exam.needsExamPassword
   const wantsPersonal = exam.needsPasscode
 
@@ -47,7 +50,7 @@ export function ExamUnlock({ exam, onLeave }: Props) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!live) return
+    if (!open) return
     unlock.mutate({
       examId: exam.event.eventId,
       examPassword: examPassword.trim() || undefined,
@@ -80,7 +83,9 @@ export function ExamUnlock({ exam, onLeave }: Props) {
                   ? `Running — ends ${formatDistanceToNow(new Date(exam.event.endsAt),
                       { addSuffix: true })}`
                   : 'Running'
-                : 'Not open yet'}
+                : exam.event.startsAt
+                  ? `Starts ${formatDistanceToNow(new Date(exam.event.startsAt), { addSuffix: true })}`
+                  : 'Not started'}
             </p>
           </div>
         </div>
@@ -88,17 +93,16 @@ export function ExamUnlock({ exam, onLeave }: Props) {
         <p className="mt-5 text-sm leading-relaxed text-gray-400">
           {wantsPersonal
             ? 'This paper needs the personal code printed on your own slip.'
-            : 'Enter the password your invigilator reads out when the paper starts.'}
+            : 'Enter the password your invigilator gives the room.'}
         </p>
 
-        {!live && (
-          // A password is not a key to a paper that is not running. Said here so somebody who
-          // was handed their slip early does not sit pressing a button that will refuse them.
-          <p className="mt-4 flex items-start gap-2 rounded-lg border border-amber-900
-            bg-amber-950/40 px-3 py-2.5 text-xs leading-relaxed text-amber-200">
+        {!live && open && (
+          <p className="mt-4 flex items-start gap-2 rounded-lg border border-accent-900
+            bg-accent-950/40 px-3 py-2.5 text-xs leading-relaxed text-accent-200">
             <Clock size={13} className="mt-0.5 shrink-0" />
             <span>
-              It unlocks only once it starts. This page updates automatically.
+              You can enter now and get ready, such as connecting Codeforces. The questions
+              appear when it starts.
             </span>
           </p>
         )}
@@ -123,7 +127,7 @@ export function ExamUnlock({ exam, onLeave }: Props) {
                 autoCapitalize="characters"
                 autoCorrect="off"
                 spellCheck={false}
-                disabled={!live}
+                disabled={!open}
                 autoFocus
               />
             </div>
@@ -145,7 +149,7 @@ export function ExamUnlock({ exam, onLeave }: Props) {
                 autoCapitalize="characters"
                 autoCorrect="off"
                 spellCheck={false}
-                disabled={!live}
+                disabled={!open}
                 autoFocus={!wantsShared}
               />
               <p className="mt-1 text-xs text-gray-600">
@@ -164,7 +168,7 @@ export function ExamUnlock({ exam, onLeave }: Props) {
 
           <button
             type="submit"
-            disabled={!live || unlock.isPending}
+            disabled={!open || unlock.isPending}
             className="btn-primary flex w-full items-center justify-center gap-2
               disabled:cursor-not-allowed disabled:opacity-40"
           >

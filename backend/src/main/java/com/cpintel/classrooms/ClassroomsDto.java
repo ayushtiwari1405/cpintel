@@ -36,7 +36,20 @@ public final class ClassroomsDto {
         long memberCount,
         long groupCount,
         long eventCount,
-        Instant createdAt
+        Instant createdAt,
+        /** Whether a Codeforces API key is stored, and its first characters to recognise it. */
+        boolean codeforcesKeySet,
+        String codeforcesKeyHint,
+        /** Whether its TAs may add and change questions in its bank. */
+        boolean tasWriteQuestions
+    ) {}
+
+    public record TaQuestionsRequest(@jakarta.validation.constraints.NotNull Boolean allowed) {}
+
+    /** A Codeforces group manager's API key; both blank removes the stored one. */
+    public record CodeforcesKeyRequest(
+        @Size(max = 100) String key,
+        @Size(max = 200) String secret
     ) {}
 
     /** What a student sees of the classrooms they are in. */

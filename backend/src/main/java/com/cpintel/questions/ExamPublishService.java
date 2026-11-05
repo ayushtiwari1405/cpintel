@@ -197,12 +197,16 @@ public class ExamPublishService {
         Map<Long, BankQuestion> byId = new HashMap<>();
         questions.findAllById(rows.stream().map(ExamBankQuestion::getQuestionId).toList())
             .forEach(q -> byId.put(q.getQuestionId(), q));
-        List<String> notReady = rows.stream().map(r -> byId.get(r.getQuestionId()))
-            .filter(q -> q == null || q.getStatus() != BankQuestion.Status.READY || Boolean.TRUE.equals(q.getArchived()))
-            .map(q -> q == null ? "a missing question" : "\"" + q.getTitle() + "\"").toList();
+        List<String> notReady = new ArrayList<>();
+        for (ExamBankQuestion r : rows) {
+            BankQuestion q = byId.get(r.getQuestionId());
+            if (q == null) { notReady.add("a missing question"); continue; }
+            if (Boolean.TRUE.equals(q.getArchived())) { notReady.add("\"" + q.getTitle() + "\" (archived)"); continue; }
+            String missing = bank.missingForJudge(q.getQuestionId());
+            if (missing != null) notReady.add("\"" + q.getTitle() + "\" (" + missing + ")");
+        }
         if (!notReady.isEmpty()) {
-            throw ApiException.badRequest("Every question must pass its check first. Not ready: "
-                + String.join(", ", notReady) + ".");
+            throw ApiException.badRequest("Not ready for the judge: " + String.join(", ", notReady) + ".");
         }
 
         String cid = JudgeContestRef.parse(event.getExternalId()).contestId();
@@ -332,9 +336,9 @@ public class ExamPublishService {
                 .orElseThrow(() -> ApiException.notFound("That question is not published in this examination."));
             BankQuestion q = questions.findById(questionId)
                 .orElseThrow(() -> ApiException.notFound("No question with id " + questionId + "."));
-            if (q.getStatus() != BankQuestion.Status.READY) {
-                throw ApiException.badRequest("\"" + q.getTitle() + "\" has changed since its last check. "
-                    + "Check it again; only a passing version can go to the judge.");
+            String missing = bank.missingForJudge(questionId);
+            if (missing != null) {
+                throw ApiException.badRequest("\"" + q.getTitle() + "\" is not ready for the judge: " + missing + ".");
             }
             if (q.getVersion().equals(r.getPublishedVersion())) {
                 throw ApiException.badRequest("The judge already has this version of \"" + q.getTitle() + "\".");

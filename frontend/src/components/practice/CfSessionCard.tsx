@@ -9,10 +9,10 @@ import { useQueryClient } from '@tanstack/react-query'
 import { formatDistanceToNowStrict } from 'date-fns'
 import { useCfSession, useConnectCfSession, useDisconnectCfSession } from '@/hooks/usePractice'
 import { useToast } from '@/components/common/Toaster'
-import { cfHelper, HELPER_COMMAND, apiBase } from '@/api/cfHelper'
-import { useAuthStore } from '@/store/authStore'
-import { desktopCf, isDesktop, openExternal } from '@/utils/desktopBridge'
-import { browserConnect, cfRelay, openCodeforces } from '@/api/cfBrowser'
+import { cfHelper, HELPER_COMMAND } from '@/api/cfHelper'
+import { isDesktop, openExternal } from '@/utils/desktopBridge'
+import { cfRelay, openCodeforces } from '@/api/cfBrowser'
+import { useCfSignIn } from '@/hooks/useCfSignIn'
 
 /**
  * @param variant `card` stands on its own; `inline` drops the panel of its own and sits inside
@@ -125,45 +125,8 @@ function ConnectedRow(
  * reports whose it is, so asking the user to type a name only creates a way to get it wrong.
  */
 function DesktopConnectForm() {
-  const qc = useQueryClient()
-  const toast = useToast()
-
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const connect = async () => {
-    setBusy(true)
-    setError(null)
-    try {
-      const signIn = window.cpintelDesktop?.cf?.signIn
-      if (signIn) {
-        // Read codeforces.com as this app and hand the page over, as the extension does. Signed
-        // in already, that is all; otherwise the app's own sign-in window first.
-        let status
-        try {
-          status = await browserConnect()
-        } catch {
-          const res = await signIn()
-          if (!res.ok) throw new Error(res.error || 'Could not sign in to Codeforces.')
-          status = await browserConnect()
-        }
-        qc.setQueryData(['practice', 'cf-session'], status)
-        qc.invalidateQueries({ queryKey: ['practice'] })
-        toast.push('success', `Connected as ${status.handle}`)
-        return
-      }
-      // Desktop builds from before the app read Codeforces itself.
-      const token = useAuthStore.getState().accessToken ?? ''
-      const handle = await desktopCf.connect(apiBase(), token)
-      qc.invalidateQueries({ queryKey: ['practice', 'cf-session'] })
-      qc.invalidateQueries({ queryKey: ['practice', 'languages'] })
-      toast.push('success', handle ? `Connected as ${handle}` : 'Codeforces connected')
-    } catch (e: any) {
-      setError(e?.response?.data?.message ?? e?.message ?? 'Could not connect that account')
-    } finally {
-      setBusy(false)
-    }
-  }
+  const { signIn: connect, busy, error: failure } = useCfSignIn()
+  const error = failure?.message ?? null
 
   return (
     <div className="space-y-3">
@@ -213,33 +176,13 @@ function DesktopConnectForm() {
  * where replayed cookies meet Cloudflare's challenge.
  */
 function ExtensionConnectForm() {
-  const qc = useQueryClient()
-  const toast = useToast()
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<{ message: string; check: boolean } | null>(null)
-
-  const connect = async () => {
-    setBusy(true)
-    setError(null)
-    try {
-      const status = await browserConnect()
-      qc.setQueryData(['practice', 'cf-session'], status)
-      qc.invalidateQueries({ queryKey: ['practice'] })
-      toast.push('success', `Connected as ${status.handle}`)
-    } catch (e: any) {
-      setError({
-        message: e?.response?.data?.message ?? e?.message ?? 'Could not connect',
-        check: !!e?.browserCheck,
-      })
-    } finally {
-      setBusy(false)
-    }
-  }
+  const { signIn: connect, busy, error } = useCfSignIn()
 
   return (
     <div className="space-y-3">
       <p className="text-xs text-gray-400">
-        Uses the Codeforces account signed in on this browser. CPIntel stores only your handle.
+        Uses the Codeforces account signed in on this browser; if none is, a sign-in window
+        opens. CPIntel stores only your handle.
       </p>
       {error && (
         <div className="space-y-1.5">

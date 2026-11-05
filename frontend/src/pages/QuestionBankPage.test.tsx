@@ -15,7 +15,7 @@ beforeAll(() => {
   URL.revokeObjectURL = () => {}
 })
 
-const ROOM: BankClassroom = { classroomId: 5, name: 'DSA', role: 'TA', active: true }
+const ROOM: BankClassroom = { classroomId: 5, name: 'DSA', role: 'TA', active: true, canEdit: true }
 
 function question(overrides: Partial<QuestionDetail> = {}): QuestionDetail {
   return {
@@ -66,6 +66,13 @@ describe('question bank', () => {
   it('tells someone with no classroom that the bank is for admins and TAs', async () => {
     open('/questions', { 'GET /question-bank/classrooms': { data: [] } })
     expect(await screen.findByText('No question banks for you')).toBeInTheDocument()
+  })
+
+  it('shows a TA the bank read-only until the admins allow adding questions', async () => {
+    open('/questions', { 'GET /question-bank/classrooms': { data: [{ ...ROOM, canEdit: false }] } })
+    expect(await screen.findByRole('button', { name: 'Sum of two' })).toBeInTheDocument()
+    expect(screen.getByText(/have not let TAs add questions/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /New question/ })).not.toBeInTheDocument()
   })
 
   it('creates a question from a title and opens it', async () => {
@@ -132,7 +139,7 @@ describe('question bank', () => {
 
   it('a read-only classroom offers no editing', async () => {
     open('/questions?classroom=5&q=40', {
-      'GET /question-bank/classrooms': { data: [{ ...ROOM, active: false }] },
+      'GET /question-bank/classrooms': { data: [{ ...ROOM, active: false, canEdit: false }] },
     })
     expect(await screen.findByLabelText('Title')).toBeDisabled()
     expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument()

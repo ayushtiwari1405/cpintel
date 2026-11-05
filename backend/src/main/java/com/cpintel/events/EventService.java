@@ -216,11 +216,11 @@ public class EventService {
             .classroomId(classroomId)
             .group(owner)
             .platform(platform)
-            .externalId(JudgeContestRef.qualify(platform, classroomId, req.externalId()))
+            .externalId(contestRef(platform, classroomId, req.externalId(), req.name(), null))
             .name(req.name().trim())
             .description(trimToNull(req.description()))
             .rules(trimToNull(req.rules()))
-            .url(trimToNull(req.url()))
+            .url(linkFor(platform, req.url(), req.externalId(), null))
             .startsAt(req.startsAt())
             .endsAt(req.endsAt())
             // Created as a draft unless the caller asked otherwise. An event appears to the
@@ -239,6 +239,7 @@ public class EventService {
         if (owner != null) assignTeam(event, owner, adminId);
         applyAssignments(event, req.teamIds(), req.userIds(), adminId);
         if (req.problems() != null && !req.problems().isEmpty()) {
+            requireCodeforcesStarted(event, req.problems());
             replaceProblems(event, req.problems());
         }
         // Always an explicit rule, even when the request did not say: an event that followed
@@ -284,13 +285,18 @@ public class EventService {
             return detail(eventId);
         }
 
+        String platform = normalisePlatform(req.platform(), kind);
+        String contest = contestRef(platform, event.getClassroomId(), req.externalId(), req.name(),
+            platform.equals(event.getPlatform()) ? event.getExternalId() : null);
+        String keptUrl = platform.equals(event.getPlatform())
+            && contest.equals(event.getExternalId()) ? event.getUrl() : null;
         event.setKind(kind);
-        event.setPlatform(normalisePlatform(req.platform(), kind));
-        event.setExternalId(JudgeContestRef.qualify(event.getPlatform(), event.getClassroomId(), req.externalId()));
+        event.setPlatform(platform);
+        event.setExternalId(contest);
         event.setName(req.name().trim());
         event.setDescription(trimToNull(req.description()));
         event.setRules(trimToNull(req.rules()));
-        event.setUrl(trimToNull(req.url()));
+        event.setUrl(linkFor(platform, req.url(), req.externalId(), keptUrl));
         event.setStartsAt(req.startsAt());
         event.setEndsAt(req.endsAt());
         event.setVisibility(normaliseVisibility(req.visibility(), kind));
@@ -308,7 +314,10 @@ public class EventService {
 
         eventRepository.save(event);
 
-        if (req.problems() != null) replaceProblems(event, req.problems());
+        if (req.problems() != null) {
+            requireCodeforcesStarted(event, req.problems());
+            replaceProblems(event, req.problems());
+        }
         applyAssignments(event, req.teamIds(), req.userIds(), adminId);
         applyFileRule(event, req.personalFilesAllowed(), adminId);
 
@@ -507,7 +516,12 @@ public class EventService {
                                                   EventsDto.ProblemsRequest req,
                                                   HttpServletRequest httpReq) {
         GroupContest event = require(eventId);
-        if (event.hasStarted(Instant.now())) {
+        if (isCodeforces(event)) {
+            if (event.isCompleted()) {
+                throw ApiException.badRequest("This is marked done. Reopen it before changing marks.");
+            }
+            requireCodeforcesStarted(event, req.problems());
+        } else if (event.hasStarted(Instant.now())) {
             throw ApiException.badRequest(
                 "It has started, so its problems are fixed.");
         }
@@ -914,13 +928,15 @@ public class EventService {
         if (!normalisePlatform(req.platform(), kind).equals(event.getPlatform())) {
             changed.add("judge");
         }
-        if (!JudgeContestRef.qualify(normalisePlatform(req.platform(), kind), event.getClassroomId(),
-                req.externalId()).equals(event.getExternalId())) {
+        if (!contestRef(normalisePlatform(req.platform(), kind), event.getClassroomId(),
+                req.externalId(), req.name(), event.getExternalId()).equals(event.getExternalId())) {
             changed.add("judge contest");
         }
         if (!Objects.equals(req.startsAt(), event.getStartsAt())) changed.add("start time");
         if (!Objects.equals(trimToNull(req.rules()), event.getRules())) changed.add("rules");
-        if (!Objects.equals(trimToNull(req.url()), event.getUrl())) changed.add("link");
+        if (req.url() != null && !Objects.equals(trimToNull(req.url()), event.getUrl())) {
+            changed.add("link");
+        }
         if (!normaliseVisibility(req.visibility(), kind).equals(event.getVisibility())) {
             changed.add("visibility");
         }
@@ -1035,6 +1051,24 @@ public class EventService {
      * that has to be consistent: reordering four problems as four independent updates has
      * intermediate states where two of them are third.
      */
+    private static boolean isCodeforces(GroupContest event) {
+        return GroupContest.Platform.CODEFORCES.name().equals(event.getPlatform());
+    }
+
+    /**
+     * On Codeforces, problems and their marks are set once the paper starts: Codeforces shows
+     * a contest's problems only then. DOMjudge papers are set beforehand, as before.
+     */
+    private static void requireCodeforcesStarted(GroupContest event,
+                                                 List<EventsDto.ProblemRequest> problems) {
+        if (!isCodeforces(event) || problems == null || problems.isEmpty()
+                || event.hasStarted(Instant.now())) {
+            return;
+        }
+        throw ApiException.badRequest(
+            "On Codeforces, problems and marks are set once the paper starts.");
+    }
+
     private void replaceProblems(GroupContest event, List<EventsDto.ProblemRequest> requested) {
         List<EventsDto.ProblemRequest> problems = requested == null ? List.of() : requested;
         if (problems.size() > MAX_PROBLEMS) {
@@ -1093,12 +1127,7 @@ public class EventService {
         }
     }
 
-    /**
-     * An examination runs on the judge the deployment owns.
-     *
-     * Codeforces cannot be asked to hold a contest open for one class at one time, and an
-     * examination whose window belongs to somebody else's site is not one CPIntel can invigilate.
-     */
+    /** CODEFORCES or DOMJUDGE, for a contest or an examination alike. */
     private String normalisePlatform(String raw, String kind) {
         String value = raw == null ? "" : raw.trim().toUpperCase(Locale.ROOT);
         String platform;
@@ -1107,12 +1136,48 @@ public class EventService {
         } catch (IllegalArgumentException e) {
             throw ApiException.badRequest("Platform must be CODEFORCES or DOMJUDGE");
         }
-        if (GroupContest.Kind.EXAM.name().equals(kind)
-            && !GroupContest.Platform.DOMJUDGE.name().equals(platform)) {
-            throw ApiException.badRequest(
-                "An examination runs on DOMjudge — that is the judge this deployment controls.");
-        }
         return platform;
+    }
+
+    /**
+     * The stored contest id: a Codeforces link becomes its number, a DOMjudge id is qualified.
+     * A blank DOMjudge id keeps {@code current}, or names a new contest for CPIntel to create.
+     */
+    private static String contestRef(String platform, Long classroomId, String raw, String name,
+                                     String current) {
+        if (GroupContest.Platform.CODEFORCES.name().equals(platform)) {
+            return com.cpintel.compete.CodeforcesCompeteProvider.contestIdOf(raw);
+        }
+        if (raw == null || raw.isBlank()) {
+            return current != null ? current : JudgeContestRef.encode(classroomId, newJudgeId(name));
+        }
+        return JudgeContestRef.qualify(platform, classroomId, raw);
+    }
+
+    private static final java.security.SecureRandom ID_RANDOM = new java.security.SecureRandom();
+
+    /** A judge contest id from the name, e.g. "midsem-practical-k3q9": letters, digits, '-'. */
+    static String newJudgeId(String name) {
+        String slug = (name == null ? "" : name).toLowerCase(Locale.ROOT)
+            .replaceAll("[^a-z0-9]+", "-").replaceAll("^-+|-+$", "");
+        if (slug.length() > 40) slug = slug.substring(0, 40).replaceAll("-+$", "");
+        String suffix = Integer.toString(ID_RANDOM.nextInt(36 * 36 * 36 * 36), 36);
+        return (slug.isEmpty() ? "contest" : slug) + "-" + "0".repeat(4 - suffix.length()) + suffix;
+    }
+
+    /**
+     * The link to show for the event: the one given, else a pasted Codeforces link, else
+     * {@code kept} (the current link, when the contest is unchanged).
+     */
+    private String linkFor(String platform, String url, String rawContest, String kept) {
+        String given = trimToNull(url);
+        if (given != null) return given;
+        String pasted = rawContest == null ? "" : rawContest.trim();
+        if (GroupContest.Platform.CODEFORCES.name().equals(platform)
+                && pasted.startsWith("http") && pasted.length() <= 500) {
+            return pasted;
+        }
+        return kept;
     }
 
     private String normaliseVisibility(String raw, String kind) {

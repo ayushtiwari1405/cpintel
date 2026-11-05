@@ -91,12 +91,15 @@ public class QuestionBankService {
             ? classroomRepository.findAllByOrderByNameAsc()
             : classroomRepository.findAllById(managed);
         for (Classroom c : run) {
+            boolean active = Boolean.TRUE.equals(c.getIsActive());
             out.put(c.getClassroomId(), new QuestionBankDto.BankClassroom(c.getClassroomId(),
-                c.getName(), QuestionBankDto.Role.ADMIN, Boolean.TRUE.equals(c.getIsActive())));
+                c.getName(), QuestionBankDto.Role.ADMIN, active, active));
         }
         for (Classroom c : classroomRepository.findAllById(classroomRepository.taClassroomIds(userId))) {
+            boolean active = Boolean.TRUE.equals(c.getIsActive());
             out.putIfAbsent(c.getClassroomId(), new QuestionBankDto.BankClassroom(c.getClassroomId(),
-                c.getName(), QuestionBankDto.Role.TA, Boolean.TRUE.equals(c.getIsActive())));
+                c.getName(), QuestionBankDto.Role.TA, active,
+                active && Boolean.TRUE.equals(c.getTasWriteQuestions())));
         }
         return out.values().stream()
             .sorted((a, b) -> a.name().compareToIgnoreCase(b.name()))
@@ -119,6 +122,10 @@ public class QuestionBankService {
         if (!Boolean.TRUE.equals(classroom.getIsActive())) {
             throw ApiException.conflict("\"" + classroom.getName()
                 + "\" is archived, so its questions can be read but not changed.");
+        }
+        if (!Boolean.TRUE.equals(classroom.getTasWriteQuestions()) && !classrooms.canManage(userId, classroom)) {
+            throw ApiException.forbidden("The admins of \"" + classroom.getName()
+                + "\" have not let TAs add or change questions.");
         }
         return classroom;
     }
@@ -558,6 +565,18 @@ public class QuestionBankService {
     public QuestionBankDto.Download exportPackage(Long userId, Long questionId) {
         return new QuestionBankDto.Download(packageName(requireQuestion(userId, questionId).getTitle()),
             buildPackage(questionId));
+    }
+
+    /**
+     * What keeps the question, as saved now, off a judge, or null when nothing does. A passing
+     * model-solution check is not needed: every test just has to have an answer.
+     */
+    String missingForJudge(Long questionId) {
+        List<BankQuestionTest> ordered = tests.findOrdered(questionId);
+        if (ordered.isEmpty()) return "no tests";
+        long unanswered = ordered.stream().filter(t -> t.getAnswerBytes() == null).count();
+        if (unanswered == 0) return null;
+        return unanswered + (unanswered == 1 ? " test has" : " tests have") + " no answer";
     }
 
     /**

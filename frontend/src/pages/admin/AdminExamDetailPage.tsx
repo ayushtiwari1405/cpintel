@@ -8,6 +8,7 @@ import { clsx } from 'clsx'
 
 import { Ago, EmptyRow, Pager, Panel, Pill, StatCard } from '@/components/admin/AdminUi'
 import { ExamQuestionsTab } from '@/components/admin/ExamQuestionsTab'
+import { CodeforcesReadiness } from '@/components/admin/CodeforcesReadiness'
 import { ExamPasswordsTab } from '@/components/admin/ExamPasswordsTab'
 import { EvaluationTab } from '@/components/evaluation/EvaluationTab'
 import { ExamLeaderboardView } from '@/components/exam/ExamLeaderboardView'
@@ -59,7 +60,7 @@ export default function AdminExamDetailPage() {
     { id: 'people',   label: 'Who sits it', icon: Users },
     { id: 'problems', label: 'Problems', icon: Plus },
     // Questions written in CPIntel's bank, published to the judge from here.
-    ...(exam && event.platform === 'DOMJUDGE' ? [{ id: 'questions' as Tab, label: 'Questions', icon: Library }] : []),
+    ...(event.platform === 'DOMJUDGE' ? [{ id: 'questions' as Tab, label: 'Questions', icon: Library }] : []),
     ...(exam ? [
       // Only an examination has passwords. A contest is open to whoever it is assigned to for
       // as long as its window is open, and a tab offering to lock one would suggest otherwise.
@@ -125,6 +126,9 @@ export default function AdminExamDetailPage() {
       </div>
 
       {tab === 'settings' && <SettingsTab detail={detail} />}
+      {tab === 'people' && event.platform === 'CODEFORCES' && (
+        <div className="mb-4"><CodeforcesReadiness eventId={id} /></div>
+      )}
       {tab === 'people'   && <PeopleTab detail={detail} />}
       {tab === 'problems' && <ProblemsTab detail={detail} />}
       {tab === 'questions' && <ExamQuestionsTab detail={detail} />}
@@ -524,8 +528,10 @@ function SettingsTab({ detail }: { detail: EventDetail }) {
               onChange={e => setForm({ ...form, name: e.target.value })} />
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-xs text-gray-500">DOMjudge contest id</span>
-            <input value={form.externalId} maxLength={100} className={INPUT} disabled={locked}
+            <span className="text-xs text-gray-500">
+              {event.platform === 'CODEFORCES' ? 'Codeforces contest' : 'DOMjudge contest id'}
+            </span>
+            <input value={form.externalId} maxLength={500} className={INPUT} disabled={locked}
               onChange={e => setForm({ ...form, externalId: e.target.value })} />
           </label>
           <label className="flex flex-col gap-1">
@@ -878,15 +884,20 @@ function fromJudge(judge: JudgeProblem[], current: ProblemDraft[]): ProblemDraft
 /**
  * Which problems the paper has and what each is worth.
  *
- * <p>On DOMjudge the list comes from the judge: the tab reads the linked contest's problems and
+ * <p>The list comes from the judge: the tab reads the linked contest's problems and
  * the admin only fills in marks. The leaderboard ranks by those marks, so the labels have to be
  * the judge's own — they are what every submission is recorded under. Typing the list by hand is
  * still there for when the judge cannot be read.
  */
 function ProblemsTab({ detail }: { detail: EventDetail }) {
   const save = useSetProblems()
-  const onJudge = detail.event.platform === 'DOMJUDGE'
-  const judge = useJudgeProblems(detail.event.eventId, onJudge)
+  const onJudge = detail.event.platform === 'DOMJUDGE' || detail.event.platform === 'CODEFORCES'
+  // Codeforces shows a contest's problems only once it starts, so its problems and marks are
+  // set from then until the paper is marked done. DOMjudge papers are set beforehand.
+  const cf = detail.event.platform === 'CODEFORCES'
+  const started = detail.settingsLocked
+  const judgeName = cf ? 'Codeforces' : 'DOMjudge'
+  const judge = useJudgeProblems(detail.event.eventId, onJudge && (!cf || started))
   const judgeList = useMemo(() => judge.data ?? [], [judge.data])
   const fromTheJudge = onJudge && judgeList.length > 0
 
@@ -918,7 +929,9 @@ function ProblemsTab({ detail }: { detail: EventDetail }) {
     : []
   const total = rows.reduce((sum, row) => sum + (row.points ?? 0), 0)
   const anyMarks = rows.some(row => row.points != null)
-  const locked = detail.settingsLocked
+  const locked = cf ? !started || !!detail.event.completedAt : detail.settingsLocked
+  const lockedReason = !cf ? 'It has started, so its problems are fixed'
+    : started ? 'Marked done — reopen it to change marks' : 'Set once the paper starts'
   const judgeError = (judge.error as { response?: { data?: { message?: string } } } | null)
     ?.response?.data?.message
 
@@ -926,7 +939,7 @@ function ProblemsTab({ detail }: { detail: EventDetail }) {
     <Panel
       title="Problems"
       description={onJudge
-        ? 'From the linked DOMjudge contest. Ranked by total marks, then time'
+        ? `From the linked ${judgeName} contest. Ranked by total marks, then time`
         : 'Statements, tests and verdicts stay on the judge'}
       actions={
         <div className="flex items-center gap-2">
@@ -942,7 +955,7 @@ function ProblemsTab({ detail }: { detail: EventDetail }) {
                          disabled:opacity-40"
             >
               <RefreshCw size={12} className={judge.isFetching ? 'animate-spin' : undefined} />
-              Reload from DOMjudge
+              Reload from {judgeName}
             </button>
           )}
           <button
@@ -953,7 +966,7 @@ function ProblemsTab({ detail }: { detail: EventDetail }) {
                 .map((row, index) => ({ ...row, ordering: index })),
             })}
             disabled={save.isPending || locked}
-            title={locked ? 'It has started, so its problems are fixed' : undefined}
+            title={locked ? lockedReason : undefined}
             className="flex items-center gap-1.5 rounded-lg bg-accent-600 px-3 py-1.5 text-xs
                        font-medium text-white transition-colors hover:bg-accent-500
                        disabled:opacity-40"
@@ -965,10 +978,14 @@ function ProblemsTab({ detail }: { detail: EventDetail }) {
       }
     >
       <div className="space-y-2 p-4">
+        {cf && !started && (
+          <p className="text-xs text-gray-500">
+            Problems and marks are set once the paper starts.
+          </p>
+        )}
         {onJudge && judge.isLoading && (
           <p className="flex items-center gap-2 text-xs text-gray-500">
-            <Loader2 size={12} className="animate-spin" /> Reading the contest's problems from
-            DOMjudge…
+            <Loader2 size={12} className="animate-spin" /> Reading problems from {judgeName}…
           </p>
         )}
         {onJudge && judge.isError && (
@@ -976,8 +993,8 @@ function ProblemsTab({ detail }: { detail: EventDetail }) {
             bg-amber-500/5 px-3 py-2 text-xs text-amber-300">
             <AlertTriangle size={13} className="mt-0.5 shrink-0" />
             <span>
-              {judgeError ?? 'Could not read the problems from DOMjudge.'} Enter them by hand
-              using the judge's labels (A, B, C…).
+              {judgeError ?? `Could not read the problems from ${judgeName}.`} Enter them by
+              hand using the judge's labels (A, B, C…).
             </span>
           </p>
         )}
@@ -990,7 +1007,7 @@ function ProblemsTab({ detail }: { detail: EventDetail }) {
               {missing.length > 0 && <> Not here: {missing.map(p => p.label).join(', ')}.</>}
               {strays.length > 0 && <> Not on the judge: {strays.map(r => r.label).join(', ')}
                 {' '}— nobody can solve these.</>}
-              {' '}Reload from DOMjudge to match it.
+              {' '}Reload from {judgeName} to match it.
             </span>
           </p>
         )}

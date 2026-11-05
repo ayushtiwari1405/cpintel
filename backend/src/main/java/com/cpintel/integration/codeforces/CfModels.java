@@ -59,6 +59,12 @@ public class CfModels {
         @Data @JsonIgnoreProperties(ignoreUnknown = true)
         public static class Author {
             private String participantType;
+            private List<Member> members;
+        }
+
+        @Data @JsonIgnoreProperties(ignoreUnknown = true)
+        public static class Member {
+            private String handle;
         }
     }
 }

@@ -6,7 +6,7 @@ import { fakeServer } from '@/test/server'
 import { renderAt, signedIn, user } from '@/test/render'
 import type { EventDetail, ExamBankState, ExamChosenQuestion } from '@/types'
 
-const detail = { event: { eventId: 7, classroomId: 5 } } as unknown as EventDetail
+const detail = { event: { eventId: 7, classroomId: 5, kind: 'EXAM' } } as unknown as EventDetail
 
 function chosen(overrides: Partial<ExamChosenQuestion> = {}): ExamChosenQuestion {
   return {
@@ -29,19 +29,30 @@ function state(overrides: Partial<ExamBankState> = {}): ExamBankState {
   }
 }
 
-function open(routes: Parameters<typeof fakeServer>[0]) {
+function open(routes: Parameters<typeof fakeServer>[0], of: EventDetail = detail) {
   signedIn(user('ADMIN'))
   const server = fakeServer({ 'GET /users/me': { data: user('ADMIN') }, ...routes })
-  renderAt('/admin/exams/7', <ExamQuestionsTab detail={detail} />)
+  renderAt('/admin/exams/7', <ExamQuestionsTab detail={of} />)
   return server
 }
 
 describe('exam questions from the bank', () => {
-  it('names the judge contest publishing creates, and blocks it while a question is unchecked', async () => {
+  it('names the judge contest publishing creates, and publishes unchecked questions too', async () => {
     open({ 'GET /admin/events/7/bank': { data: state({ chosen: [chosen({ status: 'DRAFT' })] }) } })
     expect(await screen.findByText(/creates contest "midterm"/)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Publish to the judge/ })).toBeDisabled()
-    expect(screen.getByText(/1 chosen question has not passed a check/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Publish to the judge/ })).toBeEnabled()
+  })
+
+  it('blocks publishing while a chosen question is archived', async () => {
+    open({ 'GET /admin/events/7/bank': { data: state({ chosen: [chosen({ archived: true })] }) } })
+    expect(await screen.findByRole('button', { name: /Publish to the judge/ })).toBeDisabled()
+  })
+
+  it('offers no notices on a contest, which has no screen to show them', async () => {
+    const contest = { event: { eventId: 7, classroomId: 5, kind: 'CONTEST' } } as unknown as EventDetail
+    open({ 'GET /admin/events/7/bank': { data: state() } }, contest)
+    expect(await screen.findByText(/creates contest "midterm"/)).toBeInTheDocument()
+    expect(screen.queryByLabelText('New notice')).not.toBeInTheDocument()
   })
 
   it('adds a question, saves the order, and publishes', async () => {
@@ -64,7 +75,7 @@ describe('exam questions from the bank', () => {
     expect(screen.getByText(/only this course's teams/)).toBeInTheDocument()
   })
 
-  it('during the paper, publishes a checked correction only after confirming, then offers the rejudge', async () => {
+  it('during the paper, publishes a correction only after confirming, then offers the rejudge', async () => {
     const live = state({
       editable: false,
       chosen: [chosen({ label: 'A', version: 3, publishedVersion: 2, judgeProblemId: 'cpi-e7-q10', changedSincePublished: true })],
