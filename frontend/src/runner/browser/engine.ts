@@ -2,7 +2,7 @@ import type { RunTestCase } from '@/types'
 import {
   COMPILE_TIME_LIMIT_MS, OUTPUT_LIMIT_BYTES, TIME_LIMIT_MS, type RawExec, type RawRun,
 } from '../judge'
-import type { CompileMessage } from './cppCompile.worker'
+import type { CompileMessage, CompileRequest } from './cppCompile.worker'
 import type { WasiRunMessage } from './wasiRun.worker'
 import type { PythonMessage, PythonRequest } from './python.worker'
 
@@ -43,8 +43,9 @@ const mb = (bytes: number) => (bytes / 1024 / 1024).toFixed(0)
 
 let compiler: Worker | null = null
 
-function compile(language: 'cpp' | 'c', source: string, onProgress: Progress)
-  : Promise<CompileMessage> {
+/** Compiles in the shared compiler worker; `trace` is the visualiser's instrumented build. */
+export function compile(language: 'cpp' | 'c', source: string, onProgress: Progress,
+  trace?: CompileRequest['trace']): Promise<CompileMessage> {
   compiler ??= new Worker(new URL('./cppCompile.worker.ts', import.meta.url), { type: 'module' })
   const worker = compiler
 
@@ -82,7 +83,8 @@ function compile(language: 'cpp' | 'c', source: string, onProgress: Progress)
       resolve({ kind: 'failed', error: `The compiler stopped: ${e.message || 'unknown error'}` })
     }
     onProgress('Compiling…')
-    worker.postMessage({ source, language })
+    const request: CompileRequest = { source, language, trace }
+    worker.postMessage(request)
   })
 }
 

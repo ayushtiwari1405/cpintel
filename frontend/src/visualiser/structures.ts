@@ -1,0 +1,163 @@
+import type { Compound, Frame, Step, Val } from './trace'
+
+/**
+ * Deciding how to draw a variable as a data structure, from its shape and (as teachers name
+ * things the same way) its name. Pure, so it is tested without a browser.
+ */
+
+export type ViewKind =
+  | 'array' | 'grid' | 'graph' | 'tree' | 'list' | 'heap' | 'stack' | 'queue' | 'table' | 'raw'
+
+export const VIEW_LABELS: Record<ViewKind, string> = {
+  array: 'Array', grid: '2D grid', graph: 'Graph', tree: 'Binary tree', list: 'Linked list',
+  heap: 'Heap (as tree)', stack: 'Stack', queue: 'Queue', table: 'Table', raw: 'Raw',
+}
+
+type Heap = Record<string, Compound>
+
+/** The compound a value is or refers to, and its heap id when it has one. */
+export function deref(v: Val | undefined, heap: Heap): { c: Compound; id?: string } | null {
+  if (!v) return null
+  if (v.k === 'ref') return heap[v.id] ? { c: heap[v.id], id: v.id } : null
+  if (v.k === 'ptr') return v.to && heap[v.to] ? { c: heap[v.to], id: v.to } : null
+  if (v.k === 'seq' || v.k === 'map' || v.k === 'obj') return { c: v }
+  return null
+}
+
+export const isPrim = (v: Val | undefined) =>
+  !!v && (v.k === 'num' || v.k === 'bool' || v.k === 'char' || v.k === 'str' || v.k === 'none')
+
+export const num = (v: Val | undefined): number | null => {
+  if (!v) return null
+  if (v.k === 'num') { const n = Number(v.v); return Number.isFinite(n) ? n : null }
+  if (v.k === 'bool') return v.v === 'True' || v.v === 'true' ? 1 : 0
+  return null
+}
+
+const GRAPH_NAMES = /^(adj|graph|g|edges?|nbrs?|neighbou?rs?|al|tree|children)$/i
+const HEAP_NAMES = /^(heap|pq|minheap|maxheap|h)$/i
+
+/** The node a pointer field leads to when it is the same kind of object (next, left, right). */
+export function selfLinks(c: Compound, heap: Heap): [string, string | null][] {
+  if (c.k !== 'obj') return []
+  const out: [string, string | null][] = []
+  for (const [name, v] of c.fields) {
+    if (v.k === 'none' || (v.k === 'ptr' && v.to == null)) {
+      // A null link counts when the name says it is one.
+      if (/^(next|prev|left|right|l|r|child|lc|rc|parent|nxt)$/i.test(name)) out.push([name, null])
+      continue
+    }
+    const target = deref(v, heap)
+    if (target?.id && target.c.k === 'obj' && target.c.t === c.t) out.push([name, target.id])
+  }
+  return out
+}
+
+export function detectView(name: string, v: Val, heap: Heap): ViewKind {
+  const r = deref(v, heap)
+  if (!r) return 'raw'
+  const c = r.c
+  if (c.k === 'map') {
+    const values = c.entries.map(([, x]) => deref(x, heap)?.c)
+    if (GRAPH_NAMES.test(name) && values.length > 0 && values.every(x => x?.k === 'seq')) return 'graph'
+    return 'table'
+  }
+  if (c.k === 'obj') {
+    const links = selfLinks(c, heap)
+    if (links.length === 1 || links.some(([n]) => /^(next|nxt|prev)$/i.test(n))) return 'list'
+    if (links.length >= 2) return 'tree'
+    return 'raw'
+  }
+  if (c.k !== 'seq') return 'raw'
+  if (c.t === 'stack') return 'stack'
+  if (c.t === 'queue' || c.t === 'deque') return 'queue'
+  if (c.t === 'priority_queue' || (HEAP_NAMES.test(name) && c.items.every(isPrim))) return 'heap'
+  const rows = c.items.map(x => deref(x, heap)?.c)
+  if (c.items.length > 0 && rows.every(x => x?.k === 'seq')) {
+    if (GRAPH_NAMES.test(name)) return 'graph'
+    return 'grid'
+  }
+  if (c.items.every(isPrim)) return 'array'
+  return 'raw'
+}
+
+/** Variables worth a data-structure card: anything with parts, in the executing frame and globals. */
+export function structureVars(step: Step): { frame: Frame; name: string; v: Val }[] {
+  const frames = step.frames
+  if (frames.length === 0) return []
+  const pick = frames.length > 1 ? [frames[frames.length - 1], frames[0]] : [frames[0]]
+  const out: { frame: Frame; name: string; v: Val }[] = []
+  for (const frame of pick) {
+    for (const [name, v] of frame.vars) {
+      if (deref(v, step.heap)) out.push({ frame, name, v })
+    }
+  }
+  return out
+}
+
+// Not x, y or n: those are far more often a value being looked for, or the length itself.
+const INDEX_NAMES = /^([ijkpqlruv]|lo|hi|mid|low|high|left|right|start|end|idx|pos|ptr|cur|top|head|tail|front|back|[ijk]\d|l\d|r\d)$/i
+const GRID_NAMES = /^(x|y|row|col|c)$/i
+
+/** Integer variables that read as indices into a sequence of this length. */
+export function indexMarkers(step: Step, length: number, exclude: string, grid = false): [string, number][] {
+  const out: [string, number][] = []
+  const seen = new Set<string>()
+  const frames = step.frames.length > 1 ? [step.frames[step.frames.length - 1], step.frames[0]] : step.frames
+  for (const frame of frames) {
+    for (const [name, v] of frame.vars) {
+      if (name === exclude || seen.has(name)) continue
+      if (!INDEX_NAMES.test(name) && !(grid && GRID_NAMES.test(name))) continue
+      const n = num(v)
+      if (v.k === 'num' && n != null && Number.isInteger(n) && n >= 0 && n <= length) {
+        out.push([name, n])
+        seen.add(name)
+      }
+    }
+  }
+  return out
+}
+
+/** Per-node arrays beside a graph: visited flags, distances, parents, colours. */
+export function nodeAnnotations(step: Step, n: number, exclude: string): [string, Val[]][] {
+  const out: [string, Val[]][] = []
+  const frames = step.frames.length > 1 ? [step.frames[step.frames.length - 1], step.frames[0]] : step.frames
+  for (const frame of frames) {
+    for (const [name, v] of frame.vars) {
+      if (name === exclude || out.some(([x]) => x === name)) continue
+      if (!/^(vis|visited|seen|used|done|col|color|colour|dist|d|level|lvl|depth|par|parent|p|low|tin|tout|comp|indeg)$/i.test(name)) continue
+      const c = deref(v, step.heap)?.c
+      if (c?.k === 'seq' && c.items.length >= n && c.items.every(isPrim)) out.push([name, c.items])
+    }
+  }
+  return out
+}
+
+/** Edges of an adjacency structure: list of lists, or a map from node to list. */
+export function adjacency(c: Compound, heap: Heap): { nodes: string[]; edges: [string, string, string?][] } {
+  const nodes: string[] = []
+  const edges: [string, string, string?][] = []
+  const label = (v: Val) => (v.k === 'num' || v.k === 'str' || v.k === 'char' ? v.v : '?')
+  const rows: [string, Val][] = c.k === 'seq'
+    ? c.items.map((x, i) => [String(i), x])
+    : c.k === 'map' ? c.entries.map(([k, x]) => [label(k), x]) : []
+  for (const [from] of rows) nodes.push(from)
+  for (const [from, x] of rows) {
+    const list = deref(x, heap)?.c
+    if (list?.k !== 'seq') continue
+    for (const item of list.items) {
+      const pair = deref(item, heap)?.c
+      if (pair?.k === 'seq' && pair.items.length >= 1) {
+        // (to, weight) pairs, as weighted graphs are usually stored.
+        const to = label(pair.items[0])
+        edges.push([from, to, pair.items[1] ? label(pair.items[1]) : undefined])
+        if (!nodes.includes(to)) nodes.push(to)
+      } else if (isPrim(item)) {
+        const to = label(item)
+        edges.push([from, to])
+        if (!nodes.includes(to)) nodes.push(to)
+      }
+    }
+  }
+  return { nodes, edges }
+}

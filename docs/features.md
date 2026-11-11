@@ -77,6 +77,11 @@ examinations assigned to you.
   and Run executes them all
 - A Run button that compiles your solution locally and checks it against the samples before you
   spend a real submission — see [Running code](code-runner.md#running-code)
+- **A code visualiser** (`/visualise`, sidebar **Visualiser**): step a C++ or Python program
+  forwards and back and watch the stack, heap and pointers, data structures (arrays with their
+  index variables, DP grids, graphs, trees, linked lists) and the recursion tree; with notes,
+  breakpoints, a presentation mode and share links for teaching. All in the browser — see
+  [Code visualiser](visualiser.md)
 - Submit straight to the judge from the editor, with the verdict polled back into the console —
   Codeforces and DOMjudge both, from the same page
 - **DOMjudge contestants never type a judge password.** An admin attaches each person's

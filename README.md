@@ -66,6 +66,7 @@ access to the repository, a GHCR login, a filled-in `.env`, and one kernel setti
 | [Codeforces](docs/codeforces.md) | Connecting Codeforces from the desktop app or the website |
 | [Desktop app](docs/desktop-app.md) | Building, publishing and updating the installers |
 | [Code runner](docs/code-runner.md) | How Run works, the sandbox, languages |
+| [Code visualiser](docs/visualiser.md) | Stepping through C++ and Python for teaching: views, how tracing works, limits |
 | [Development](docs/development.md) | Running locally, API documentation |
 | [Testing](docs/testing.md) | Test suites, integration and smoke tests, CI, release readiness |
 | [Features](docs/features.md) | Everything the product does, and where it is in the app |

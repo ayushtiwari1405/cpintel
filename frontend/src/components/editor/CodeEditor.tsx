@@ -15,6 +15,8 @@ interface Props {
   onRun?: () => void
   /** Ctrl/Cmd+S, for submitting without reaching for the mouse. */
   onSubmit?: () => void
+  /** The Monaco instance once mounted, for pages that decorate lines (the visualiser). */
+  onEditor?: (editor: Parameters<OnMount>[0]) => void
 }
 
 /**
@@ -25,7 +27,7 @@ interface Props {
  * keeps the pages in charge of what the code is for.
  */
 export function CodeEditor({
-  value, onChange, language, readOnly, onRun, onSubmit,
+  value, onChange, language, readOnly, onRun, onSubmit, onEditor,
 }: Props) {
   // Held in refs so the keybindings, which are registered once on mount, always call the
   // current handler rather than the one captured at mount.
@@ -34,10 +36,13 @@ export function CodeEditor({
   const submitRef = useRef(onSubmit)
   runRef.current = onRun
   submitRef.current = onSubmit
+  const editorRef = useRef(onEditor)
+  editorRef.current = onEditor
 
   const handleMount = useCallback<OnMount>((editor) => {
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => runRef.current?.())
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => submitRef.current?.())
+    editorRef.current?.(editor)
   }, [])
 
   return (

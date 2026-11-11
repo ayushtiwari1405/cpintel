@@ -23,6 +23,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/profile':         'Profile',
   '/teams':           'Teams',
   '/evaluate':        'Evaluate',
+  '/visualise':       'Code visualiser',
   '/download':        'Desktop app',
   '/admin':               'Admin',
   '/admin/users':         'Admin · Users',
@@ -55,7 +56,7 @@ function titleFor(path: string): string {
  * workspaces: resizable panes that have to fill the window exactly, so a max width and a page
  * scrollbar would fight the split rather than help it.
  */
-const WORKSPACE_ROUTES = new Set(['/practice', '/compete', '/exams', '/exam'])
+const WORKSPACE_ROUTES = new Set(['/practice', '/compete', '/exams', '/exam', '/visualise'])
 
 /** Whether the wide sidebar shows labels; remembered per browser, open unless closed before. */
 const SIDEBAR_KEY = 'cpintel-sidebar'

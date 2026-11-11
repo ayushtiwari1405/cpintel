@@ -35,6 +35,7 @@ const ExtensionPage     = lazy(() => import('@/pages/ExtensionPage'))
 const DownloadPage      = lazy(() => import('@/pages/DownloadPage'))
 const EvaluatePage      = lazy(() => import('@/pages/EvaluatePage'))
 const QuestionBankPage  = lazy(() => import('@/pages/QuestionBankPage'))
+const VisualisePage     = lazy(() => import('@/pages/VisualisePage'))
 
 /**
  * Signed in — and in the right mode for where they are going.
@@ -188,6 +189,10 @@ export function AppRoutes() {
           <Route path="/profile"         element={<ProfilePage />} />
           {/* Admins and TAs alike: the server decides per classroom who may read and edit. */}
           <Route path="/questions"       element={<QuestionBankPage />} />
+          {/* The code visualiser: students and teaching staff alike. Who sees it in the
+              navigation is still to be decided; the page itself needs nothing from the server. */}
+          <Route path="/visualise"       element={
+            <ErrorBoundary scope="the code visualiser"><VisualisePage /></ErrorBoundary>} />
 
           <Route path="/admin"               element={<AdminRoute><AdminOverview /></AdminRoute>} />
           <Route path="/admin/users"         element={<AdminRoute><AdminUsers /></AdminRoute>} />
