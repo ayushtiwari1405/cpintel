@@ -16,10 +16,12 @@ export function Arrows({ container, version }: {
   const [size, setSize] = useState({ w: 0, h: 0 })
 
   useLayoutEffect(() => {
-    const root = container.current
-    if (!root) return
+    let observer: ResizeObserver | null = null
+    let frame = 0
 
     const measure = () => {
+      const root = container.current
+      if (!root) return
       const base = root.getBoundingClientRect()
       const at = (r: DOMRect) => ({
         left: r.left - base.left + root.scrollLeft,
@@ -57,11 +59,19 @@ export function Arrows({ container, version }: {
       setSize({ w: root.scrollWidth, h: root.scrollHeight })
     }
 
-    measure()
-    const observer = new ResizeObserver(measure)
-    observer.observe(root)
-    for (const child of Array.from(root.children)) observer.observe(child)
-    return () => observer.disconnect()
+    const start = () => {
+      const root = container.current
+      if (!root) return
+      measure()
+      observer = new ResizeObserver(measure)
+      observer.observe(root)
+      for (const child of Array.from(root.children)) observer.observe(child)
+    }
+    // React attaches a parent's ref after its children's layout effects, so on the view's first
+    // render the container is not there yet: start on the next frame instead.
+    if (container.current) start()
+    else frame = requestAnimationFrame(start)
+    return () => { cancelAnimationFrame(frame); observer?.disconnect() }
   }, [container, version])
 
   return (

@@ -217,7 +217,9 @@ export default function VisualisePage() {
         if (!model || line > model.getLineCount()) continue
         const end = model.getLineMaxColumn(line)
         list.push({ range: new monaco.Range(line, end, line, end),
-          options: { after: { content: `  ×${n}`, inlineClassName: 'viz-count' } } })
+          // showIfCollapsed: the range is empty (the end of the line), which Monaco
+          // otherwise does not draw.
+          options: { showIfCollapsed: true, after: { content: `  ×${n}`, inlineClassName: 'viz-count' } } })
       }
       if (prev && prev.line !== current?.line) {
         list.push({ range: new monaco.Range(prev.line, 1, prev.line, 1),
