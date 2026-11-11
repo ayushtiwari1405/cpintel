@@ -24,7 +24,7 @@ candidates take part; the rest stay away. Ramp up rather than starting at 200 �
 100, 200 and compare: a number means something next to the same number at a different load.
 
 The report is simulate.py's: latency per endpoint (p50/p90/p99/max), every non-2xx status,
-verdicts, and submit → verdict times. Watch Grafana alongside (README.md).
+verdicts, and submit → verdict times. Watch Grafana alongside (docs/operations.md, "Monitoring").
 """
 
 from __future__ import annotations

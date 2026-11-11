@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Checks, and prepares, an existing MongoDB for a backend that creates its own named indexes.
 # The full procedure - backup, stopping the backend, the order of these commands, recovery - is
-# README.md, "Upgrading MongoDB's indexes". In short:
+# docs/operations.md, "Upgrading an existing MongoDB". In short:
 #
 #   scripts/mongo-index-upgrade.sh --container cpintel-mongo --check
 #       Read-only. Duplicates against each unique index, what each index needs, and whether
@@ -21,7 +21,7 @@
 #
 # What it never does: delete a document, drop an index it has not matched exactly against a
 # known earlier definition, use dropIndexes(), touch _id_, or choose between duplicate contest
-# rules or Codeforces submissions - those are exported for a person to decide (README).
+# rules or Codeforces submissions - those are exported for a person to decide (docs/operations.md).
 # Safe to run again at any point: every step checks the current state first.
 #
 # Settings: MONGO_APP_USER (default cpintel_app) - the backend's account, whose connections count
@@ -147,7 +147,7 @@ finish() {   # the exit code for a status, with a word about what to do
     READY)   echo "=== Ready: no duplicates, and every index is in place or can be made."; exit 0 ;;
     APPLIED) echo "=== Done: every managed index is in place. Start the backend."; exit 0 ;;
     PLANNED|RENAMED) exit 0 ;;
-    DUPLICATES) echo "=== Duplicates remain: resolve them (README) and check again. Nothing was changed."; exit 3 ;;
+    DUPLICATES) echo "=== Duplicates remain: resolve them (docs/operations.md) and check again. Nothing was changed."; exit 3 ;;
     WRITERS) echo "=== Refused: something is connected that can write (above). Stop the backend first. Nothing was changed."; exit 4 ;;
     UNSAFE)  echo "=== Stopped: something above needs a person. Nothing further was changed."; exit 1 ;;
     *)       echo "!!! No answer from the check (status '${STATUS}')."; exit 1 ;;

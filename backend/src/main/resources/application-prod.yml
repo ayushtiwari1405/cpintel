@@ -32,7 +32,7 @@ management:
     health:
       show-details: never
 
-# The API description and its UI are for development (README, "API documentation"). In prod
+# The API description and its UI are for development (docs/development.md, "API documentation"). In prod
 # they only map the attack surface for whoever reaches the backend; nginx does not route them.
 springdoc:
   api-docs:

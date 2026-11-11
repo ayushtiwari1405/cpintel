@@ -146,9 +146,18 @@ off the server: losing the keys makes stored exam passwords and DOMjudge logins 
 GitHub builds CPIntel. The server downloads the finished images from GitHub's container registry
 (GHCR).
 
-- [ ] **A read-only token so the server can pull images from GHCR** — *Required.*
-- [ ] **Repository variable `CPINTEL_SERVER_URL`** — *Required.* The `https://` address. It is
-  built into the desktop app so the app only ever talks to this server.
+- [ ] **Read access to the repository from the server** — *Required* while the repository is
+  private. A read-only deploy key, added by a repository admin
+  ([deployment.md, step 2](deployment.md#2-get-the-code-onto-the-server)).
+- [ ] **A read-only token so the server can pull images from GHCR** — *Required* while the
+  packages are private. A classic personal access token with only `read:packages`, used once
+  with `docker login ghcr.io` on the server
+  ([deployment.md, step 3](deployment.md#3-let-the-server-pull-the-images)). Note its expiry
+  date: deploys fail at the pull step once it runs out.
+- [ ] **Repository variable `CPINTEL_SERVER_URL`** — *Optional.* The `https://` address, built
+  into installers made by the GitHub tag workflow. Not needed when the server builds the
+  installers itself at deploy, which is the default
+  ([desktop-app.md](desktop-app.md#publishing-the-desktop-app)).
 - [ ] **Repository variable `CPINTEL_EXTENSION_URL`** — *Optional.* The browser extension's store
   link (1.8), so the website can point people to it.
 - [ ] **An `NVD_API_KEY` repository secret** — *Optional.* Free from
@@ -159,7 +168,7 @@ GitHub builds CPIntel. The server downloads the finished images from GitHub's co
 Both databases are dumped every night and kept for 14 days (`scripts/backup.sh`, from cron). A
 copy has to live off the server, or a disk failure loses everything. What a backup holds, what it
 does not (database accounts, `.env` and its keys, Redis), and the restore steps are in the
-README's [Backups and restore](../README.md#backups-and-restore).
+[Backups and restore](operations.md#backups-and-restore).
 
 - [ ] **An off-server place for the nightly dumps** — *Required.* Another machine, object
   storage, or a mounted network share.
@@ -169,8 +178,8 @@ README's [Backups and restore](../README.md#backups-and-restore).
   throwaway containers on 2026-10-15; see the head of `scripts/restore.sh`.)
 
 - [ ] **Only when upgrading a server whose database predates this release:** a maintenance
-  window to stop the backend and run the README's
-  [Upgrading an existing MongoDB](../README.md#upgrading-an-existing-mongodb) before deploying,
+  window to stop the backend and run
+  [Upgrading an existing MongoDB](operations.md#upgrading-an-existing-mongodb) before deploying,
   and someone to decide between any duplicated contest file rules it finds. A fresh install
   needs none of this.
 
@@ -179,8 +188,9 @@ README's [Backups and restore](../README.md#backups-and-restore).
 Exams are best sat in the CPIntel desktop app, which applies the exam's lockdown settings and
 records time spent away. Practice works in any browser.
 
-- [ ] **A place to distribute the desktop app installer** — *Required.* Windows, Linux and macOS
-  builds are produced by GitHub on each release (a `v*` tag).
+- [ ] **A place to distribute the desktop app installer** — *Required.* The server builds the
+  Windows, Linux and macOS installers itself at deploy and offers them on its `/download` page;
+  a `v*` tag can also publish them as a GitHub release.
 - [ ] **Permission to install it on every lab PC** — *Required.*
 - [ ] **The CPIntel browser extension** — *Optional.* Only needed for Codeforces practice in a
   web browser. The website hands it out itself: its `/extension` page gives each user the
@@ -253,7 +263,7 @@ and survived a page reload with no Content-Security-Policy violations.
   previous version. It refuses while an examination is running or about to (`--force`
   overrides), and reloads nginx so it finds the restarted backend. It does not change MongoDB's
   indexes or data: an older database is prepared first with `scripts/mongo-index-upgrade.sh`
-  (README, "Upgrading an existing MongoDB"), and a backend that stops on one is rolled back, not
+  ([operations.md](operations.md#upgrading-an-existing-mongodb)), and a backend that stops on one is rolled back, not
   repaired.
 - [ ] Optional: enable the commented-out SSH deploy job in `ci.yml` for automatic deploys.
 - [x] **Backups.** Nightly `pg_dump` + `mongodump`, each read back before it is kept, 14 days
@@ -263,7 +273,7 @@ and survived a page reload with no Content-Security-Policy violations.
 - [x] **Preflight.** `python3 -I scripts/deploy-preflight.py --version <sha>` checks `.env` and
   the production Compose files before a deploy, read-only, without printing a value.
 - [x] **Health.** `/actuator/health` says DOWN within about 5 s of a datastore going away and UP
-  as soon as it is back (README, "Health checks").
+  as soon as it is back ([operations.md](operations.md#health-checks)).
 - [x] **Lab behind NAT.** `CPINTEL_LAB_NETWORKS` sizes both nginx's and the backend's
   per-address limits for a room; per-account limits are unchanged.
 - [x] **Run on a server.** A separate runner container with no network, a read-only filesystem,

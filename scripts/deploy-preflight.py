@@ -12,7 +12,7 @@ docker CLI is there, `docker compose config` (which reads files only and talks t
 What it never does: connect to a database or to Docker's daemon, start or stop anything, pull or
 push an image, back up, restore, migrate or deploy. It cannot see a server's data, so it cannot
 tell whether MongoDB needs the index upgrade, and it does not check DNS, certificates on the
-wire, ports or reachability: those are for the server itself (README, "Deploying to a server").
+wire, ports or reachability: those are for the server itself (docs/deployment.md).
 Passing it means the settings look complete, not that a deployment will work.
 
 The rules match what the backend refuses at start under the prod profile (SecretsCheck) and
@@ -191,7 +191,7 @@ def check_exceptions(report, today):
         if left < 0:
             report.line("FAIL", f"vulnerability-scan exceptions expired on {d}: the image build gate fails until they are resolved")
         elif left <= 60:
-            report.line("WARN", f"vulnerability-scan exceptions expire on {d} ({left} days): Spring Boot 4, or re-check them (README)")
+            report.line("WARN", f"vulnerability-scan exceptions expire on {d} ({left} days): Spring Boot 4, or re-check them (docs/testing.md)")
         else:
             report.line("PASS", f"vulnerability-scan exceptions run to {d} ({left} days)")
 
@@ -220,7 +220,7 @@ def main(argv=None):
     check_exceptions(report, datetime.date.fromisoformat(args.today) if args.today else datetime.date.today())
     print("Not checked here")
     print("  INFO  MongoDB's indexes and duplicates: on a server with an existing database, run")
-    print("        scripts/mongo-index-upgrade.sh --container cpintel-mongo --check first (README)")
+    print("        scripts/mongo-index-upgrade.sh --container cpintel-mongo --check first (docs/operations.md)")
     print("  INFO  DNS, certificates on the wire, ports and reachability: only the server can tell")
 
     print(f"=== {report.failed} failed, {report.warned} warning(s)")

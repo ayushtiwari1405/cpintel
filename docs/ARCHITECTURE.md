@@ -374,8 +374,8 @@ whose mapping context carries the auto-index setting; built with only a database
 was until `78f1dc6`, the template makes a mapping context of its own with index creation off, and
 no entity index was ever created - which `@DataMongoTest` did not show, as it replaces
 `MongoConfig` with Spring Boot's own template (`MongoLeastPrivilegeTest` now imports it). A
-database created before then may hold earlier index definitions and duplicates: see the README's
-[Upgrading an existing MongoDB](../README.md#upgrading-an-existing-mongodb), the one procedure for it.
+database created before then may hold earlier index definitions and duplicates: see
+[Upgrading an existing MongoDB](operations.md#upgrading-an-existing-mongodb), the one procedure for it.
 
 ## Why the analytics engine lives in Java
 

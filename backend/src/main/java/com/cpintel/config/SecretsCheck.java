@@ -100,8 +100,8 @@ public class SecretsCheck {
             throw new IllegalStateException(
                 "Refusing to start: this deployment is running on missing or placeholder "
                 + "secrets.\n  - " + detail
-                + "\n\nSet these in the environment and restart. See \"Roles and accounts\" and "
-                + "the configuration table in README.md.");
+                + "\n\nSet these in the environment and restart. See docs/accounts.md (\"Roles and accounts\") and "
+                + "docs/configuration.md.");
         }
 
         log.warn("Secrets check found {} problem(s). Startup continues because this is not the "

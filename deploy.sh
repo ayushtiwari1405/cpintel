@@ -20,7 +20,7 @@
 #      not something to leave running without a person deciding.
 #
 # It does not prepare MongoDB's indexes or resolve duplicate data. A database from an earlier
-# release goes through README.md, "Upgrading an existing MongoDB" (scripts/mongo-index-upgrade.sh)
+# release goes through docs/operations.md, "Upgrading an existing MongoDB" (scripts/mongo-index-upgrade.sh)
 # first; a backend that stops on one here is rolled back by step 6, not repaired.
 #
 # Refused while an examination is running or starts within 30 minutes: the backend is down for
