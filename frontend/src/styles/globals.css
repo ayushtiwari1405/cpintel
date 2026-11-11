@@ -272,3 +272,10 @@
     border-color: transparent transparent transparent rgb(var(--c-accent-400));
   }
 }
+
+/* The visualiser's handout: when it is open, printing prints it and nothing else. */
+@media print {
+  body:has(.viz-handout) > *:not(.viz-handout) { display: none !important; }
+  .viz-handout { position: static !important; overflow: visible !important; inset: auto !important; }
+  .viz-handout .overflow-auto { overflow: visible !important; }
+}

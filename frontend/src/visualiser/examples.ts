@@ -1,11 +1,23 @@
+import type { LessonNote } from './lessons'
 import type { VizLanguage } from './trace'
 
-export interface Example { id: string; title: string; language: VizLanguage; code: string; stdin: string }
+export interface Example {
+  id: string
+  title: string
+  topic: string
+  language: VizLanguage
+  code: string
+  stdin: string
+  /** Notes written for the lesson, placed on their steps once the program is traced. */
+  lesson?: LessonNote[]
+  /** An example worth running beside this one in Compare. */
+  compareWith?: string
+}
 
 /** Starting points for a lecture: each one shows off a different view. */
 export const EXAMPLES: Example[] = [
   {
-    id: 'py-fib', title: 'Recursion: Fibonacci', language: 'python', stdin: '',
+    id: 'py-fib', title: 'Recursion: Fibonacci', topic: 'Recursion', language: 'python', stdin: '',
     code: `def fib(n):
     if n < 2:
         return n
@@ -13,9 +25,15 @@ export const EXAMPLES: Example[] = [
 
 print(fib(5))
 `,
+    lesson: [
+      { line: 6, text: "We call fib(5). Open the Calls tab: every call waits for the two calls below it to finish." },
+      { line: 3, text: "A base case: fib(1) returns straight away, with no calls below it." },
+      { line: 4, on: 'return', text: "fib(2) is done: 1 + 0 = 1. Its frame leaves the stack and the caller carries on." },
+      { line: 4, nth: 3, text: "This is fib(3). Count how often fib(3) is computed in the whole tree: that repeated work is what memoisation removes." },
+    ],
   },
   {
-    id: 'py-bubble', title: 'Bubble sort', language: 'python', stdin: '',
+    id: 'py-bubble', title: 'Bubble sort', topic: 'Sorting', language: 'python', stdin: '',
     code: `a = [5, 2, 9, 1, 6, 3]
 n = len(a)
 for i in range(n):
@@ -24,9 +42,35 @@ for i in range(n):
             a[j], a[j + 1] = a[j + 1], a[j]
 print(a)
 `,
+    lesson: [
+      { line: 5, text: "Compare the neighbours a[j] and a[j + 1] (ringed in Structures; tick Bars to see their heights)." },
+      { line: 6, text: "Out of order, so swap them: the larger value moves one place right." },
+      { line: 3, nth: 2, text: "One pass done: the largest value has bubbled to the end and will not move again." },
+      { line: 7, text: "Sorted. Bubble sort makes about n²/2 comparisons whatever the input." },
+    ],
+    compareWith: 'py-insertion',
   },
   {
-    id: 'py-linked', title: 'Linked list: reverse', language: 'python', stdin: '',
+    id: 'py-insertion', title: 'Insertion sort', topic: 'Sorting', language: 'python', stdin: '',
+    code: `a = [5, 2, 9, 1, 6, 3]
+for i in range(1, len(a)):
+    key = a[i]
+    j = i - 1
+    while j >= 0 and a[j] > key:
+        a[j + 1] = a[j]
+        j -= 1
+    a[j + 1] = key
+print(a)
+`,
+    lesson: [
+      { line: 3, text: "Take the next element out. Everything left of i is already sorted." },
+      { line: 6, text: "Shift the larger element one place right, opening a gap for key." },
+      { line: 8, text: "Drop key into the gap. Compare with bubble sort: on nearly sorted input this does far less work." },
+    ],
+    compareWith: 'py-bubble',
+  },
+  {
+    id: 'py-linked', title: 'Linked list: reverse', topic: 'Linked lists', language: 'python', stdin: '',
     code: `class Node:
     def __init__(self, val, next=None):
         self.val = val
@@ -43,9 +87,14 @@ while cur:
     cur = nxt
 head = prev
 `,
+    lesson: [
+      { line: 11, text: "Save the rest of the list first: the next line cuts this node's link to it." },
+      { line: 12, text: "Point this node backwards. Watch its arrow flip in the Memory tab." },
+      { line: 15, text: "cur ran off the end, so prev is the old tail, which is now the head." },
+    ],
   },
   {
-    id: 'py-bfs', title: 'Graph: BFS', language: 'python', stdin: '',
+    id: 'py-bfs', title: 'Graph: BFS', topic: 'Graphs', language: 'python', stdin: '',
     code: `from collections import deque
 
 adj = [[1, 2], [0, 3], [0, 3, 4], [1, 2], [2]]
@@ -60,9 +109,14 @@ while q:
             q.append(v)
 print(dist)
 `,
+    lesson: [
+      { line: 8, text: "Take the oldest node in the queue: BFS finishes one distance before starting the next." },
+      { line: 11, text: "The first time we reach v is by a shortest path, so this is its distance. Structures shows dist beside each node." },
+      { line: 13, text: "Every node's distance from node 0, counted in edges." },
+    ],
   },
   {
-    id: 'py-lcs', title: 'DP table: LCS', language: 'python', stdin: '',
+    id: 'py-lcs', title: 'DP table: LCS', topic: 'Dynamic programming', language: 'python', stdin: '',
     code: `s, t = "abcb", "bcab"
 dp = [[0] * (len(t) + 1) for _ in range(len(s) + 1)]
 for i in range(1, len(s) + 1):
@@ -73,9 +127,14 @@ for i in range(1, len(s) + 1):
             dp[i][j] = max(dp[i - 1][j], dp[i][j - 1])
 print(dp[len(s)][len(t)])
 `,
+    lesson: [
+      { line: 5, text: "dp[i][j] is the LCS of the first i letters of s and the first j of t. Compare the last letters." },
+      { line: 6, text: "They match: one more than the answer without both of them (the diagonal)." },
+      { line: 8, text: "No match: the better of dropping a letter from s (above) or from t (left). The ringed cells are the ones read." },
+    ],
   },
   {
-    id: 'py-bst', title: 'Binary search tree', language: 'python', stdin: '',
+    id: 'py-bst', title: 'Binary search tree', topic: 'Trees', language: 'python', stdin: '',
     code: `class Node:
     def __init__(self, key):
         self.key = key
@@ -95,9 +154,13 @@ root = None
 for k in [5, 3, 8, 1, 4, 9]:
     root = insert(root, k)
 `,
+    lesson: [
+      { line: 10, text: "Smaller keys go left and larger go right, so every insert walks one path down from the root." },
+      { line: 9, text: "An empty spot: the new node goes here." },
+    ],
   },
   {
-    id: 'cpp-binsearch', title: 'Binary search', language: 'cpp', stdin: '7\n',
+    id: 'cpp-binsearch', title: 'Binary search', topic: 'Searching', language: 'cpp', stdin: '9\n',
     code: `#include <bits/stdc++.h>
 using namespace std;
 
@@ -115,9 +178,14 @@ int main() {
     cout << ans << "\\n";
 }
 `,
+    lesson: [
+      { line: 10, text: "Look at the middle of what is left, [lo, hi]." },
+      { line: 12, text: "a[mid] is too small, so x can only be to its right: drop the left half." },
+      { line: 15, text: "Each step halved the range, so this took about log₂(n) steps." },
+    ],
   },
   {
-    id: 'cpp-linked', title: 'Pointers: linked list', language: 'cpp', stdin: '',
+    id: 'cpp-linked', title: 'Pointers: linked list', topic: 'Pointers and memory', language: 'cpp', stdin: '',
     code: `#include <bits/stdc++.h>
 using namespace std;
 
@@ -139,9 +207,14 @@ int main() {
     cout << sum << "\\n";
 }
 `,
+    lesson: [
+      { line: 12, text: "new puts a Node on the heap, and n points to it." },
+      { line: 13, text: "The new node becomes the head: this list grows at the front." },
+      { line: 17, text: "Walk the list by following next pointers until nullptr." },
+    ],
   },
   {
-    id: 'cpp-fact', title: 'Recursion and references', language: 'cpp', stdin: '',
+    id: 'cpp-fact', title: 'Recursion and references', topic: 'Recursion', language: 'cpp', stdin: '',
     code: `#include <bits/stdc++.h>
 using namespace std;
 
@@ -160,9 +233,13 @@ int main() {
     cout << fact(5) << "\\n";
 }
 `,
+    lesson: [
+      { line: 10, text: "x is a reference: changing it changes main's vector (follow the violet arrow)." },
+      { line: 5, text: "The base case: fact(1) is 1. Now the waiting calls multiply on the way back up." },
+    ],
   },
   {
-    id: 'cpp-dfs', title: 'Graph: DFS', language: 'cpp', stdin: '',
+    id: 'cpp-dfs', title: 'Graph: DFS', topic: 'Graphs', language: 'cpp', stdin: '',
     code: `#include <bits/stdc++.h>
 using namespace std;
 
@@ -181,9 +258,13 @@ int main() {
     return 0;
 }
 `,
+    lesson: [
+      { line: 8, text: "Mark u visited before exploring from it, so a cycle cannot bring us back." },
+      { line: 10, text: "Go deep: dfs(v) runs to completion before the next neighbour of u is tried." },
+    ],
   },
   {
-    id: 'c-malloc', title: 'malloc: a linked list', language: 'c', stdin: '',
+    id: 'c-malloc', title: 'malloc: a linked list', topic: 'Pointers and memory', language: 'c', stdin: '',
     code: `#include <stdio.h>
 #include <stdlib.h>
 
@@ -211,9 +292,13 @@ int main(void) {
     return 0;
 }
 `,
+    lesson: [
+      { line: 10, text: "malloc gives an unnamed block on the heap; n holds its address." },
+      { line: 12, text: "Link the new node in front of the old head." },
+    ],
   },
   {
-    id: 'c-array', title: 'Arrays and pointers', language: 'c', stdin: '',
+    id: 'c-array', title: 'Arrays and pointers', topic: 'Pointers and memory', language: 'c', stdin: '',
     code: `#include <stdio.h>
 
 void reverse(int *a, int n) {
@@ -234,6 +319,10 @@ int main(void) {
     return 0;
 }
 `,
+    lesson: [
+      { line: 4, text: "l and r are pointers into main's array: follow the arrows." },
+      { line: 7, text: "*l = *r writes through the pointer, into a[] itself." },
+    ],
   },
 ]
 

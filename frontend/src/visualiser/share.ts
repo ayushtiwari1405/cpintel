@@ -15,6 +15,8 @@ export interface Shared {
   step: number
   /** Recording starts at the first breakpoint. */
   fromBreakpoint: boolean
+  /** Opens in predict mode: students guess each step before it runs. */
+  predict: boolean
 }
 
 const PREFIX = 'v1.'
@@ -41,7 +43,7 @@ const fromB64Url = (text: string) => {
 
 export async function encodeShare(s: Shared): Promise<string> {
   const json = JSON.stringify({
-    l: s.language, c: s.code, i: s.stdin, n: s.notes, b: s.breakpoints, s: s.step, f: s.fromBreakpoint ? 1 : 0,
+    l: s.language, c: s.code, i: s.stdin, n: s.notes, b: s.breakpoints, s: s.step, f: s.fromBreakpoint ? 1 : 0, q: s.predict ? 1 : 0,
   })
   const packed = await pipe(new TextEncoder().encode(json), new CompressionStream('deflate-raw'))
   return PREFIX + toB64Url(packed)
@@ -67,6 +69,7 @@ export async function decodeShare(fragment: string): Promise<Shared | null> {
       breakpoints: Array.isArray(o.b) ? o.b.filter((x: unknown) => Number.isInteger(x)) : [],
       step: Number.isInteger(o.s) ? o.s : 0,
       fromBreakpoint: o.f === 1,
+      predict: o.q === 1,
     }
   } catch {
     return null

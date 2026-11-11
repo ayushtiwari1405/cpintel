@@ -54,7 +54,7 @@ export function StructuresView({ step, prev, zoom, lineText }: {
                 <span className="font-mono text-sm text-gray-100">{name}</span>
                 {frame.name !== step.frames[step.frames.length - 1]?.name || step.frames.length === 1
                   ? <span className="text-[10px] text-gray-500">in {frame.name}</span> : null}
-                <label className="ml-auto flex items-center gap-1.5 text-[11px] text-gray-500">
+                <label className="ml-auto flex items-center gap-1.5 text-[11px] text-gray-500 print:hidden">
                   <span>View as</span>
                   <select value={kind}
                     onChange={e => setOverrides(o => ({ ...o, [key]: e.target.value as ViewKind }))}
@@ -123,7 +123,7 @@ function ArrayStrip({ c, prev, step, name, lineText }: {
   return (
     <div className="flex flex-col gap-1">
       {bars && (
-        <label className="mb-1 flex items-center gap-1.5 self-start text-[11px] text-gray-500">
+        <label className="mb-1 flex items-center gap-1.5 self-start text-[11px] text-gray-500 print:hidden">
           <input type="checkbox" checked={showBars} onChange={e => setShowBars(e.target.checked)} />
           Bars (for sorting)
         </label>

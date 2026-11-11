@@ -4,6 +4,8 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
+import { EXAMPLES } from '../src/visualiser/examples.ts'
+import { notesFromLesson } from '../src/visualiser/lessons.ts'
 
 const python = spawnSync('python3', ['--version']).status === 0
 const TRACER = fileURLToPath(new URL('../src/visualiser/tracers/python_tracer.py', import.meta.url))
@@ -57,6 +59,15 @@ describe('python tracer', { skip: !python && 'no python3 here' }, () => {
     assert.equal(t.steps[0].line, 4)
     assert.equal(t.stdout, '1225\n')
     assert.ok(t.steps.length < 5)
+  })
+
+  it('places every note of every Python lesson on a step', () => {
+    for (const ex of EXAMPLES.filter(e => e.language === 'python' && e.lesson)) {
+      const t = trace(ex.code, ex.stdin)
+      assert.equal(t.error, null, ex.id)
+      const placed = Object.values(notesFromLesson(t, ex.lesson)).join('\n\n')
+      for (const n of ex.lesson) assert.ok(placed.includes(n.text), `${ex.id}: "${n.text}" was not placed`)
+    }
   })
 })
 

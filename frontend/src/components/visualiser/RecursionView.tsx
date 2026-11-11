@@ -68,7 +68,7 @@ export function RecursionView({ tree, trace, step, onStep, zoom }: {
   return (
     <div ref={scroller} className="relative h-full overflow-auto">
       {total > 12 && (
-        <label className="sticky left-3 top-3 z-10 ml-3 mt-3 inline-flex items-center gap-1.5 rounded-md border border-gray-800 bg-gray-900/90 px-2 py-1 text-[11px] text-gray-400">
+        <label className="sticky left-3 top-3 z-10 ml-3 mt-3 inline-flex print:hidden items-center gap-1.5 rounded-md border border-gray-800 bg-gray-900/90 px-2 py-1 text-[11px] text-gray-400">
           <input type="checkbox" checked={folding} onChange={e => setCollapse(e.target.checked)} />
           Fold finished calls ({total} calls in all)
         </label>

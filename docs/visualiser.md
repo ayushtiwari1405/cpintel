@@ -28,6 +28,26 @@ breakpoint (or step over) / last, a scrubber, and a speed setting. The keys are 
 
 ### Teaching tools
 
+- **Examples with lesson notes**: the examples menu is grouped by topic (recursion, sorting,
+  searching, linked lists, trees, graphs, dynamic programming, pointers and memory). Examples
+  marked "notes" come with notes already written. Each note is attached to a line (and which
+  run of it), not to a step number, so it still lands on the right step when the input changes.
+  If the code is edited, the lesson's notes are not applied.
+- **Predict mode** (the graduation-cap button): stepping forward first asks what the line about
+  to run will change: a variable, a list element (`a[1]`), a field (`node.next`), a map entry or
+  a return value. Each question shows what the value was. **Check** marks each answer and shows
+  the right one; **Continue** (or `→`) runs the step. A running score is kept. Answers are matched
+  leniently, so `5` and `5.0`, `'ab'` and `ab`, `true` and `True` are all accepted. Playing and
+  jumping skip the questions. A shared link can open in predict mode, for setting a class an
+  exercise.
+- **Compare** (the two-columns button): runs a second program — the same code on another input,
+  another algorithm, or the example the current one suggests (insertion sort for bubble sort) —
+  and steps both together, side by side, in whichever tab is open. The shorter run waits at its
+  end. A line above says how many steps each took and which line was busiest in each.
+- **Handout** (the printer button): a preview of the key steps — the noted ones; otherwise the
+  first runs of each breakpoint line; otherwise eight steps spread through the run. Each step
+  comes with its line, its note, the output so far and a drawing. **Print / Save as PDF** prints
+  only the handout, in the light theme.
 - **Notes**: pin a note to any step (the sticky-note button). It shows as a callout when that step is reached.
 - **Breakpoints**: playing stops at them, and the skip buttons jump between them. With **Start
   recording at the first breakpoint**, nothing before that point is recorded, so the set-up of a

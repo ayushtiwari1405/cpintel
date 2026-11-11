@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { clsx } from 'clsx'
 import {
-  Boxes, Cpu, Eye, EyeOff, GitFork, Loader2, Maximize2, Minimize2, Pencil, Play, Share2,
-  StickyNote, Terminal, ZoomIn, ZoomOut,
+  Boxes, Columns2, Cpu, Eye, EyeOff, GitFork, GraduationCap, Loader2, Maximize2, Minimize2, Pencil,
+  Play, Printer, Share2, StickyNote, Terminal, ZoomIn, ZoomOut,
 } from 'lucide-react'
 
 import { CodeEditor } from '@/components/editor/CodeEditor'
@@ -15,6 +15,12 @@ import { MemoryView } from '@/components/visualiser/MemoryView'
 import { StructuresView } from '@/components/visualiser/StructuresView'
 import { RecursionView } from '@/components/visualiser/RecursionView'
 import { StepControls } from '@/components/visualiser/StepControls'
+import { PredictPanel, type Score } from '@/components/visualiser/PredictPanel'
+import { Handout } from '@/components/visualiser/Handout'
+import { CompareDialog, type Comparison } from '@/components/visualiser/CompareDialog'
+import { questionsFor, type Question } from '@/visualiser/predict'
+import { handoutSteps } from '@/visualiser/handout'
+import { notesFromLesson, type LessonNote } from '@/visualiser/lessons'
 import { useMediaQuery, WIDE } from '@/hooks/useMediaQuery'
 import { MAX_STEPS, traceProgram } from '@/visualiser/engine'
 import { EXAMPLES, LANGUAGE_LABELS, STARTER } from '@/visualiser/examples'
@@ -22,7 +28,7 @@ import {
   lineCounts, nextBreakpoint, nextRunOfLine, prevBreakpoint, stepBackOver, stepOver,
 } from '@/visualiser/navigate'
 import { MAX_LINK_CHARS, decodeShare, encodeShare } from '@/visualiser/share'
-import { brief, buildCallTree, type Trace, type VizLanguage } from '@/visualiser/trace'
+import { brief, buildCallTree, type CallNode, type Trace, type VizLanguage } from '@/visualiser/trace'
 
 type ViewTab = 'memory' | 'structures' | 'recursion' | 'output'
 type Editor = monaco.editor.IStandaloneCodeEditor
@@ -64,15 +70,27 @@ export default function VisualisePage() {
   const [presenting, setPresenting] = useState(false)
   const [editor, setEditor] = useState<Editor | null>(null)
   const [fromBreakpoint, setFromBreakpoint] = useState(false)
+  // Teaching: predict mode, a second run to compare with, the handout, an example's lesson.
+  const [predict, setPredict] = useState(false)
+  const [quiz, setQuiz] = useState<{ from: number; questions: Question[] } | null>(null)
+  const [score, setScore] = useState<Score>({ asked: 0, right: 0 })
+  const [compare, setCompare] = useState<Comparison | null>(null)
+  const [compareOpen, setCompareOpen] = useState(false)
+  const [handout, setHandout] = useState(false)
+  const [lesson, setLesson] = useState<{ id: string; code: string; notes: LessonNote[] } | null>(null)
 
-  const steps = trace?.steps ?? []
-  const current = steps[step]
-  const prev = step > 0 ? steps[step - 1] : undefined
+  const steps = useMemo(() => trace?.steps ?? [], [trace])
+  // In Compare both runs share one step number; the shorter one waits at its end.
+  const total = Math.max(steps.length, compare?.trace.steps.length ?? 0)
+  const stepA = Math.min(step, steps.length - 1)
+  const current = steps[stepA]
+  const prev = stepA > 0 ? steps[stepA - 1] : undefined
   const tree = useMemo(() => (trace ? buildCallTree(trace) : null), [trace])
+  const treeB = useMemo(() => (compare ? buildCallTree(compare.trace) : null), [compare])
   const counts = useMemo(() => (trace ? lineCounts(trace) : new Map<number, number>()), [trace])
   const goto = useCallback((i: number) => {
-    setStep(Math.max(0, Math.min(i, (trace?.steps.length ?? 1) - 1)))
-  }, [trace])
+    setStep(Math.max(0, Math.min(i, Math.max(trace?.steps.length ?? 1, compare?.trace.steps.length ?? 0) - 1)))
+  }, [trace, compare])
 
   // ── running ─────────────────────────────────────────────────────────────
 
@@ -92,11 +110,17 @@ export default function VisualisePage() {
     }
     setRunning(false)
     setTrace(result)
+    setQuiz(null)
+    setScore({ asked: 0, right: 0 })
+    // An example's lesson notes land on their steps — unless the code was changed since.
+    if (lesson && lesson.code === src && !opts?.step) setNotes(notesFromLesson(result, lesson.notes))
     setStep(Math.max(0, Math.min(opts?.step ?? 0, result.steps.length - 1)))
     if (result.steps.length === 0) setTab('output')
-  }, [language, code, stdin, fromBreakpoint, breakpoints])
+  }, [language, code, stdin, fromBreakpoint, breakpoints, lesson])
 
-  const edit = () => { setTrace(null); setPlaying(false); setEditingNote(false) }
+  const edit = () => {
+    setTrace(null); setPlaying(false); setEditingNote(false); setQuiz(null); setCompare(null); setHandout(false)
+  }
 
   const switchLanguage = (l: VizLanguage) => {
     if (l === language) return
@@ -118,6 +142,7 @@ export default function VisualisePage() {
     setStdin(ex.stdin)
     setNotes({})
     setBreakpoints(new Set())
+    setLesson(ex.lesson ? { id: ex.id, code: ex.code, notes: ex.lesson } : null)
     edit()
   }
 
@@ -136,6 +161,7 @@ export default function VisualisePage() {
       setNotes(shared.notes)
       setBreakpoints(new Set(shared.breakpoints))
       setFromBreakpoint(shared.fromBreakpoint)
+      setPredict(shared.predict)
       run({ language: shared.language, code: shared.code, stdin: shared.stdin, step: shared.step,
         startLines: shared.fromBreakpoint ? shared.breakpoints : [] })
     })
@@ -148,16 +174,29 @@ export default function VisualisePage() {
 
   useEffect(() => {
     if (!playing || !trace) return
-    if (step >= trace.steps.length - 1) { setPlaying(false); return }
+    if (step >= total - 1) { setPlaying(false); return }
     const id = window.setTimeout(() => {
       const next = step + 1
       setStep(next)
       // Playing stops at a breakpoint, as a debugger's Continue does.
       const s = trace.steps[next]
-      if (breakpoints.size && s.event === 'line' && breakpoints.has(s.line)) setPlaying(false)
+      if (breakpoints.size && s?.event === 'line' && breakpoints.has(s.line)) setPlaying(false)
     }, 650 / speed)
     return () => window.clearTimeout(id)
-  }, [playing, step, speed, trace, breakpoints])
+  }, [playing, step, speed, trace, breakpoints, total])
+
+  /** One step forward; in predict mode, a quiz first when the step changes something. */
+  const forward = useCallback(() => {
+    if (!trace) return
+    if (predict && !compare && step < steps.length - 1) {
+      const questions = questionsFor(steps[step], steps[step + 1])
+      if (questions.length) { setPlaying(false); setQuiz({ from: step, questions }); return }
+    }
+    goto(step + 1)
+  }, [trace, predict, compare, step, steps, goto])
+
+  // Moving anywhere else abandons a quiz that is open.
+  useEffect(() => { if (quiz && quiz.from !== step) setQuiz(null) }, [quiz, step])
 
   const jumpNext = useCallback(() => {
     if (!trace) return
@@ -174,15 +213,15 @@ export default function VisualisePage() {
       if (!trace || editingNote) return
       const t = e.target as HTMLElement | null
       if (t?.closest('input, textarea, select, [contenteditable], .monaco-editor')) return
-      if (e.key === 'ArrowRight') { e.preventDefault(); if (e.shiftKey) jumpNext(); else goto(step + 1) }
+      if (e.key === 'ArrowRight') { e.preventDefault(); if (e.shiftKey) jumpNext(); else if (!quiz) forward() }
       else if (e.key === 'ArrowLeft') { e.preventDefault(); if (e.shiftKey) jumpBack(); else goto(step - 1) }
       else if (e.key === ' ') { e.preventDefault(); setPlaying(p => !p) }
       else if (e.key === 'Home') { e.preventDefault(); goto(0) }
-      else if (e.key === 'End') { e.preventDefault(); goto(steps.length - 1) }
+      else if (e.key === 'End') { e.preventDefault(); goto(total - 1) }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [trace, step, steps.length, editingNote, goto, jumpNext, jumpBack])
+  }, [trace, step, total, editingNote, goto, jumpNext, jumpBack, forward, quiz])
 
   // ── the editor: current line, breakpoints, run counts ─────────────────────
 
@@ -276,7 +315,7 @@ export default function VisualisePage() {
   const share = async () => {
     try {
       const encoded = await encodeShare({
-        language, code, stdin, notes, breakpoints: [...breakpoints], step, fromBreakpoint,
+        language, code, stdin, notes, breakpoints: [...breakpoints], step, fromBreakpoint, predict,
       })
       const url = `${window.location.origin}/visualise#${encoded}`
       if (url.length > MAX_LINK_CHARS) {
@@ -311,18 +350,12 @@ export default function VisualisePage() {
               <select value="" onChange={e => loadExample(e.target.value)} aria-label="Load an example"
                 className="max-w-36 rounded-md border border-gray-700 bg-gray-950 px-2 py-1 text-xs text-gray-300">
                 <option value="" disabled>Examples…</option>
-                <optgroup label="Python">
-                  {EXAMPLES.filter(e => e.language === 'python').map(e =>
-                    <option key={e.id} value={e.id}>{e.title}</option>)}
-                </optgroup>
-                <optgroup label="C++">
-                  {EXAMPLES.filter(e => e.language === 'cpp').map(e =>
-                    <option key={e.id} value={e.id}>{e.title}</option>)}
-                </optgroup>
-                <optgroup label="C">
-                  {EXAMPLES.filter(e => e.language === 'c').map(e =>
-                    <option key={e.id} value={e.id}>{e.title}</option>)}
-                </optgroup>
+                {[...new Set(EXAMPLES.map(e => e.topic))].map(topic => (
+                  <optgroup key={topic} label={topic}>
+                    {EXAMPLES.filter(e => e.topic === topic).map(e =>
+                      <option key={e.id} value={e.id}>{e.title} ({LANGUAGE_LABELS[e.language]}){e.lesson ? ' · notes' : ''}</option>)}
+                  </optgroup>
+                ))}
               </select>
             )}
             {languageSelect}
@@ -367,6 +400,37 @@ export default function VisualisePage() {
 
   const output = trace ? trace.stdout.slice(0, current ? current.out : trace.stdout.length) : ''
   const atEnd = !!trace && step >= steps.length - 1
+  const example = lesson ? EXAMPLES.find(e => e.id === lesson.id) : undefined
+
+  /** One run's view for the selected tab, at step i (Compare draws two of these). */
+  const view = (t: Trace, i: number, src: string, callTree: CallNode | null, onStep: (j: number) => void) => {
+    const at = Math.min(i, t.steps.length - 1)
+    const s = t.steps[at]
+    const before = at > 0 ? t.steps[at - 1] : undefined
+    if (tab === 'output' || !s) {
+      const shown = t.stdout.slice(0, s ? s.out : t.stdout.length)
+      return (
+        <div className="h-full overflow-auto p-4">
+          {t.error && (at >= t.steps.length - 1) && (
+            <pre className="mb-3 whitespace-pre-wrap rounded-md border border-red-800/70 bg-red-950/40 p-3 font-mono text-xs text-red-200">
+              {t.error}{t.errorLine ? ` (line ${t.errorLine})` : ''}
+            </pre>
+          )}
+          <h3 className="mb-1 text-[11px] font-medium uppercase tracking-wide text-gray-500">Output so far</h3>
+          <pre className="min-h-16 whitespace-pre-wrap rounded-md border border-gray-800 bg-gray-900 p-3 font-mono text-xs text-gray-200"
+            style={{ zoom }}>
+            {shown || <span className="text-gray-600">nothing printed yet</span>}
+          </pre>
+        </div>
+      )
+    }
+    if (tab === 'memory') return <MemoryView step={s} prev={before} showFunctions={showFunctions} zoom={zoom} />
+    if (tab === 'structures') {
+      return <StructuresView step={s} prev={before} zoom={zoom}
+        lineText={s.event === 'line' ? src.split('\n')[s.line - 1] : undefined} />
+    }
+    return <RecursionView tree={callTree} trace={t} step={at} onStep={onStep} zoom={zoom} />
+  }
 
   const viewPane = (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-gray-950">
@@ -394,6 +458,20 @@ export default function VisualisePage() {
             <button type="button" className={clsx('btn-ghost btn-sm', editingNote && 'text-accent-300')}
               onClick={() => setEditingNote(e => !e)} disabled={!trace}
               aria-pressed={editingNote} title="Add a note to this step"><StickyNote size={14} /></button>
+            <button type="button" className={clsx('btn-ghost btn-sm', predict && 'bg-sky-950/60 text-sky-300')}
+              onClick={() => { setPredict(p => !p); setQuiz(null) }} aria-pressed={predict}
+              title={predict ? 'Predict mode is on: stepping forward asks first' : 'Predict mode: guess each step before it runs'}>
+              <GraduationCap size={14} />
+            </button>
+            <button type="button" className={clsx('btn-ghost btn-sm', compare && 'bg-accent-400/10 text-accent-300')}
+              onClick={() => (compare ? setCompare(null) : setCompareOpen(true))} disabled={!trace || steps.length === 0}
+              aria-pressed={!!compare} title={compare ? 'Stop comparing' : 'Compare with a second run, side by side'}>
+              <Columns2 size={14} />
+            </button>
+            <button type="button" className="btn-ghost btn-sm" onClick={() => setHandout(true)}
+              disabled={!trace || steps.length === 0} title="Handout: print or save key steps as PDF">
+              <Printer size={14} />
+            </button>
             <button type="button" className="btn-ghost btn-sm" onClick={share}
               title="Copy a link to this visualisation"><Share2 size={14} /></button>
             <button type="button" className="btn-ghost btn-sm" onClick={togglePresent}
@@ -404,12 +482,25 @@ export default function VisualisePage() {
         } />
 
       {trace && steps.length > 0 && (
-        <StepControls step={step} count={steps.length} current={current} playing={playing} speed={speed}
-          onStep={goto} onPlay={setPlaying} onSpeed={setSpeed} onBreakBack={jumpBack} onBreakNext={jumpNext}
-          hasBreakpoints={breakpoints.size > 0} />
+        <StepControls step={step} count={total} current={current} playing={playing} speed={speed}
+          onStep={i => (i === step + 1 ? forward() : goto(i))} onPlay={setPlaying} onSpeed={setSpeed}
+          onBreakBack={jumpBack} onBreakNext={jumpNext} hasBreakpoints={breakpoints.size > 0} />
       )}
 
-      {trace && (editingNote || notes[step]) && (
+      {quiz && current && (
+        <PredictPanel key={quiz.from} line={current.line} questions={quiz.questions} score={score}
+          onScored={(right, asked) => setScore(sc => ({ asked: sc.asked + asked, right: sc.right + right }))}
+          onContinue={() => { setQuiz(null); goto(quiz.from + 1) }}
+          onSkip={() => { setQuiz(null); goto(quiz.from + 1) }} />
+      )}
+
+      {predict && !quiz && trace && score.asked > 0 && (
+        <p className="shrink-0 border-b border-sky-900/50 bg-sky-950/20 px-3 py-1 text-[11px] text-sky-300">
+          Predict mode · {score.right} of {score.asked} right so far
+        </p>
+      )}
+
+      {trace && !quiz && (editingNote || notes[step]) && (
         <NoteBar text={notes[step] ?? ''} editing={editingNote}
           onChange={text => setNotes(n => {
             const next = { ...n }
@@ -441,30 +532,40 @@ export default function VisualisePage() {
             Step through it line by line, forwards and back, and watch variables, objects, pointers,
             data structures and recursive calls change. Pick an example to start.
           </EmptyState>
-        ) : tab === 'output' || steps.length === 0 ? (
-          <div className="h-full overflow-auto p-4">
-            {trace.error && (atEnd || steps.length === 0) && (
-              <pre className="mb-3 whitespace-pre-wrap rounded-md border border-red-800/70 bg-red-950/40 p-3 font-mono text-xs text-red-200">
-                {trace.error}{trace.errorLine ? ` (line ${trace.errorLine})` : ''}
-              </pre>
-            )}
-            <h3 className="mb-1 text-[11px] font-medium uppercase tracking-wide text-gray-500">Output so far</h3>
-            <pre className="min-h-16 whitespace-pre-wrap rounded-md border border-gray-800 bg-gray-900 p-3 font-mono text-xs text-gray-200"
-              style={{ zoom }}>
-              {output || <span className="text-gray-600">nothing printed yet</span>}
-            </pre>
+        ) : compare ? (
+          <div className="flex h-full flex-col">
+            <CompareSummary a={trace} b={compare.trace} bTitle={compare.title} />
+            <div className="grid min-h-0 flex-1 grid-cols-1 divide-gray-800 max-md:divide-y md:grid-cols-2 md:divide-x">
+              {[
+                { label: example?.title ?? 'This code', t: trace, src: code, ct: tree },
+                { label: compare.title, t: compare.trace, src: compare.code, ct: treeB },
+              ].map(({ label, t, src, ct }, k) => {
+                const at = Math.min(step, t.steps.length - 1)
+                const s = t.steps[at]
+                return (
+                  <section key={k} className="flex min-h-0 flex-col" aria-label={`Run ${k === 0 ? 'A' : 'B'}: ${label}`}>
+                    <header className="flex shrink-0 items-center gap-2 border-b border-gray-800 bg-gray-900/60 px-3 py-1.5">
+                      <span className="rounded-sm bg-gray-800 px-1.5 font-mono text-[11px] text-gray-300">{k === 0 ? 'A' : 'B'}</span>
+                      <span className="truncate text-xs font-medium text-gray-200">{label}</span>
+                      <code className="min-w-0 flex-1 truncate font-mono text-[11px] text-gray-500">
+                        {s ? `${s.line}: ${src.split('\n')[s.line - 1]?.trim() ?? ''}` : ''}
+                      </code>
+                      <span className={clsx('shrink-0 font-mono text-[11px]', step >= t.steps.length - 1 ? 'text-green-300' : 'text-gray-400')}>
+                        {step >= t.steps.length - 1 ? `finished in ${t.steps.length}` : `${at + 1}/${t.steps.length}`}
+                      </span>
+                    </header>
+                    <div className="min-h-0 flex-1">{view(t, step, src, ct, goto)}</div>
+                  </section>
+                )
+              })}
+            </div>
           </div>
-        ) : !current ? null : tab === 'memory' ? (
-          <MemoryView step={current} prev={prev} showFunctions={showFunctions} zoom={zoom} />
-        ) : tab === 'structures' ? (
-          <StructuresView step={current} prev={prev} zoom={zoom}
-            lineText={current.event === 'line' ? code.split('\n')[current.line - 1] : undefined} />
         ) : (
-          <RecursionView tree={tree} trace={trace} step={step} onStep={goto} zoom={zoom} />
+          view(trace, step, code, tree, goto)
         )}
       </div>
 
-      {trace && tab !== 'output' && steps.length > 0 && (
+      {trace && tab !== 'output' && steps.length > 0 && !compare && (
         <div className="max-h-24 shrink-0 overflow-auto border-t border-gray-800 bg-gray-900 px-3 py-1.5">
           <span className="mr-2 text-[10px] uppercase tracking-wide text-gray-500">Output</span>
           <span className="whitespace-pre-wrap font-mono text-xs text-gray-200">{output}</span>
@@ -482,7 +583,37 @@ export default function VisualisePage() {
       </div>
       <SplitPane className="min-h-0 flex-1" direction={wide ? 'horizontal' : 'vertical'} storageKey={wide ? 'cpintel-viz-split' : 'cpintel-viz-split-v'}
         initial={wide ? 40 : 45} min={20} max={75} first={editorPane} second={viewPane} />
+      {compareOpen && (
+        <CompareDialog open onClose={() => setCompareOpen(false)} language={language} code={code} stdin={stdin}
+          suggested={example?.compareWith}
+          onReady={c => { setCompare(c); setCompareOpen(false); setQuiz(null); setStep(0) }} />
+      )}
+      {handout && trace && (
+        <Handout trace={trace} code={code} notes={notes}
+          steps={handoutSteps(trace, notes, breakpoints)} onClose={() => setHandout(false)} />
+      )}
     </div>
+  )
+}
+
+/** How the two runs differ in work: steps taken and the busiest line. */
+function CompareSummary({ a, b, bTitle }: { a: Trace; b: Trace; bTitle: string }) {
+  const busiest = (t: Trace) => {
+    let best: [number, number] = [0, 0]
+    for (const [line, n] of lineCounts(t)) if (n > best[1]) best = [line, n]
+    return best
+  }
+  const [la, na] = busiest(a)
+  const [lb, nb] = busiest(b)
+  const diff = b.steps.length - a.steps.length
+  return (
+    <p className="shrink-0 border-b border-gray-800 bg-gray-900 px-3 py-1.5 text-xs text-gray-400">
+      A took <span className="font-mono text-gray-200">{a.steps.length}</span> steps
+      (busiest: line {la}, ×{na}); B, {bTitle}, took <span className="font-mono text-gray-200">{b.steps.length}</span>
+      {' '}(busiest: line {lb}, ×{nb}).{' '}
+      {diff === 0 ? 'The same amount of work.'
+        : <>B did <span className="font-mono text-gray-200">{Math.abs(Math.round((diff / a.steps.length) * 100))}%</span> {diff < 0 ? 'fewer' : 'more'} steps.</>}
+    </p>
   )
 }
 
