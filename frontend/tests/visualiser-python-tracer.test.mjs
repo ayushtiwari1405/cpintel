@@ -8,11 +8,11 @@ import { fileURLToPath } from 'node:url'
 const python = spawnSync('python3', ['--version']).status === 0
 const TRACER = fileURLToPath(new URL('../src/visualiser/tracers/python_tracer.py', import.meta.url))
 
-function trace(source, stdin = '', maxSteps = 500) {
+function trace(source, stdin = '', maxSteps = 500, startLines = '') {
   const script = `import json, sys
 g = {}
 exec(compile(open(sys.argv[1]).read(), 'tracer', 'exec'), g)
-print(g['__cpviz_trace'](sys.stdin.read(), ${JSON.stringify(stdin)}, ${maxSteps}))`
+print(g['__cpviz_trace'](sys.stdin.read(), ${JSON.stringify(stdin)}, ${maxSteps}, ${JSON.stringify(startLines)}))`
   const r = spawnSync('python3', ['-I', '-c', script, TRACER], { input: source, encoding: 'utf8' })
   if (r.status !== 0) throw new Error(r.stderr)
   return JSON.parse(r.stdout)
@@ -50,4 +50,13 @@ describe('python tracer', { skip: !python && 'no python3 here' }, () => {
     const t = trace('class A:\n    x = 1\na = A()\n')
     assert.equal(t.steps.some(s => s.frames.some(f => f.name === 'A')), false)
   })
+
+  it('starts recording at the first run of a start line', () => {
+    const src = 'total = 0\nfor i in range(50):\n    total += i\nprint(total)\n'
+    const t = trace(src, '', 500, '4')
+    assert.equal(t.steps[0].line, 4)
+    assert.equal(t.stdout, '1225\n')
+    assert.ok(t.steps.length < 5)
+  })
 })
+

@@ -36,8 +36,12 @@ class _StepLimit(BaseException):
 
 
 class _Recorder:
-    def __init__(self, max_steps):
+    def __init__(self, max_steps, start_lines=()):
         self.max_steps = max_steps
+        # Recording starts the first time one of these lines is about to run (the visualiser's
+        # "start at the first breakpoint"); with none, from the beginning.
+        self.start_lines = set(start_lines)
+        self.recording = not self.start_lines
         self.steps = []
         self.ids = {}          # id(obj) -> "h<n>", stable for the whole run
         self.keep = []         # holds every labelled object so its id() is never reused
@@ -179,6 +183,14 @@ class _Recorder:
     def tracer(self, frame, event, arg):
         if frame.f_code.co_filename != FILENAME:
             return None
+        if not self.recording:
+            if event == "line" and frame.f_lineno in self.start_lines:
+                self.recording = True
+            else:
+                if event == "call" and not frame.f_code.co_flags & CO_OPTIMIZED \
+                        and frame.f_code.co_name != "<module>":
+                    return None
+                return self.tracer
         if event == "call":
             if frame.f_code.co_name == "<module>":
                 return self.tracer
@@ -212,7 +224,7 @@ class _Out(io.StringIO):
         return len(self.getvalue())
 
 
-def __cpviz_trace(source, stdin, max_steps):
+def __cpviz_trace(source, stdin, max_steps, start_lines=None):
     linecache.cache[FILENAME] = (len(source), None, source.splitlines(True), FILENAME)
     result = {"language": "python", "steps": [], "stdout": "", "error": None,
               "truncated": False}
@@ -223,7 +235,10 @@ def __cpviz_trace(source, stdin, max_steps):
         result["errorLine"] = e.lineno
         return json.dumps(result)
 
-    rec = _Recorder(int(max_steps))
+    # Lines as "3,7" (from the page) or a list (from the tests).
+    if isinstance(start_lines, str):
+        start_lines = [x for x in start_lines.split(",") if x.strip()]
+    rec = _Recorder(int(max_steps), [int(x) for x in (start_lines or [])])
     out = _Out()
     rec.out = out
     saved = sys.stdin, sys.stdout, sys.stderr

@@ -27,7 +27,7 @@ const load = () => {
   return pyodide
 }
 
-export interface PyTraceRequest { source: string; stdin: string; maxSteps: number }
+export interface PyTraceRequest { source: string; stdin: string; maxSteps: number; startLines: number[] }
 export type PyTraceMessage =
   | { kind: 'loaded' }
   | { kind: 'traced'; json: string }
@@ -46,7 +46,8 @@ self.onmessage = async (e: MessageEvent<PyTraceRequest>) => {
   }
   post({ kind: 'loaded' })
   try {
-    const json = py.globals.get('__cpviz_trace')(e.data.source, e.data.stdin, e.data.maxSteps)
+    const json = py.globals.get('__cpviz_trace')(e.data.source, e.data.stdin, e.data.maxSteps,
+      e.data.startLines.join(','))
     post({ kind: 'traced', json: json as string })
   } catch (err: any) {
     const message = String(err?.message ?? err)

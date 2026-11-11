@@ -51,8 +51,9 @@ function declared(d: Node | null): Declared[] {
       return declared(named(d)[0] ?? null).map(x => ({ ...x, ref: true }))
     case 'array_declarator': {
       const size = d.childForFieldName('size')?.text ?? ''
+      // a[n][m] nests as (a[n])[m]: the inner declarator holds the first extent.
       return declared(d.childForFieldName('declarator')).map(x => ({
-        ...x, arraySizes: [size, ...x.arraySizes],
+        ...x, arraySizes: [...x.arraySizes, size],
       }))
     }
     case 'structured_binding_declarator':
@@ -86,6 +87,10 @@ export function instrument(source: string, root: Node, opts: InstrumentOptions =
       if (d.arraySizes.length === 1) {
         return `${kw}cpviz::Var ${id}(${lit(d.name)}, ${d.name}, (std::size_t)(${d.arraySizes[0]}));`
       }
+      if (d.arraySizes.length === 2) {
+        return `${kw}cpviz::Var ${id}(${lit(d.name)}, &${d.name}[0][0], (std::size_t)(${d.arraySizes[0]}), `
+          + `(std::size_t)(${d.arraySizes[1]}));`
+      }
     }
     return `${kw}cpviz::Var ${id}(${lit(d.name)}, ${d.name});`
   }
@@ -116,6 +121,35 @@ export function instrument(source: string, root: Node, opts: InstrumentOptions =
     }
   }
 
+  /** Function-like macros that expand to a for loop, and which argument names its variable. */
+  const loopMacros = new Map<string, number>()
+  const scanMacros = (node: Node) => {
+    for (const c of named(node)) {
+      if (c.type === 'preproc_function_def') {
+        const name = c.childForFieldName('name')?.text
+        const params = named(c.childForFieldName('parameters') ?? c).filter(x => x.type === 'identifier').map(x => x.text)
+        const value = c.childForFieldName('value')?.text ?? ''
+        const m = value.match(/^\s*for\s*\(\s*(?:[A-Za-z_][\w:<>]*\s+)*?\(?\s*([A-Za-z_]\w*)\s*\)?\s*=/)
+        const at = m ? params.indexOf(m[1]) : -1
+        if (name && at >= 0) loopMacros.set(name, at)
+      } else if (c.namedChildCount > 0 && c.type !== 'function_definition') {
+        scanMacros(c)
+      }
+    }
+  }
+  scanMacros(root)
+
+  /** `rep(i, 0, n) { ... }`: the macro call and the variable it declares, if it is one. */
+  const macroLoop = (stmt: Node | null): { line: number; variable: string } | null => {
+    if (!stmt || stmt.type !== 'expression_statement' || !stmt.lastChild?.isMissing) return null
+    const call = named(stmt)[0]
+    if (call?.type !== 'call_expression') return null
+    const at = loopMacros.get(call.childForFieldName('function')?.text ?? '')
+    const args = named(call.childForFieldName('arguments') ?? call)
+    const variable = at != null ? args[at] : null
+    return variable?.type === 'identifier' ? { line: line(stmt), variable: variable.text } : null
+  }
+
   const isMacroLoopBody = (stmt: Node) => {
     const prev = stmt.previousNamedSibling
     if (!prev || prev.type !== 'expression_statement') return false
@@ -124,6 +158,7 @@ export function instrument(source: string, root: Node, opts: InstrumentOptions =
   }
 
   const statement = (stmt: Node, ctx: Ctx | null, inCase: boolean) => {
+    if (ctx && macroLoop(stmt)) { add(stmt.startIndex, `cpviz::step(${line(stmt)}); `); return }
     if (!ctx || !STEP_TYPES.has(stmt.type) || stmt.isMissing || stmt.hasError) return
     if (isMacroLoopBody(stmt)) return
     if (stmt.type === 'expression_statement' && named(stmt).length === 0) return
@@ -244,12 +279,46 @@ export function instrument(source: string, root: Node, opts: InstrumentOptions =
         }
       }
     }
-    add(body.endIndex - 1, ` public: void __cpviz_dump(cpviz::W& __w) const { ${fields.join(' ')} } `)
+    // Base classes first, as a debugger lists them; each is dumped only if it is the student's.
+    const bases: string[] = []
+    const clause = named(spec).find(c => c.type === 'base_class_clause')
+    if (clause) {
+      for (const b of named(clause)) {
+        if (!/^(type_identifier|template_type|qualified_identifier)$/.test(b.type)) continue
+        bases.push(`cpviz::dump_base(__w, static_cast<const ${b.text}&>(*this));`)
+      }
+    }
+    add(body.endIndex - 1,
+      ` public: void __cpviz_dump(cpviz::W& __w) const { ${[...bases, ...fields].join(' ')} } `)
   }
 
   /** Statements inside a block, then whatever they contain. */
   const block = (body: Node, ctx: Ctx | null) => {
     for (const child of named(body)) {
+      // The braced body of a loop macro: its variable shown, its line stepped each iteration.
+      const loop = child.type === 'compound_statement' && ctx ? macroLoop(child.previousNamedSibling) : null
+      if (loop) {
+        atTop(child, register({ name: loop.variable, ref: false, arraySizes: [], fn: false }, false) ?? '', loop.line)
+        block(child, ctx)
+        continue
+      }
+      // A "function" inside a function is a macro with a braced body — `FOR(j, m) { ... }` reads
+      // as a definition to the parser. Its body is the student's code; a loop macro's variable
+      // is shown like any loop's.
+      if (child.type === 'function_definition' && ctx) {
+        const body = child.childForFieldName('body')
+        const fd = functionDeclarator(child.childForFieldName('declarator'))
+        if (body?.type === 'compound_statement' && fd) {
+          const at = loopMacros.get(fd.childForFieldName('declarator')?.text ?? '')
+          const arg = at != null ? named(fd.childForFieldName('parameters') ?? fd)[at]?.text.trim() : undefined
+          add(child.startIndex, `cpviz::step(${line(child)}); `)
+          const v = arg && /^[A-Za-z_]\w*$/.test(arg)
+            ? register({ name: arg, ref: false, arraySizes: [], fn: false }, false) ?? '' : ''
+          atTop(body, v, at != null ? line(child) : undefined)
+          block(body, ctx)
+          continue
+        }
+      }
       if (child.type === 'case_statement') {
         for (const s of named(child).slice(child.childForFieldName('value') ? 1 : 0)) {
           statement(s, ctx, true)

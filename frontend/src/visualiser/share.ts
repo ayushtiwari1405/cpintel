@@ -13,6 +13,8 @@ export interface Shared {
   notes: Record<number, string>
   breakpoints: number[]
   step: number
+  /** Recording starts at the first breakpoint. */
+  fromBreakpoint: boolean
 }
 
 const PREFIX = 'v1.'
@@ -39,7 +41,7 @@ const fromB64Url = (text: string) => {
 
 export async function encodeShare(s: Shared): Promise<string> {
   const json = JSON.stringify({
-    l: s.language, c: s.code, i: s.stdin, n: s.notes, b: s.breakpoints, s: s.step,
+    l: s.language, c: s.code, i: s.stdin, n: s.notes, b: s.breakpoints, s: s.step, f: s.fromBreakpoint ? 1 : 0,
   })
   const packed = await pipe(new TextEncoder().encode(json), new CompressionStream('deflate-raw'))
   return PREFIX + toB64Url(packed)
@@ -52,7 +54,7 @@ export async function decodeShare(fragment: string): Promise<Shared | null> {
   try {
     const bytes = await pipe(fromB64Url(text.slice(PREFIX.length)), new DecompressionStream('deflate-raw'))
     const o = JSON.parse(new TextDecoder().decode(bytes))
-    if ((o.l !== 'python' && o.l !== 'cpp') || typeof o.c !== 'string') return null
+    if (!['python', 'cpp', 'c'].includes(o.l) || typeof o.c !== 'string') return null
     const notes: Record<number, string> = {}
     for (const [k, v] of Object.entries(o.n ?? {})) {
       if (Number.isInteger(Number(k)) && typeof v === 'string') notes[Number(k)] = v.slice(0, 2000)
@@ -64,6 +66,7 @@ export async function decodeShare(fragment: string): Promise<Shared | null> {
       notes,
       breakpoints: Array.isArray(o.b) ? o.b.filter((x: unknown) => Number.isInteger(x)) : [],
       step: Number.isInteger(o.s) ? o.s : 0,
+      fromBreakpoint: o.f === 1,
     }
   } catch {
     return null

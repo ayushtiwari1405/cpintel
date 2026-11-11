@@ -37,11 +37,15 @@ function loadParser(): Promise<Parser> {
  * Clang's sanitizers in trap mode for raw pointers and arrays, libc++'s hardening for
  * vector/string/array indexing.
  */
-const TRACE_BUILD = {
+const traceBuild = (req: VizRequest) => ({
   files: { 'cpviz.h': RUNTIME },
-  defines: [`CPVIZ_MAX_STEPS=${MAX_STEPS}`, '_LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_FAST'],
+  defines: [
+    `CPVIZ_MAX_STEPS=${MAX_STEPS}`, '_LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_FAST',
+    ...(req.language === 'c' ? ['CPVIZ_C'] : []),
+    ...(req.startLines?.length ? [`CPVIZ_START_LINES=${req.startLines.join(',')}`] : []),
+  ],
   flags: ['-fsanitize=null,bounds,vla-bound,return', '-fsanitize-trap=all'],
-}
+})
 
 /**
  * Traces a C++ program: instrument it, compile it in the browser's Clang, run it, collect the
@@ -70,32 +74,37 @@ async function build(req: VizRequest, root: Parameters<typeof instrument>[1], on
   : Promise<Trace> {
   const full = instrument(req.source, root)
 
-  let built = await compile('cpp', full, onProgress, TRACE_BUILD)
-  if (built.kind === 'failed') return failure('cpp', built.error)
-  if (built.kind !== 'done') return failure('cpp', 'The compiler did not answer.')
+  const build = traceBuild(req)
+  let built = await compile('cpp', full, onProgress, build)
+  const lang = req.language
+  if (built.kind === 'failed') return failure(lang, built.error)
+  if (built.kind !== 'done') return failure(lang, 'The compiler did not answer.')
 
   if (!built.ok) {
     onProgress('Checking the program…')
-    const plain = await compile('cpp', req.source, onProgress)
+    // The student's program, compiled as they wrote it (C as C), says whose mistake it is.
+    const plain = await compile(lang === 'c' ? 'c' : 'cpp', req.source, onProgress)
     if (plain.kind === 'done' && !plain.ok) {
-      return { ...failure('cpp', `Compilation failed:\n${plain.output}`), errorLine: firstErrorLine(plain.output) }
+      return { ...failure(lang, `Compilation failed:\n${plain.output}`), errorLine: firstErrorLine(plain.output) }
     }
     onProgress('Compiling (cautious mode)…')
     const careful = instrument(req.source, root, { safe: true })
-    const retry = await compile('cpp', careful, onProgress, TRACE_BUILD)
+    const retry = await compile('cpp', careful, onProgress, build)
     if (retry.kind !== 'done' || !retry.ok) {
-      return failure('cpp', 'This program compiles, but the visualiser could not trace it — it '
-        + 'uses something the tracer does not support yet.\n\n'
+      return failure(lang, 'This program compiles, but the visualiser could not trace it — it '
+        + 'uses something the tracer does not support yet.'
+        + (lang === 'c' ? ' C is traced as C++, so C-only code (a void* assigned to another '
+          + 'pointer type without a cast, say) needs a cast here.' : '') + '\n\n'
         + (retry.kind === 'done' ? retry.output : built.output).slice(0, 4000))
     }
     built = retry
   }
-  if (!built.ok) return failure('cpp', 'The compiler did not answer.')
+  if (!built.ok) return failure(lang, 'The compiler did not answer.')
 
   onProgress('Tracing…')
   const result = await run(built.module, req.stdin)
   if (!result) {
-    return failure('cpp', `The program ran for more than ${RUN_TIME_LIMIT_MS / 1000} s while being `
+    return failure(lang, `The program ran for more than ${RUN_TIME_LIMIT_MS / 1000} s while being `
       + 'traced. Look for an infinite loop, or try a smaller input.')
   }
   const last = result.steps[result.steps.length - 1]
@@ -105,7 +114,7 @@ async function build(req: VizRequest, root: Parameters<typeof instrument>[1], on
       + 'outside an array, vector or string, or a failed assert.'
     : result.error
   return {
-    language: 'cpp',
+    language: lang,
     steps: result.steps,
     stdout: result.stdout,
     error,
@@ -115,7 +124,7 @@ async function build(req: VizRequest, root: Parameters<typeof instrument>[1], on
 }
 
 function firstErrorLine(output: string): number | null {
-  const m = output.match(/main\.cpp:(\d+):\d+: error/)
+  const m = output.match(/main\.(?:c|cpp):(\d+):\d+: error/)
   return m ? Number(m[1]) : null
 }
 

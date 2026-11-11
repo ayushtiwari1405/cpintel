@@ -42,15 +42,23 @@ export function Arrows({ container, version }: {
         const t = at(target.getBoundingClientRect())
         const x1 = s.left + s.width / 2
         const y1 = s.top + s.height / 2
-        // Land on the near side of the target, a little below its top edge.
-        const leftward = t.left + t.width / 2 < x1
-        const x2 = leftward ? t.left + t.width : t.left
-        const y2 = t.top + Math.min(12, t.height / 2)
-        const dx = Math.max(40, Math.abs(x2 - x1) / 2)
-        const c1 = x1 + dx
-        const c2 = leftward ? x2 + dx : x2 - dx
+        let d: string
+        if (t.top + t.height < y1 - 6 && t.left < x1 + 40) {
+          // Up and back into a frame above (a pointer into the caller's array): come in from
+          // below the cell, so several pointers into one array fan out instead of piling up.
+          const x2 = t.left + t.width / 2
+          const y2 = t.top + t.height
+          d = `M${x1},${y1} C${x1 + 30},${y1} ${x2},${y2 + 40} ${x2},${y2}`
+        } else {
+          // Otherwise land on the near side of the target, a little below its top edge.
+          const leftward = t.left + t.width / 2 < x1
+          const x2 = leftward ? t.left + t.width : t.left
+          const y2 = t.top + Math.min(12, t.height / 2)
+          const dx = Math.max(40, Math.abs(x2 - x1) / 2)
+          d = `M${x1},${y1} C${x1 + dx},${y1} ${leftward ? x2 + dx : x2 - dx},${y2} ${x2},${y2}`
+        }
         next.push({
-          d: `M${x1},${y1} C${c1},${y1} ${c2},${y2} ${x2},${y2}`,
+          d,
           kind: dot.dataset.arrowKind ?? 'ptr',
           key: `${i}-${id}`,
         })

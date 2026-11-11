@@ -5,9 +5,10 @@ import { EmptyState } from '@/components/common/States'
 import type { Compound, Step, Val } from '@/visualiser/trace'
 import { brief } from '@/visualiser/trace'
 import {
-  VIEW_LABELS, adjacency, deref, detectView, indexMarkers, isPrim, nodeAnnotations, selfLinks,
+  VIEW_LABELS, accessed, adjacency, deref, detectView, indexMarkers, isPrim, nodeAnnotations, selfLinks,
   structureVars, type ViewKind,
 } from '@/visualiser/structures'
+import { layoutGraph } from '@/visualiser/graphLayout'
 import { CompoundView, Prim } from './ValueView'
 
 type Heap = Record<string, Compound>
@@ -17,7 +18,13 @@ type Heap = Record<string, Compound>
  * variables under it, a DP table, a graph with its visited marks, a tree, a linked list.
  * The view is guessed from the shape and the name and can be overridden per variable.
  */
-export function StructuresView({ step, prev, zoom }: { step: Step; prev?: Step; zoom: number }) {
+export function StructuresView({ step, prev, zoom, lineText }: {
+  step: Step
+  prev?: Step
+  zoom: number
+  /** The source of the line about to run, for the cells it reads (a[j] and a[j + 1]). */
+  lineText?: string
+}) {
   const vars = structureVars(step)
   const [overrides, setOverrides] = useState<Record<string, ViewKind>>({})
 
@@ -60,7 +67,7 @@ export function StructuresView({ step, prev, zoom }: { step: Step; prev?: Step; 
               </header>
               <div className="overflow-x-auto p-3">
                 <Structure kind={kind} name={name} v={v} step={step} prevV={prevFind(frame.id, name)}
-                  prevHeap={prev?.heap} />
+                  prevHeap={prev?.heap} lineText={lineText} />
               </div>
             </section>
           )
@@ -70,8 +77,8 @@ export function StructuresView({ step, prev, zoom }: { step: Step; prev?: Step; 
   )
 }
 
-function Structure({ kind, name, v, step, prevV, prevHeap }: {
-  kind: ViewKind; name: string; v: Val; step: Step; prevV?: Val; prevHeap?: Heap
+function Structure({ kind, name, v, step, prevV, prevHeap, lineText }: {
+  kind: ViewKind; name: string; v: Val; step: Step; prevV?: Val; prevHeap?: Heap; lineText?: string
 }) {
   const heap = step.heap
   const r = deref(v, heap)
@@ -79,8 +86,11 @@ function Structure({ kind, name, v, step, prevV, prevHeap }: {
   if (!r) return <span className="text-xs text-gray-500">{brief(v, heap)}</span>
   const c = r.c
   switch (kind) {
-    case 'array': return c.k === 'seq' ? <ArrayStrip c={c} prev={before} step={step} name={name} /> : <Mismatch />
-    case 'grid': return c.k === 'seq' ? <Grid c={c} prev={before} heap={heap} prevHeap={prevHeap} step={step} /> : <Mismatch />
+    case 'array': return c.k === 'seq'
+      ? <ArrayStrip c={c} prev={before} step={step} name={name} lineText={lineText} /> : <Mismatch />
+    case 'grid': return c.k === 'seq'
+      ? <Grid c={c} prev={before} heap={heap} prevHeap={prevHeap} step={step} name={name} lineText={lineText} />
+      : <Mismatch />
     case 'graph': return <Graph c={c} heap={heap} step={step} name={name} />
     case 'tree': return r.id ? <BinaryTree root={r.id} heap={heap} /> : <Mismatch />
     case 'list': return r.id ? <LinkedList head={r.id} heap={heap} /> : <Mismatch />
@@ -100,10 +110,11 @@ const cellText = (v: Val, heap?: Heap) => (isPrim(v)
   ? <Prim v={v as Extract<Val, { k: 'num' | 'str' | 'bool' | 'none' | 'char' }>} />
   : <span className="font-mono text-[11px] text-gray-400">{brief(v, heap)}</span>)
 
-function ArrayStrip({ c, prev, step, name }: {
-  c: Extract<Compound, { k: 'seq' }>; prev?: Compound; step: Step; name: string
+function ArrayStrip({ c, prev, step, name, lineText }: {
+  c: Extract<Compound, { k: 'seq' }>; prev?: Compound; step: Step; name: string; lineText?: string
 }) {
   const markers = indexMarkers(step, c.items.length, name)
+  const reads = new Set(accessed(lineText, name, step).filter(a => a.length === 1).map(a => a[0]))
   const prevItems = prev?.k === 'seq' ? prev.items : null
   const numeric = c.items.map(x => (x.k === 'num' ? Number(x.v) : NaN))
   const bars = numeric.length > 1 && numeric.every(Number.isFinite)
@@ -126,14 +137,16 @@ function ArrayStrip({ c, prev, step, name }: {
               {showBars && bars && (
                 <div className="flex h-24 w-9 items-end justify-center px-1">
                   <div className={clsx('w-full rounded-t-sm transition-[height] duration-200',
-                    here.length ? 'bg-accent-400' : changed ? 'bg-amber-400' : 'bg-gray-600')}
+                    reads.has(i) ? 'bg-sky-400' : changed ? 'bg-amber-400' : here.length ? 'bg-accent-400' : 'bg-gray-600')}
                     style={{ height: `${Math.max(4, (Math.abs(numeric[i]) / max) * 96)}px` }} />
                 </div>
               )}
               <span className="font-mono text-[9px] text-gray-500">{i}</span>
               <div className={clsx('-ml-px flex h-9 min-w-9 items-center justify-center border px-1.5 text-xs',
                 here.length ? 'border-accent-400 bg-accent-400/10' : 'border-gray-700 bg-gray-950',
-                changed && 'viz-changed')}>
+                reads.has(i) && 'relative z-10 ring-2 ring-sky-400',
+                changed && 'viz-changed')}
+                aria-label={`${name}[${i}]${reads.has(i) ? ', used on this line' : ''}${here.length ? `, ${here.join(' and ')} here` : ''}`}>
                 {cellText(x)}
               </div>
               <div className="flex h-8 flex-col items-center pt-0.5">
@@ -160,13 +173,21 @@ function ArrayStrip({ c, prev, step, name }: {
         )}
       </div>
       {c.items.length === 0 && <span className="text-xs text-gray-500">empty</span>}
+      {reads.size > 0 && (
+        <p className="mt-1 flex items-center gap-1.5 text-[11px] text-gray-500">
+          <span className="inline-block h-2.5 w-2.5 rounded-sm ring-2 ring-sky-400" aria-hidden="true" />
+          used by the line about to run
+        </p>
+      )}
     </div>
   )
 }
 
-function Grid({ c, prev, heap, prevHeap, step }: {
+function Grid({ c, prev, heap, prevHeap, step, name, lineText }: {
   c: Extract<Compound, { k: 'seq' }>; prev?: Compound; heap: Heap; prevHeap?: Heap; step: Step
+  name: string; lineText?: string
 }) {
+  const reads = new Set(accessed(lineText, name, step).filter(a => a.length === 2).map(([a, b]) => `${a},${b}`))
   const rows = c.items.map(x => deref(x, heap)?.c).map(x => (x?.k === 'seq' ? x.items : []))
   const prevRows = prev?.k === 'seq'
     ? prev.items.map(x => (prevHeap ? deref(x, prevHeap)?.c : x)).map(x => (x?.k === 'seq' ? x.items : []))
@@ -197,6 +218,7 @@ function Grid({ c, prev, heap, prevHeap, step }: {
               return (
                 <td key={j} className={clsx('h-8 min-w-8 border px-1.5 text-center',
                   focus ? 'border-accent-400 bg-accent-400/15' : (i === ri || j === ci) ? 'border-gray-700 bg-gray-850' : 'border-gray-700',
+                  reads.has(`${i},${j}`) && 'relative ring-2 ring-inset ring-sky-400',
                   changed && 'viz-changed')}>
                   {x ? cellText(x, heap) : ''}
                 </td>
@@ -215,12 +237,7 @@ function Graph({ c, heap, step, name }: { c: Compound; heap: Heap; step: Step; n
   const markers = indexMarkers(step, nodes.length, name)
   const n = nodes.length
   if (n === 0) return <span className="text-xs text-gray-500">No nodes yet.</span>
-  const R = Math.max(70, n * 16)
-  const size = 2 * R + 80
-  const pos = new Map(nodes.map((id, i) => {
-    const a = (2 * Math.PI * i) / n - Math.PI / 2
-    return [id, { x: size / 2 + R * Math.cos(a), y: size / 2 + R * Math.sin(a) }]
-  }))
+  const { pos, size } = layoutGraph(nodes, edges)
   const key = (a: string, b: string) => `${a}->${b}`
   const all = new Set(edges.map(([a, b]) => key(a, b)))
   const undirected = edges.every(([a, b]) => all.has(key(b, a)))
@@ -228,7 +245,9 @@ function Graph({ c, heap, step, name }: { c: Compound; heap: Heap; step: Step; n
   const drawn = new Set<string>()
   return (
     <div className="flex flex-wrap items-start gap-4">
-      <svg width={size} height={size} role="img" aria-label={`Graph ${name}`}>
+      <svg width={size} height={size} role="img"
+        aria-label={`Graph ${name}: ${n} nodes. Edges ${edges.slice(0, 40).map(([a, b]) => `${a} to ${b}`).join(', ')}`
+          + `${visitedNote ? `. Visited: ${nodes.filter((id, i) => isTruthy(visitedNote[1][Number(id)] ?? visitedNote[1][i])).join(', ') || 'none'}` : ''}`}>
         <defs>
           <marker id="viz-edge" viewBox="0 0 8 8" refX="17" refY="4" markerWidth="6" markerHeight="6" orient="auto">
             <path d="M0,0 L8,4 L0,8 z" className="fill-gray-500" />
@@ -382,8 +401,11 @@ function TreeSvg({ tree, label }: { tree: TNode; label: string }) {
   }
   visit(tree, 0)
   const depth = Math.max(0, ...placed.map(p => p.y))
+  const describe = (t: TNode): string => (!t.id ? 'empty'
+    : t.kids.length ? `${t.label} (${t.kids.map(describe).join(', ')})` : t.label)
   return (
-    <svg width={Math.max(W, col * W) + 40} height={depth + 60} role="img" aria-label={label}>
+    <svg width={Math.max(W, col * W) + 40} height={depth + 60} role="img"
+      aria-label={`${label}: ${describe(tree)}`}>
       <g transform="translate(20,20)">
         {edges.map(([x1, y1, x2, y2], i) => (
           <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} className="stroke-gray-600" strokeWidth={1.25} />

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { clsx } from 'clsx'
 import { GitFork } from 'lucide-react'
 import { EmptyState } from '@/components/common/States'
@@ -9,7 +9,10 @@ const NODE_H = 46
 const GAP_X = 14
 const GAP_Y = 34
 
-interface Placed { node: CallNode; x: number; y: number }
+interface Placed { node: CallNode; x: number; y: number; hidden: number }
+
+/** Past this many calls, finished subtrees start folded away. */
+const BIG = 40
 
 /**
  * The calls made so far, as a tree: who called whom, with what, and what came back. Calls on
@@ -27,7 +30,10 @@ export function RecursionView({ tree, trace, step, onStep, zoom }: {
   const active = useMemo(() => new Set(trace.steps[step]?.frames.map(f => f.id) ?? []), [trace, step])
   const top = trace.steps[step]?.frames[trace.steps[step].frames.length - 1]?.id
 
-  const { placed, edges, width, height } = useMemo(() => layout(tree, step), [tree, step])
+  const total = useMemo(() => count(tree), [tree])
+  const [collapse, setCollapse] = useState<boolean | null>(null)
+  const folding = collapse ?? total > BIG
+  const { placed, edges, width, height } = useMemo(() => layout(tree, step, folding), [tree, step, folding])
 
   // Keeps the running call on screen as the tree outgrows the panel.
   const scroller = useRef<HTMLDivElement>(null)
@@ -60,7 +66,13 @@ export function RecursionView({ tree, trace, step, onStep, zoom }: {
 
   const heap = trace.steps[step]?.heap
   return (
-    <div ref={scroller} className="h-full overflow-auto">
+    <div ref={scroller} className="relative h-full overflow-auto">
+      {total > 12 && (
+        <label className="sticky left-3 top-3 z-10 ml-3 mt-3 inline-flex items-center gap-1.5 rounded-md border border-gray-800 bg-gray-900/90 px-2 py-1 text-[11px] text-gray-400">
+          <input type="checkbox" checked={folding} onChange={e => setCollapse(e.target.checked)} />
+          Fold finished calls ({total} calls in all)
+        </label>
+      )}
       <div style={{ zoom }} className="p-4">
         <svg width={width} height={height} role="img" aria-label="Recursion tree">
           {edges.map(([a, b]) => (
@@ -69,7 +81,7 @@ export function RecursionView({ tree, trace, step, onStep, zoom }: {
               strokeWidth={1.25}
               className={active.has(b.node.frameId) ? 'stroke-accent-400' : 'stroke-gray-700'} />
           ))}
-          {placed.map(({ node, x, y }) => {
+          {placed.map(({ node, x, y, hidden }) => {
             const onStack = active.has(node.frameId)
             const done = node.exit < step && !onStack
             const isTop = node.frameId === top
@@ -93,7 +105,8 @@ export function RecursionView({ tree, trace, step, onStep, zoom }: {
                 <text x={NODE_W / 2} y={35} textAnchor="middle"
                   className={clsx('font-mono text-[10px]',
                     isTop ? 'fill-accent-100' : done ? 'fill-green-300' : 'fill-gray-500')}>
-                  {done && node.ret ? clip(`→ ${brief(node.ret)}`, 17)
+                  {done && node.ret ? clip(`→ ${brief(node.ret)}${hidden ? ` · +${hidden}` : ''}`, 17)
+                    : done && hidden ? `+${hidden} calls`
                     : onStack ? (isTop ? 'running' : 'waiting') : ''}
                 </text>
               </g>
@@ -111,7 +124,16 @@ const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…`
  * A simple tidy layout: leaves take consecutive columns in call order, a parent sits centred
  * over its children. Only calls that have begun by `step` take part, so the tree grows.
  */
-function layout(tree: CallNode | null, step: number) {
+function count(node: CallNode | null): number {
+  return node ? 1 + node.children.reduce((s, c) => s + count(c), 0) : 0
+}
+
+/** Calls under a node that have begun by `step`. */
+function begun(node: CallNode, step: number): number {
+  return node.children.filter(c => c.enter <= step).reduce((s, c) => s + 1 + begun(c, step), 0)
+}
+
+function layout(tree: CallNode | null, step: number, fold: boolean) {
   const placed: Placed[] = []
   const edges: [Placed, Placed][] = []
   if (!tree) return { placed, edges, width: 0, height: 0 }
@@ -119,7 +141,9 @@ function layout(tree: CallNode | null, step: number) {
   let maxDepth = 0
   const visit = (node: CallNode, d: number): Placed => {
     maxDepth = Math.max(maxDepth, d)
-    const kids = node.children.filter(c => c.enter <= step)
+    // A finished call folds into one box, keeping the running path and its neighbours readable.
+    const folded = fold && node.parent != null && node.exit < step
+    const kids = folded ? [] : node.children.filter(c => c.enter <= step)
     let x: number
     const placedKids = kids.map(k => visit(k, d + 1))
     if (placedKids.length === 0) {
@@ -128,7 +152,7 @@ function layout(tree: CallNode | null, step: number) {
     } else {
       x = (placedKids[0].x + placedKids[placedKids.length - 1].x) / 2
     }
-    const me = { node, x, y: d * (NODE_H + GAP_Y) }
+    const me = { node, x, y: d * (NODE_H + GAP_Y), hidden: folded ? begun(node, step) : 0 }
     placed.push(me)
     for (const k of placedKids) edges.push([me, k])
     return me

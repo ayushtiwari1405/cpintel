@@ -14,6 +14,8 @@ export interface VizRequest {
   language: VizLanguage
   source: string
   stdin: string
+  /** Record nothing until one of these lines is about to run; empty records from the start. */
+  startLines?: number[]
 }
 
 /**
@@ -77,7 +79,9 @@ function tracePython(req: VizRequest, onProgress: Progress): Promise<Trace> {
       discard()
       resolve(failure('python', e.message || 'Python stopped unexpectedly.'))
     }
-    const request: PyTraceRequest = { source: req.source, stdin: req.stdin, maxSteps: MAX_STEPS }
+    const request: PyTraceRequest = {
+      source: req.source, stdin: req.stdin, maxSteps: MAX_STEPS, startLines: req.startLines ?? [],
+    }
     worker.postMessage(request)
   })
 }

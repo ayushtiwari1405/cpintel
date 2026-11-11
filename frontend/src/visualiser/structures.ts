@@ -161,3 +161,75 @@ export function adjacency(c: Compound, heap: Heap): { nodes: string[]; edges: [s
   }
   return { nodes, edges }
 }
+
+/** The integer variables in scope at a step: the running frame's, then globals. */
+export function intScope(step: Step): Map<string, number> {
+  const scope = new Map<string, number>()
+  const frames = step.frames.length > 1 ? [step.frames[step.frames.length - 1], step.frames[0]] : step.frames
+  for (const frame of frames) {
+    for (const [name, v] of frame.vars) {
+      const n = num(v)
+      if (v.k === 'num' && n != null && Number.isInteger(n) && !scope.has(name)) scope.set(name, n)
+    }
+  }
+  return scope
+}
+
+/**
+ * Evaluates a small integer expression — names, numbers, + - * / // % and parentheses — or
+ * returns null for anything else (a call, a field, a variable not in scope).
+ */
+export function evalIndex(expr: string, scope: Map<string, number>): number | null {
+  const tokens = expr.match(/\s*(\/\/|[A-Za-z_]\w*|\d+|[-+*/%()])/g)?.map(t => t.trim())
+  if (!tokens || tokens.join('') !== expr.replace(/\s+/g, '')) return null
+  let i = 0
+  const peek = () => tokens[i]
+  const atom = (): number | null => {
+    const t = tokens[i++]
+    if (t === undefined) return null
+    if (t === '(') { const v = sum(); if (tokens[i++] !== ')') return null; return v }
+    if (t === '-') { const v = atom(); return v == null ? null : -v }
+    if (/^\d+$/.test(t)) return Number(t)
+    if (/^[A-Za-z_]\w*$/.test(t)) return scope.get(t) ?? null
+    return null
+  }
+  const product = (): number | null => {
+    let v = atom()
+    while (v != null && (peek() === '*' || peek() === '/' || peek() === '//' || peek() === '%')) {
+      const op = tokens[i++]
+      const r = atom()
+      if (r == null || (op !== '*' && r === 0)) return null
+      v = op === '*' ? v * r : op === '%' ? v % r : Math.trunc(v / r)
+    }
+    return v
+  }
+  const sum = (): number | null => {
+    let v = product()
+    while (v != null && (peek() === '+' || peek() === '-')) {
+      const op = tokens[i++]
+      const r = product()
+      if (r == null) return null
+      v = op === '+' ? v + r : v - r
+    }
+    return v
+  }
+  const v = sum()
+  return i === tokens.length ? v : null
+}
+
+/**
+ * The cells of `name` the line about to run reads or writes: `a[j]` and `a[j + 1]` in a bubble
+ * sort's comparison, `dp[i - 1][j]` in a DP. One index for a 1D array, two for a grid.
+ */
+export function accessed(lineText: string | undefined, name: string, step: Step): number[][] {
+  if (!lineText) return []
+  const scope = intScope(step)
+  const out: number[][] = []
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const re = new RegExp(`(?<![\\w.])${escaped}((?:\\s*\\[[^\\[\\]]+\\])+)`, 'g')
+  for (const m of lineText.matchAll(re)) {
+    const parts = [...m[1].matchAll(/\[([^[\]]+)\]/g)].map(x => evalIndex(x[1], scope))
+    if (parts.length && parts.every(p => p != null)) out.push(parts as number[])
+  }
+  return out
+}

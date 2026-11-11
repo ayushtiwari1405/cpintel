@@ -7,7 +7,8 @@
  * own, which is what makes stepping backwards and scrubbing free.
  */
 
-export type VizLanguage = 'python' | 'cpp'
+/** 'c' is traced through the C++ tracer, compiled as C++ with C's malloc semantics. */
+export type VizLanguage = 'python' | 'cpp' | 'c'
 
 /** A value as a variable, field or element holds it. */
 export type Val =

@@ -77,7 +77,7 @@ examinations assigned to you.
   and Run executes them all
 - A Run button that compiles your solution locally and checks it against the samples before you
   spend a real submission — see [Running code](code-runner.md#running-code)
-- **A code visualiser** (`/visualise`, sidebar **Visualiser**): step a C++ or Python program
+- **A code visualiser** (`/visualise`, sidebar **Visualiser**): step a C, C++ or Python program
   forwards and back and watch the stack, heap and pointers, data structures (arrays with their
   index variables, DP grids, graphs, trees, linked lists) and the recursion tree; with notes,
   breakpoints, a presentation mode and share links for teaching. All in the browser — see

@@ -16,13 +16,13 @@ import { StructuresView } from '@/components/visualiser/StructuresView'
 import { RecursionView } from '@/components/visualiser/RecursionView'
 import { StepControls } from '@/components/visualiser/StepControls'
 import { useMediaQuery, WIDE } from '@/hooks/useMediaQuery'
-import { traceProgram } from '@/visualiser/engine'
-import { EXAMPLES, STARTER } from '@/visualiser/examples'
+import { MAX_STEPS, traceProgram } from '@/visualiser/engine'
+import { EXAMPLES, LANGUAGE_LABELS, STARTER } from '@/visualiser/examples'
 import {
   lineCounts, nextBreakpoint, nextRunOfLine, prevBreakpoint, stepBackOver, stepOver,
 } from '@/visualiser/navigate'
 import { MAX_LINK_CHARS, decodeShare, encodeShare } from '@/visualiser/share'
-import { buildCallTree, type Trace, type VizLanguage } from '@/visualiser/trace'
+import { brief, buildCallTree, type Trace, type VizLanguage } from '@/visualiser/trace'
 
 type ViewTab = 'memory' | 'structures' | 'recursion' | 'output'
 type Editor = monaco.editor.IStandaloneCodeEditor
@@ -63,6 +63,7 @@ export default function VisualisePage() {
   const [showFunctions, setShowFunctions] = useState(false)
   const [presenting, setPresenting] = useState(false)
   const [editor, setEditor] = useState<Editor | null>(null)
+  const [fromBreakpoint, setFromBreakpoint] = useState(false)
 
   const steps = trace?.steps ?? []
   const current = steps[step]
@@ -76,19 +77,24 @@ export default function VisualisePage() {
   // ── running ─────────────────────────────────────────────────────────────
 
   const run = useCallback(async (opts?: {
-    language?: VizLanguage; code?: string; stdin?: string; step?: number
+    language?: VizLanguage; code?: string; stdin?: string; step?: number; startLines?: number[]
   }) => {
     const lang = opts?.language ?? language
     const src = opts?.code ?? code
+    const startLines = opts?.startLines ?? (fromBreakpoint ? [...breakpoints] : [])
     setRunning(true)
     setPlaying(false)
-    const result = await traceProgram({ language: lang, source: src, stdin: opts?.stdin ?? stdin },
+    const result = await traceProgram({ language: lang, source: src, stdin: opts?.stdin ?? stdin, startLines },
       setProgress)
+    if (startLines.length && result.steps.length === 0 && !result.error) {
+      result.error = 'No breakpoint line ran, so nothing was recorded. Untick "Start at the first '
+        + 'breakpoint", or put a breakpoint on a line that runs.'
+    }
     setRunning(false)
     setTrace(result)
     setStep(Math.max(0, Math.min(opts?.step ?? 0, result.steps.length - 1)))
     if (result.steps.length === 0) setTab('output')
-  }, [language, code, stdin])
+  }, [language, code, stdin, fromBreakpoint, breakpoints])
 
   const edit = () => { setTrace(null); setPlaying(false); setEditingNote(false) }
 
@@ -129,7 +135,9 @@ export default function VisualisePage() {
       setStdin(shared.stdin)
       setNotes(shared.notes)
       setBreakpoints(new Set(shared.breakpoints))
-      run({ language: shared.language, code: shared.code, stdin: shared.stdin, step: shared.step })
+      setFromBreakpoint(shared.fromBreakpoint)
+      run({ language: shared.language, code: shared.code, stdin: shared.stdin, step: shared.step,
+        startLines: shared.fromBreakpoint ? shared.breakpoints : [] })
     })
     return () => { cancelled = true }
     // Once, on arrival.
@@ -268,7 +276,7 @@ export default function VisualisePage() {
   const share = async () => {
     try {
       const encoded = await encodeShare({
-        language, code, stdin, notes, breakpoints: [...breakpoints], step,
+        language, code, stdin, notes, breakpoints: [...breakpoints], step, fromBreakpoint,
       })
       const url = `${window.location.origin}/visualise#${encoded}`
       if (url.length > MAX_LINK_CHARS) {
@@ -288,8 +296,8 @@ export default function VisualisePage() {
     <select value={language} onChange={e => switchLanguage(e.target.value as VizLanguage)}
       aria-label="Language" disabled={running}
       className="rounded-md border border-gray-700 bg-gray-950 px-2 py-1 text-xs text-gray-200">
-      <option value="python">Python 3</option>
-      <option value="cpp">C++</option>
+      {(Object.keys(LANGUAGE_LABELS) as VizLanguage[]).map(l =>
+        <option key={l} value={l}>{LANGUAGE_LABELS[l]}</option>)}
     </select>
   )
 
@@ -311,6 +319,10 @@ export default function VisualisePage() {
                   {EXAMPLES.filter(e => e.language === 'cpp').map(e =>
                     <option key={e.id} value={e.id}>{e.title}</option>)}
                 </optgroup>
+                <optgroup label="C">
+                  {EXAMPLES.filter(e => e.language === 'c').map(e =>
+                    <option key={e.id} value={e.id}>{e.title}</option>)}
+                </optgroup>
               </select>
             )}
             {languageSelect}
@@ -327,7 +339,7 @@ export default function VisualisePage() {
           </>
         } />
       <div className="relative min-h-0 flex-1">
-        <CodeEditor value={code} onChange={setCode} language={language === 'cpp' ? 'cpp' : 'python'}
+        <CodeEditor value={code} onChange={setCode} language={language === 'python' ? 'python' : 'cpp'}
           readOnly={!!trace || running} onRun={() => { if (!trace) run() }} onEditor={onEditor} />
       </div>
       <div className="shrink-0 border-t border-gray-800 bg-gray-900 px-3 py-2">
@@ -336,6 +348,14 @@ export default function VisualisePage() {
           readOnly={!!trace} spellCheck={false}
           placeholder="What the program reads, if anything"
           className="input resize-y font-mono text-xs" />
+        <label className={clsx('mt-1.5 flex items-center gap-1.5 text-[11px]',
+          breakpoints.size ? 'text-gray-400' : 'text-gray-600')}>
+          <input type="checkbox" checked={fromBreakpoint && breakpoints.size > 0} disabled={!breakpoints.size || !!trace}
+            onChange={e => setFromBreakpoint(e.target.checked)} />
+          <span title={`Skips the set-up before it, so a long run fits in the ${MAX_STEPS} recorded steps`}>
+            Start recording at the first breakpoint
+          </span>
+        </label>
         <p className="mt-1.5 text-[11px] text-gray-500">
           {trace
             ? 'Click a line to jump to its next run. Click the gutter to set a breakpoint.'
@@ -437,7 +457,8 @@ export default function VisualisePage() {
         ) : !current ? null : tab === 'memory' ? (
           <MemoryView step={current} prev={prev} showFunctions={showFunctions} zoom={zoom} />
         ) : tab === 'structures' ? (
-          <StructuresView step={current} prev={prev} zoom={zoom} />
+          <StructuresView step={current} prev={prev} zoom={zoom}
+            lineText={current.event === 'line' ? code.split('\n')[current.line - 1] : undefined} />
         ) : (
           <RecursionView tree={tree} trace={trace} step={step} onStep={goto} zoom={zoom} />
         )}
@@ -455,10 +476,24 @@ export default function VisualisePage() {
 
   return (
     <div ref={rootRef} className="flex min-h-0 flex-1 flex-col bg-gray-950">
+      {/* What changed, for screen readers: the step, the line, and the variables that moved. */}
+      <div className="sr-only" aria-live="polite" aria-atomic="true" data-testid="viz-announcer">
+        {trace && current ? announce(step, steps.length, current, prev) : ''}
+      </div>
       <SplitPane className="min-h-0 flex-1" direction={wide ? 'horizontal' : 'vertical'} storageKey={wide ? 'cpintel-viz-split' : 'cpintel-viz-split-v'}
         initial={wide ? 40 : 45} min={20} max={75} first={editorPane} second={viewPane} />
     </div>
   )
+}
+
+function announce(i: number, n: number, s: Trace['steps'][number], before?: Trace['steps'][number]): string {
+  const top = s.frames[s.frames.length - 1]
+  const was = new Map(before?.frames.find(f => f.id === top?.id)?.vars.map(([k, v]) => [k, JSON.stringify(v)]) ?? [])
+  const changed = (top?.vars ?? []).filter(([k, v]) => was.get(k) !== JSON.stringify(v)).slice(0, 3)
+    .map(([k, v]) => `${k} is ${brief(v, s.heap)}`)
+  const what = s.event === 'call' ? `call ${top?.name}` : s.event === 'return' ? `${top?.name} returns ${s.ret ? brief(s.ret, s.heap) : ''}`
+    : s.event === 'exception' ? s.error ?? 'exception' : `line ${s.line}`
+  return `Step ${i + 1} of ${n}, ${what}.${changed.length ? ` ${changed.join(', ')}.` : ''}`
 }
 
 function NoteBar({ text, editing, onChange, onDone, noteCount, onNextNote }: {

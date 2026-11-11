@@ -87,4 +87,31 @@ int main() { int s = 0; rep(i, 3) s += i; switch (s) { case 1: int t; t = 2; bre
     assert.doesNotMatch(out, /rep\(i, 3\) cpviz::step/)
     lacks(out, '("t", t)')
   })
+
+  it('shows the variable of a loop macro, braced or nested as a "definition"', () => {
+    const out = parse(`#define rep(i,a,b) for(int i=a;i<b;i++)
+#define FOR(x, n) for (long long x = 0; x < (n); ++x)
+int main() {
+  rep(i, 0, 3) {
+    FOR(j, 2) {
+      int s = i + j;
+    }
+  }
+}`)
+    const lines = body(out).split('\n')
+    contains(lines[3], 'cpviz::step(4); rep(i, 0, 3) { cpviz::Var')
+    contains(lines[3], '("i", i); cpviz::step(4);')
+    contains(lines[4], 'cpviz::step(5); FOR(j, 2) { cpviz::Var')
+    contains(lines[4], '("j", j); cpviz::step(5);')
+    lacks(out, 'Frame __cpviz_f("FOR"')
+  })
+
+  it('lists base-class fields and registers 2D arrays of run-time size', () => {
+    const out = parse(`struct A { int x; };
+struct B : public A { int y; };
+int main() { int n = 2, m = 3; int dp[n][m]; }`)
+    contains(out, 'cpviz::dump_base(__w, static_cast<const A&>(*this)); __w.field("y", y);')
+    contains(out, '("dp", &dp[0][0], (std::size_t)(n), (std::size_t)(m));')
+  })
 })
+

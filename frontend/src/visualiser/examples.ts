@@ -182,9 +182,65 @@ int main() {
 }
 `,
   },
+  {
+    id: 'c-malloc', title: 'malloc: a linked list', language: 'c', stdin: '',
+    code: `#include <stdio.h>
+#include <stdlib.h>
+
+typedef struct Node {
+    int value;
+    struct Node *next;
+} Node;
+
+Node *push(Node *head, int value) {
+    Node *n = malloc(sizeof(Node));
+    n->value = value;
+    n->next = head;
+    return n;
+}
+
+int main(void) {
+    Node *head = NULL;
+    for (int i = 1; i <= 3; i++) {
+        head = push(head, i * 10);
+    }
+    for (Node *p = head; p != NULL; p = p->next) {
+        printf("%d ", p->value);
+    }
+    printf("\\n");
+    return 0;
+}
+`,
+  },
+  {
+    id: 'c-array', title: 'Arrays and pointers', language: 'c', stdin: '',
+    code: `#include <stdio.h>
+
+void reverse(int *a, int n) {
+    int *l = a, *r = a + n - 1;
+    while (l < r) {
+        int t = *l;
+        *l = *r;
+        *r = t;
+        l++;
+        r--;
+    }
+}
+
+int main(void) {
+    int a[5] = {1, 2, 3, 4, 5};
+    reverse(a, 5);
+    for (int i = 0; i < 5; i++) printf("%d ", a[i]);
+    return 0;
+}
+`,
+  },
 ]
 
 export const STARTER: Record<VizLanguage, string> = {
   python: EXAMPLES[0].code,
   cpp: EXAMPLES.find(e => e.id === 'cpp-binsearch')!.code,
+  c: EXAMPLES.find(e => e.id === 'c-malloc')!.code,
 }
+
+export const LANGUAGE_LABELS: Record<VizLanguage, string> = { python: 'Python 3', cpp: 'C++', c: 'C' }

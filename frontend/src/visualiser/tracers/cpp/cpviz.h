@@ -73,7 +73,7 @@ inline void note_free(void* p) { if (p) allocs().erase((std::uintptr_t)p); }
 // ── frames and variables ────────────────────────────────────────────────
 
 struct W;
-using DumpFn = void (*)(W&, const void*, std::size_t);
+using DumpFn = void (*)(W&, const void*, std::size_t, std::size_t);
 
 struct VarRec {
   const char* name;
@@ -82,6 +82,7 @@ struct VarRec {
   std::size_t count;  // elements, for an array registered by pointer and length
   DumpFn dump;
   bool ref;
+  std::size_t cols = 0;  // columns, for a 2D array registered by pointer
 };
 
 struct FrameRec {
@@ -196,10 +197,19 @@ template <class T> constexpr bool is_compound() {
 
 // ── the writer ──────────────────────────────────────────────────────────
 
+struct Pending {
+  std::uintptr_t key;
+  const void* p;
+  std::size_t count;
+  DumpFn fn;
+};
+
 struct Region {
   std::uintptr_t lo, hi;
   std::size_t elem;
   std::string id;
+  bool heap = false;  // storage inside a heap object; `owner` is that object
+  Pending owner{};
 };
 
 inline std::string hex(std::uintptr_t a) {
@@ -208,19 +218,14 @@ inline std::string hex(std::uintptr_t a) {
   return "0x" + std::string(buf, r.ptr);
 }
 
-struct Pending {
-  std::uintptr_t key;
-  const void* p;
-  std::size_t count;
-  DumpFn fn;
-};
-
 template <class T> void dump(W& w, const T& v);
 
 struct W {
   std::string out;
   bool collect = false;           // first pass: only learn where every variable's storage is
-  std::string var;                // id of the variable being written ("var:F:N")
+  std::string var;                // id of the variable being written ("var:F:N"), or heap object
+  bool var_heap = false;
+  Pending owner{};
   std::vector<Region> regions;
   std::vector<Pending> pending;
   std::vector<std::uintptr_t> emitted;
@@ -282,7 +287,7 @@ struct W {
   // Storage the next pointers may land in, most specific wins.
   void region(const void* lo, std::size_t bytes, std::size_t elem) {
     if (!collect || var.empty() || bytes == 0) return;
-    regions.push_back({(std::uintptr_t)lo, (std::uintptr_t)lo + bytes, elem, var});
+    regions.push_back({(std::uintptr_t)lo, (std::uintptr_t)lo + bytes, elem, var, var_heap, owner});
   }
   const Region* find_region(std::uintptr_t a) const {
     const Region* best = nullptr;
@@ -306,16 +311,18 @@ struct W {
   }
 
   template <class E> void pointer(const E* p, std::string_view tname, bool is_ref = false) {
-    if (collect) return;
     auto a = (std::uintptr_t)p;
-    out += R"({"k":"ptr","t":)"; quoted(std::string(tname) + (is_ref ? "&" : "*"));
-    out += R"(,"addr":")"; out += hex(a); out += R"(","to":)";
-    if (!p) { out += "null}"; return; }
+    if (!collect) {
+      out += R"({"k":"ptr","t":)"; quoted(std::string(tname) + (is_ref ? "&" : "*"));
+      out += R"(,"addr":")"; out += hex(a); out += R"(","to":)";
+    }
+    if (!p) { raw("null}"); return; }
     if (auto r = find_region(a)) {
+      if (collect) return;
       out += '"'; out += r->id; out += '"';
-      if (r->elem && r->hi - r->lo > r->elem) {
-        out += R"(,"idx":)"; out += std::to_string((a - r->lo) / r->elem);
-      }
+      if (r->heap) pending.push_back(r->owner);  // drawn even if nothing else reaches it
+      bool indexed = r->elem && r->hi - r->lo > r->elem && (!r->heap || r->lo == r->owner.key);
+      if (indexed) { out += R"(,"idx":)"; out += std::to_string((a - r->lo) / r->elem); }
       out += '}';
       return;
     }
@@ -331,24 +338,26 @@ struct W {
           bool array = size >= 2 * sz && (a - base) % sz == 0;
           std::uintptr_t key = array ? base : a;
           std::size_t count = array ? size / sz : 1;
-          if (!array && a + sz > base + size) { out += "null}"; return; }
-          out += '"'; out += hex(key); out += '"';
-          if (array) { out += R"(,"idx":)"; out += std::to_string((a - base) / sz); }
-          out += '}';
-          pending.push_back({key, (const void*)key, count, [](W& w, const void* q, std::size_t n) {
+          if (!array && a + sz > base + size) { raw("null}"); return; }
+          if (!collect) {
+            out += '"'; out += hex(key); out += '"';
+            if (array) { out += R"(,"idx":)"; out += std::to_string((a - base) / sz); }
+            out += '}';
+          }
+          pending.push_back({key, (const void*)key, count, [](W& w, const void* q, std::size_t n, std::size_t) {
             const E* e = static_cast<const E*>(q);
             if (n == 1 && is_compound<E>()) { dump(w, *e); return; }
-            w.out += R"({"k":"seq","t":)"; w.quoted(type_name<E>() + (n > 1 ? "[]" : ""));
-            w.out += R"(,"items":[)";
+            w.raw(R"({"k":"seq","t":)"); w.quoted(type_name<E>() + (n > 1 ? "[]" : ""));
+            w.raw(R"(,"items":[)");
             std::size_t shown = std::min(n, MAX_ITEMS);
-            for (std::size_t i = 0; i < shown; i++) { if (i) w.out += ','; dump(w, e[i]); }
-            w.out += R"(],"more":)"; w.out += std::to_string(n - shown); w.out += '}';
+            for (std::size_t i = 0; i < shown; i++) { if (i) w.raw(","); dump(w, e[i]); }
+            w.raw(R"(],"more":)"); if (!w.collect) w.out += std::to_string(n - shown); w.raw("}");
           }});
           return;
         }
       }
     }
-    out += "null}";
+    raw("null}");
   }
 
   template <class It> void seq(std::string_view t, It first, std::size_t n, std::size_t total) {
@@ -472,18 +481,38 @@ template <class T> void dump(W& w, const T& v) {
 struct Frame;
 inline void emit(const char* event, int line, const std::string* ret = nullptr);
 
-template <class T> void dump_var(W& w, const void* p, std::size_t) { dump(w, *static_cast<const T*>(p)); }
+template <class T> void dump_var(W& w, const void* p, std::size_t, std::size_t) { dump(w, *static_cast<const T*>(p)); }
 
-template <class E> void dump_span(W& w, const void* p, std::size_t n) {
+template <class E> void dump_span(W& w, const void* p, std::size_t n, std::size_t) {
   const E* e = static_cast<const E*>(p);
   w.region(e, n * sizeof(E), sizeof(E));
   w.seq(type_name<E>() + "[" + std::to_string(n) + "]", e, std::min(n, MAX_ITEMS), n);
 }
 
+// A run-time-sized 2D array (int dp[n][m]) registered by its first element and both extents.
+template <class E> void dump_grid(W& w, const void* p, std::size_t r, std::size_t c) {
+  const E* e = static_cast<const E*>(p);
+  w.region(e, r * c * sizeof(E), c * sizeof(E));
+  std::string row = type_name<E>() + "[" + std::to_string(c) + "]";
+  w.raw(R"({"k":"seq","t":)"); w.quoted(type_name<E>() + "[" + std::to_string(r) + "][" + std::to_string(c) + "]");
+  w.raw(R"(,"items":[)");
+  std::size_t shown = std::min(r, MAX_ITEMS);
+  for (std::size_t i = 0; i < shown; i++) {
+    if (i) w.raw(",");
+    w.seq(row, e + i * c, std::min(c, MAX_ITEMS), c);
+  }
+  w.raw(R"(],"more":)"); if (!w.collect) w.out += std::to_string(r - shown); w.raw("}");
+}
+
+// A base class's fields, listed before the derived class's own (when it is the student's).
+template <class B> void dump_base(W& w, const B& b) {
+  if constexpr (requires { b.__cpviz_dump(w); }) b.__cpviz_dump(w);
+}
+
 struct by_ref_t {};
 inline constexpr by_ref_t by_ref{};
 
-template <class T> void dump_ref(W& w, const void* p, std::size_t) {
+template <class T> void dump_ref(W& w, const void* p, std::size_t, std::size_t) {
   const T& v = *static_cast<const T*>(p);
   if (w.collect) return;  // a reference owns no storage; what it names is registered elsewhere
   if (w.find_region((std::uintptr_t)p)) {
@@ -504,6 +533,9 @@ struct Var {
   }
   template <class E> Var(const char* name, E* p, std::size_t n) {
     reg({name, p, n * sizeof(E), n, &dump_span<std::remove_cv_t<E>>, false});
+  }
+  template <class E> Var(const char* name, E* p, std::size_t r, std::size_t c) {
+    reg({name, p, r * c * sizeof(E), r, &dump_grid<std::remove_cv_t<E>>, false, c});
   }
   void reg(VarRec r) {
     bool was = internal(); internal() = true;
@@ -555,15 +587,53 @@ inline void write_frame(W& w, FrameRec& f) {
       w.regions.push_back({(std::uintptr_t)v.addr, (std::uintptr_t)v.addr + v.size, v.size, w.var});
     }
     if (!w.collect) { if (i) w.out += ','; w.out += '['; w.quoted(v.name); w.out += ','; }
-    v.dump(w, v.addr, v.count);
+    v.dump(w, v.addr, v.count, v.cols);
     w.raw("]");
   }
   w.var.clear();
   w.raw("]}");
 }
 
+// First pass over the heap: what every reachable heap object holds, so a pointer into a vector
+// inside a heap object lands on that object instead of on a second copy of the buffer.
+inline void collect_heap(W& w) {
+  std::vector<std::uintptr_t> seen;
+  for (std::size_t i = 0; i < w.pending.size() && seen.size() < MAX_HEAP; i++) {
+    Pending p = w.pending[i];
+    if (std::find(seen.begin(), seen.end(), p.key) != seen.end()) continue;
+    seen.push_back(p.key);
+    w.var = hex(p.key);
+    w.var_heap = true;
+    w.owner = p;
+    p.fn(w, p.p, p.count, 0);
+  }
+  w.var.clear();
+  w.var_heap = false;
+  w.pending.clear();
+  w.out.clear();
+}
+
+#ifdef CPVIZ_START_LINES
+// Recording starts the first time one of these lines is about to run (the visualiser's
+// "start at the first breakpoint"), so a long set-up does not use up the step budget.
+inline bool starts_here(int l) {
+  static const int lines[] = {CPVIZ_START_LINES};
+  for (int x : lines) if (x == l) return true;
+  return false;
+}
+inline bool& recording() { static bool r = false; return r; }
+#else
+inline bool starts_here(int) { return true; }
+inline bool& recording() { static bool r = true; return r; }
+#endif
+
 inline void emit(const char* event, int line, const std::string* ret) {
   if (internal()) return;
+  if (!stack().empty()) stack().back()->line = line;
+  if (!recording()) {
+    if (std::strcmp(event, "line") == 0 && starts_here(line)) recording() = true;
+    else return;
+  }
   internal() = true;
   if (++steps_taken() > CPVIZ_MAX_STEPS) {
     std::fflush(stdout);
@@ -577,13 +647,13 @@ inline void emit(const char* event, int line, const std::string* ret) {
   std::cout.flush();
   std::fflush(stdout);
 
-  if (!stack().empty()) stack().back()->line = line;
   globals().line = line;
 
   W w;
   w.collect = true;
   if (!globals().vars.empty()) write_frame(w, globals());
   for (auto* f : stack()) write_frame(w, *f);
+  collect_heap(w);
 
   w.collect = false;
   w.out.reserve(4096);
@@ -601,7 +671,7 @@ inline void emit(const char* event, int line, const std::string* ret) {
     w.emitted.push_back(p.key);
     if (written++) w.out += ',';
     w.out += '"'; w.out += hex(p.key); w.out += "\":";
-    p.fn(w, p.p, p.count);
+    p.fn(w, p.p, p.count, 0);
   }
   w.out += '}';
   if (ret) { w.out += ",\"ret\":"; w.out += *ret; }
@@ -616,7 +686,9 @@ template <class T> std::string encode_ret(const T& v) {
   bool was = internal(); internal() = true;
   W w;
   // The return value can point at the frame's own variables, which the step resolves itself.
-  for (auto* f : stack()) { w.collect = true; write_frame(w, *f); }
+  w.collect = true;
+  for (auto* f : stack()) write_frame(w, *f);
+  collect_heap(w);
   w.collect = false;
   w.out.clear();
   dump(w, v);
@@ -671,7 +743,19 @@ inline void* cpviz_realloc(void* q, std::size_t n) {
   cpviz::note_free(q); void* p = std::realloc(q, n); cpviz::note_alloc(p, n); return p;
 }
 inline void cpviz_free(void* p) { cpviz::note_free(p); std::free(p); }
+#ifdef CPVIZ_C
+// A C program is compiled as C++, where `int *p = malloc(...)` needs a cast. This stands in for
+// malloc's void* and converts to any object pointer, as void* does in C.
+struct cpviz_cmem {
+  void* p;
+  template <class T> operator T*() const { return static_cast<T*>(p); }
+};
+#define malloc(n) (cpviz_cmem{cpviz_malloc(n)})
+#define calloc(k, n) (cpviz_cmem{cpviz_calloc(k, n)})
+#define realloc(p, n) (cpviz_cmem{cpviz_realloc(p, n)})
+#else
 #define malloc(n) cpviz_malloc(n)
 #define calloc(k, n) cpviz_calloc(k, n)
 #define realloc(p, n) cpviz_realloc(p, n)
+#endif
 #define free(p) cpviz_free(p)
