@@ -46,7 +46,7 @@ function Step({ n, title, children }: { n: number; title: string; children: Reac
 }
 
 /**
- * Getting the CPIntel Codeforces Connector into this browser.
+ * Getting the CPIntel Connector into this browser.
  *
  * <p>Where somebody lands when they try to connect Codeforces on the website and have no
  * extension. The download is made on this page, for this site (see `cfExtension.ts`), so it
@@ -74,11 +74,11 @@ export default function ExtensionPage() {
   const header = (
     <div>
       <h1 className="flex items-center gap-2 text-2xl font-semibold text-gray-50">
-        <Puzzle size={22} className="text-accent-400" /> CPIntel Codeforces Connector
+        <Puzzle size={22} className="text-accent-400" /> CPIntel Connector
       </h1>
       <p className="mt-1 text-sm text-gray-400">
-        Lets CPIntel open Codeforces problems and submit solutions using this browser's
-        Codeforces sign-in.
+        Lets CPIntel open Codeforces problems, and run and submit Codeforces and LeetCode
+        solutions, using this browser's own sign-ins to those sites.
       </p>
     </div>
   )

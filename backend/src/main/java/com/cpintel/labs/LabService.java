@@ -59,6 +59,7 @@ public class LabService {
 
     private final LabAssignmentRepository labs;
     private final LabSolveRepository solves;
+    private final com.cpintel.repository.jpa.LabProblemRepository problems;
     private final PlatformAccountRepository accounts;
     private final ClassroomMemberRepository members;
     private final ClassroomRepository classrooms;
@@ -386,6 +387,39 @@ public class LabService {
         }
         return new LabsDto.MyLabs(out, handle(handles.get(ProblemRef.CODEFORCES)),
             handle(handles.get(ProblemRef.LEETCODE)));
+    }
+
+    /**
+     * One of the student's lab problems on LeetCode, with what solving it here needs. Only a
+     * student set the lab, once it has opened, may read it this way.
+     */
+    @Transactional(readOnly = true)
+    public LabsDto.LeetCodeProblem leetCodeProblem(Long userId, Long labProblemId) {
+        LabProblem p = problems.findById(labProblemId)
+            .orElseThrow(() -> ApiException.notFound("No such lab problem."));
+        LabAssignment lab = p.getLab();
+        if (lab.getOpensAt().isAfter(Instant.now()) || !audience.includes(lab, userId)) {
+            throw ApiException.notFound("No such lab problem.");
+        }
+        if (!ProblemRef.LEETCODE.equals(p.getPlatform())) {
+            throw ApiException.badRequest("That problem is on Codeforces; open it from Practice.");
+        }
+        LeetCodeClient.Statement st;
+        try {
+            st = leetCode.statement(p.getProblemKey());
+        } catch (Exception e) {
+            log.warn("LeetCode statement for {} failed: {}", p.getProblemKey(), e.getMessage());
+            throw ApiException.serviceUnavailable("LeetCode did not answer. Try again in a minute.");
+        }
+        if (st == null) throw ApiException.notFound("LeetCode no longer has this problem.");
+        LabSolve s = solves.findByUserIdAndLabProblemIdIn(userId, List.of(labProblemId)).stream()
+            .findFirst().orElse(null);
+        return new LabsDto.LeetCodeProblem(lab.getLabId(), labProblemId, lab.getTitle(), st.questionId(),
+            st.slug(), p.getTitle(), st.difficulty(), st.paidOnly(), LeetCodeHtml.clean(st.contentHtml()),
+            st.snippets().stream().map(x -> new LabsDto.LeetCodeSnippet(x.lang(), x.langSlug(), x.code())).toList(),
+            st.exampleTestcases(), p.getUrl(), p.getMarks(),
+            s == null ? null : Boolean.TRUE.equals(s.getLate()) ? "LATE" : "SOLVED",
+            s == null ? null : s.getSolvedAt(), lab.getDueAt());
     }
 
     private static LabsDto.Handle handle(PlatformAccount a) {

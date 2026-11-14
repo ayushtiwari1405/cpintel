@@ -12,6 +12,7 @@ import {
 } from './cfSession'
 import { isOpenableExternal } from './externalUrl'
 import * as localRunner from './localRunner'
+import { callLeetCode, forgetLeetCode, signInLeetCode } from './lcSession'
 import { installUpdate, type UpdateProgress } from './updater'
 
 const store = new Store()
@@ -356,6 +357,32 @@ handle('cf:fetch', async (_e, request) => {
     return { error: e?.message ?? String(e) }
   }
 })
+
+// ── LeetCode ──────────────────────────────────────────────────
+//
+// Lab problems solved in CPIntel. Not during a locked-down examination: nothing an examination
+// sits is on LeetCode.
+
+handle('lc:signIn', async () => {
+  if (lockdown.isEngaged()) return { error: 'Not available during this examination.' }
+  try {
+    const result = await signInLeetCode(mainWindow ?? undefined)
+    return result ? { result } : { error: 'The LeetCode sign-in window was closed.' }
+  } catch (e: any) {
+    return { error: e?.message ?? String(e) }
+  }
+})
+
+handle('lc:call', async (_e, op, args) => {
+  if (lockdown.isEngaged()) return { error: 'Not available during this examination.' }
+  try {
+    return { result: await callLeetCode(op, args) }
+  } catch (e: any) {
+    return { error: e?.message ?? String(e) }
+  }
+})
+
+handle('lc:forget', () => forgetLeetCode())
 
 // ── Lockdown ──────────────────────────────────────────────────
 

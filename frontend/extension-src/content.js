@@ -6,13 +6,19 @@
 // as window messages; only messages from this very window and origin are passed on.
 
 document.documentElement.setAttribute('data-cpintel-cf', chrome.runtime.getManifest().version)
+// LeetCode too, from 0.4.0: lets the page know it can run and submit there.
+document.documentElement.setAttribute('data-cpintel-lc', chrome.runtime.getManifest().version)
 
 window.addEventListener('message', (event) => {
   if (event.source !== window || event.origin !== window.location.origin) return
   const message = event.data
   if (!message || message.cpintelCf !== 'request') return
 
-  const forward = message.kind === 'open'
+  const forward = message.kind === 'lc-signin'
+    ? { type: 'lc-signin' }
+    : message.kind === 'lc-call'
+    ? { type: 'lc-call', op: message.op, args: message.args }
+    : message.kind === 'open'
     ? { type: 'cf-open' }
     : message.kind === 'signin'
       ? { type: 'cf-signin' }

@@ -14,6 +14,7 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -40,6 +41,13 @@ public class LabController {
     @Operation(summary = "Your open and past labs, with what you have solved")
     public ResponseEntity<ApiResponse<LabsDto.MyLabs>> mine(@AuthenticationPrincipal Long userId) {
         return ResponseEntity.ok(ApiResponse.ok(labs.mine(userId)));
+    }
+
+    @GetMapping("/problems/{labProblemId}/leetcode")
+    @Operation(summary = "A LeetCode lab problem's statement and starter code, to solve it here")
+    public ResponseEntity<ApiResponse<LabsDto.LeetCodeProblem>> leetCodeProblem(
+        @AuthenticationPrincipal Long userId, @PathVariable Long labProblemId) {
+        return ResponseEntity.ok(ApiResponse.ok(labs.leetCodeProblem(userId, labProblemId)));
     }
 
     @PostMapping("/check")

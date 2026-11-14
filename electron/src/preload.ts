@@ -50,6 +50,12 @@ contextBridge.exposeInMainWorld('cpintelDesktop', {
   },
 
   /** Compiling and running with the toolchains this build carries, outside examinations. */
+  lc: {
+    signIn: () => ipcRenderer.invoke('lc:signIn'),
+    call: (op: string, args?: Record<string, unknown>) => ipcRenderer.invoke('lc:call', op, args),
+    forget: () => ipcRenderer.invoke('lc:forget'),
+  },
+
   runner: {
     languages: () => ipcRenderer.invoke('runner:languages'),
     run: (request: unknown) => ipcRenderer.invoke('runner:run', request),

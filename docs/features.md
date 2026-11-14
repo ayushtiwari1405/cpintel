@@ -120,6 +120,9 @@ examinations assigned to you.
   chooses per lab whether problems solved before it opened count.
 - Students prove a handle is theirs once: a compilation error on Codeforces 4A, or a code in
   their LeetCode profile summary. Unverified handles earn no credit.
+- Students can solve lab problems inside CPIntel: Codeforces ones in Practice, LeetCode ones
+  in a workspace that runs and submits through their own LeetCode sign-in (desktop app or the
+  CPIntel extension).
 - The grid downloads as a spreadsheet. See [classrooms](classrooms.md#lab-assignments).
 
 ## Examinations
@@ -231,6 +234,7 @@ the product.
 | `/exams` | anyone | Your assigned examinations, and past ones to read back |
 | `/exam` | exam mode | The one paper an examination session can reach; every other route redirects here |
 | `/labs` | anyone | Lab assignments from your classrooms: problems, what you have solved, marks |
+| `/labs/problems/{id}` | anyone | Solve a lab's LeetCode problem: statement, editor, Run and Submit through your LeetCode sign-in |
 | `/platforms` | anyone | Link and sync Codeforces, link LeetCode, verify both handles; connect the Codeforces session used for submitting |
 | `/teams` | anyone | Team contests you are in, and where you placed |
 | `/profile` | anyone | Your account |

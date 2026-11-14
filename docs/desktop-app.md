@@ -99,3 +99,9 @@ rather than asking you to run a helper, and the sign-in persists, so reconnectin
 session is one click. See [Connecting Codeforces](codeforces.md#connecting-codeforces). Connecting is refused
 while an examination lockdown is engaged — a full browser window mid-round would walk around
 everything the lock is doing, so it is something to do before the round starts.
+
+LeetCode works the same way for lab problems: *Sign in to LeetCode* in a lab problem's workspace
+opens a LeetCode window the app owns, and Run and Submit then go to LeetCode with that session.
+The app only sends the four requests the workspace needs (who is signed in, run, submit, read a
+result), built in the app from checked arguments. LeetCode is unavailable while a lockdown is
+engaged.

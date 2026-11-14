@@ -219,7 +219,7 @@ function NoExtensionForm() {
   return (
     <div className="space-y-3">
       <p className="text-xs text-gray-400">
-        This browser needs the <span className="text-gray-200">CPIntel Codeforces Connector</span>{' '}
+        This browser needs the <span className="text-gray-200">CPIntel Connector</span>{' '}
         extension (Chrome, Edge or Brave) to open problems and submit.
       </p>
       {/* A new tab, so whatever was open here — a problem, half-written code — stays open. */}

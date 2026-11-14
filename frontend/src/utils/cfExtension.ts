@@ -4,7 +4,7 @@ import manifestSource from '../../extension-src/manifest.json?raw'
 import { zip } from '@/utils/zip'
 
 /**
- * The CPIntel Codeforces Connector, packaged for whoever is asking.
+ * The CPIntel Connector, packaged for whoever is asking.
  *
  * <p>The extension only runs on the one CPIntel site named in its manifest — that is what stops
  * any other site asking it to fetch Codeforces as the user. So it cannot be one fixed download:

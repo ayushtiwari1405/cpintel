@@ -1,6 +1,6 @@
 import { apiClient } from './client'
 import type {
-  ApiResponse, LabProblemView, LabProgress, LabRequest, LabSummary, MyLabs,
+  ApiResponse, LabLeetCodeProblem, LabProblemView, LabProgress, LabRequest, LabSummary, MyLabs,
 } from '@/types'
 
 /**
@@ -47,6 +47,9 @@ export const adminLabsApi = {
 
 export const labsApi = {
   mine: () => apiClient.get<ApiResponse<MyLabs>>('/labs/mine').then(r => r.data),
+
+  leetCodeProblem: (problemId: number) =>
+    apiClient.get<ApiResponse<LabLeetCodeProblem>>(`/labs/problems/${problemId}/leetcode`).then(r => r.data),
 
   /** Looks for your new solves now. Once a minute at most. */
   check: () =>

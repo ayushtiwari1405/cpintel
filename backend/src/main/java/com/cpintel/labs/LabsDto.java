@@ -67,5 +67,14 @@ public final class LabsDto {
 
     public record CheckResult(int recorded, Instant checkedAt) {}
 
+    /** A lab's LeetCode problem, ready to be solved in CPIntel. contentHtml is sanitised. */
+    public record LeetCodeProblem(Long labId, Long problemId, String labTitle, String questionId,
+                                  String slug, String title, String difficulty, boolean paidOnly,
+                                  String contentHtml, List<LeetCodeSnippet> snippets,
+                                  List<String> exampleTestcases, String url, BigDecimal marks,
+                                  String status, Instant solvedAt, Instant dueAt) {}
+
+    public record LeetCodeSnippet(String lang, String langSlug, String code) {}
+
     public record CheckStarted(boolean started, String message) {}
 }

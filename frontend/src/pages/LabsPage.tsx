@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom'
 import { format, formatDistanceToNow } from 'date-fns'
 import { clsx } from 'clsx'
 import {
-  AlertTriangle, CheckCircle2, CircleDashed, Clock, ExternalLink, FlaskConical, Loader2, RefreshCw,
+  AlertTriangle, CheckCircle2, CircleDashed, Clock, Code2, ExternalLink, FlaskConical, Loader2, RefreshCw,
 } from 'lucide-react'
 import { PageHeader } from '@/components/common/PageHeader'
 import { EmptyState, ErrorState, LoadingState } from '@/components/common/States'
@@ -165,10 +165,31 @@ function ProblemRow({ item }: { item: MyLabProblem }) {
           {solvedAt && <> · accepted {format(new Date(solvedAt), 'd MMM, HH:mm')}</>}
         </p>
       </div>
-      <span className="shrink-0 font-mono text-xs tabular-nums text-gray-400">
+      <span className="hidden shrink-0 font-mono text-xs tabular-nums text-gray-400 sm:inline">
         {fmt(problem.marks)} {Number(problem.marks) === 1 ? 'mark' : 'marks'}
       </span>
+      <SolveLink item={item} />
     </li>
+  )
+}
+
+/** Where to solve it inside CPIntel: the LeetCode workspace, or Practice for Codeforces. */
+function SolveLink({ item }: { item: MyLabProblem }) {
+  const { problem, status } = item
+  if (status === 'SOLVED' || problem.problemId == null) return null
+  let to: string | null = null
+  if (problem.platform === 'LEETCODE') {
+    to = `/labs/problems/${problem.problemId}`
+  } else {
+    const [contest, index] = problem.key.split('/')
+    // Gym problems are not in Practice; they are solved on Codeforces.
+    if (Number(contest) < 100_000) to = `/practice?contest=${contest}&index=${index}`
+  }
+  if (!to) return null
+  return (
+    <Link to={to} className="btn-secondary btn-sm shrink-0" aria-label={`Solve ${problem.title} in CPIntel`}>
+      <Code2 size={13} aria-hidden="true" /> Solve
+    </Link>
   )
 }
 

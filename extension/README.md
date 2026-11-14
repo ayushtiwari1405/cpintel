@@ -1,4 +1,4 @@
-# CPIntel Codeforces Connector (browser extension)
+# CPIntel Connector (browser extension)
 
 Codeforces sits behind Cloudflare, and the clearance a browser earns is tied to that browser.
 So a hosted CPIntel server cannot fetch problem statements or submit solutions for anyone:
@@ -16,6 +16,14 @@ for it — the check's token and the page's form fields are read back and the su
 again. Either window closes as soon as it leaves Codeforces' home, sign-in, check or submit
 pages, and gives up after three minutes. Time in them is not counted as away during an
 examination. This needs the `scripting` permission, so an update asks for it.
+
+Since 0.4.0 it also works with **LeetCode**, for lab assignments solved inside CPIntel. That
+needs `https://leetcode.com` and the `cookies` permission (to read LeetCode's CSRF token), so an
+update asks for both. The page cannot send LeetCode arbitrary requests: it asks for one of four
+things (who is signed in, run on test input, submit, read a result) and the extension builds
+each request itself, to fixed LeetCode paths, with checked arguments. A sign-in window opens on
+LeetCode's login page when the browser is not signed in. CPIntel never receives the LeetCode
+cookies either.
 
 ## How users get it
 

@@ -72,6 +72,20 @@ Changing a lab's dates, or whether earlier solves count, throws its recorded sol
 checks everyone again under the new rules. Adding, removing, reordering or re-marking
 problems keeps the solves of the problems that stay.
 
+**Solving inside CPIntel.** Each unsolved problem on a student's *Labs* page has a **Solve**
+button. A Codeforces problem opens in Practice, as any Codeforces problem does (gym problems
+are solved on Codeforces). A LeetCode problem opens a workspace with the statement, an editor
+holding LeetCode's starter code for the chosen language, **Run** on editable test input, and
+**Submit**. Run and Submit go to LeetCode through the student's own LeetCode sign-in: the
+desktop app's LeetCode window, or on the website the CPIntel extension (0.4.0 or later,
+installed from `/extension`). The server never sees the LeetCode session. The solve lands on
+the student's LeetCode account, and an accepted submission asks for their labs to be checked
+straight away (once a minute at most; otherwise the next scheduled check picks it up). The
+workspace warns when the LeetCode account signed in is not the student's verified handle,
+since those solves would not count. Without the app or the extension the workspace still shows
+the statement, and the student can solve the problem on LeetCode itself. Premium problems only
+show their statement on LeetCode.
+
 **Verified handles.** Linking a handle only checks that it exists, so labs credit a handle
 only after the student proves it is theirs, on the Platforms page:
 

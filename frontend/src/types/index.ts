@@ -1790,3 +1790,23 @@ export interface MyLab {
 export interface LabHandle { handle: string; verified: boolean }
 
 export interface MyLabs { labs: MyLab[]; codeforces: LabHandle | null; leetcode: LabHandle | null }
+
+/** A lab's LeetCode problem, to solve inside CPIntel. contentHtml is sanitised by the server. */
+export interface LabLeetCodeProblem {
+  labId: number
+  problemId: number
+  labTitle: string
+  questionId: string
+  slug: string
+  title: string
+  difficulty: string | null
+  paidOnly: boolean
+  contentHtml: string | null
+  snippets: { lang: string; langSlug: string; code: string }[]
+  exampleTestcases: string[]
+  url: string
+  marks: number
+  status: LabSolveStatus
+  solvedAt: string | null
+  dueAt: string
+}

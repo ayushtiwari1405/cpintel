@@ -16,6 +16,15 @@ export function useMyLabs() {
   })
 }
 
+export function useLabLeetCodeProblem(problemId: number) {
+  return useQuery({
+    queryKey: ['labs', 'leetcode', problemId],
+    queryFn: () => labsApi.leetCodeProblem(problemId).then(r => r.data),
+    enabled: Number.isFinite(problemId),
+    staleTime: 1000 * 60 * 5,
+  })
+}
+
 export function useCheckMyLabs() {
   const queryClient = useQueryClient()
   const toast = useToast()

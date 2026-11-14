@@ -20,7 +20,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/labs':            'Labs',
   '/exam':            'Examination',
   '/platforms':       'Platforms',
-  '/extension':       'Codeforces Connector',
+  '/extension':       'CPIntel Connector',
   '/profile':         'Profile',
   '/teams':           'Teams',
   '/evaluate':        'Evaluate',
@@ -38,6 +38,7 @@ const PAGE_TITLES: Record<string, string> = {
 const PREFIX_TITLES: [string, string][] = [
   ['/admin/groups/contests/', 'Admin · Team contest'],
   ['/admin/classrooms/',      'Admin · Classroom'],
+  ['/labs/',                  'Labs · Problem'],
   ['/admin/teams/',           'Admin · Team'],
   ['/admin/groups/',          'Admin · Team'],
   ['/admin/exams/',           'Admin · Examination'],

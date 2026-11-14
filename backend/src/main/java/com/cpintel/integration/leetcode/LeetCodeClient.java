@@ -104,6 +104,49 @@ public class LeetCodeClient {
             q.path("isPaidOnly").asBoolean(false));
     }
 
+    public record Snippet(String lang, String langSlug, String code) {}
+
+    /** What solving a problem needs: its statement (LeetCode's HTML), starter code and examples. */
+    public record Statement(String questionId, String frontendId, String slug, String title,
+                            String difficulty, boolean paidOnly, String contentHtml,
+                            List<Snippet> snippets, List<String> exampleTestcases) {}
+
+    /** Statements change rarely; kept briefly so a class opening one problem costs one call. */
+    private final java.util.Map<String, Cached> statements = new java.util.concurrent.ConcurrentHashMap<>();
+    private record Cached(Statement statement, Instant at) {}
+    private static final Duration STATEMENT_TTL = Duration.ofHours(6);
+
+    /**
+     * The problem's statement and starter code, or null when there is none with that slug. A
+     * premium problem comes back with no content to an anonymous caller.
+     */
+    public Statement statement(String slug) {
+        Cached hit = statements.get(slug);
+        if (hit != null && hit.at().plus(STATEMENT_TTL).isAfter(Instant.now())) return hit.statement();
+        JsonNode data = query("statement", """
+            query($s: String!) {
+              question(titleSlug: $s) {
+                questionId questionFrontendId title titleSlug difficulty isPaidOnly content
+                exampleTestcaseList codeSnippets { lang langSlug code }
+              }
+            }
+            """, Map.of("s", slug));
+        JsonNode q = data.path("question");
+        if (q.isMissingNode() || q.isNull()) return null;
+        List<Snippet> snippets = new ArrayList<>();
+        for (JsonNode sn : q.path("codeSnippets")) {
+            snippets.add(new Snippet(sn.path("lang").asText(), sn.path("langSlug").asText(), sn.path("code").asText("")));
+        }
+        List<String> examples = new ArrayList<>();
+        for (JsonNode ex : q.path("exampleTestcaseList")) examples.add(ex.asText());
+        Statement st = new Statement(q.path("questionId").asText(), q.path("questionFrontendId").asText(null),
+            q.path("titleSlug").asText(slug), q.path("title").asText(slug), q.path("difficulty").asText(null),
+            q.path("isPaidOnly").asBoolean(false),
+            q.path("content").isNull() ? null : q.path("content").asText(null), snippets, examples);
+        if (statements.size() < 2_000) statements.put(slug, new Cached(st, Instant.now()));
+        return st;
+    }
+
     /** The user's latest accepted submissions, newest first, at most {@link #RECENT_LIMIT}. */
     public List<AcceptedSubmission> recentAccepted(String username) {
         JsonNode data = query("recentAc", """

@@ -78,6 +78,12 @@ declare global {
         fetch?: (request: { method?: 'GET' | 'POST'; url: string; form?: Record<string, string> })
           => Promise<{ status: number; url: string; body: string } | { error: string }>
       }
+      /** LeetCode in the app's own session, for lab problems. Absent from builds older than it. */
+      lc?: {
+        signIn: () => Promise<{ result?: { signedIn: boolean; username: string | null }; error?: string }>
+        call: (op: string, args?: Record<string, unknown>) => Promise<{ result?: unknown; error?: string }>
+        forget: () => Promise<void>
+      }
       /**
        * Compiles and runs with the toolchains the desktop build carries, outside examinations.
        * Absent from desktop builds older than this bridge.
