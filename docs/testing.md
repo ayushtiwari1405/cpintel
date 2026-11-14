@@ -154,6 +154,11 @@ Known and still open - none of these is fixed by anything above:
 Passing tests mean the code behaves as tested on a test stack. They do not certify a server,
 its data, its secrets or its network.
 
+### Lab assignments: manual checklist
+
+What needs real accounts, browsers, the desktop app or the server for lab assignments
+(Codeforces, LeetCode, CSES) is listed in [labs-test-checklist.md](labs-test-checklist.md).
+
 ### Running CI before pushing
 
 `scripts/ci-local.sh` runs the same stages as `.github/workflows/ci.yml` — workflow lint, backend
