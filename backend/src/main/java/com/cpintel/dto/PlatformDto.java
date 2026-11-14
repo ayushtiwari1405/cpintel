@@ -25,6 +25,8 @@ public class PlatformDto {
         private Integer maxRating;
         private Instant lastSyncedAt;
         private String syncStatus;
+        /** When the student proved the handle is theirs; null while unproven. */
+        private Instant verifiedAt;
     }
 
     @Getter @Builder @Jacksonized

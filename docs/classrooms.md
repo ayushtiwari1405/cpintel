@@ -43,6 +43,56 @@ starts with no judge: an admin sets its DOMjudge URL from its page. At the next 
 DOMjudge logins, archived submissions and file rules stored before are moved into it. Nothing
 DOMjudge-related is read from `.env`.
 
+## Lab assignments
+
+A lab is a list of Codeforces and LeetCode problems that a classroom's students solve on
+those sites by a deadline. CPIntel reads each student's accepted submissions from their
+**verified** handles and fills in a marks grid.
+
+**Setting one** (classroom page → *Lab assignments* → *New lab*):
+
+- Paste problem links: Codeforces problemset, contest and gym links (or shorthand such as
+  `1700A`), or LeetCode problem links. Each one is looked up when it is added, so a typo is
+  caught straight away.
+- Give each problem its marks (1 by default).
+- Choose when it opens and when it is due. Students see the lab from its opening.
+- Choose who it is for: the whole classroom, or only some of its teams.
+- *Count problems solved before the lab opened*: off by default. Off means only solves
+  between opening and the deadline count. On means any accepted submission before the
+  deadline counts.
+
+**Marking.** A solve after the deadline is recorded as *late*: shown, worth no marks. For each
+problem, a solve in time beats a late one. Labs are checked every 10 minutes
+(`CPINTEL_LAB_CHECK_INTERVAL_MS`), and for a week after their deadline so that late solves
+still show. An admin can press *Check now*, and a student can press *Check for new solves*
+(once a minute). *Marks (.xlsx)* downloads the grid, every solve with its time (IST), and
+the lab's settings.
+
+Changing a lab's dates, or whether earlier solves count, throws its recorded solves away and
+checks everyone again under the new rules. Adding, removing, reordering or re-marking
+problems keeps the solves of the problems that stay.
+
+**Verified handles.** Linking a handle only checks that it exists, so labs credit a handle
+only after the student proves it is theirs, on the Platforms page:
+
+- Codeforces: within 20 minutes, submit code that does not compile to problem 4A. A
+  compilation error does not touch the rating.
+- LeetCode: put the code CPIntel shows into the profile *Summary* and save. It can be removed
+  once verified.
+
+Handles linked before labs existed stay linked but show as unverified until proven. The lab
+grid shows each student's handles and flags anyone whose solves are not being counted.
+
+**Limits.**
+
+- LeetCode's public API only shows a user's last 20 accepted submissions. The 10-minute
+  schedule keeps up with normal solving. With *earlier solves* on, an old LeetCode solve only
+  counts if it is still among those 20, so a student may need to resubmit it.
+- A Codeforces problem is matched by the contest it was linked from. Div. 1 and Div. 2 often
+  share a problem under two contest ids, and solving it under the other id does not count.
+- Codeforces private group contests are not readable through a student's handle.
+- Only LeetCode.com is supported (not leetcode.cn).
+
 ## Running a team contest
 
 1. `/admin/teams` — create a team and add its members. For a whole class, the **Import a

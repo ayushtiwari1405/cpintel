@@ -234,6 +234,13 @@ cpintel:
       base-url: https://codeforces.com/api
       web-url: https://codeforces.com
       rate-limit-ms: 500
+    # Read only for lab assignments: a handle's profile and its recent accepted submissions.
+    leetcode:
+      base-url: https://leetcode.com
+      rate-limit-ms: ${CPINTEL_LEETCODE_RATE_LIMIT_MS:1000}
+  labs:
+    # How often open labs (and those up to a week past their deadline) are checked.
+    check-interval-ms: ${CPINTEL_LAB_CHECK_INTERVAL_MS:600000}
   groups:
     # Live group boards are rebuilt on this interval. Unhurried on purpose: Codeforces only
     # answers per handle, so one refresh of a thirty-person group is thirty rate-limited calls.

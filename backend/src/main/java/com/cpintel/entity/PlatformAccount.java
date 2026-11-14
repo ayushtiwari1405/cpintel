@@ -49,8 +49,21 @@ public class PlatformAccount extends BaseEntity {
     @Builder.Default
     private Boolean isActive = true;
 
+    /** When the student proved the handle is theirs; null until then. Labs credit only these. */
+    @Column(name = "verified_at")
+    private Instant verifiedAt;
+
+    /** The code the student was asked to show on the platform, while a proof is open. */
+    @Column(name = "verify_code", length = 40)
+    private String verifyCode;
+
+    @Column(name = "verify_issued_at")
+    private Instant verifyIssuedAt;
+
     public enum Platform {
-        CODEFORCES
+        CODEFORCES,
+        /** A handle only: labs read it, nothing else is synced from LeetCode. */
+        LEETCODE
     }
 
     public enum SyncStatus {

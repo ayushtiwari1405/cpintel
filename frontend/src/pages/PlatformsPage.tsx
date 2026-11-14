@@ -6,6 +6,7 @@ import { formatDistanceToNow } from 'date-fns'
 import { clsx } from 'clsx'
 import { PageHeader } from '@/components/common/PageHeader'
 import { ErrorState, LoadingState } from '@/components/common/States'
+import { HandleVerification } from '@/components/platforms/HandleVerification'
 
 const PLATFORMS = [
   {
@@ -13,6 +14,14 @@ const PLATFORMS = [
     name: 'Codeforces',
     desc: 'Contests, ratings and your full submission history.',
     placeholder: 'tourist',
+    synced: true,
+  },
+  {
+    id: 'LEETCODE',
+    name: 'LeetCode',
+    desc: 'Read only for lab assignments: CPIntel checks your recent accepted solutions.',
+    placeholder: 'your_username',
+    synced: false,
   },
 ]
 
@@ -72,7 +81,7 @@ export default function PlatformsPage() {
                       <h2 id={`platform-${p.id}`} className="text-base font-semibold text-gray-50">
                         {p.name}
                       </h2>
-                      {account && (() => {
+                      {account && p.synced && (() => {
                         const st = SYNC[account.syncStatus] ?? SYNC.PENDING
                         return <span className={st.className}>{st.icon}{st.label}</span>
                       })()}
@@ -138,6 +147,7 @@ export default function PlatformsPage() {
 
                   {account && (
                     <div className="flex shrink-0 gap-2">
+                      {p.synced && (
                       <button
                         type="button"
                         className="btn-secondary btn-sm"
@@ -147,6 +157,7 @@ export default function PlatformsPage() {
                         <RefreshCw size={13} className={isSyncing ? 'animate-spin' : ''} aria-hidden="true" />
                         {isSyncing ? 'Syncing…' : 'Sync now'}
                       </button>
+                      )}
                       <button
                         type="button"
                         className="btn btn-sm border border-red-900/60 text-red-300 hover:bg-red-950/50"
@@ -159,6 +170,8 @@ export default function PlatformsPage() {
                     </div>
                   )}
                 </div>
+
+                {account && <HandleVerification account={account} />}
 
                 {/* Linking a handle is how CPIntel reads your history; connecting a session is
                     how it submits for you. Two different things about one account, so they
@@ -176,7 +189,9 @@ export default function PlatformsPage() {
         <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">How sync works</h2>
         <ul className="list-disc space-y-1 pl-4 text-xs marker:text-gray-600">
           <li>The first sync fetches your full history and may take a minute.</li>
-          <li>Accounts sync automatically every night at 02:00 UTC.</li>
+          <li>Codeforces accounts sync automatically every night at 02:00 UTC.</li>
+          <li>Lab assignments only count solves from a verified handle. Verifying takes a minute
+            and is done once.</li>
           <li>Submitting from Practice needs the Codeforces session above; linking a handle alone
             does not enable it.</li>
         </ul>

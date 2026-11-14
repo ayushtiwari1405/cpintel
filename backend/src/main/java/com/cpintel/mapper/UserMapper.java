@@ -45,6 +45,7 @@ public class UserMapper {
             .maxRating(pa.getMaxRating())
             .lastSyncedAt(pa.getLastSyncedAt())
             .syncStatus(pa.getSyncStatus())
+            .verifiedAt(pa.getVerifiedAt())
             .build();
     }
 

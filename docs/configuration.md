@@ -22,6 +22,8 @@ Everything below has a working default; only the secrets in `.env` genuinely nee
 | `CPINTEL_FILES_MAX_FILE_BYTES` | `2097152` | Per-file upload cap |
 | `CPINTEL_FILES_MAX_TOTAL_BYTES` | `33554432` | Per-user vault cap |
 | `CPINTEL_STANDINGS_REFRESH_MS` | `180000` | How often live group boards are rebuilt |
+| `CPINTEL_LAB_CHECK_INTERVAL_MS` | `600000` | How often open lab assignments are checked for new solves. Keep it well under the time it takes to solve 20 LeetCode problems |
+| `CPINTEL_LEETCODE_RATE_LIMIT_MS` | `1000` | Minimum spacing between calls to LeetCode |
 | `CPINTEL_RATE_LIMIT_ENABLED` | `true` | Per-account and per-address throttling on sign-in, runs and syncs |
 | `CPINTEL_MIN_DESKTOP_VERSION` | `0.0.0` | Desktop builds below this are told to update, with a ribbon that cannot be closed |
 | `CPINTEL_DESKTOP_BUILD` | `1` | `deploy.sh` builds the desktop installers for `CPINTEL_PUBLIC_URL` when that address or the app changed; `0` skips it ([desktop-app.md](desktop-app.md#publishing-the-desktop-app)) |

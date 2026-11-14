@@ -38,7 +38,9 @@ export function useLinkAccount() {
       platformApi.link(platform, handle),
     onSuccess: (_, vars) => {
       queryClient.invalidateQueries({ queryKey: ['platforms'] })
-      toast.push('success', `${vars.platform} account linked! Syncing now…`)
+      toast.push('success', vars.platform === 'LEETCODE'
+        ? 'LeetCode handle linked. Verify it to get lab credit.'
+        : `${vars.platform} account linked! Syncing now…`)
     },
     onError: (err: any) => {
       toast.push('error', err.response?.data?.message ?? 'Failed to link account')
@@ -100,6 +102,34 @@ export function useSyncAccount() {
     },
     onError: (err: any) => {
       toast.push('error', err.response?.data?.message ?? 'Sync failed')
+    },
+  })
+}
+
+/** Opens (or reopens) a proof that a linked handle is the student's. */
+export function useStartVerify() {
+  const toast = useToast()
+  return useMutation({
+    mutationFn: (platform: string) => platformApi.startVerify(platform).then(r => r.data),
+    onError: (err: any) => {
+      toast.push('error', err.response?.data?.message ?? 'Could not start verification')
+    },
+  })
+}
+
+/** Looks for the proof; on success the handle shows as verified everywhere. */
+export function useCheckVerify() {
+  const queryClient = useQueryClient()
+  const toast = useToast()
+  return useMutation({
+    mutationFn: (platform: string) => platformApi.checkVerify(platform).then(r => r.data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['platforms'] })
+      queryClient.invalidateQueries({ queryKey: ['labs'] })
+      toast.push('success', 'Handle verified')
+    },
+    onError: (err: any) => {
+      toast.push('error', err.response?.data?.message ?? 'Could not verify yet')
     },
   })
 }

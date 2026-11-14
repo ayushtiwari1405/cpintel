@@ -114,7 +114,9 @@ public class AnalyticsService {
 
         List<TopicMastery> rollups =
             topicMasteryRepository.findByUserUserIdAndScope(userId, TopicMastery.Scope.TOPIC);
-        List<PlatformAccount> platforms = platformAccountRepository.findByUserUserId(userId);
+        // Codeforces only: a LeetCode handle is linked for labs, and has no history here.
+        List<PlatformAccount> platforms = platformAccountRepository.findByUserUserId(userId).stream()
+            .filter(pa -> "CODEFORCES".equals(pa.getPlatform())).toList();
         List<ContestSummary> contests =
             contestSummaryRepository.findByUserUserIdOrderByContestDateDesc(userId);
 

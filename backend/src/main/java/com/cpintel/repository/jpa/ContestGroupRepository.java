@@ -14,6 +14,8 @@ public interface ContestGroupRepository extends JpaRepository<ContestGroup, Long
 
     List<ContestGroup> findAllByOrderByCreatedAtDesc();
 
+    List<ContestGroup> findByClassroomIdOrderByName(Long classroomId);
+
     @Query("SELECT g FROM ContestGroup g LEFT JOIN FETCH g.members m LEFT JOIN FETCH m.user WHERE g.groupId = :id")
     Optional<ContestGroup> findByIdWithMembers(@Param("id") Long id);
 

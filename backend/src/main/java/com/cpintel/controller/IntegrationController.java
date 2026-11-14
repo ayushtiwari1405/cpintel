@@ -27,6 +27,7 @@ import java.util.stream.Collectors;
 public class IntegrationController {
 
     private final SyncService syncService;
+    private final com.cpintel.service.HandleVerificationService verification;
     private final ContestSyncService contestSyncService;
     private final UserMapper userMapper;
 
@@ -67,6 +68,43 @@ public class IntegrationController {
     public ResponseEntity<ApiResponse<Void>> unlinkCf(@AuthenticationPrincipal Long userId) {
         syncService.unlinkAccount(userId, "CODEFORCES");
         return ResponseEntity.ok(ApiResponse.message("Codeforces account unlinked"));
+    }
+
+    @PostMapping("/leetcode/link")
+    @Operation(summary = "Link a LeetCode handle, for lab assignments")
+    public ResponseEntity<ApiResponse<PlatformDto.Summary>> linkLeetCode(
+        @AuthenticationPrincipal Long userId,
+        @Valid @RequestBody PlatformDto.LinkRequest req) {
+        return ResponseEntity.ok(ApiResponse.ok(
+            syncService.linkAccount(userId, "LEETCODE", req.getHandle())));
+    }
+
+    @DeleteMapping("/leetcode")
+    public ResponseEntity<ApiResponse<Void>> unlinkLeetCode(@AuthenticationPrincipal Long userId) {
+        syncService.unlinkAccount(userId, "LEETCODE");
+        return ResponseEntity.ok(ApiResponse.message("LeetCode account unlinked"));
+    }
+
+    @PostMapping("/{platform}/verify")
+    @Operation(summary = "Start proving a linked handle is yours")
+    public ResponseEntity<ApiResponse<com.cpintel.service.HandleVerificationService.Challenge>> startVerify(
+        @AuthenticationPrincipal Long userId, @PathVariable String platform) {
+        return ResponseEntity.ok(ApiResponse.ok(verification.start(userId, platformOf(platform))));
+    }
+
+    @PostMapping("/{platform}/verify/check")
+    @Operation(summary = "Look for the proof on the platform, and verify the handle if it is there")
+    public ResponseEntity<ApiResponse<PlatformDto.Summary>> checkVerify(
+        @AuthenticationPrincipal Long userId, @PathVariable String platform) {
+        return ResponseEntity.ok(ApiResponse.ok(verification.check(userId, platformOf(platform))));
+    }
+
+    private static String platformOf(String path) {
+        return switch (path) {
+            case "codeforces" -> "CODEFORCES";
+            case "leetcode" -> "LEETCODE";
+            default -> throw com.cpintel.exception.ApiException.notFound("No platform " + path);
+        };
     }
 
     @GetMapping("/sync-status/{jobId}")

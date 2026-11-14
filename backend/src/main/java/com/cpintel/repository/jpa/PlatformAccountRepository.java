@@ -16,6 +16,8 @@ import java.util.Optional;
 @Repository
 public interface PlatformAccountRepository extends JpaRepository<PlatformAccount, Long> {
     List<PlatformAccount> findByUserUserId(Long userId);
+
+    List<PlatformAccount> findByUserUserIdIn(java.util.Collection<Long> userIds);
     Optional<PlatformAccount> findByUserUserIdAndPlatform(Long userId, String platform);
     boolean existsByUserUserIdAndPlatform(Long userId, String platform);
 
@@ -24,7 +26,8 @@ public interface PlatformAccountRepository extends JpaRepository<PlatformAccount
 
     long countByPlatformAndHandleIgnoreCase(String platform, String handle);
 
-    @Query("SELECT pa FROM PlatformAccount pa WHERE pa.syncStatus = 'PENDING' OR pa.syncStatus = 'FAILED'")
+    @Query("SELECT pa FROM PlatformAccount pa WHERE pa.platform = 'CODEFORCES' "
+         + "AND (pa.syncStatus = 'PENDING' OR pa.syncStatus = 'FAILED')")
     List<PlatformAccount> findAccountsPendingSync();
 
     /** Its own transaction: it is called from the sync thread, where there is no other. */
@@ -42,7 +45,8 @@ public interface PlatformAccountRepository extends JpaRepository<PlatformAccount
      * managed for a row the job only needs three columns of.
      */
     @Query("SELECT pa.accountId AS accountId, pa.user.userId AS userId, pa.platform AS platform "
-         + "FROM PlatformAccount pa WHERE pa.isActive = true ORDER BY pa.accountId")
+         + "FROM PlatformAccount pa WHERE pa.isActive = true AND pa.platform = 'CODEFORCES' "
+         + "ORDER BY pa.accountId")
     Slice<ActiveAccount> findActiveAccounts(Pageable pageable);
 
     /** Projection for {@link #findActiveAccounts}. */

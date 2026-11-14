@@ -50,7 +50,8 @@ class SyncJobGuardTest {
         });
         service = new SyncService(mock(AppMetrics.class), users, accounts, jobs,
             mock(CfSubmissionRepository.class), mock(ContestSummaryRepository.class),
-            mock(CodeforcesClient.class), mock(PlatformNormalizer.class),
+            mock(CodeforcesClient.class),
+            mock(com.cpintel.integration.leetcode.LeetCodeClient.class), mock(PlatformNormalizer.class),
             mock(ContestSyncService.class), mock(MongoTemplate.class),
             new org.springframework.beans.factory.support.StaticListableBeanFactory()
                 .getBeanProvider(com.cpintel.analytics.AnalyticsService.class));

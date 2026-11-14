@@ -34,7 +34,7 @@ the reasoning behind the harder decisions, and [`docs/SRS.md`](SRS.md) for requi
 | Document DB | MongoDB — raw submission history, personal files, contest snapshots |
 | Cache | Redis — sessions, JWT blacklist, per-user token revocation, analytics cache |
 | Integrations | Codeforces REST + scraping, DOMjudge REST v4 |
-| Migrations | Flyway — 33 versioned migrations (schema, indexes, materialized views, audit indexes, groups, super admin role, scheduler locks, node-level mastery, examinations, examination access, placement results, Codeforces-only cleanup, examination-mode sessions, several events per judge contest, examination leaderboards, classrooms, audit log by classroom, DOMjudge logins in PostgreSQL, marking an event done, rejudging a problem, TA marking, freezing TA marks, refresh-token digests and families, skill ratings, one sync at a time, examination grants kept in PostgreSQL, desktop-app-only examinations, which admin made each account, the classroom question bank, uploaded statement PDFs, model-solution checks, publishing examinations to the judge, classroom Codeforces keys and TA question permission) |
+| Migrations | Flyway — 34 versioned migrations (schema, indexes, materialized views, audit indexes, groups, super admin role, scheduler locks, node-level mastery, examinations, examination access, placement results, Codeforces-only cleanup, examination-mode sessions, several events per judge contest, examination leaderboards, classrooms, audit log by classroom, DOMjudge logins in PostgreSQL, marking an event done, rejudging a problem, TA marking, freezing TA marks, refresh-token digests and families, skill ratings, one sync at a time, examination grants kept in PostgreSQL, desktop-app-only examinations, which admin made each account, the classroom question bank, uploaded statement PDFs, model-solution checks, publishing examinations to the judge, classroom Codeforces keys and TA question permission, lab assignments with verified LeetCode and Codeforces handles) |
 | Containerization | Docker Compose — 11 services: 3 behind the `monitoring` profile and certbot behind `letsencrypt`. `docker-compose.prod.yml` swaps the builds for CI images |
 | Editor | Monaco, bundled locally (no CDN) — shared by the Practice, Compete and examination workspaces |
 | Code runner | g++, gcc and CPython under bubblewrap + rlimits, in its own locked-down container on a server; judged against the statement's sample tests |
@@ -110,6 +110,17 @@ examinations assigned to you.
   a round that needs invigilating is created as one, from `/admin/exams`
 - Per-team analytics: participation rate, average solved, best placing, and the recent events
   the team sat
+
+## Lab assignments
+
+- An admin sets a classroom (or some of its teams) a list of Codeforces and LeetCode problems
+  with marks, an opening time and a deadline. Students solve them on those sites.
+- CPIntel reads accepted submissions from each student's verified handle every 10 minutes and
+  fills in a marks grid. Solves after the deadline show as late and earn nothing. The admin
+  chooses per lab whether problems solved before it opened count.
+- Students prove a handle is theirs once: a compilation error on Codeforces 4A, or a code in
+  their LeetCode profile summary. Unverified handles earn no credit.
+- The grid downloads as a spreadsheet. See [classrooms](classrooms.md#lab-assignments).
 
 ## Examinations
 
@@ -219,12 +230,14 @@ the product.
 | `/compete` | anyone | Contests on Codeforces or DOMjudge: statements, editor, submissions, rank |
 | `/exams` | anyone | Your assigned examinations, and past ones to read back |
 | `/exam` | exam mode | The one paper an examination session can reach; every other route redirects here |
-| `/platforms` | anyone | Link and sync Codeforces; connect the Codeforces session used for submitting |
+| `/labs` | anyone | Lab assignments from your classrooms: problems, what you have solved, marks |
+| `/platforms` | anyone | Link and sync Codeforces, link LeetCode, verify both handles; connect the Codeforces session used for submitting |
 | `/teams` | anyone | Team contests you are in, and where you placed |
 | `/profile` | anyone | Your account |
 | `/admin` | admin | Deployment overview and recent activity |
 | `/admin/users` | admin | Accounts, roles, deactivation, session revocation |
 | `/admin/audit` | admin | The append-only audit trail |
+| `/admin/classrooms/{id}/labs/{lab}` | admin | One lab assignment: marks grid, check now, spreadsheet, edit |
 | `/admin/teams` | admin | Teams, members, DOMjudge logins, contests, standings, team analytics |
 | `/admin/exams` | admin | Contests and examinations: rosters, problems, lifecycle |
 | `/admin/exams/{id}` | admin | One event — settings, who sits it, problems, passwords, live monitoring, session log, leaderboard |

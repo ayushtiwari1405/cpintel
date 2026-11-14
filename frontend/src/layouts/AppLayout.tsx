@@ -17,6 +17,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/practice':        'Practice',
   '/compete':         'Compete',
   '/exams':           'Exams',
+  '/labs':            'Labs',
   '/exam':            'Examination',
   '/platforms':       'Platforms',
   '/extension':       'Codeforces Connector',

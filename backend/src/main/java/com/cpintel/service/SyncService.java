@@ -9,6 +9,7 @@ import com.cpintel.exception.ApiException;
 import com.cpintel.integration.PlatformNormalizer;
 import com.cpintel.integration.codeforces.CfModels;
 import com.cpintel.integration.codeforces.CodeforcesClient;
+import com.cpintel.integration.leetcode.LeetCodeClient;
 import com.cpintel.repository.jpa.*;
 import com.cpintel.repository.jpa.ContestSummaryRepository;
 import com.cpintel.repository.mongo.*;
@@ -42,6 +43,7 @@ public class SyncService {
     private final CfSubmissionRepository cfSubmissionRepository;
     private final ContestSummaryRepository contestSummaryRepository;
     private final CodeforcesClient cfClient;
+    private final LeetCodeClient leetCode;
     private final PlatformNormalizer normalizer;
     private final ContestSyncService contestSyncService;
     private final org.springframework.data.mongodb.core.MongoTemplate mongoTemplate;
@@ -78,13 +80,15 @@ public class SyncService {
             throw ApiException.conflict("That " + platform + " handle is already linked to another account.");
 
         // Validate handle exists on the platform
-        validateHandle(platform, handle);
+        handle = validateHandle(platform, handle.trim());
 
+        boolean synced = "CODEFORCES".equals(platform);
         PlatformAccount account = PlatformAccount.builder()
             .user(user)
             .platform(platform)
             .handle(handle)
-            .syncStatus("PENDING")
+            // Nothing is synced from LeetCode: the handle is only read by lab checks.
+            .syncStatus(synced ? "PENDING" : "COMPLETED")
             .isActive(true)
             .build();
 
@@ -92,7 +96,7 @@ public class SyncService {
         log.info("Linked {} account '{}' for user {}", platform, handle, userId);
 
         // Kick off initial sync
-        triggerSync(userId, platform, "FULL");
+        if (synced) triggerSync(userId, platform, "FULL");
 
         return mapToSummary(account);
     }
@@ -116,6 +120,9 @@ public class SyncService {
 
     @Transactional
     public PlatformDto.SyncResponse triggerSync(Long userId, String platform, String jobType) {
+        if (!"CODEFORCES".equals(platform)) {
+            throw ApiException.badRequest("Only Codeforces history is synced.");
+        }
         QueuedJob queued = createJob(userId, platform, jobType);
         Long jobId = queued.jobId();
         String finalJobType = jobType;
@@ -371,12 +378,23 @@ public class SyncService {
         return platformAccountRepository.findByUserUserId(userId);
     }
 
-    private void validateHandle(String platform, String handle) {
-        boolean valid = switch (platform) {
-            case "CODEFORCES" -> cfClient.handleExists(handle);
+    /** The handle as the platform spells it, or a refusal when it has no such user. */
+    private String validateHandle(String platform, String handle) {
+        String found = switch (platform) {
+            case "CODEFORCES" -> cfClient.handleExists(handle) ? handle : null;
+            case "LEETCODE" -> {
+                try {
+                    LeetCodeClient.Profile p = leetCode.profile(handle);
+                    yield p == null ? null : p.username();
+                } catch (Exception e) {
+                    log.warn("LeetCode lookup for '{}' failed: {}", handle, e.getMessage());
+                    throw ApiException.serviceUnavailable("LeetCode did not answer. Try again in a minute.");
+                }
+            }
             default -> throw ApiException.badRequest("Unknown platform: " + platform);
         };
-        if (!valid) throw ApiException.badRequest("Handle '" + handle + "' not found on " + platform);
+        if (found == null) throw ApiException.badRequest("Handle '" + handle + "' not found on " + platform);
+        return found;
     }
 
     private PlatformDto.Summary mapToSummary(PlatformAccount pa) {
@@ -388,6 +406,7 @@ public class SyncService {
             .maxRating(pa.getMaxRating())
             .lastSyncedAt(pa.getLastSyncedAt())
             .syncStatus(pa.getSyncStatus())
+            .verifiedAt(pa.getVerifiedAt())
             .build();
     }
 }

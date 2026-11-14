@@ -25,6 +25,9 @@ const AdminAudit        = lazy(() => import('@/pages/admin/AdminAuditPage'))
 const AdminFiles        = lazy(() => import('@/pages/admin/AdminContestFilesPage'))
 const AdminClassrooms   = lazy(() => import('@/pages/admin/AdminClassroomsPage'))
 const AdminClassroom    = lazy(() => import('@/pages/admin/AdminClassroomDetailPage'))
+const AdminLab          = lazy(() => import('@/pages/admin/AdminLabPage'))
+const AdminLabEdit      = lazy(() => import('@/pages/admin/AdminLabEditPage'))
+const LabsPage          = lazy(() => import('@/pages/LabsPage'))
 const AdminGroups       = lazy(() => import('@/pages/admin/AdminGroupsPage'))
 const AdminGroupDetail  = lazy(() => import('@/pages/admin/AdminGroupDetailPage'))
 const AdminGroupContest = lazy(() => import('@/pages/admin/AdminGroupContestPage'))
@@ -173,6 +176,7 @@ export function AppRoutes() {
             </ErrorBoundary>} />
           <Route path="/exam"            element={
             <ErrorBoundary scope="the examination"><ExamModePage /></ErrorBoundary>} />
+          <Route path="/labs"            element={<LabsPage />} />
           <Route path="/platforms"       element={<PlatformsPage />} />
           {/* Where connecting Codeforces sends somebody whose browser has no extension. */}
           <Route path="/extension"       element={<ExtensionPage />} />
@@ -196,6 +200,12 @@ export function AppRoutes() {
           <Route path="/admin/classrooms"    element={<AdminRoute><AdminClassrooms /></AdminRoute>} />
           <Route path="/admin/classrooms/:classroomId"
                  element={<AdminRoute><AdminClassroom /></AdminRoute>} />
+          <Route path="/admin/classrooms/:classroomId/labs/new"
+                 element={<AdminRoute><AdminLabEdit key="new" /></AdminRoute>} />
+          <Route path="/admin/classrooms/:classroomId/labs/:labId"
+                 element={<AdminRoute><AdminLab /></AdminRoute>} />
+          <Route path="/admin/classrooms/:classroomId/labs/:labId/edit"
+                 element={<AdminRoute><AdminLabEdit key="edit" /></AdminRoute>} />
           <Route path="/admin/teams"         element={<AdminRoute><AdminGroups /></AdminRoute>} />
           <Route path="/admin/teams/:groupId"
             element={<AdminRoute><AdminGroupDetail /></AdminRoute>} />

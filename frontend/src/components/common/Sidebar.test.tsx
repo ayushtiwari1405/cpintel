@@ -29,7 +29,7 @@ function as(role: Role, taExams: unknown[] = [], banks: unknown[] = []) {
 
 const STUDENT = [
   'Dashboard -> /dashboard', 'Analytics -> /analytics', 'Roadmap -> /roadmap', 'Practice plan -> /recommendations',
-  'Practice -> /practice', 'Compete -> /compete', 'Exams -> /exams', 'Teams -> /teams',
+  'Practice -> /practice', 'Compete -> /compete', 'Exams -> /exams', 'Labs -> /labs', 'Teams -> /teams',
   'Platforms -> /platforms', 'Profile -> /profile', 'Desktop app -> /download',
 ]
 const CONSOLE = [

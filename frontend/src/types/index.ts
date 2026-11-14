@@ -32,12 +32,24 @@ export interface User {
 
 export interface PlatformAccount {
   accountId: number
-  platform: 'CODEFORCES'
+  platform: 'CODEFORCES' | 'LEETCODE'
   handle: string
   currentRating?: number
   maxRating?: number
   lastSyncedAt?: string
   syncStatus: 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED'
+  /** When the student proved the handle is theirs; labs credit only verified handles. */
+  verifiedAt?: string | null
+}
+
+/** An open proof that a linked handle is the student's own. */
+export interface HandleChallenge {
+  platform: 'CODEFORCES' | 'LEETCODE'
+  handle: string
+  code: string
+  issuedAt: string
+  expiresAt: string
+  problemUrl: string
 }
 
 export interface TopicMastery {
@@ -1692,3 +1704,89 @@ export interface QuestionRequest {
   /** The version the editor loaded; omitted when creating. */
   version?: number
 }
+
+// ------------------------------------------------------------------ labs
+
+export type LabPlatform = 'CODEFORCES' | 'LEETCODE'
+export type LabState = 'UPCOMING' | 'OPEN' | 'CLOSED'
+/** SOLVED in time, LATE after the deadline, or null when not solved. */
+export type LabSolveStatus = 'SOLVED' | 'LATE' | null
+
+export interface LabProblemView {
+  problemId: number | null
+  platform: LabPlatform
+  key: string
+  title: string
+  url: string
+  difficulty: string | null
+  marks: number
+}
+
+export interface LabProblemInput { link: string; marks: number }
+
+export interface LabRequest {
+  title: string
+  description: string | null
+  opensAt: string
+  dueAt: string
+  countEarlierSolves: boolean
+  groupIds: number[]
+  problems: LabProblemInput[]
+}
+
+export interface LabSummary {
+  labId: number
+  classroomId: number
+  title: string
+  description: string | null
+  opensAt: string
+  dueAt: string
+  countEarlierSolves: boolean
+  groupIds: number[]
+  groupNames: string[]
+  lastCheckedAt: string | null
+  problems: LabProblemView[]
+  totalMarks: number
+  studentCount: number
+  state: LabState
+}
+
+export interface LabCell { problemId: number; status: LabSolveStatus; solvedAt: string | null }
+
+export interface LabStudentRow {
+  userId: number
+  username: string
+  fullName: string | null
+  codeforcesHandle: string | null
+  codeforcesVerified: boolean
+  leetcodeHandle: string | null
+  leetcodeVerified: boolean
+  cells: LabCell[]
+  solved: number
+  late: number
+  marks: number
+}
+
+export interface LabProgress { lab: LabSummary; students: LabStudentRow[] }
+
+export interface MyLabProblem { problem: LabProblemView; status: LabSolveStatus; solvedAt: string | null }
+
+export interface MyLab {
+  labId: number
+  classroomId: number
+  classroomName: string
+  title: string
+  description: string | null
+  opensAt: string
+  dueAt: string
+  countEarlierSolves: boolean
+  lastCheckedAt: string | null
+  state: LabState
+  problems: MyLabProblem[]
+  marks: number
+  totalMarks: number
+}
+
+export interface LabHandle { handle: string; verified: boolean }
+
+export interface MyLabs { labs: MyLab[]; codeforces: LabHandle | null; leetcode: LabHandle | null }

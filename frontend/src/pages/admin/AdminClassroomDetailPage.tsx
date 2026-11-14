@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import {
-  AlertCircle, ArrowLeft, CheckCircle2, Copy, Loader2, RefreshCw, Save, UserMinus, UserPlus,
+  AlertCircle, ArrowLeft, CheckCircle2, Copy, Loader2, Plus, RefreshCw, Save, UserMinus, UserPlus,
 } from 'lucide-react'
 import {
   useAdminClassroom, useArchiveClassroom, useCheckJudge, useClassroomMemberActions, useClassroomSettings,
@@ -10,6 +10,8 @@ import {
 import { useAdminUsers, useIsSuperAdmin } from '@/hooks/useAdmin'
 import { useAdminGroups } from '@/hooks/useGroups'
 import { useClassroomTaActions, useClassroomTas } from '@/hooks/useEvaluation'
+import { useAdminLabs } from '@/hooks/useLabs'
+import { format } from 'date-fns'
 import { Ago, EmptyRow, Panel, Pill } from '@/components/admin/AdminUi'
 import type { ClassroomSummary, TaAdded } from '@/types'
 import { copyText } from '@/utils/clipboard'
@@ -49,6 +51,7 @@ export default function AdminClassroomDetailPage() {
         className="mb-2" />
       <Settings room={room} />
       <CodeforcesKey room={room} />
+      <Labs classroomId={id} />
       <Teams classroomId={id} />
       <Members classroomId={id} />
       <Staff classroomId={id} />
@@ -241,6 +244,59 @@ function CodeforcesKey({ room }: { room: ClassroomSummary }) {
             </button>
           )}
         </div>
+      </div>
+    </Panel>
+  )
+}
+
+const LAB_STATE = {
+  UPCOMING: { label: 'Upcoming', tone: 'gray' },
+  OPEN:     { label: 'Open', tone: 'green' },
+  CLOSED:   { label: 'Closed', tone: 'amber' },
+} as const
+
+/** Lab assignments: Codeforces and LeetCode problems the classroom's students are set. */
+function Labs({ classroomId }: { classroomId: number }) {
+  const { data: labs, isLoading, isError } = useAdminLabs(classroomId)
+  return (
+    <Panel title="Lab assignments"
+      description="Problems from Codeforces and LeetCode, solved there and checked from students' verified handles."
+      actions={
+        <Link to={`/admin/classrooms/${classroomId}/labs/new`} className="btn-primary btn-sm">
+          <Plus size={13} aria-hidden="true" /> New lab
+        </Link>
+      }>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-gray-800 text-left text-[11px] uppercase tracking-wide text-gray-500">
+              <th className="px-4 py-2 font-medium">Lab</th>
+              <th className="px-4 py-2 font-medium">Status</th>
+              <th className="px-4 py-2 font-medium">Due</th>
+              <th className="px-4 py-2 font-medium">Problems</th>
+              <th className="px-4 py-2 font-medium">For</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-800">
+            {isLoading && <EmptyRow colSpan={5}>Loading labs…</EmptyRow>}
+            {isError && <EmptyRow colSpan={5}>Could not load the labs.</EmptyRow>}
+            {labs?.length === 0 && <EmptyRow colSpan={5}>No labs yet.</EmptyRow>}
+            {labs?.map(l => (
+              <tr key={l.labId}>
+                <td className="px-4 py-2.5">
+                  <Link to={`/admin/classrooms/${classroomId}/labs/${l.labId}`}
+                    className="text-gray-200 hover:text-accent-300">{l.title}</Link>
+                </td>
+                <td className="px-4 py-2.5"><Pill tone={LAB_STATE[l.state].tone}>{LAB_STATE[l.state].label}</Pill></td>
+                <td className="px-4 py-2.5 text-xs text-gray-400">{format(new Date(l.dueAt), 'd MMM yyyy, HH:mm')}</td>
+                <td className="px-4 py-2.5 text-xs text-gray-400">{l.problems.length} · {Number(l.totalMarks)} marks</td>
+                <td className="px-4 py-2.5 text-xs text-gray-400">
+                  {l.groupNames.length ? l.groupNames.join(', ') : 'Whole classroom'} · {l.studentCount}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </Panel>
   )

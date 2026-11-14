@@ -82,6 +82,9 @@ public class AuditService {
     public static final String CLASSROOM_STAFF_REMOVED  = "ADMIN_CLASSROOM_STAFF_REMOVED";
     public static final String CLASSROOM_TA_ADDED       = "ADMIN_CLASSROOM_TA_ADDED";
     public static final String CLASSROOM_TA_REMOVED     = "ADMIN_CLASSROOM_TA_REMOVED";
+    public static final String LAB_CREATED              = "ADMIN_LAB_CREATED";
+    public static final String LAB_UPDATED              = "ADMIN_LAB_UPDATED";
+    public static final String LAB_DELETED              = "ADMIN_LAB_DELETED";
 
     // Admin actions on groups and the contests laid over them
     public static final String GROUP_CREATED         = "ADMIN_GROUP_CREATED";
