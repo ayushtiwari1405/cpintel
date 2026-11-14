@@ -1,6 +1,6 @@
 import { apiClient } from './client'
 import type {
-  ApiResponse, LabLeetCodeProblem, LabProblemView, LabProgress, LabRequest, LabSummary, MyLabs,
+  ApiResponse, CsesVerdict, LabCsesProblem, LabLeetCodeProblem, LabProblemView, LabProgress, LabRequest, LabSummary, MyLabs,
 } from '@/types'
 
 /**
@@ -47,6 +47,18 @@ export const adminLabsApi = {
 
 export const labsApi = {
   mine: () => apiClient.get<ApiResponse<MyLabs>>('/labs/mine').then(r => r.data),
+
+  csesProblem: (problemId: number) =>
+    apiClient.get<ApiResponse<LabCsesProblem>>(`/labs/problems/${problemId}/cses`).then(r => r.data),
+
+  /** Submits with the student's connected CSES account; `language` is a runner language id. */
+  csesSubmit: (problemId: number, language: string, code: string) =>
+    apiClient.post<ApiResponse<CsesVerdict>>(`/labs/problems/${problemId}/cses/submissions`,
+      { language, code }, { timeout: 60_000 }).then(r => r.data),
+
+  csesVerdict: (problemId: number, submissionId: number) =>
+    apiClient.get<ApiResponse<CsesVerdict>>(`/labs/problems/${problemId}/cses/submissions/${submissionId}`)
+      .then(r => r.data),
 
   leetCodeProblem: (problemId: number) =>
     apiClient.get<ApiResponse<LabLeetCodeProblem>>(`/labs/problems/${problemId}/leetcode`).then(r => r.data),

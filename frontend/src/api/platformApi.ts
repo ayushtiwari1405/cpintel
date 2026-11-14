@@ -20,6 +20,19 @@ export const platformApi = {
       `/integrations/${platform.toLowerCase()}/sync`
     ).then(r => r.data),
 
+  /** Starts connecting CSES: sign in at the returned cses.fi address to approve it. */
+  csesStart: () =>
+    apiClient.post<ApiResponse<{ authenticationUrl: string; expiresAt: string }>>('/integrations/cses/connect')
+      .then(r => r.data),
+
+  /** Whether the CSES sign-in has been approved; connects the account once it has. */
+  csesCheck: () =>
+    apiClient.post<ApiResponse<{ connected: boolean; account: PlatformAccount | null }>>(
+      '/integrations/cses/connect/check').then(r => r.data),
+
+  csesDisconnect: () =>
+    apiClient.delete<ApiResponse<void>>('/integrations/cses').then(r => r.data),
+
   /** Opens a proof that the handle is yours, or returns the one already open. */
   startVerify: (platform: string) =>
     apiClient.post<ApiResponse<HandleChallenge>>(

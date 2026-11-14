@@ -260,7 +260,7 @@ function Labs({ classroomId }: { classroomId: number }) {
   const { data: labs, isLoading, isError } = useAdminLabs(classroomId)
   return (
     <Panel title="Lab assignments"
-      description="Problems from Codeforces and LeetCode, solved there and checked from students' verified handles."
+      description="Problems from Codeforces, LeetCode and CSES, checked from students' verified accounts."
       actions={
         <Link to={`/admin/classrooms/${classroomId}/labs/new`} className="btn-primary btn-sm">
           <Plus size={13} aria-hidden="true" /> New lab

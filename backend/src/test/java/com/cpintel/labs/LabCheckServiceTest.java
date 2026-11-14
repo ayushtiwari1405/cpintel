@@ -39,6 +39,8 @@ class LabCheckServiceTest {
     private CodeforcesClient codeforces;
     private LeetCodeClient leetCode;
     private LabCheckService service;
+    private com.cpintel.integration.cses.CsesClient cses;
+    private com.cpintel.service.CsesAccountService csesAccounts;
     private LabAssignment lab;
     private User alice, bob;
 
@@ -49,11 +51,14 @@ class LabCheckServiceTest {
         audience = mock(LabAudience.class);
         codeforces = mock(CodeforcesClient.class);
         leetCode = mock(LeetCodeClient.class);
+        cses = mock(com.cpintel.integration.cses.CsesClient.class);
+        csesAccounts = mock(com.cpintel.service.CsesAccountService.class);
         PlatformTransactionManager tx = mock(PlatformTransactionManager.class);
         when(tx.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
         when(solves.record(anyLong(), anyLong(), any(), anyBoolean(), anyString(), any())).thenReturn(1);
         service = new LabCheckService(mock(LabAssignmentRepository.class), solves, accounts,
-            mock(ClassroomMemberRepository.class), audience, codeforces, leetCode, tx);
+            mock(ClassroomMemberRepository.class), audience, codeforces, leetCode,
+            cses, csesAccounts, tx);
 
         lab = LabAssignment.builder().labId(1L).classroomId(10L).title("Lab 1")
             .opensAt(OPENS).dueAt(DUE).countEarlierSolves(false).problems(new ArrayList<>()).build();
@@ -112,6 +117,41 @@ class LabCheckServiceTest {
         verify(codeforces, times(1)).getSubmissions(anyString(), anyInt(), anyInt());
         // The OK was before the lab opened, and this lab does not count earlier solves.
         verify(solves, never()).record(anyLong(), anyLong(), any(), anyBoolean(), anyString(), any());
+    }
+
+    @Test
+    void readsCsesThroughTheStudentsTokenAndOnlyForPassedTasks() {
+        lab.getProblems().add(problem(102L, "CSES", "1640"));
+        lab.getProblems().add(problem(103L, "CSES", "1068"));
+        PlatformAccount account = account(alice, "CSES", "alice_cses", true);
+        account.setAccessToken("sealed");
+        account.setSyncStatus("COMPLETED");
+        when(accounts.findByUserUserIdIn(any())).thenReturn(List.of(account));
+        when(csesAccounts.token(account)).thenReturn("tok");
+        when(cses.statuses("tok")).thenReturn(java.util.Map.of("1640", "pass", "1068", "fail"));
+        when(cses.submissions("tok", "1640")).thenReturn(List.of(
+            new com.cpintel.integration.cses.CsesClient.Submission(7, Instant.parse("2026-11-11T08:00:00Z"), "fail"),
+            new com.cpintel.integration.cses.CsesClient.Submission(8, Instant.parse("2026-11-11T09:00:00Z"), "pass")));
+
+        service.run(List.of(lab), null);
+
+        verify(solves).record(102L, 1L, Instant.parse("2026-11-11T09:00:00Z"), false, "alice_cses", "8");
+        verify(cses, never()).submissions("tok", "1068");
+    }
+
+    @Test
+    void aRefusedCsesSignInIsMarkedForReconnecting() {
+        lab.getProblems().add(problem(102L, "CSES", "1640"));
+        PlatformAccount account = account(alice, "CSES", "alice_cses", true);
+        account.setAccessToken("sealed");
+        when(accounts.findByUserUserIdIn(any())).thenReturn(List.of(account));
+        when(csesAccounts.token(account)).thenReturn("tok");
+        when(cses.statuses("tok")).thenThrow(new com.cpintel.integration.cses.CsesClient.TokenRejected());
+
+        service.run(List.of(lab), null);
+
+        verify(csesAccounts).markRejected(account);
+        verify(solves, never()).record(eq(102L), anyLong(), any(), anyBoolean(), anyString(), any());
     }
 
     private static LabProblem problem(Long id, String platform, String key) {

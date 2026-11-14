@@ -35,6 +35,7 @@ public class LabController {
 
     private final LabService labs;
     private final LabCheckService checker;
+    private final com.cpintel.labs.CsesSolveService csesSolve;
     private final RedisTemplate<String, Object> redis;
 
     @GetMapping("/mine")
@@ -48,6 +49,28 @@ public class LabController {
     public ResponseEntity<ApiResponse<LabsDto.LeetCodeProblem>> leetCodeProblem(
         @AuthenticationPrincipal Long userId, @PathVariable Long labProblemId) {
         return ResponseEntity.ok(ApiResponse.ok(labs.leetCodeProblem(userId, labProblemId)));
+    }
+
+    @GetMapping("/problems/{labProblemId}/cses")
+    @Operation(summary = "A CSES lab task's statement and examples, to solve it here")
+    public ResponseEntity<ApiResponse<LabsDto.CsesProblem>> csesProblem(
+        @AuthenticationPrincipal Long userId, @PathVariable Long labProblemId) {
+        return ResponseEntity.ok(ApiResponse.ok(labs.csesProblem(userId, labProblemId)));
+    }
+
+    @PostMapping("/problems/{labProblemId}/cses/submissions")
+    @Operation(summary = "Submit to CSES with your connected CSES account")
+    public ResponseEntity<ApiResponse<LabsDto.CsesVerdict>> csesSubmit(
+        @AuthenticationPrincipal Long userId, @PathVariable Long labProblemId,
+        @jakarta.validation.Valid @org.springframework.web.bind.annotation.RequestBody LabsDto.CsesSubmitRequest req) {
+        return ResponseEntity.ok(ApiResponse.ok(csesSolve.submit(userId, labProblemId, req)));
+    }
+
+    @GetMapping("/problems/{labProblemId}/cses/submissions/{submissionId}")
+    @Operation(summary = "A CSES submission's verdict so far; an accepted one counts for the lab at once")
+    public ResponseEntity<ApiResponse<LabsDto.CsesVerdict>> csesVerdict(
+        @AuthenticationPrincipal Long userId, @PathVariable Long labProblemId, @PathVariable long submissionId) {
+        return ResponseEntity.ok(ApiResponse.ok(csesSolve.verdict(userId, labProblemId, submissionId)));
     }
 
     @PostMapping("/check")

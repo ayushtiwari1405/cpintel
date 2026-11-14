@@ -26,7 +26,7 @@ const problem: LabLeetCodeProblem = {
 }
 
 const labs = (handle: string | null, verified = true): MyLabs =>
-  ({ labs: [], codeforces: null, leetcode: handle ? { handle, verified } : null })
+  ({ labs: [], codeforces: null, leetcode: handle ? { handle, verified } : null, cses: null })
 
 function open(mine: MyLabs, routes: Parameters<typeof fakeServer>[0] = {}) {
   signedIn(user('USER'))

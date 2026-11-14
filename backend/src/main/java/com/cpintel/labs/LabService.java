@@ -69,6 +69,8 @@ public class LabService {
     private final LabCheckService checker;
     private final CfProblemsetClient problemset;
     private final LeetCodeClient leetCode;
+    private final com.cpintel.integration.cses.CsesClient cses;
+    private final com.cpintel.integration.cses.CsesStatements csesStatements;
     private final AuditService auditService;
 
     // ------------------------------------------------------------------ problems
@@ -95,6 +97,17 @@ public class LabService {
             title = (found.frontendId() != null ? found.frontendId() + ". " : "") + found.title()
                 + (found.paidOnly() ? " (Premium)" : "");
             difficulty = found.difficulty();
+        } else if (ProblemRef.CSES.equals(ref.platform())) {
+            java.util.Map<String, String> names;
+            try {
+                names = cses.taskNames();
+            } catch (Exception e) {
+                log.warn("CSES task list failed: {}", e.getMessage());
+                throw ApiException.serviceUnavailable("CSES did not answer. Try again in a minute.");
+            }
+            String name = names.get(ref.key());
+            if (name == null) throw ApiException.badRequest("The CSES problem set has no task " + ref.key() + ".");
+            title = name;
         } else if (ref.isGym()) {
             // Gym problems are not in the public problemset; the link is taken as given.
             title = "Gym " + ref.cfContestId() + " · problem " + ref.cfIndex();
@@ -273,9 +286,11 @@ public class LabService {
             Map<String, PlatformAccount> mine = handles.getOrDefault(u.getUserId(), Map.of());
             PlatformAccount cf = mine.get(ProblemRef.CODEFORCES);
             PlatformAccount lc = mine.get(ProblemRef.LEETCODE);
+            PlatformAccount cs = mine.get(ProblemRef.CSES);
             rows.add(new LabsDto.StudentRow(u.getUserId(), u.getUsername(), u.getFullName(),
                 cf == null ? null : cf.getHandle(), cf != null && cf.getVerifiedAt() != null,
                 lc == null ? null : lc.getHandle(), lc != null && lc.getVerifiedAt() != null,
+                cs == null ? null : cs.getHandle(), connected(cs),
                 cells, solved, late, marks));
         }
         return new LabsDto.Progress(summary, rows);
@@ -289,7 +304,7 @@ public class LabService {
         LabsDto.LabSummary lab = progress.lab();
 
         List<List<Object>> marks = new ArrayList<>();
-        List<Object> header = new ArrayList<>(List.of("Username", "Full name", "Codeforces", "LeetCode"));
+        List<Object> header = new ArrayList<>(List.of("Username", "Full name", "Codeforces", "LeetCode", "CSES"));
         for (LabsDto.ProblemView p : lab.problems()) header.add(p.title() + " (" + p.marks().stripTrailingZeros().toPlainString() + ")");
         header.addAll(List.of("Solved in time", "Solved late", "Marks", "Out of"));
         marks.add(header);
@@ -305,6 +320,7 @@ public class LabService {
             row.add(r.fullName() == null ? "" : r.fullName());
             row.add(handleCell(r.codeforcesHandle(), r.codeforcesVerified()));
             row.add(handleCell(r.leetcodeHandle(), r.leetcodeVerified()));
+            row.add(handleCell(r.csesHandle(), r.csesConnected()));
             for (LabsDto.Cell c : r.cells()) {
                 LabsDto.ProblemView p = problemById.get(c.problemId());
                 if ("SOLVED".equals(c.status())) row.add(p.marks());
@@ -313,9 +329,11 @@ public class LabService {
                 if (c.status() != null) {
                     detail.add(List.of(r.username(), p.title(), p.platform(), IST.format(c.solvedAt()),
                         "LATE".equals(c.status()) ? "yes" : "no",
-                        ProblemRef.LEETCODE.equals(p.platform())
-                            ? Optional.ofNullable(r.leetcodeHandle()).orElse("")
-                            : Optional.ofNullable(r.codeforcesHandle()).orElse("")));
+                        Optional.ofNullable(switch (p.platform()) {
+                            case ProblemRef.LEETCODE -> r.leetcodeHandle();
+                            case ProblemRef.CSES -> r.csesHandle();
+                            default -> r.codeforcesHandle();
+                        }).orElse("")));
                 }
             }
             row.add(r.solved());
@@ -385,8 +403,46 @@ public class LabService {
                     l.getLastCheckedAt(), state(l, now), problems, marks, total(l)));
             }
         }
+        PlatformAccount cs = handles.get(ProblemRef.CSES);
         return new LabsDto.MyLabs(out, handle(handles.get(ProblemRef.CODEFORCES)),
-            handle(handles.get(ProblemRef.LEETCODE)));
+            handle(handles.get(ProblemRef.LEETCODE)),
+            cs == null ? null : new LabsDto.Handle(cs.getHandle(), connected(cs)));
+    }
+
+    /** One of the student's lab problems on CSES, with its statement and examples. */
+    @Transactional(readOnly = true)
+    public LabsDto.CsesProblem csesProblem(Long userId, Long labProblemId) {
+        LabProblem p = studentProblem(userId, labProblemId, ProblemRef.CSES);
+        com.cpintel.integration.cses.CsesStatements.Statement st;
+        try {
+            st = csesStatements.statement(p.getProblemKey());
+        } catch (Exception e) {
+            log.warn("CSES statement for {} failed: {}", p.getProblemKey(), e.getMessage());
+            throw ApiException.serviceUnavailable("CSES did not answer. Try again in a minute.");
+        }
+        if (st == null) throw ApiException.notFound("CSES no longer has this task.");
+        LabAssignment lab = p.getLab();
+        LabSolve s = solves.findByUserIdAndLabProblemIdIn(userId, List.of(labProblemId)).stream()
+            .findFirst().orElse(null);
+        return new LabsDto.CsesProblem(lab.getLabId(), labProblemId, lab.getTitle(), p.getProblemKey(),
+            p.getTitle(), st.timeLimit(), st.memoryLimit(), st.html(),
+            st.examples().stream().map(e -> new LabsDto.Example(e.input(), e.output())).toList(),
+            p.getUrl(), p.getMarks(),
+            s == null ? null : Boolean.TRUE.equals(s.getLate()) ? "LATE" : "SOLVED",
+            s == null ? null : s.getSolvedAt(), lab.getDueAt());
+    }
+
+    /** A lab problem the student is set, on the given platform; anything else reads as missing. */
+    @Transactional(readOnly = true)
+    public LabProblem studentProblem(Long userId, Long labProblemId, String platform) {
+        LabProblem p = problems.findById(labProblemId)
+            .orElseThrow(() -> ApiException.notFound("No such lab problem."));
+        LabAssignment lab = p.getLab();
+        if (lab.getOpensAt().isAfter(Instant.now()) || !audience.includes(lab, userId)
+                || !platform.equals(p.getPlatform())) {
+            throw ApiException.notFound("No such lab problem.");
+        }
+        return p;
     }
 
     /**
@@ -420,6 +476,12 @@ public class LabService {
             st.exampleTestcases(), p.getUrl(), p.getMarks(),
             s == null ? null : Boolean.TRUE.equals(s.getLate()) ? "LATE" : "SOLVED",
             s == null ? null : s.getSolvedAt(), lab.getDueAt());
+    }
+
+    /** A CSES account counts while CSES still accepts its token. */
+    private static boolean connected(PlatformAccount a) {
+        return a != null && a.getVerifiedAt() != null && a.getAccessToken() != null
+            && !"FAILED".equals(a.getSyncStatus());
     }
 
     private static LabsDto.Handle handle(PlatformAccount a) {

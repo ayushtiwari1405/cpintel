@@ -60,10 +60,20 @@ public class PlatformAccount extends BaseEntity {
     @Column(name = "verify_issued_at")
     private Instant verifyIssuedAt;
 
+    /**
+     * A CSES API token, sealed. Set only for CSES, whose account is connected through its own
+     * API sign-in rather than linked by name; never returned by any endpoint.
+     */
+    @JsonIgnore
+    @Column(name = "access_token", length = 600)
+    private String accessToken;
+
     public enum Platform {
         CODEFORCES,
         /** A handle only: labs read it, nothing else is synced from LeetCode. */
-        LEETCODE
+        LEETCODE,
+        /** Connected through CSES's API sign-in; read by labs and used to submit. */
+        CSES
     }
 
     public enum SyncStatus {

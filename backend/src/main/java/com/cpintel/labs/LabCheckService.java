@@ -61,6 +61,8 @@ public class LabCheckService {
     private final LabAudience audience;
     private final CodeforcesClient codeforces;
     private final LeetCodeClient leetCode;
+    private final com.cpintel.integration.cses.CsesClient cses;
+    private final com.cpintel.service.CsesAccountService csesAccounts;
     private final TransactionTemplate transaction;
 
     /** One background check at a time; the outbound limiter paces the calls anyway. */
@@ -74,7 +76,9 @@ public class LabCheckService {
     public LabCheckService(LabAssignmentRepository labs, LabSolveRepository solves,
                            PlatformAccountRepository accounts, ClassroomMemberRepository members,
                            LabAudience audience, CodeforcesClient codeforces,
-                           LeetCodeClient leetCode, PlatformTransactionManager transactions) {
+                           LeetCodeClient leetCode, com.cpintel.integration.cses.CsesClient cses,
+                           com.cpintel.service.CsesAccountService csesAccounts,
+                           PlatformTransactionManager transactions) {
         this.labs = labs;
         this.solves = solves;
         this.accounts = accounts;
@@ -82,6 +86,8 @@ public class LabCheckService {
         this.audience = audience;
         this.codeforces = codeforces;
         this.leetCode = leetCode;
+        this.cses = cses;
+        this.csesAccounts = csesAccounts;
         this.transaction = new TransactionTemplate(transactions);
     }
 
@@ -196,6 +202,23 @@ public class LabCheckService {
         return recorded;
     }
 
+    /**
+     * Records one accepted submission CPIntel has just watched being graded, for the problem it
+     * was sent to. It came from the platform itself, through the student's own sign-in, so it is
+     * taken as is rather than waiting for the next check.
+     */
+    public int recordWatched(Long userId, LabAssignment lab, LabProblem problem, String handle,
+                             java.time.Instant at, String ref) {
+        var pending = new SolveMatcher.Pending(problem.getLabProblemId(), problem.getProblemKey(),
+            lab.getOpensAt(), lab.getDueAt(), Boolean.TRUE.equals(lab.getCountEarlierSolves()));
+        List<SolveMatcher.Found> found = SolveMatcher.match(List.of(pending),
+            List.of(new SolveMatcher.Accepted(problem.getProblemKey(), at, ref)));
+        if (found.isEmpty()) return 0;
+        SolveMatcher.Found f = found.get(0);
+        Integer n = transaction.execute(s -> solves.record(f.problemId(), userId, f.at(), f.late(), handle, f.ref()));
+        return n == null ? 0 : n;
+    }
+
     private int checkOne(Long userId, PlatformAccount account, List<Target> targets) {
         List<SolveMatcher.Pending> pending = targets.stream()
             .map(t -> new SolveMatcher.Pending(t.problem().getLabProblemId(), t.problem().getProblemKey(),
@@ -208,6 +231,7 @@ public class LabCheckService {
                 SolveMatcher.readBackTo(pending));
             case ProblemRef.LEETCODE -> leetCode.recentAccepted(account.getHandle()).stream()
                 .map(s -> new SolveMatcher.Accepted(s.slug(), s.at(), s.id())).toList();
+            case ProblemRef.CSES -> csesAccepted(account, pending);
             default -> List.of();
         };
 
@@ -221,6 +245,30 @@ public class LabCheckService {
             return n;
         });
         return written == null ? 0 : written;
+    }
+
+    /**
+     * Accepted CSES submissions to the pending tasks. One call says which tasks the student has
+     * passed; only those have their submissions read, for the times.
+     */
+    private List<SolveMatcher.Accepted> csesAccepted(PlatformAccount account, List<SolveMatcher.Pending> pending) {
+        if ("FAILED".equals(account.getSyncStatus()) || account.getAccessToken() == null) return List.of();
+        String token = csesAccounts.token(account);
+        try {
+            java.util.Map<String, String> statuses = cses.statuses(token);
+            List<SolveMatcher.Accepted> out = new ArrayList<>();
+            for (String task : pending.stream().map(SolveMatcher.Pending::key).distinct().toList()) {
+                if (!"pass".equals(statuses.get(task))) continue;
+                for (var s : cses.submissions(token, task)) {
+                    if ("pass".equals(s.outcome())) out.add(new SolveMatcher.Accepted(task, s.time(), String.valueOf(s.id())));
+                }
+            }
+            return out;
+        } catch (com.cpintel.integration.cses.CsesClient.TokenRejected e) {
+            csesAccounts.markRejected(account);
+            log.info("CSES sign-in for '{}' is no longer accepted; marked for reconnecting", account.getHandle());
+            return List.of();
+        }
     }
 
     /** Accepted Codeforces submissions back to {@code since}, newest first. */

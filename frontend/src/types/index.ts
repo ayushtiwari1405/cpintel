@@ -32,7 +32,7 @@ export interface User {
 
 export interface PlatformAccount {
   accountId: number
-  platform: 'CODEFORCES' | 'LEETCODE'
+  platform: 'CODEFORCES' | 'LEETCODE' | 'CSES'
   handle: string
   currentRating?: number
   maxRating?: number
@@ -1707,7 +1707,7 @@ export interface QuestionRequest {
 
 // ------------------------------------------------------------------ labs
 
-export type LabPlatform = 'CODEFORCES' | 'LEETCODE'
+export type LabPlatform = 'CODEFORCES' | 'LEETCODE' | 'CSES'
 export type LabState = 'UPCOMING' | 'OPEN' | 'CLOSED'
 /** SOLVED in time, LATE after the deadline, or null when not solved. */
 export type LabSolveStatus = 'SOLVED' | 'LATE' | null
@@ -1761,6 +1761,8 @@ export interface LabStudentRow {
   codeforcesVerified: boolean
   leetcodeHandle: string | null
   leetcodeVerified: boolean
+  csesHandle: string | null
+  csesConnected: boolean
   cells: LabCell[]
   solved: number
   late: number
@@ -1789,7 +1791,13 @@ export interface MyLab {
 
 export interface LabHandle { handle: string; verified: boolean }
 
-export interface MyLabs { labs: MyLab[]; codeforces: LabHandle | null; leetcode: LabHandle | null }
+/** cses.verified means the CSES account is connected and CSES still accepts it. */
+export interface MyLabs {
+  labs: MyLab[]
+  codeforces: LabHandle | null
+  leetcode: LabHandle | null
+  cses: LabHandle | null
+}
 
 /** A lab's LeetCode problem, to solve inside CPIntel. contentHtml is sanitised by the server. */
 export interface LabLeetCodeProblem {
@@ -1809,4 +1817,34 @@ export interface LabLeetCodeProblem {
   status: LabSolveStatus
   solvedAt: string | null
   dueAt: string
+}
+
+/** A lab's CSES task, to solve inside CPIntel. Maths is in $$$ delimiters for MathJax. */
+export interface LabCsesProblem {
+  labId: number
+  problemId: number
+  labTitle: string
+  taskId: string
+  title: string
+  timeLimit: string | null
+  memoryLimit: string | null
+  contentHtml: string
+  examples: { input: string; output: string }[]
+  url: string
+  marks: number
+  status: LabSolveStatus
+  solvedAt: string | null
+  dueAt: string
+}
+
+/** A CSES submission as graded so far. `result` is set once `pending` is false. */
+export interface CsesVerdict {
+  submissionId: number
+  pending: boolean
+  status: string | null
+  result: string | null
+  finishedTests: number | null
+  totalTests: number | null
+  compiler: string | null
+  tests: { number: number; verdict: string; timeMs: number | null }[]
 }

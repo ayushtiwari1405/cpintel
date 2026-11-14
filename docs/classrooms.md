@@ -45,14 +45,15 @@ DOMjudge-related is read from `.env`.
 
 ## Lab assignments
 
-A lab is a list of Codeforces and LeetCode problems that a classroom's students solve on
-those sites by a deadline. CPIntel reads each student's accepted submissions from their
+A lab is a list of Codeforces, LeetCode and CSES problems that a classroom's students solve by a
+deadline, on those sites or inside CPIntel. CPIntel reads each student's accepted submissions from their
 **verified** handles and fills in a marks grid.
 
 **Setting one** (classroom page → *Lab assignments* → *New lab*):
 
 - Paste problem links: Codeforces problemset, contest and gym links (or shorthand such as
-  `1700A`), or LeetCode problem links. Each one is looked up when it is added, so a typo is
+  `1700A`), LeetCode problem links, or CSES problem-set links (or shorthand such as
+  `cses:1068`). Each one is looked up when it is added, so a typo is
   caught straight away.
 - Give each problem its marks (1 by default).
 - Choose when it opens and when it is due. Students see the lab from its opening.
@@ -86,6 +87,20 @@ since those solves would not count. Without the app or the extension the workspa
 the statement, and the student can solve the problem on LeetCode itself. Premium problems only
 show their statement on LeetCode.
 
+**CSES.** CSES has an official API (the one its own command-line client uses), and CPIntel
+uses it. A student connects CSES once, on the Platforms page: *Connect CSES* opens cses.fi, where
+they sign in to approve CPIntel, and the page notices. No password passes through CPIntel, and
+CSES itself says whose account it is, so a connected CSES account needs no further proof. The
+token is stored sealed with `CPINTEL_SESSION_KEY` (CSES cannot be connected without it), is never
+returned by any endpoint, and is signed out on CSES when the student disconnects. Lab checks read
+the student's task statuses and submission times through it. A CSES problem's *Solve* button
+opens a workspace with the statement, **Run** on the examples with the same local runner as
+Practice (C++, C, Java, Python 3), and **Submit**, which the server sends to CSES with the
+student's token. An accepted submission counts for the lab at once. If CSES stops accepting the
+token (for example, the student signed out of it on cses.fi), the account shows as needing to
+reconnect and its solves are not counted until it is. Submission times without a zone are read
+as Helsinki time, which is where CSES runs.
+
 **Verified handles.** Linking a handle only checks that it exists, so labs credit a handle
 only after the student proves it is theirs, on the Platforms page:
 
@@ -106,6 +121,8 @@ grid shows each student's handles and flags anyone whose solves are not being co
   share a problem under two contest ids, and solving it under the other id does not count.
 - Codeforces private group contests are not readable through a student's handle.
 - Only LeetCode.com is supported (not leetcode.cn).
+- CSES: only the main problem set, not its other courses or contests. The API describes itself
+  as having "no stability guarantees", so a change on CSES's side could need a change here.
 
 ## Running a team contest
 

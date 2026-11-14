@@ -16,6 +16,15 @@ export function useMyLabs() {
   })
 }
 
+export function useLabCsesProblem(problemId: number) {
+  return useQuery({
+    queryKey: ['labs', 'cses', problemId],
+    queryFn: () => labsApi.csesProblem(problemId).then(r => r.data),
+    enabled: Number.isFinite(problemId),
+    staleTime: 1000 * 60 * 5,
+  })
+}
+
 export function useLabLeetCodeProblem(problemId: number) {
   return useQuery({
     queryKey: ['labs', 'leetcode', problemId],

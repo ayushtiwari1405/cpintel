@@ -7,6 +7,7 @@ import { clsx } from 'clsx'
 import { PageHeader } from '@/components/common/PageHeader'
 import { ErrorState, LoadingState } from '@/components/common/States'
 import { HandleVerification } from '@/components/platforms/HandleVerification'
+import { CsesCard } from '@/components/platforms/CsesCard'
 
 const PLATFORMS = [
   {
@@ -182,6 +183,7 @@ export default function PlatformsPage() {
               </section>
             )
           })}
+          <CsesCard account={accounts.find(a => a.platform === 'CSES')} />
         </div>
       )}
 

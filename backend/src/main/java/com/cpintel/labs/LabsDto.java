@@ -49,6 +49,7 @@ public final class LabsDto {
     public record StudentRow(Long userId, String username, String fullName,
                              String codeforcesHandle, boolean codeforcesVerified,
                              String leetcodeHandle, boolean leetcodeVerified,
+                             String csesHandle, boolean csesConnected,
                              List<Cell> cells, int solved, int late, BigDecimal marks) {}
 
     public record Progress(LabSummary lab, List<StudentRow> students) {}
@@ -63,7 +64,8 @@ public final class LabsDto {
     /** A linked handle, or null fields when none is linked. */
     public record Handle(String handle, boolean verified) {}
 
-    public record MyLabs(List<MyLab> labs, Handle codeforces, Handle leetcode) {}
+    /** {@code cses.verified} is whether the CSES account is connected and CSES still accepts it. */
+    public record MyLabs(List<MyLab> labs, Handle codeforces, Handle leetcode, Handle cses) {}
 
     public record CheckResult(int recorded, Instant checkedAt) {}
 
@@ -73,6 +75,26 @@ public final class LabsDto {
                                   String contentHtml, List<LeetCodeSnippet> snippets,
                                   List<String> exampleTestcases, String url, BigDecimal marks,
                                   String status, Instant solvedAt, Instant dueAt) {}
+
+    public record Example(String input, String output) {}
+
+    /** A lab's CSES task, to solve here. contentHtml is sanitised, maths in $$$ delimiters. */
+    public record CsesProblem(Long labId, Long problemId, String labTitle, String taskId, String title,
+                              String timeLimit, String memoryLimit, String contentHtml,
+                              List<Example> examples, String url, BigDecimal marks, String status,
+                              Instant solvedAt, Instant dueAt) {}
+
+    /** What a student sends to submit to CSES: one of CPIntel's runner languages, and the code. */
+    public record CsesSubmitRequest(
+        @jakarta.validation.constraints.NotBlank @jakarta.validation.constraints.Size(max = 20) String language,
+        @jakarta.validation.constraints.NotBlank @jakarta.validation.constraints.Size(max = 100_000) String code) {}
+
+    /** A CSES submission as CSES has graded it so far. */
+    public record CsesVerdict(long submissionId, boolean pending, String status, String result,
+                              Integer finishedTests, Integer totalTests, String compiler,
+                              List<CsesTest> tests) {}
+
+    public record CsesTest(int number, String verdict, Integer timeMs) {}
 
     public record LeetCodeSnippet(String lang, String langSlug, String code) {}
 

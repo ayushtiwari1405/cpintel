@@ -5,6 +5,7 @@ import { ArrowDown, ArrowLeft, ArrowUp, ExternalLink, Loader2, Plus, Save, Trash
 import { PageHeader } from '@/components/common/PageHeader'
 import { ErrorState, LoadingState, errorMessage } from '@/components/common/States'
 import { EmptyRow, Panel, Pill } from '@/components/admin/AdminUi'
+import { PlatformPill } from '@/components/admin/PlatformPill'
 import { useAdminClassroom } from '@/hooks/useClassrooms'
 import { useAdminGroups } from '@/hooks/useGroups'
 import { useAdminLab, useSaveLab } from '@/hooks/useLabs'
@@ -218,9 +219,7 @@ function Editor({ classroomId, lab }: { classroomId: number; lab: LabSummary | n
                       {r.view.title} <ExternalLink size={11} className="text-gray-500" aria-hidden="true" />
                     </a>
                     <span className="mt-0.5 flex gap-1.5">
-                      <Pill tone={r.view.platform === 'LEETCODE' ? 'amber' : 'accent'}>
-                        {r.view.platform === 'LEETCODE' ? 'LeetCode' : 'Codeforces'}
-                      </Pill>
+                      <PlatformPill platform={r.view.platform} />
                       {r.view.difficulty && <Pill>{r.view.difficulty}</Pill>}
                     </span>
                   </td>
@@ -253,7 +252,7 @@ function Editor({ classroomId, lab }: { classroomId: number; lab: LabSummary | n
           <div className="flex max-w-2xl gap-2">
             <input value={link} onChange={e => setLink(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add() } }}
-              placeholder="https://codeforces.com/problemset/problem/1700/A or https://leetcode.com/problems/two-sum/"
+              placeholder="A Codeforces, LeetCode or CSES problem link"
               aria-label="Problem link" className={`${field} min-w-0 flex-1 font-mono text-xs`} />
             <button type="button" onClick={add} disabled={adding || !link.trim()}
               className="btn-secondary btn-sm whitespace-nowrap">
@@ -263,7 +262,8 @@ function Editor({ classroomId, lab }: { classroomId: number; lab: LabSummary | n
           </div>
           {addError && <p role="alert" className="text-xs text-red-400">{addError}</p>}
           <p className="text-[11px] text-gray-500">
-            Codeforces problemset, contest and gym links, or shorthand like 1700A. LeetCode problem links.
+            Codeforces problemset, contest and gym links, or shorthand like 1700A. LeetCode problem
+            links. CSES problem-set links, or shorthand like cses:1068.
           </p>
         </div>
       </Panel>

@@ -39,7 +39,7 @@ function open(data: MyLabs, routes: Parameters<typeof fakeServer>[0] = {}) {
 
 describe('labs', () => {
   it('lists each problem with where to solve it, its status and the marks so far', async () => {
-    open({ labs: [lab()], codeforces: { handle: 'alice', verified: true }, leetcode: { handle: 'alice', verified: true } })
+    open({ labs: [lab()], codeforces: { handle: 'alice', verified: true }, leetcode: { handle: 'alice', verified: true }, cses: null })
 
     const card = (await screen.findByText('Lab 3: Two pointers')).closest('article')!
     expect(within(card).getByText('DSA 2026')).toBeInTheDocument()
@@ -52,7 +52,7 @@ describe('labs', () => {
   })
 
   it('warns when a handle the labs need is missing or unverified', async () => {
-    open({ labs: [lab()], codeforces: { handle: 'alice', verified: false }, leetcode: null })
+    open({ labs: [lab()], codeforces: { handle: 'alice', verified: false }, leetcode: null, cses: null })
 
     const warning = (await screen.findByText(/Your solves are not being counted yet/)).closest<HTMLElement>('[role="status"]')!
     expect(warning).toHaveTextContent('verify your Codeforces handle (alice)')
@@ -63,7 +63,7 @@ describe('labs', () => {
   it('separates past labs from open ones', async () => {
     open({
       labs: [lab({ labId: 2, title: 'Old lab', state: 'CLOSED', dueAt: past }), lab()],
-      codeforces: { handle: 'a', verified: true }, leetcode: { handle: 'a', verified: true },
+      codeforces: { handle: 'a', verified: true }, leetcode: { handle: 'a', verified: true }, cses: null,
     })
     const pastSection = (await screen.findByRole('heading', { name: 'Past' })).closest('section')!
     expect(within(pastSection).getByText('Old lab')).toBeInTheDocument()
@@ -72,7 +72,7 @@ describe('labs', () => {
   })
 
   it('checks for new solves on request', async () => {
-    const server = open({ labs: [lab()], codeforces: { handle: 'a', verified: true }, leetcode: { handle: 'a', verified: true } },
+    const server = open({ labs: [lab()], codeforces: { handle: 'a', verified: true }, leetcode: { handle: 'a', verified: true }, cses: null },
       { 'POST /labs/check': { data: { recorded: 1, checkedAt: new Date().toISOString() } } })
 
     await userEvent.click(await screen.findByRole('button', { name: /Check for new solves/ }))
@@ -81,7 +81,7 @@ describe('labs', () => {
   })
 
   it('says so when there are no labs', async () => {
-    open({ labs: [], codeforces: null, leetcode: null })
+    open({ labs: [], codeforces: null, leetcode: null, cses: null })
     expect(await screen.findByText('No labs yet')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Check for new solves/ })).not.toBeInTheDocument()
   })

@@ -29,6 +29,7 @@ const AdminLab          = lazy(() => import('@/pages/admin/AdminLabPage'))
 const AdminLabEdit      = lazy(() => import('@/pages/admin/AdminLabEditPage'))
 const LabsPage          = lazy(() => import('@/pages/LabsPage'))
 const LabProblemPage    = lazy(() => import('@/pages/LabProblemPage'))
+const LabCsesPage       = lazy(() => import('@/pages/LabCsesPage'))
 const AdminGroups       = lazy(() => import('@/pages/admin/AdminGroupsPage'))
 const AdminGroupDetail  = lazy(() => import('@/pages/admin/AdminGroupDetailPage'))
 const AdminGroupContest = lazy(() => import('@/pages/admin/AdminGroupContestPage'))
@@ -180,6 +181,8 @@ export function AppRoutes() {
           <Route path="/labs"            element={<LabsPage />} />
           <Route path="/labs/problems/:problemId" element={
             <ErrorBoundary scope="the LeetCode workspace"><LabProblemPage /></ErrorBoundary>} />
+          <Route path="/labs/cses/:problemId" element={
+            <ErrorBoundary scope="the CSES workspace"><LabCsesPage /></ErrorBoundary>} />
           <Route path="/platforms"       element={<PlatformsPage />} />
           {/* Where connecting Codeforces sends somebody whose browser has no extension. */}
           <Route path="/extension"       element={<ExtensionPage />} />

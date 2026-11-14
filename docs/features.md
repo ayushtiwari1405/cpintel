@@ -34,7 +34,7 @@ the reasoning behind the harder decisions, and [`docs/SRS.md`](SRS.md) for requi
 | Document DB | MongoDB — raw submission history, personal files, contest snapshots |
 | Cache | Redis — sessions, JWT blacklist, per-user token revocation, analytics cache |
 | Integrations | Codeforces REST + scraping, DOMjudge REST v4 |
-| Migrations | Flyway — 34 versioned migrations (schema, indexes, materialized views, audit indexes, groups, super admin role, scheduler locks, node-level mastery, examinations, examination access, placement results, Codeforces-only cleanup, examination-mode sessions, several events per judge contest, examination leaderboards, classrooms, audit log by classroom, DOMjudge logins in PostgreSQL, marking an event done, rejudging a problem, TA marking, freezing TA marks, refresh-token digests and families, skill ratings, one sync at a time, examination grants kept in PostgreSQL, desktop-app-only examinations, which admin made each account, the classroom question bank, uploaded statement PDFs, model-solution checks, publishing examinations to the judge, classroom Codeforces keys and TA question permission, lab assignments with verified LeetCode and Codeforces handles) |
+| Migrations | Flyway — 35 versioned migrations (schema, indexes, materialized views, audit indexes, groups, super admin role, scheduler locks, node-level mastery, examinations, examination access, placement results, Codeforces-only cleanup, examination-mode sessions, several events per judge contest, examination leaderboards, classrooms, audit log by classroom, DOMjudge logins in PostgreSQL, marking an event done, rejudging a problem, TA marking, freezing TA marks, refresh-token digests and families, skill ratings, one sync at a time, examination grants kept in PostgreSQL, desktop-app-only examinations, which admin made each account, the classroom question bank, uploaded statement PDFs, model-solution checks, publishing examinations to the judge, classroom Codeforces keys and TA question permission, lab assignments with verified LeetCode and Codeforces handles, CSES accounts and problems) |
 | Containerization | Docker Compose — 11 services: 3 behind the `monitoring` profile and certbot behind `letsencrypt`. `docker-compose.prod.yml` swaps the builds for CI images |
 | Editor | Monaco, bundled locally (no CDN) — shared by the Practice, Compete and examination workspaces |
 | Code runner | g++, gcc and CPython under bubblewrap + rlimits, in its own locked-down container on a server; judged against the statement's sample tests |
@@ -113,7 +113,7 @@ examinations assigned to you.
 
 ## Lab assignments
 
-- An admin sets a classroom (or some of its teams) a list of Codeforces and LeetCode problems
+- An admin sets a classroom (or some of its teams) a list of Codeforces, LeetCode and CSES problems
   with marks, an opening time and a deadline. Students solve them on those sites.
 - CPIntel reads accepted submissions from each student's verified handle every 10 minutes and
   fills in a marks grid. Solves after the deadline show as late and earn nothing. The admin
@@ -235,7 +235,8 @@ the product.
 | `/exam` | exam mode | The one paper an examination session can reach; every other route redirects here |
 | `/labs` | anyone | Lab assignments from your classrooms: problems, what you have solved, marks |
 | `/labs/problems/{id}` | anyone | Solve a lab's LeetCode problem: statement, editor, Run and Submit through your LeetCode sign-in |
-| `/platforms` | anyone | Link and sync Codeforces, link LeetCode, verify both handles; connect the Codeforces session used for submitting |
+| `/labs/cses/{id}` | anyone | Solve a lab's CSES task: statement, Run on the examples locally, Submit with your connected CSES account |
+| `/platforms` | anyone | Link and sync Codeforces, link LeetCode, verify both handles, connect CSES; connect the Codeforces session used for submitting |
 | `/teams` | anyone | Team contests you are in, and where you placed |
 | `/profile` | anyone | Your account |
 | `/admin` | admin | Deployment overview and recent activity |

@@ -28,6 +28,7 @@ public class IntegrationController {
 
     private final SyncService syncService;
     private final com.cpintel.service.HandleVerificationService verification;
+    private final com.cpintel.service.CsesAccountService csesAccounts;
     private final ContestSyncService contestSyncService;
     private final UserMapper userMapper;
 
@@ -83,6 +84,26 @@ public class IntegrationController {
     public ResponseEntity<ApiResponse<Void>> unlinkLeetCode(@AuthenticationPrincipal Long userId) {
         syncService.unlinkAccount(userId, "LEETCODE");
         return ResponseEntity.ok(ApiResponse.message("LeetCode account unlinked"));
+    }
+
+    @PostMapping("/cses/connect")
+    @Operation(summary = "Start connecting a CSES account: returns the cses.fi address to sign in at")
+    public ResponseEntity<ApiResponse<com.cpintel.service.CsesAccountService.Started>> csesStart(
+        @AuthenticationPrincipal Long userId) {
+        return ResponseEntity.ok(ApiResponse.ok(csesAccounts.start(userId)));
+    }
+
+    @PostMapping("/cses/connect/check")
+    @Operation(summary = "Whether the CSES sign-in has been approved; connects the account when it has")
+    public ResponseEntity<ApiResponse<com.cpintel.service.CsesAccountService.Checked>> csesCheck(
+        @AuthenticationPrincipal Long userId) {
+        return ResponseEntity.ok(ApiResponse.ok(csesAccounts.check(userId)));
+    }
+
+    @DeleteMapping("/cses")
+    public ResponseEntity<ApiResponse<Void>> csesDisconnect(@AuthenticationPrincipal Long userId) {
+        csesAccounts.disconnect(userId);
+        return ResponseEntity.ok(ApiResponse.message("CSES account disconnected"));
     }
 
     @PostMapping("/{platform}/verify")

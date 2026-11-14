@@ -7,7 +7,10 @@ import { ErrorState, LoadingState } from '@/components/common/States'
 import { Ago, EmptyRow, Panel, Pill, StatCard } from '@/components/admin/AdminUi'
 import { useAdminClassroom } from '@/hooks/useClassrooms'
 import { useCheckLab, useDeleteLab, useDownloadLabMarks, useLabProgress } from '@/hooks/useLabs'
-import type { LabCell, LabState, LabStudentRow } from '@/types'
+import type { LabCell, LabPlatform, LabState, LabStudentRow } from '@/types'
+import { PlatformPill } from '@/components/admin/PlatformPill'
+
+const SHORT: Record<LabPlatform, string> = { CODEFORCES: 'CF', LEETCODE: 'LC', CSES: 'CSES' }
 
 const LAB_STATE: Record<LabState, { label: string; tone: 'gray' | 'green' | 'amber' }> = {
   UPCOMING: { label: 'Upcoming', tone: 'gray' },
@@ -119,7 +122,7 @@ export default function AdminLabPage() {
                     <a href={p.url} target="_blank" rel="noreferrer" title={`${p.title} (${p.marks} marks)`}
                       className="hover:text-accent-300">
                       {i + 1}<span className="block text-[10px] normal-case text-gray-600">
-                        {p.platform === 'LEETCODE' ? 'LC' : 'CF'}
+                        {SHORT[p.platform]}
                       </span>
                     </a>
                   </th>
@@ -142,6 +145,7 @@ export default function AdminLabPage() {
                   <td className="px-3 py-2 text-xs">
                     <HandleTag label="CF" handle={s.codeforcesHandle} verified={s.codeforcesVerified} />
                     <HandleTag label="LC" handle={s.leetcodeHandle} verified={s.leetcodeVerified} />
+                    <HandleTag label="CSES" handle={s.csesHandle} verified={s.csesConnected} />
                   </td>
                   {s.cells.map(c => <CellView key={c.problemId} cell={c} />)}
                   <td className="px-4 py-2 text-right font-mono tabular-nums text-gray-100">
@@ -163,9 +167,7 @@ export default function AdminLabPage() {
               <a href={p.url} target="_blank" rel="noreferrer" className="min-w-0 flex-1 truncate text-gray-200 hover:text-accent-300">
                 {p.title}
               </a>
-              <Pill tone={p.platform === 'LEETCODE' ? 'amber' : 'accent'}>
-                {p.platform === 'LEETCODE' ? 'LeetCode' : 'Codeforces'}
-              </Pill>
+              <PlatformPill platform={p.platform} />
               {p.difficulty && <Pill>{p.difficulty}</Pill>}
               <span className="w-16 text-right font-mono text-xs text-gray-400">{round(p.marks)} marks</span>
             </li>
@@ -179,6 +181,7 @@ export default function AdminLabPage() {
 function ready(s: LabStudentRow, platforms: string[]) {
   return (!platforms.includes('CODEFORCES') || s.codeforcesVerified)
     && (!platforms.includes('LEETCODE') || s.leetcodeVerified)
+    && (!platforms.includes('CSES') || s.csesConnected)
 }
 
 function HandleTag({ label, handle, verified }: { label: string; handle: string | null; verified: boolean }) {

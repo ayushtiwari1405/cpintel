@@ -17,13 +17,16 @@ Everything below has a working default; only the secrets in `.env` genuinely nee
 | `CPINTEL_RUNNER_CPP` | `g++` | C++ compiler, when running inside the backend (dev/desktop) |
 | `CPINTEL_RUNNER_PYTHON` | `python3` | Python interpreter, when running inside the backend (dev/desktop) |
 | `CPINTEL_SUBMIT_ENABLED` | `true` | Whether submissions may be forwarded to Codeforces |
-| `CPINTEL_SESSION_KEY` | *(none — required)* | Encrypts stored Codeforces session cookies. At least 16 chars |
+| `CPINTEL_SESSION_KEY` | *(none — required)* | Encrypts stored Codeforces session cookies and CSES tokens. At least 16 chars |
 | `CPINTEL_FILES_IN_CONTEST` | `true` | Whether contests offer personal files by default |
 | `CPINTEL_FILES_MAX_FILE_BYTES` | `2097152` | Per-file upload cap |
 | `CPINTEL_FILES_MAX_TOTAL_BYTES` | `33554432` | Per-user vault cap |
 | `CPINTEL_STANDINGS_REFRESH_MS` | `180000` | How often live group boards are rebuilt |
 | `CPINTEL_LAB_CHECK_INTERVAL_MS` | `600000` | How often open lab assignments are checked for new solves. Keep it well under the time it takes to solve 20 LeetCode problems |
 | `CPINTEL_LEETCODE_RATE_LIMIT_MS` | `1000` | Minimum spacing between calls to LeetCode |
+
+CSES accounts are stored sealed with `CPINTEL_SESSION_KEY`, the key that already protects
+Codeforces sessions, so CSES cannot be connected on a server without it.
 | `CPINTEL_RATE_LIMIT_ENABLED` | `true` | Per-account and per-address throttling on sign-in, runs and syncs |
 | `CPINTEL_MIN_DESKTOP_VERSION` | `0.0.0` | Desktop builds below this are told to update, with a ribbon that cannot be closed |
 | `CPINTEL_DESKTOP_BUILD` | `1` | `deploy.sh` builds the desktop installers for `CPINTEL_PUBLIC_URL` when that address or the app changed; `0` skips it ([desktop-app.md](desktop-app.md#publishing-the-desktop-app)) |

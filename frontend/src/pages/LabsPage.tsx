@@ -9,7 +9,7 @@ import { EmptyState, ErrorState, LoadingState } from '@/components/common/States
 import { useCheckMyLabs, useMyLabs } from '@/hooks/useLabs'
 import type { LabHandle, LabPlatform, MyLab, MyLabProblem } from '@/types'
 
-const PLATFORM_NAME: Record<LabPlatform, string> = { CODEFORCES: 'Codeforces', LEETCODE: 'LeetCode' }
+const PLATFORM_NAME: Record<LabPlatform, string> = { CODEFORCES: 'Codeforces', LEETCODE: 'LeetCode', CSES: 'CSES' }
 
 /**
  * The lab assignments set in your classrooms: problems on Codeforces and LeetCode, solved
@@ -42,7 +42,7 @@ export default function LabsPage() {
           </button>
         )} />
 
-      <HandleWarnings needs={needs} codeforces={data.codeforces} leetcode={data.leetcode} />
+      <HandleWarnings needs={needs} codeforces={data.codeforces} leetcode={data.leetcode} cses={data.cses} />
 
       {data.labs.length === 0 && (
         <EmptyState icon={<FlaskConical size={18} />} title="No labs yet">
@@ -66,12 +66,17 @@ export default function LabsPage() {
   )
 }
 
-function HandleWarnings({ needs, codeforces, leetcode }: {
+function HandleWarnings({ needs, codeforces, leetcode, cses }: {
   needs: Set<LabPlatform>
   codeforces: LabHandle | null
   leetcode: LabHandle | null
+  cses: LabHandle | null
 }) {
   const problems: string[] = []
+  if (needs.has('CSES')) {
+    if (!cses) problems.push('connect your CSES account')
+    else if (!cses.verified) problems.push(`reconnect your CSES account (${cses.handle})`)
+  }
   for (const [platform, handle] of [['CODEFORCES', codeforces], ['LEETCODE', leetcode]] as const) {
     if (!needs.has(platform)) continue
     if (!handle) problems.push(`link your ${PLATFORM_NAME[platform]} handle`)
@@ -180,6 +185,8 @@ function SolveLink({ item }: { item: MyLabProblem }) {
   let to: string | null = null
   if (problem.platform === 'LEETCODE') {
     to = `/labs/problems/${problem.problemId}`
+  } else if (problem.platform === 'CSES') {
+    to = `/labs/cses/${problem.problemId}`
   } else {
     const [contest, index] = problem.key.split('/')
     // Gym problems are not in Practice; they are solved on Codeforces.

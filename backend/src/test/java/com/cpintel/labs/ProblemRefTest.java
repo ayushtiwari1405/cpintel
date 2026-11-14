@@ -57,4 +57,22 @@ class ProblemRefTest {
     void refusesAnythingElse(String input) {
         assertThatThrownBy(() -> ProblemRef.parse(input)).isInstanceOf(ApiException.class);
     }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+        "https://cses.fi/problemset/task/1068", "https://cses.fi/problemset/task/1068/",
+        "cses.fi/problemset/view/1068/", "CSES 1068", "cses:1068",
+    })
+    void readsEveryCsesForm(String input) {
+        ProblemRef ref = ProblemRef.parse(input);
+        assertThat(ref.platform()).isEqualTo(ProblemRef.CSES);
+        assertThat(ref.key()).isEqualTo("1068");
+        assertThat(ref.url()).isEqualTo("https://cses.fi/problemset/task/1068/");
+    }
+
+    @Test
+    void refusesOtherCsesPages() {
+        assertThatThrownBy(() -> ProblemRef.parse("https://cses.fi/problemset/")).isInstanceOf(ApiException.class);
+        assertThatThrownBy(() -> ProblemRef.parse("https://cses.fi.evil.com/problemset/task/1068")).isInstanceOf(ApiException.class);
+    }
 }
