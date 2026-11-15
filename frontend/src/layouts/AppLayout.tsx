@@ -58,6 +58,7 @@ function titleFor(path: string): string {
  * scrollbar would fight the split rather than help it.
  */
 const WORKSPACE_ROUTES = new Set(['/practice', '/compete', '/exams', '/exam'])
+// The lab workspaces (/labs/problems/:id, /labs/cses/:id) are matched by pattern below.
 
 /** Whether the wide sidebar shows labels; remembered per browser, open unless closed before. */
 const SIDEBAR_KEY = 'cpintel-sidebar'
@@ -80,6 +81,7 @@ export default function AppLayout() {
   const examMode = useAuthStore(s => s.mode) === 'EXAM'
   const canGoBack = location.key !== 'default' && !examLive && !examMode
   const workspace = WORKSPACE_ROUTES.has(location.pathname)
+    || /^\/labs\/(problems|cses)\/[^/]+$/.test(location.pathname)
   const onBack = canGoBack ? () => navigate(-1) : undefined
 
   const sidebarRef = useRef<HTMLElement>(null)

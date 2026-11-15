@@ -180,64 +180,41 @@ export function StatementView({
   return (
     <div className="h-full overflow-y-auto pr-1">
       <article className="mx-auto max-w-3xl">
-        {/* Header */}
-        <header className="pb-5 mb-5 border-b border-gray-800">
-          <div className="flex items-start gap-3">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl
-                            border border-accent-900 bg-accent-600/10 font-mono text-base
-                            font-semibold text-accent-300">
-              {problem.index}
-            </div>
-
-            <div className="min-w-0 flex-1">
-              <p className="text-[11px] font-mono uppercase tracking-wider text-gray-600">
-                {isDocument ? `Problem ${problem.index}` : `Contest ${problem.contestId}`}
-              </p>
-              <h2 className="mt-0.5 text-xl font-semibold leading-snug text-gray-50">
-                {problem.name}
-              </h2>
-            </div>
-
-            <button
-              // Marked as allowed during a contest: reading the problem on the judge's own site
-              // is something a contestant is entitled to do, so the lock lets this one through.
-              onClick={() => openExternal(problem.url, true)}
-              data-lockdown-allow
-              className="shrink-0 flex items-center gap-1.5 rounded-lg border border-gray-800
-                         px-2.5 py-1.5 text-xs text-gray-500 transition-colors
-                         hover:border-accent-900 hover:text-accent-400"
-            >
-              <ExternalLink size={12} /> {isDocument ? 'Judge' : 'Codeforces'}
-            </button>
-          </div>
-
-          <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
-            {problem.timeLimit && (
-              <Meta icon={<Clock size={12} />} label="Time" value={problem.timeLimit} />
-            )}
-            {problem.memoryLimit && (
-              <Meta icon={<Cpu size={12} />} label="Memory" value={problem.memoryLimit} />
-            )}
-            {io && <Meta icon={<FileText size={12} />} label="Files" value={io} />}
-            {problem.rating && (
-              <span className={clsx('flex items-center gap-1 rounded-full border px-2.5 py-1',
-                'font-medium tabular-nums', ratingTone(problem.rating))}>
-                <Star size={11} /> {problem.rating}
-              </span>
-            )}
-            {problem.tags.length > 0 && (
-              <button
-                onClick={toggleTags}
-                className="flex items-center gap-1 rounded-full border border-gray-800 px-2.5
-                           py-1 text-gray-500 transition-colors hover:text-gray-300"
-              >
-                <Tag size={11} />
-                {showTags ? 'Hide tags' : `Show ${problem.tags.length} tag${
-                  problem.tags.length === 1 ? '' : 's'}`}
-              </button>
-            )}
-          </div>
-
+        <StatementHeader
+          badge={problem.index}
+          kicker={isDocument ? `Problem ${problem.index}` : `Contest ${problem.contestId}`}
+          title={problem.name}
+          externalLabel={isDocument ? 'Judge' : 'Codeforces'}
+          onOpenExternal={() => openExternal(problem.url, true)}
+          chips={
+            <>
+              {problem.timeLimit && (
+                <Meta icon={<Clock size={12} />} label="Time" value={problem.timeLimit} />
+              )}
+              {problem.memoryLimit && (
+                <Meta icon={<Cpu size={12} />} label="Memory" value={problem.memoryLimit} />
+              )}
+              {io && <Meta icon={<FileText size={12} />} label="Files" value={io} />}
+              {problem.rating && (
+                <span className={clsx('flex items-center gap-1 rounded-full border px-2.5 py-1',
+                  'font-medium tabular-nums', ratingTone(problem.rating))}>
+                  <Star size={11} /> {problem.rating}
+                </span>
+              )}
+              {problem.tags.length > 0 && (
+                <button
+                  onClick={toggleTags}
+                  className="flex items-center gap-1 rounded-full border border-gray-800 px-2.5
+                             py-1 text-gray-500 transition-colors hover:text-gray-300"
+                >
+                  <Tag size={11} />
+                  {showTags ? 'Hide tags' : `Show ${problem.tags.length} tag${
+                    problem.tags.length === 1 ? '' : 's'}`}
+                </button>
+              )}
+            </>
+          }
+        >
           {showTags && problem.tags.length > 0 && (
             <div className="flex flex-wrap gap-1.5 mt-3">
               {problem.tags.map(t => (
@@ -248,7 +225,7 @@ export function StatementView({
               ))}
             </div>
           )}
-        </header>
+        </StatementHeader>
 
         {isDocument ? (
           <PdfStatement url={pdfUrl ?? null} isPdf={!!pdfIsPdf} text={pdfText ?? null}
@@ -301,7 +278,60 @@ export function StatementView({
   )
 }
 
-function Meta({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+/**
+ * The top of a problem statement: a badge, a small line above the title, the title, a link out
+ * to the judge, and a row of chips. Shared by Practice, Compete and the lab workspaces, so a
+ * LeetCode or CSES problem reads the same as a Codeforces one.
+ */
+export function StatementHeader({
+  badge, kicker, title, externalLabel, onOpenExternal, chips, children,
+}: {
+  badge: string
+  kicker: React.ReactNode
+  title: string
+  externalLabel: string
+  onOpenExternal: () => void
+  chips?: React.ReactNode
+  children?: React.ReactNode
+}) {
+  return (
+    <header className="pb-5 mb-5 border-b border-gray-800">
+      <div className="flex items-start gap-3">
+        <div className={clsx(
+          'flex h-11 min-w-11 shrink-0 items-center justify-center rounded-xl px-1.5',
+          'border border-accent-900 bg-accent-600/10 font-mono font-semibold text-accent-300',
+          badge.length > 3 ? 'text-xs' : 'text-base',
+        )}>
+          {badge}
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <p className="text-[11px] font-mono uppercase tracking-wider text-gray-600">
+            {kicker}
+          </p>
+          <h2 className="mt-0.5 text-xl font-semibold leading-snug text-gray-50">
+            {title}
+          </h2>
+        </div>
+
+        <button
+          onClick={onOpenExternal}
+          data-lockdown-allow
+          className="shrink-0 flex items-center gap-1.5 rounded-lg border border-gray-800
+                     px-2.5 py-1.5 text-xs text-gray-500 transition-colors
+                     hover:border-accent-900 hover:text-accent-400"
+        >
+          <ExternalLink size={12} /> {externalLabel}
+        </button>
+      </div>
+
+      {chips && <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">{chips}</div>}
+      {children}
+    </header>
+  )
+}
+
+export function Meta({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   return (
     <span className="flex items-center gap-1.5 rounded-full border border-gray-800 bg-gray-900/60
                      px-2.5 py-1 text-gray-400">
@@ -386,7 +416,14 @@ function PdfStatement({ url, isPdf, text, error }: {
   )
 }
 
-function Section({ title, html, flush }: { title?: string; html?: string; flush?: boolean }) {
+export function Section({ title, html, flush, math = true, className }: {
+  title?: string
+  html?: string | null
+  flush?: boolean
+  /** Typeset maths in it. Off for statements that write a plain $ as a dollar sign. */
+  math?: boolean
+  className?: string
+}) {
   const ref = useRef<HTMLDivElement>(null)
 
   // The statement is written into the DOM here rather than through
@@ -405,17 +442,18 @@ function Section({ title, html, flush }: { title?: string; html?: string; flush?
     if (!el || !html) return
     let cancelled = false
     el.innerHTML = html
-    typesetWhenReady(el, () => cancelled)
+    if (math) typesetWhenReady(el, () => cancelled)
     return () => { cancelled = true }
-  }, [html])
+  }, [html, math])
 
   if (!html) return null
 
   return (
     <section className={flush ? '' : 'mt-6 first:mt-0'}>
       {title && <SectionTitle>{title}</SectionTitle>}
-      {/* Sanitised server-side with a jsoup safelist before it ever reaches the client. */}
-      <div ref={ref} className="cf-statement text-[14.5px] text-gray-300 leading-7" />
+      {/* Sanitised before it gets here: server-side with a jsoup safelist for Codeforces, with
+          DOMPurify by the lab workspaces for LeetCode and CSES. */}
+      <div ref={ref} className={clsx('cf-statement text-[14.5px] text-gray-300 leading-7', className)} />
     </section>
   )
 }

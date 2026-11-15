@@ -1,20 +1,20 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import DOMPurify from 'dompurify'
 import { useQueryClient } from '@tanstack/react-query'
-import { format } from 'date-fns'
-import {
-  AlertTriangle, ArrowLeft, CheckCircle2, Clock, ExternalLink, Loader2, Play, Send,
-} from 'lucide-react'
-import { CodeEditor } from '@/components/editor/CodeEditor'
-import { starterFor } from '@/components/editor/languages'
+import { AlertTriangle, Clock, Cpu, Link2 } from 'lucide-react'
+
+import { LabMetaChips, LabWorkspace, WorkspaceNotice } from '@/components/labs/LabWorkspace'
+import { Meta, Section, StatementHeader } from '@/components/practice/StatementView'
+import { SolvePane } from '@/components/workspace/SolvePane'
 import { ErrorState, LoadingState, errorMessage } from '@/components/common/States'
 import { useToast } from '@/components/common/Toaster'
+import { starterFor } from '@/components/editor/languages'
 import { useLabCsesProblem, useMyLabs } from '@/hooks/useLabs'
 import { useRunCode, useRunnerLanguages } from '@/hooks/useRunner'
 import { labsApi } from '@/api/labsApi'
-import { typesetWhenReady } from '@/utils/mathjax'
-import type { CsesVerdict, LabCsesProblem, RunResponse } from '@/types'
+import { openExternal } from '@/utils/desktopBridge'
+import type { CsesVerdict, LabCsesProblem, RunTestCase, VerdictResponse } from '@/types'
 
 /** The runner languages CSES takes from here; the server maps them onto CSES's names. */
 const CSES_LANGUAGES = ['cpp', 'c', 'java', 'python3']
@@ -45,6 +45,22 @@ export default function LabCsesPage() {
   return <Workspace problem={problem} />
 }
 
+/** CSES's verdict in the shape the console's verdict chip reads. */
+export function csesChipVerdict(v: CsesVerdict): VerdictResponse {
+  const code = (v.result ?? v.status ?? '').toUpperCase().replace(/[\s-]+/g, '_')
+  const failed = v.tests.find(t => t.verdict.toUpperCase() !== 'ACCEPTED')
+  return {
+    submissionId: String(v.submissionId),
+    verdict: v.pending ? 'TESTING'
+      : code === 'ACCEPTED' ? 'OK'
+        : code === 'COMPILE_ERROR' ? 'COMPILATION_ERROR'
+          : code || 'Done',
+    // The chip says "on test n+1" from this.
+    passedTestCount: !v.pending && failed ? failed.number - 1 : undefined,
+    finished: !v.pending,
+  }
+}
+
 function Workspace({ problem }: { problem: LabCsesProblem }) {
   const toast = useToast()
   const queryClient = useQueryClient()
@@ -56,7 +72,7 @@ function Workspace({ problem }: { problem: LabCsesProblem }) {
   const runtime = languages.find(l => l.id === lang) ?? languages[0]
   const editorLanguage = runtime?.editorLanguage ?? 'cpp'
 
-  const draftKey = `cpintel.cses.draft.${problem.taskId}.${lang}`
+  const draftKey = `cpintel.cses.draft.${problem.taskId}.${runtime?.id ?? lang}`
   const [draft, setDraft] = useState<{ key: string; code: string } | null>(null)
   const code = draft?.key === draftKey ? draft.code : (stored(draftKey) ?? starterFor(editorLanguage))
   const setCode = (next: string) => {
@@ -65,29 +81,20 @@ function Workspace({ problem }: { problem: LabCsesProblem }) {
   }
 
   const run = useRunCode()
-  const [runResult, setRunResult] = useState<RunResponse | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [verdict, setVerdict] = useState<CsesVerdict | null>(null)
-  const [failure, setFailure] = useState<string | null>(null)
+  const [submitError, setSubmitError] = useState<string | null>(null)
 
   const ready = account?.verified === true
 
-  const doRun = () => {
-    if (!runtime || run.isPending) return
-    setVerdict(null); setFailure(null)
-    run.mutate({
-      language: runtime.id,
-      source: code,
-      tests: problem.examples.map((e, i) => ({ input: e.input, expected: e.output, label: `Example ${i + 1}` })),
-    }, {
-      onSuccess: setRunResult,
-      onError: e => setFailure(errorMessage(e, 'The run did not go through.')),
-    })
+  const doRun = (tests: RunTestCase[]) => {
+    if (!runtime) return
+    run.mutate({ language: runtime.id, source: code, tests })
   }
 
   const doSubmit = async () => {
     if (!ready || !runtime || submitting) return
-    setSubmitting(true); setFailure(null); setRunResult(null)
+    setSubmitting(true); setSubmitError(null); setVerdict(null)
     try {
       let v = (await labsApi.csesSubmit(problem.problemId, runtime.id, code)).data
       setVerdict(v)
@@ -102,7 +109,7 @@ function Workspace({ problem }: { problem: LabCsesProblem }) {
         toast.push('success', 'Accepted, and counted for the lab.')
       }
     } catch (e) {
-      setFailure(errorMessage(e, 'The submission did not go through.'))
+      setSubmitError(errorMessage(e, 'The submission did not go through.'))
     } finally {
       setSubmitting(false)
     }
@@ -110,159 +117,108 @@ function Workspace({ problem }: { problem: LabCsesProblem }) {
 
   const html = useMemo(() => DOMPurify.sanitize(problem.contentHtml, { USE_PROFILES: { html: true } }),
     [problem.contentHtml])
-  // Written by the effect, not dangerouslySetInnerHTML: React re-applies that on every
-  // re-render, which would put the raw $$$ back over MathJax's output (see StatementView).
-  const statementRef = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    const el = statementRef.current
-    if (!el) return
-    let cancelled = false
-    el.innerHTML = html
-    typesetWhenReady(el, () => cancelled)
-    return () => { cancelled = true }
-  }, [html])
+
+  const notice = ready ? null : (
+    <WorkspaceNotice
+      icon={account ? <AlertTriangle size={14} /> : <Link2 size={14} />}
+      tone={account ? 'warn' : 'plain'}
+      action={<Link to="/platforms" className="btn-secondary btn-sm">Platforms</Link>}
+    >
+      {account
+        ? 'CSES no longer accepts your connection. Reconnect CSES to submit from here.'
+        : 'Connect your CSES account to submit from here. You can still run on the examples.'}
+    </WorkspaceNotice>
+  )
+
+  const statement = (
+    <article className="mx-auto max-w-3xl">
+      <StatementHeader
+        badge={problem.taskId}
+        kicker={<><Link to="/labs" className="hover:text-gray-300">{problem.labTitle}</Link> · CSES</>}
+        title={problem.title}
+        externalLabel="CSES"
+        onOpenExternal={() => openExternal(problem.url, true)}
+        chips={<LabChips problem={problem} />}
+      />
+      <Section html={html}
+        className="[&_h1]:mt-6 [&_h1]:mb-2 [&_h1]:text-[11px] [&_h1]:font-semibold [&_h1]:uppercase [&_h1]:tracking-wider [&_h1]:text-gray-500" />
+      <div className="h-8" />
+    </article>
+  )
 
   return (
-    <div className="space-y-4">
-      <Link to="/labs" className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-gray-300">
-        <ArrowLeft size={12} /> {problem.labTitle}
-      </Link>
-
-      <header className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <h1 className="text-xl font-semibold text-gray-50">{problem.title}</h1>
-          <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-400">
-            <span>CSES {problem.taskId}</span>
-            {problem.timeLimit && <span>Time {problem.timeLimit}</span>}
-            {problem.memoryLimit && <span>Memory {problem.memoryLimit}</span>}
-            <span>{Number(problem.marks)} {Number(problem.marks) === 1 ? 'mark' : 'marks'}</span>
-            <span>Due {format(new Date(problem.dueAt), 'EEE d MMM, HH:mm')}</span>
-            {problem.status === 'SOLVED' && (
-              <span className="inline-flex items-center gap-1 text-green-300"><CheckCircle2 size={12} /> Solved</span>
-            )}
-            {problem.status === 'LATE' && (
-              <span className="inline-flex items-center gap-1 text-amber-300"><Clock size={12} /> Solved late</span>
-            )}
-          </p>
-        </div>
-        <a href={problem.url} target="_blank" rel="noreferrer" className="btn-ghost btn-sm shrink-0">
-          Open on CSES <ExternalLink size={12} aria-hidden="true" />
-        </a>
-      </header>
-
-      {!ready ? (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-amber-900/60 bg-amber-950/20 p-3 text-sm text-amber-200">
-          <AlertTriangle size={16} className="shrink-0" aria-hidden="true" />
-          <span className="min-w-0 flex-1">
-            {account
-              ? 'CSES no longer accepts your connection. Reconnect CSES to submit from here.'
-              : 'Connect your CSES account to submit from here. You can still run on the examples.'}
-          </span>
-          <Link to="/platforms" className="btn-secondary btn-sm">Platforms</Link>
-        </div>
-      ) : (
-        <div className="flex items-center gap-2 rounded-xl border border-gray-800 bg-gray-900 p-3 text-sm text-gray-400">
-          <CheckCircle2 size={14} className="text-green-400" aria-hidden="true" />
-          Submitting to CSES as <span className="font-mono text-gray-200">{account?.handle}</span>
-        </div>
-      )}
-
-      <div className="grid gap-4 xl:grid-cols-2">
-        <section aria-label="Statement" className="rounded-xl border border-gray-800 bg-gray-900 p-4 xl:max-h-[calc(100vh-12rem)] xl:overflow-y-auto">
-          <div ref={statementRef} className="cf-statement text-sm leading-relaxed text-gray-300 [&_h1]:mt-4 [&_h1]:text-sm [&_h1]:font-semibold [&_h1]:text-gray-100" />
-        </section>
-
-        <section aria-label="Solution" className="flex min-w-0 flex-col gap-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <label className="sr-only" htmlFor="cses-lang">Language</label>
-            <select id="cses-lang" value={runtime?.id ?? lang}
-              onChange={e => { setLang(e.target.value); store(LANG_KEY, e.target.value) }}
-              className="rounded-lg border border-gray-800 bg-gray-900 px-2.5 py-1.5 text-sm text-gray-200">
-              {languages.map(l => <option key={l.id} value={l.id}>{l.displayName}</option>)}
-            </select>
-            <div className="ml-auto flex gap-2">
-              <button type="button" className="btn-secondary btn-sm" disabled={!runtime || run.isPending || submitting}
-                onClick={doRun} title="Run on the examples (Ctrl+Enter)">
-                {run.isPending ? <Loader2 size={13} className="animate-spin" aria-hidden="true" /> : <Play size={13} aria-hidden="true" />}
-                Run
-              </button>
-              <button type="button" className="btn-primary btn-sm" disabled={!ready || !runtime || submitting}
-                onClick={doSubmit} title={ready ? 'Submit to CSES (Ctrl+S)' : 'Connect CSES first'}>
-                {submitting ? <Loader2 size={13} className="animate-spin" aria-hidden="true" /> : <Send size={13} aria-hidden="true" />}
-                Submit
-              </button>
-            </div>
-          </div>
-
-          <div className="h-[420px] overflow-hidden rounded-xl border border-gray-800">
-            <CodeEditor value={code} onChange={setCode} language={editorLanguage} onRun={doRun} onSubmit={doSubmit} />
-          </div>
-
-          <div aria-live="polite" className="min-w-0 space-y-2">
-            {run.isPending && (
-              <p className="flex items-center gap-2 text-sm text-gray-400">
-                <Loader2 size={14} className="animate-spin" /> {run.progress ?? 'Running on the examples…'}
-              </p>
-            )}
-            {failure && <p role="alert" className="text-sm text-red-400">{failure}</p>}
-            {runResult && !run.isPending && <RunView r={runResult} />}
-            {verdict && <VerdictView v={verdict} />}
-            {!runResult && !verdict && !failure && !run.isPending && (
-              <p className="text-xs text-gray-600">Run checks your code on the examples here. Submit sends it to CSES.</p>
-            )}
-          </div>
-        </section>
-      </div>
-    </div>
+    <LabWorkspace
+      labId={problem.labId}
+      problemId={problem.problemId}
+      notice={notice}
+      statement={statement}
+      storageKey="cpintel.lab.split"
+      editor={
+        <SolvePane
+          languages={languages.map(l => ({ id: l.id, label: l.displayName }))}
+          languageId={runtime?.id ?? lang}
+          onLanguageChange={id => { setLang(id); store(LANG_KEY, id) }}
+          source={code}
+          onSourceChange={setCode}
+          editorLanguage={editorLanguage}
+          samples={problem.examples}
+          problemKey={`cses-${problem.problemId}`}
+          onRun={doRun}
+          running={run.isPending}
+          progress={run.progress}
+          runResult={run.data ?? null}
+          runError={run.isError ? errorMessage(run.error, 'The run did not go through.') : null}
+          runBlocked={runtime ? null : 'No local toolchain is available to run code'}
+          runTitle="Run against these cases  (Ctrl+Enter)"
+          onSubmit={doSubmit}
+          submitting={submitting}
+          submitBlocked={!ready ? 'Connect CSES first' : !runtime ? 'Pick a language' : null}
+          submitTitle={`Submit to CSES as ${account?.handle ?? ''}  (Ctrl+S)`}
+          verdict={verdict ? csesChipVerdict(verdict) : null}
+          polling={!!verdict?.pending}
+          verdictDetail={submitError
+            ? <p role="alert" className="text-sm text-red-400">{submitError}</p>
+            : verdict ? <CsesVerdictDetail v={verdict} /> : undefined}
+          storageKey="cpintel.lab"
+        />
+      }
+    />
   )
 }
 
-function RunView({ r }: { r: RunResponse }) {
-  const pre = 'mt-1 max-h-40 overflow-auto whitespace-pre-wrap rounded-md border border-gray-800 bg-gray-950 p-2 font-mono text-xs text-gray-300'
-  if (r.error) return <p className="text-sm text-red-400">{r.error}</p>
-  if (!r.compiled) {
-    return <div><p className="text-sm font-semibold text-red-300">Compilation error</p><pre className={pre}>{r.compileOutput}</pre></div>
-  }
+/** Marks, deadline and whether it is already solved, as chips like Practice's time and memory. */
+function LabChips({ problem }: { problem: LabCsesProblem }) {
   return (
-    <ul className="space-y-1 text-sm">
-      {r.results.map(t => (
-        <li key={t.label}>
-          <span className={t.verdict === 'OK' ? 'text-green-300' : 'text-red-300'}>
-            {t.label}: {t.verdict === 'OK' ? 'passed' : t.verdict.replace(/_/g, ' ').toLowerCase()}
-          </span>
-          {t.verdict !== 'OK' && (
-            <pre className={pre}>{`Got:\n${t.actual}${t.expected != null ? `\nExpected:\n${t.expected}` : ''}${t.stderr ? `\n${t.stderr}` : ''}`}</pre>
-          )}
-        </li>
-      ))}
-    </ul>
+    <>
+      {problem.timeLimit && <Meta icon={<Clock size={12} />} label="Time" value={problem.timeLimit} />}
+      {problem.memoryLimit && <Meta icon={<Cpu size={12} />} label="Memory" value={problem.memoryLimit} />}
+      <LabMetaChips marks={problem.marks} dueAt={problem.dueAt} status={problem.status} />
+    </>
   )
 }
 
-function VerdictView({ v }: { v: CsesVerdict }) {
-  const pre = 'mt-1 max-h-40 overflow-auto whitespace-pre-wrap rounded-md border border-gray-800 bg-gray-950 p-2 font-mono text-xs text-gray-300'
+function CsesVerdictDetail({ v }: { v: CsesVerdict }) {
+  const pre = 'mt-1 max-h-40 overflow-auto whitespace-pre-wrap rounded-md border border-gray-800 bg-gray-900 p-2 font-mono text-xs text-gray-300'
   if (v.pending) {
     return (
-      <p className="flex items-center gap-2 text-sm text-gray-400">
-        <Loader2 size={14} className="animate-spin" /> Judging on CSES
-        {v.totalTests ? ` (${v.finishedTests ?? 0} / ${v.totalTests} tests)` : '…'}
+      <p className="text-xs text-gray-400">
+        Judging on CSES{v.totalTests ? ` — ${v.finishedTests ?? 0} of ${v.totalTests} tests` : '…'}
       </p>
     )
   }
   const accepted = v.result === 'ACCEPTED'
   const failed = v.tests.find(t => t.verdict !== 'ACCEPTED')
+  const passed = v.tests.filter(t => t.verdict === 'ACCEPTED').length
   return (
-    <div className="text-sm">
-      <p className={`font-semibold ${accepted ? 'text-green-300' : 'text-red-300'}`}>
-        {(v.result ?? v.status ?? 'Done').replace(/_/g, ' ').toLowerCase().replace(/^./, c => c.toUpperCase())}
+    <div className="space-y-1 rounded-lg border border-gray-800 bg-gray-900/40 p-3 text-sm">
+      <p className={accepted ? 'font-semibold text-green-400' : 'font-semibold text-red-400'}>
+        CSES: {(v.result ?? v.status ?? 'Done').replace(/_/g, ' ').toLowerCase().replace(/^./, c => c.toUpperCase())}
         {v.tests.length > 0 && (
-          <span className="ml-2 font-normal text-gray-400">
-            {v.tests.filter(t => t.verdict === 'ACCEPTED').length} / {v.tests.length} tests
-          </span>
+          <span className="ml-2 text-xs font-normal text-gray-400">{passed} / {v.tests.length} tests</span>
         )}
       </p>
       {!accepted && failed && (
-        <p className="mt-1 text-xs text-gray-400">First failing test: #{failed.number} ({failed.verdict.toLowerCase()})</p>
+        <p className="text-xs text-gray-400">First failing test: #{failed.number} ({failed.verdict.toLowerCase()})</p>
       )}
       {v.compiler && <pre className={pre}>{v.compiler}</pre>}
     </div>

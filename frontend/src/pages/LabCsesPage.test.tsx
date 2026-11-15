@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { Route, Routes } from 'react-router-dom'
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import LabCsesPage from './LabCsesPage'
+import LabCsesPage, { csesChipVerdict } from './LabCsesPage'
 import { fakeServer } from '@/test/server'
 import { renderAt, signedIn, user } from '@/test/render'
 import type { LabCsesProblem, MyLabs } from '@/types'
@@ -62,7 +62,7 @@ describe('solving a CSES lab task', () => {
     await userEvent.click(await screen.findByRole('button', { name: /Run/ }))
     expect(runMock.mock.calls[0][0]).toMatchObject({
       language: 'cpp',
-      tests: [{ input: '4 8\n2 7 5 1\n', expected: '2 4\n', label: 'Example 1' }],
+      tests: [{ input: '4 8\n2 7 5 1\n', expected: '2 4\n', label: 'Case 1' }],
     })
   })
 
@@ -91,9 +91,27 @@ describe('solving a CSES lab task', () => {
 
     await userEvent.click(await screen.findByRole('button', { name: /Submit/ }))
 
-    expect(await screen.findByText('Accepted', {}, { timeout: 8000 })).toBeInTheDocument()
+    expect(await screen.findByText('CSES: Accepted', {}, { timeout: 8000 })).toBeInTheDocument()
     expect(server.calls('POST /labs/problems/9/cses/submissions')[0].body).toMatchObject({ language: 'cpp' })
     await waitFor(() => expect(server.calls('GET /labs/problems/9/cses/submissions/55').length).toBeGreaterThanOrEqual(2))
     expect(await screen.findByText('Accepted, and counted for the lab.')).toBeInTheDocument()
   }, 15_000)
+
+  it('shows each example as an editable case, with its expected output', async () => {
+    open(labs(null))
+    expect(await screen.findByPlaceholderText('The stdin your program reads')).toHaveValue('4 8\n2 7 5 1\n')
+    expect(screen.getByPlaceholderText(/Leave empty to print the output/)).toHaveValue('2 4\n')
+  })
+})
+
+describe('csesChipVerdict', () => {
+  it('maps CSES results onto the chip and names the failing test', () => {
+    expect(csesChipVerdict({ submissionId: 3, pending: false, status: 'READY', result: 'WRONG ANSWER',
+      finishedTests: 9, totalTests: 9, compiler: null,
+      tests: [{ number: 1, verdict: 'ACCEPTED', timeMs: 1 }, { number: 2, verdict: 'WRONG ANSWER', timeMs: 1 }] }))
+      .toEqual({ submissionId: '3', verdict: 'WRONG_ANSWER', passedTestCount: 1, finished: true })
+    expect(csesChipVerdict({ submissionId: 4, pending: true, status: 'TESTING', result: null,
+      finishedTests: 1, totalTests: 9, compiler: null, tests: [] }))
+      .toMatchObject({ verdict: 'TESTING', finished: false })
+  })
 })

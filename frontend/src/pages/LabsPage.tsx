@@ -6,13 +6,14 @@ import {
 } from 'lucide-react'
 import { PageHeader } from '@/components/common/PageHeader'
 import { EmptyState, ErrorState, LoadingState } from '@/components/common/States'
+import { solvePath } from '@/components/labs/solvePath'
 import { useCheckMyLabs, useMyLabs } from '@/hooks/useLabs'
 import type { LabHandle, LabPlatform, MyLab, MyLabProblem } from '@/types'
 
 const PLATFORM_NAME: Record<LabPlatform, string> = { CODEFORCES: 'Codeforces', LEETCODE: 'LeetCode', CSES: 'CSES' }
 
 /**
- * The lab assignments set in your classrooms: problems on Codeforces and LeetCode, solved
+ * The lab assignments set in your classrooms: problems on Codeforces, LeetCode and CSES, solved
  * there. CPIntel reads your accepted submissions from your verified handles every few minutes.
  */
 export default function LabsPage() {
@@ -31,7 +32,7 @@ export default function LabsPage() {
   return (
     <div className="space-y-6">
       <PageHeader title="Labs"
-        description="Problems your instructors set on Codeforces and LeetCode. Solve them there; CPIntel picks up your accepted submissions every few minutes."
+        description="Problems your instructors set on Codeforces, LeetCode and CSES. Solve them here or on those sites; CPIntel picks up your accepted submissions every few minutes."
         actions={data.labs.length > 0 && (
           <button type="button" className="btn-secondary btn-sm" disabled={check.isPending}
             onClick={() => check.mutate()}>
@@ -178,20 +179,11 @@ function ProblemRow({ item }: { item: MyLabProblem }) {
   )
 }
 
-/** Where to solve it inside CPIntel: the LeetCode workspace, or Practice for Codeforces. */
+/** Where to solve it inside CPIntel: the LeetCode or CSES workspace, or Practice for Codeforces. */
 function SolveLink({ item }: { item: MyLabProblem }) {
   const { problem, status } = item
-  if (status === 'SOLVED' || problem.problemId == null) return null
-  let to: string | null = null
-  if (problem.platform === 'LEETCODE') {
-    to = `/labs/problems/${problem.problemId}`
-  } else if (problem.platform === 'CSES') {
-    to = `/labs/cses/${problem.problemId}`
-  } else {
-    const [contest, index] = problem.key.split('/')
-    // Gym problems are not in Practice; they are solved on Codeforces.
-    if (Number(contest) < 100_000) to = `/practice?contest=${contest}&index=${index}`
-  }
+  if (status === 'SOLVED') return null
+  const to = solvePath(problem)
   if (!to) return null
   return (
     <Link to={to} className="btn-secondary btn-sm shrink-0" aria-label={`Solve ${problem.title} in CPIntel`}>

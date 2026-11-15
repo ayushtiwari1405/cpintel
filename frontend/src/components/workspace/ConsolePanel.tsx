@@ -67,7 +67,22 @@ interface Props {
   /** What the platform said about the last submission, if anything. */
   verdict: VerdictResponse | null
   polling: boolean
-  onShowSubmissionTests: () => void
+  /** Opens the failed submission's tests. Without it the verdict offers no link. */
+  onShowSubmissionTests?: () => void
+  /**
+   * More about the last submission than the header chip holds — the failing input, the
+   * compiler's message. Shown at the top of the Result tab.
+   */
+  verdictDetail?: ReactNode
+  /** What goes in a case's input; stdin unless the judge reads something else. */
+  inputPlaceholder?: string
+  /**
+   * Whether a case has an expected output to fill in. Off where the judge works the expected
+   * answer out itself (LeetCode), so there is nothing to type.
+   */
+  showExpected?: boolean
+  /** What the run's second stream is called: stderr locally, the program's prints elsewhere. */
+  stderrLabel?: string
   /** Run and Submit, supplied by the pane that owns them. */
   actions: ReactNode
   /** Anything worth saying about the local runner — off, missing, unsandboxed. */
@@ -90,6 +105,8 @@ interface Props {
 export function ConsolePanel({
   cases, onCasesChange, activeCase, onActiveCase, tab, onTab,
   result, progress, running, error, verdict, polling, onShowSubmissionTests, actions, notes, disabled,
+  verdictDetail, inputPlaceholder = 'The stdin your program reads', showExpected = true,
+  stderrLabel = 'stderr',
 }: Props) {
   const active = cases[activeCase]
 
@@ -177,13 +194,14 @@ export function ConsolePanel({
                     disabled={disabled}
                     spellCheck={false}
                     rows={4}
-                    placeholder="The stdin your program reads"
+                    placeholder={inputPlaceholder}
                     className="w-full rounded-lg border border-gray-800 bg-gray-900 px-3 py-2
                                font-mono text-xs text-gray-200 placeholder-gray-400 resize-y
                                outline-hidden focus:border-accent-600 disabled:opacity-50"
                   />
                 </Labelled>
 
+                {showExpected && (
                 <Labelled
                   label="Expected output"
                   hint={active.expected == null ? 'optional — leave empty to just see the output' : undefined}
@@ -200,6 +218,7 @@ export function ConsolePanel({
                                outline-hidden focus:border-accent-600 disabled:opacity-50"
                   />
                 </Labelled>
+                )}
               </>
             )}
 
@@ -214,6 +233,8 @@ export function ConsolePanel({
             cases={cases}
             activeCase={activeCase}
             onActiveCase={onActiveCase}
+            verdictDetail={verdictDetail}
+            stderrLabel={stderrLabel}
           />
         )}
       </div>
@@ -233,7 +254,7 @@ function ResultDot({ result }: { result: RunResponse }) {
   )
 }
 
-function ResultView({ result, progress, running, error, cases, activeCase, onActiveCase }: {
+interface ResultProps {
   result: RunResponse | null
   progress: string | null
   running: boolean
@@ -241,7 +262,24 @@ function ResultView({ result, progress, running, error, cases, activeCase, onAct
   cases: WorkCase[]
   activeCase: number
   onActiveCase: (index: number) => void
-}) {
+  stderrLabel: string
+}
+
+/** The submission's detail, when there is one, above the last run's results. */
+function ResultView({ verdictDetail, ...props }: ResultProps & { verdictDetail?: ReactNode }) {
+  if (!verdictDetail) return <RunResult {...props} />
+  const ranOrRunning = props.running || props.error || props.result
+  return (
+    <div>
+      <div className="p-3 pb-0">{verdictDetail}</div>
+      {ranOrRunning && <RunResult {...props} />}
+    </div>
+  )
+}
+
+function RunResult({
+  result, progress, running, error, cases, activeCase, onActiveCase, stderrLabel,
+}: ResultProps) {
   if (running) {
     return (
       <div className="flex items-center justify-center gap-2 py-12 text-sm text-gray-500">
@@ -306,7 +344,9 @@ function ResultView({ result, progress, running, error, cases, activeCase, onAct
         {judged.length > 0 && (
           <span className="text-xs text-gray-500">{passed}/{judged.length} cases passed</span>
         )}
-        <span className="text-xs text-gray-600">compiled in {result.compileMs} ms</span>
+        {result.compileMs > 0 && (
+          <span className="text-xs text-gray-600">compiled in {result.compileMs} ms</span>
+        )}
       </div>
 
       {allPassed && (
@@ -338,12 +378,12 @@ function ResultView({ result, progress, running, error, cases, activeCase, onAct
         ))}
       </div>
 
-      {shown && <CaseResult result={shown} />}
+      {shown && <CaseResult result={shown} stderrLabel={stderrLabel} />}
     </div>
   )
 }
 
-function CaseResult({ result }: { result: RunTestResult }) {
+function CaseResult({ result, stderrLabel }: { result: RunTestResult; stderrLabel: string }) {
   const meta = VERDICT_META[result.verdict] ?? VERDICT_META.NO_EXPECTED
 
   return (
@@ -371,7 +411,7 @@ function CaseResult({ result }: { result: RunTestResult }) {
         <Labelled label="Expected"><Pre>{result.expected}</Pre></Labelled>
       )}
       {result.stderr && (
-        <Labelled label="stderr"><Pre className="text-amber-200/80">{result.stderr}</Pre></Labelled>
+        <Labelled label={stderrLabel}><Pre className="text-amber-200/80">{result.stderr}</Pre></Labelled>
       )}
 
       {result.exitCode != null && result.exitCode !== 0 && (
@@ -389,7 +429,7 @@ function CaseResult({ result }: { result: RunTestResult }) {
 function PlatformVerdict({ verdict, polling, onShowTests }: {
   verdict: VerdictResponse
   polling: boolean
-  onShowTests: () => void
+  onShowTests?: () => void
 }) {
   const pending = !verdict.finished
   const accepted = verdict.verdict === 'OK'
@@ -416,7 +456,7 @@ function PlatformVerdict({ verdict, polling, onShowTests }: {
       {pending && polling && (
         <span className="opacity-60 shrink-0">#{verdict.submissionId}</span>
       )}
-      {failed && (
+      {failed && onShowTests && (
         <button
           onClick={onShowTests}
           title="Open the test that failed, without leaving the app"

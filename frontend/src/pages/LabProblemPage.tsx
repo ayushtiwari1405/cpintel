@@ -2,11 +2,12 @@ import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import DOMPurify from 'dompurify'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { format } from 'date-fns'
-import {
-  AlertTriangle, ArrowLeft, CheckCircle2, Clock, ExternalLink, Loader2, LogIn, Play, Send,
-} from 'lucide-react'
-import { CodeEditor } from '@/components/editor/CodeEditor'
+import { clsx } from 'clsx'
+import { AlertTriangle, Gauge, Loader2, LogIn, Puzzle, RotateCcw } from 'lucide-react'
+
+import { LabMetaChips, LabWorkspace, WorkspaceNotice } from '@/components/labs/LabWorkspace'
+import { Section, StatementHeader } from '@/components/practice/StatementView'
+import { SolvePane } from '@/components/workspace/SolvePane'
 import { ErrorState, LoadingState, errorMessage } from '@/components/common/States'
 import { useToast } from '@/components/common/Toaster'
 import { useLabLeetCodeProblem, useMyLabs } from '@/hooks/useLabs'
@@ -15,7 +16,8 @@ import {
   extensionTooOld, lcRelay, lcRun, lcSignIn, lcStatus, lcSubmit, monacoLanguage,
   type LcResult, type LcStatus,
 } from '@/api/lcBrowser'
-import type { LabLeetCodeProblem } from '@/types'
+import { openExternal } from '@/utils/desktopBridge'
+import type { LabLeetCodeProblem, RunResponse, RunTestCase, VerdictResponse } from '@/types'
 
 const LANG_KEY = 'cpintel.lc.lang'
 
@@ -28,7 +30,7 @@ function store(key: string, value: string) {
 
 /**
  * A lab's LeetCode problem, solved inside CPIntel: the statement, an editor with LeetCode's
- * starter code, Run on test input and Submit. Both go to LeetCode through the student's own
+ * starter code, Run on test cases and Submit. Both go to LeetCode through the student's own
  * LeetCode sign-in (desktop app or CPIntel extension), so the solve lands on their LeetCode
  * account, where the lab check picks it up.
  */
@@ -43,6 +45,63 @@ export default function LabProblemPage() {
   if (isError) return <ErrorState title="Could not open this problem" error={error} onRetry={() => refetch()} />
   if (isLoading || !problem) return <LoadingState label="Loading the problem…" />
   return <Workspace problem={problem} />
+}
+
+const LC_VERDICTS: Record<string, string> = {
+  'Accepted': 'OK',
+  'Wrong Answer': 'WRONG_ANSWER',
+  'Time Limit Exceeded': 'TIME_LIMIT_EXCEEDED',
+  'Memory Limit Exceeded': 'MEMORY_LIMIT_EXCEEDED',
+  'Runtime Error': 'RUNTIME_ERROR',
+  'Compile Error': 'COMPILATION_ERROR',
+}
+
+/** LeetCode's verdict on a submission, in the shape the console's verdict chip reads. */
+export function lcChipVerdict(r: LcResult, submissionId: string): VerdictResponse {
+  const msg = r.status_msg ?? (r.state === 'FAILURE' ? 'Failed' : 'Done')
+  const verdict = LC_VERDICTS[msg] ?? msg
+  return {
+    submissionId,
+    verdict,
+    passedTestCount: verdict !== 'OK' && r.total_correct != null ? r.total_correct : undefined,
+    finished: true,
+  }
+}
+
+/**
+ * LeetCode's answer to a Run, in the shape the console's Result tab reads — one result per
+ * case, compared with LeetCode's own expected answers.
+ */
+export function lcRunResponse(r: LcResult, tests: RunTestCase[]): RunResponse {
+  const compileError = r.full_compile_error || r.compile_error
+  if (compileError || r.status_msg === 'Compile Error') {
+    return { compiled: false, compileOutput: compileError || 'Compile error', compileMs: 0, results: [], error: null }
+  }
+  const answers = r.code_answer ?? []
+  const runtimeError = r.full_runtime_error || r.runtime_error
+  if (!runtimeError && answers.length === 0 && r.run_success === false) {
+    return { compiled: true, compileOutput: null, compileMs: 0, results: [],
+      error: `LeetCode: ${r.status_msg ?? 'the run failed'}.` }
+  }
+  const ms = Number.parseInt(r.status_runtime ?? '', 10) || 0
+  const results: RunResponse['results'] = []
+  tests.forEach((t, i) => {
+    if (i < answers.length) {
+      const expected = r.expected_code_answer?.[i]
+      results.push({
+        label: t.label, input: t.input, actual: answers[i], expected: expected ?? null,
+        verdict: expected === undefined ? 'NO_EXPECTED' : expected === answers[i] ? 'OK' : 'WRONG_ANSWER',
+        stderr: r.std_output_list?.[i] ?? '', durationMs: ms, exitCode: null, truncated: false,
+      })
+    } else if (runtimeError && i === answers.length) {
+      // The case that failed; the ones after it never ran.
+      results.push({
+        label: t.label, input: t.input, actual: '', expected: r.expected_code_answer?.[i] ?? null,
+        verdict: 'RUNTIME_ERROR', stderr: runtimeError, durationMs: ms, exitCode: null, truncated: false,
+      })
+    }
+  })
+  return { compiled: true, compileOutput: null, compileMs: 0, results, error: null }
 }
 
 function Workspace({ problem }: { problem: LabLeetCodeProblem }) {
@@ -64,34 +123,41 @@ function Workspace({ problem }: { problem: LabLeetCodeProblem }) {
     store(draftKey, next)
   }
 
-  const [input, setInput] = useState(problem.exampleTestcases.join('\n'))
-  const [busy, setBusy] = useState<'run' | 'submit' | null>(null)
-  const [result, setResult] = useState<{ kind: 'run' | 'submit'; r: LcResult } | null>(null)
-  const [failure, setFailure] = useState<string | null>(null)
+  const [running, setRunning] = useState(false)
+  const [runResult, setRunResult] = useState<RunResponse | null>(null)
+  const [runError, setRunError] = useState<string | null>(null)
+  const [submitting, setSubmitting] = useState(false)
+  const [submitted, setSubmitted] = useState<{ r: LcResult; id: string } | null>(null)
+  const [submitError, setSubmitError] = useState<string | null>(null)
 
   const connection = useLeetCodeConnection()
   const ready = connection.status?.signedIn === true
+  const blocked = !connection.relay
+    ? 'Use the CPIntel desktop app or extension to run and submit here'
+    : !ready ? 'Sign in to LeetCode first' : null
 
   const solution = { slug: problem.slug, questionId: problem.questionId, lang, code }
 
-  const run = async () => {
-    if (!ready || busy) return
-    setBusy('run'); setFailure(null)
+  const run = async (tests: RunTestCase[]) => {
+    if (!ready || running) return
+    setRunning(true); setRunError(null)
     try {
-      setResult({ kind: 'run', r: await lcRun(solution, input) })
+      // LeetCode takes every case's arguments one after another, one argument per line.
+      const input = tests.map(t => t.input.replace(/\n+$/, '')).join('\n')
+      setRunResult(lcRunResponse(await lcRun(solution, input), tests))
     } catch (e) {
-      setFailure(errorMessage(e, 'The run did not go through.'))
+      setRunError(errorMessage(e, 'The run did not go through.'))
     } finally {
-      setBusy(null)
+      setRunning(false)
     }
   }
 
   const submit = async () => {
-    if (!ready || busy) return
-    setBusy('submit'); setFailure(null)
+    if (!ready || submitting) return
+    setSubmitting(true); setSubmitError(null); setSubmitted(null)
     try {
       const r = await lcSubmit(solution)
-      setResult({ kind: 'submit', r })
+      setSubmitted({ r, id: r.submissionId })
       if (r.status_msg === 'Accepted') {
         // Ask for this student's labs to be checked now rather than at the next schedule.
         try {
@@ -103,108 +169,115 @@ function Workspace({ problem }: { problem: LabLeetCodeProblem }) {
         }
       }
     } catch (e) {
-      setFailure(errorMessage(e, 'The submission did not go through.'))
+      setSubmitError(errorMessage(e, 'The submission did not go through.'))
     } finally {
-      setBusy(null)
+      setSubmitting(false)
     }
   }
 
   const html = useMemo(() => problem.contentHtml
     ? DOMPurify.sanitize(problem.contentHtml, { USE_PROFILES: { html: true } }) : null, [problem.contentHtml])
 
-  return (
-    <div className="space-y-4">
-      <Link to="/labs" className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-gray-300">
-        <ArrowLeft size={12} /> {problem.labTitle}
-      </Link>
+  const samples = useMemo(
+    () => problem.exampleTestcases.map(input => ({ input, output: '' })), [problem.exampleTestcases])
 
-      <header className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <h1 className="text-xl font-semibold text-gray-50">{problem.title}</h1>
-          <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-400">
-            <span>LeetCode{problem.difficulty && <> · {problem.difficulty}</>}</span>
-            <span>{Number(problem.marks)} {Number(problem.marks) === 1 ? 'mark' : 'marks'}</span>
-            <span>Due {format(new Date(problem.dueAt), 'EEE d MMM, HH:mm')}</span>
-            {problem.status === 'SOLVED' && (
-              <span className="inline-flex items-center gap-1 text-green-300"><CheckCircle2 size={12} /> Solved</span>
-            )}
-            {problem.status === 'LATE' && (
-              <span className="inline-flex items-center gap-1 text-amber-300"><Clock size={12} /> Solved late</span>
-            )}
+  const verdict: VerdictResponse | null = submitting
+    ? { submissionId: '', verdict: 'TESTING', finished: false }
+    : submitted ? lcChipVerdict(submitted.r, submitted.id) : null
+
+  const statement = (
+    <article className="mx-auto max-w-3xl">
+      <StatementHeader
+        badge={problem.questionId}
+        kicker={<><Link to="/labs" className="hover:text-gray-300">{problem.labTitle}</Link> · LeetCode</>}
+        title={problem.title}
+        externalLabel="LeetCode"
+        onOpenExternal={() => openExternal(problem.url, true)}
+        chips={
+          <>
+            {problem.difficulty && <DifficultyChip difficulty={problem.difficulty} />}
+            <LabMetaChips marks={problem.marks} dueAt={problem.dueAt} status={problem.status} />
+          </>
+        }
+      />
+      {html
+        // LeetCode writes a plain $ as a dollar sign, so no maths typesetting here.
+        ? <Section html={html} math={false} />
+        : (
+          <p className="text-sm text-gray-400">
+            {problem.paidOnly
+              ? 'This is a LeetCode Premium problem, so its statement is only shown on LeetCode.'
+              : 'LeetCode did not send a statement for this problem.'}{' '}
+            <a href={problem.url} target="_blank" rel="noreferrer" className="text-accent-300 hover:underline">Read it there</a>.
           </p>
-        </div>
-        <a href={problem.url} target="_blank" rel="noreferrer" className="btn-ghost btn-sm shrink-0">
-          Open on LeetCode <ExternalLink size={12} aria-hidden="true" />
-        </a>
-      </header>
+        )}
+      <div className="h-8" />
+    </article>
+  )
 
-      <ConnectionBar connection={connection} />
-
-      <div className="grid gap-4 xl:grid-cols-2">
-        <section aria-label="Statement" className="rounded-xl border border-gray-800 bg-gray-900 p-4 xl:max-h-[calc(100vh-12rem)] xl:overflow-y-auto">
-          {html
-            ? <div className="cf-statement text-sm leading-relaxed text-gray-300" dangerouslySetInnerHTML={{ __html: html }} />
-            : (
-              <p className="text-sm text-gray-400">
-                {problem.paidOnly
-                  ? 'This is a LeetCode Premium problem, so its statement is only shown on LeetCode.'
-                  : 'LeetCode did not send a statement for this problem.'}{' '}
-                <a href={problem.url} target="_blank" rel="noreferrer" className="text-accent-300 hover:underline">Read it there</a>.
-              </p>
-            )}
-        </section>
-
-        <section aria-label="Solution" className="flex min-w-0 flex-col gap-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <label className="sr-only" htmlFor="lc-lang">Language</label>
-            <select id="lc-lang" value={lang}
-              onChange={e => { setLang(e.target.value); store(LANG_KEY, e.target.value) }}
-              className="rounded-lg border border-gray-800 bg-gray-900 px-2.5 py-1.5 text-sm text-gray-200">
-              {languages.map(l => <option key={l.langSlug} value={l.langSlug}>{l.lang}</option>)}
-            </select>
-            <button type="button" className="btn-ghost btn-sm"
-              onClick={() => { if (confirm('Replace your code with LeetCode\'s starter code?')) setCode(starter) }}>
-              Reset
+  return (
+    <LabWorkspace
+      labId={problem.labId}
+      problemId={problem.problemId}
+      notice={<ConnectionNotice connection={connection} />}
+      statement={statement}
+      storageKey="cpintel.lab.split"
+      editor={
+        <SolvePane
+          languages={languages.map(l => ({ id: l.langSlug, label: l.lang }))}
+          languageId={lang}
+          onLanguageChange={id => { setLang(id); store(LANG_KEY, id) }}
+          source={code}
+          onSourceChange={setCode}
+          editorLanguage={monacoLanguage(lang)}
+          toolbar={
+            <button
+              type="button"
+              onClick={() => { if (confirm('Replace your code with LeetCode\'s starter code?')) setCode(starter) }}
+              title="Start again from LeetCode's starter code"
+              aria-label="Reset to the starter code"
+              className="rounded-md border border-gray-800 p-1.5 text-gray-400 transition-colors
+                         hover:bg-gray-800 hover:text-gray-200"
+            >
+              <RotateCcw size={13} />
             </button>
-            <div className="ml-auto flex gap-2">
-              <button type="button" className="btn-secondary btn-sm" disabled={!ready || busy !== null} onClick={run}
-                title={ready ? 'Run on the test input (Ctrl+Enter)' : 'Connect LeetCode first'}>
-                {busy === 'run' ? <Loader2 size={13} className="animate-spin" aria-hidden="true" /> : <Play size={13} aria-hidden="true" />}
-                Run
-              </button>
-              <button type="button" className="btn-primary btn-sm" disabled={!ready || busy !== null} onClick={submit}
-                title={ready ? 'Submit to LeetCode (Ctrl+S)' : 'Connect LeetCode first'}>
-                {busy === 'submit' ? <Loader2 size={13} className="animate-spin" aria-hidden="true" /> : <Send size={13} aria-hidden="true" />}
-                Submit
-              </button>
-            </div>
-          </div>
+          }
+          samples={samples}
+          problemKey={`lc-${problem.problemId}`}
+          inputPlaceholder="One argument per line, as on LeetCode"
+          showExpected={false}
+          stderrLabel="Printed"
+          onRun={tests => { void run(tests) }}
+          running={running}
+          runResult={runResult}
+          runError={runError}
+          runBlocked={blocked}
+          runTitle="Run on LeetCode against these cases  (Ctrl+Enter)"
+          onSubmit={() => { void submit() }}
+          submitting={submitting}
+          submitBlocked={blocked}
+          submitTitle={`Submit to LeetCode as ${connection.status?.username ?? ''}  (Ctrl+S)`}
+          verdict={verdict}
+          polling={false}
+          verdictDetail={submitError
+            ? <p role="alert" className="text-sm text-red-400">{submitError}</p>
+            : submitted ? <SubmitDetail r={submitted.r} /> : undefined}
+          storageKey="cpintel.lab"
+        />
+      }
+    />
+  )
+}
 
-          <div className="h-[420px] overflow-hidden rounded-xl border border-gray-800">
-            <CodeEditor value={code} onChange={setCode} language={monacoLanguage(lang)} onRun={run} onSubmit={submit} />
-          </div>
-
-          <div className="grid gap-3 lg:grid-cols-2">
-            <label className="block">
-              <span className="mb-1 block text-xs text-gray-400">Test input (one argument per line)</span>
-              <textarea value={input} onChange={e => setInput(e.target.value)} rows={6} spellCheck={false}
-                className="w-full rounded-lg border border-gray-800 bg-gray-950 px-3 py-2 font-mono text-xs text-gray-200" />
-            </label>
-            <div aria-live="polite" className="min-w-0">
-              <span className="mb-1 block text-xs text-gray-400">Result</span>
-              {busy && (
-                <p className="flex items-center gap-2 text-sm text-gray-400">
-                  <Loader2 size={14} className="animate-spin" /> {busy === 'run' ? 'Running on LeetCode…' : 'Judging on LeetCode…'}
-                </p>
-              )}
-              {!busy && failure && <p role="alert" className="text-sm text-red-400">{failure}</p>}
-              {!busy && !failure && result && <ResultView kind={result.kind} r={result.r} />}
-              {!busy && !failure && !result && <p className="text-xs text-gray-600">Run or submit to see LeetCode's verdict.</p>}
-            </div>
-          </div>
-        </section>
-      </div>
-    </div>
+/** LeetCode's own colours for its three difficulties. */
+function DifficultyChip({ difficulty }: { difficulty: string }) {
+  const tone = difficulty === 'Easy' ? 'text-teal-400 border-teal-900'
+    : difficulty === 'Medium' ? 'text-amber-400 border-amber-900'
+      : difficulty === 'Hard' ? 'text-red-400 border-red-900' : 'text-gray-400 border-gray-700'
+  return (
+    <span className={clsx('flex items-center gap-1 rounded-full border px-2.5 py-1 font-medium', tone)}>
+      <Gauge size={11} /> {difficulty}
+    </span>
   )
 }
 
@@ -244,104 +317,85 @@ function useLeetCodeConnection(): Connection {
   }
 }
 
-function ConnectionBar({ connection: c }: { connection: Connection }) {
-  const box = 'flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border p-3 text-sm'
+/** What stands between the student and Run / Submit, if anything. Nothing once all is well. */
+function ConnectionNotice({ connection: c }: { connection: Connection }) {
   if (!c.relay) {
     return (
-      <div className={`${box} border-amber-900/60 bg-amber-950/20 text-amber-200`}>
-        <AlertTriangle size={16} className="shrink-0" aria-hidden="true" />
-        <span className="min-w-0 flex-1">
-          {extensionTooOld()
-            ? 'Your CPIntel extension is too old for LeetCode. Install the new version to run and submit here.'
-            : 'To run and submit here, use the CPIntel desktop app or install the CPIntel browser extension. You can still solve it on LeetCode; it counts either way.'}
-        </span>
-        <Link to="/extension" className="btn-secondary btn-sm">Get the extension</Link>
-      </div>
+      <WorkspaceNotice icon={<Puzzle size={14} />}
+        action={<Link to="/extension" className="btn-secondary btn-sm">Get the extension</Link>}>
+        {extensionTooOld()
+          ? 'Your CPIntel extension is too old for LeetCode. Install the new version to run and submit here.'
+          : 'To run and submit here, use the CPIntel desktop app or install the CPIntel browser extension. You can still solve it on LeetCode; it counts either way.'}
+      </WorkspaceNotice>
     )
   }
   if (c.loading) {
-    return <div className={`${box} border-gray-800 text-gray-400`}><Loader2 size={14} className="animate-spin" /> Checking your LeetCode sign-in…</div>
+    return (
+      <WorkspaceNotice icon={<Loader2 size={14} className="animate-spin" />}>
+        <span className="text-gray-400">Checking your LeetCode sign-in…</span>
+      </WorkspaceNotice>
+    )
   }
   if (!c.status?.signedIn) {
     return (
-      <div className={`${box} border-gray-800 bg-gray-900 text-gray-300`}>
-        <span className="min-w-0 flex-1">
-          {c.error ? errorMessage(c.error, 'Could not reach LeetCode.') + ' ' : ''}
-          Sign in to LeetCode {c.relay === 'desktop' ? 'in the app' : 'in this browser'} to run and submit from here.
-        </span>
-        <button type="button" className="btn-primary btn-sm" onClick={c.signIn} disabled={c.signingIn}>
-          {c.signingIn ? <Loader2 size={13} className="animate-spin" aria-hidden="true" /> : <LogIn size={13} aria-hidden="true" />}
-          Sign in to LeetCode
-        </button>
-      </div>
+      <WorkspaceNotice icon={<LogIn size={14} />}
+        action={
+          <button type="button" className="btn-primary btn-sm" onClick={c.signIn} disabled={c.signingIn}>
+            {c.signingIn ? <Loader2 size={13} className="animate-spin" aria-hidden="true" /> : <LogIn size={13} aria-hidden="true" />}
+            Sign in to LeetCode
+          </button>
+        }>
+        {c.error ? errorMessage(c.error, 'Could not reach LeetCode.') + ' ' : ''}
+        Sign in to LeetCode {c.relay === 'desktop' ? 'in the app' : 'in this browser'} to run and submit from here.
+      </WorkspaceNotice>
     )
   }
   const signedAs = c.status.username ?? ''
   const mismatch = c.linked && c.linked.handle.toLowerCase() !== signedAs.toLowerCase()
   if (!c.linked || mismatch || !c.linked.verified) {
     return (
-      <div className={`${box} border-amber-900/60 bg-amber-950/20 text-amber-200`}>
-        <AlertTriangle size={16} className="shrink-0" aria-hidden="true" />
-        <span className="min-w-0 flex-1">
-          Signed in to LeetCode as <b className="font-mono">{signedAs}</b>.{' '}
-          {!c.linked
-            ? 'Link and verify this handle on the Platforms page, or your solves will not count.'
-            : mismatch
-              ? <>Your linked handle is <b className="font-mono">{c.linked.handle}</b>, so solves from this account will not count.</>
-              : 'Verify this handle on the Platforms page, or your solves will not count.'}
-        </span>
-        <Link to="/platforms" className="btn-secondary btn-sm">Platforms</Link>
-      </div>
+      <WorkspaceNotice icon={<AlertTriangle size={14} />} tone="warn"
+        action={<Link to="/platforms" className="btn-secondary btn-sm">Platforms</Link>}>
+        Signed in to LeetCode as <b className="font-mono">{signedAs}</b>.{' '}
+        {!c.linked
+          ? 'Link and verify this handle on the Platforms page, or your solves will not count.'
+          : mismatch
+            ? <>Your linked handle is <b className="font-mono">{c.linked.handle}</b>, so solves from this account will not count.</>
+            : 'Verify this handle on the Platforms page, or your solves will not count.'}
+      </WorkspaceNotice>
     )
   }
-  return (
-    <div className={`${box} border-gray-800 bg-gray-900 text-gray-400`}>
-      <CheckCircle2 size={14} className="text-green-400" aria-hidden="true" />
-      Submitting to LeetCode as <span className="font-mono text-gray-200">{signedAs}</span>
-      {c.relay === 'desktop' ? ' (desktop app)' : ' (this browser)'}
-    </div>
-  )
+  return null
 }
 
-function ResultView({ kind, r }: { kind: 'run' | 'submit'; r: LcResult }) {
+/** What LeetCode said about the submission, under the verdict chip. */
+function SubmitDetail({ r }: { r: LcResult }) {
   const msg = r.status_msg ?? (r.state === 'FAILURE' ? 'Failed' : 'Done')
-  const good = kind === 'submit' ? msg === 'Accepted' : r.run_success && r.correct_answer !== false && msg === 'Accepted'
-  const tone = good ? 'text-green-300' : 'text-red-300'
-  const pre = 'mt-1 max-h-40 overflow-auto whitespace-pre-wrap rounded-md border border-gray-800 bg-gray-950 p-2 font-mono text-xs text-gray-300'
+  const accepted = msg === 'Accepted'
+  const pre = 'mt-1 max-h-40 overflow-auto whitespace-pre-wrap rounded-md border border-gray-800 bg-gray-900 p-2 font-mono text-xs text-gray-300'
   const error = r.full_compile_error || r.compile_error || r.full_runtime_error || r.runtime_error
-
   return (
-    <div className="space-y-2 text-sm">
-      <p className={`font-semibold ${tone}`}>
-        {msg}
-        {kind === 'submit' && r.total_testcases != null && (
-          <span className="ml-2 font-normal text-gray-400">{r.total_correct ?? 0} / {r.total_testcases} tests</span>
+    <div className="space-y-2 rounded-lg border border-gray-800 bg-gray-900/40 p-3 text-sm">
+      <p className={accepted ? 'font-semibold text-green-400' : 'font-semibold text-red-400'}>
+        LeetCode: {msg}
+        {r.total_testcases != null && (
+          <span className="ml-2 text-xs font-normal text-gray-400">{r.total_correct ?? 0} / {r.total_testcases} tests</span>
         )}
       </p>
-      {kind === 'submit' && msg === 'Accepted' && (
+      {accepted && (r.status_runtime || r.status_memory) && (
         <p className="text-xs text-gray-400">Runtime {r.status_runtime} · Memory {r.status_memory}</p>
       )}
       {error && <pre className={pre}>{error}</pre>}
-      {!error && kind === 'run' && r.code_answer && (
-        <div className="space-y-1">
-          {r.code_answer.map((out, i) => {
-            const expected = r.expected_code_answer?.[i]
-            const same = expected === undefined || expected === out
-            return (
-              <div key={i} className="text-xs">
-                <span className="text-gray-500">Case {i + 1}: </span>
-                <span className={same ? 'text-gray-200' : 'text-red-300'}>{out}</span>
-                {!same && <span className="text-gray-500"> (expected {expected})</span>}
-              </div>
-            )
-          })}
-        </div>
-      )}
-      {!error && kind === 'submit' && msg !== 'Accepted' && r.last_testcase && (
+      {!error && !accepted && r.last_testcase && (
         <div className="text-xs">
           <span className="text-gray-500">Failing input</span>
           <pre className={pre}>{r.last_testcase}</pre>
-          {r.expected_output !== undefined && <p className="mt-1 text-gray-400">Expected <span className="font-mono">{String(r.expected_output)}</span>, got <span className="font-mono">{String(r.code_output)}</span></p>}
+          {r.expected_output !== undefined && (
+            <p className="mt-1 text-gray-400">
+              Expected <span className="font-mono">{String(r.expected_output)}</span>, got{' '}
+              <span className="font-mono">{String(r.code_output)}</span>
+            </p>
+          )}
         </div>
       )}
     </div>
