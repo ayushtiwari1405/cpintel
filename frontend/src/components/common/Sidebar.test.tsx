@@ -29,13 +29,13 @@ function as(role: Role, taExams: unknown[] = [], banks: unknown[] = []) {
 
 const STUDENT = [
   'Dashboard -> /dashboard', 'Analytics -> /analytics', 'Roadmap -> /roadmap', 'Practice plan -> /recommendations',
-  'Practice -> /practice', 'Compete -> /compete', 'Exams -> /exams', 'Labs -> /labs', 'Teams -> /teams',
+  'Practice -> /practice', 'Compete -> /compete', 'Exams -> /exams', 'Labs -> /labs', 'Visualiser -> /visualise', 'Teams -> /teams',
   'Platforms -> /platforms', 'Profile -> /profile', 'Desktop app -> /download',
 ]
 const CONSOLE = [
   'Overview -> /admin', 'Users -> /admin/users', 'Classrooms -> /admin/classrooms', 'Teams -> /admin/teams',
   'Examinations -> /admin/exams', 'Question bank -> /questions', 'Audit trail -> /admin/audit', 'Contest files -> /admin/contest-files',
-  'Profile -> /profile',
+  'Visualiser -> /visualise', 'Profile -> /profile',
 ]
 
 describe('sidebar navigation by role', () => {

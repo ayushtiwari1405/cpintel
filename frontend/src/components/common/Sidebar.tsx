@@ -3,7 +3,7 @@ import { forwardRef } from 'react'
 import {
   ArrowLeft, LayoutDashboard, BarChart2, Map, Link2, User, PanelLeftClose, PanelLeftOpen,
   LogOut, Code2, Swords, Shield, Users, ScrollText, FolderCog, UsersRound, FileText, School,
-  ClipboardCheck, Monitor, X, CalendarCheck, Library, FlaskConical, type LucideIcon } from 'lucide-react'
+  ClipboardCheck, Monitor, X, CalendarCheck, Library, FlaskConical, Workflow, type LucideIcon } from 'lucide-react'
 import { useLogout } from '@/hooks/useAuth'
 import { ThemeToggle } from './ThemeToggle'
 import { BrandLockup } from './BrandMark'
@@ -28,6 +28,7 @@ const PRACTICE:  Item = { to: '/practice',  icon: Code2,           label: 'Pract
 const COMPETE:   Item = { to: '/compete',   icon: Swords,          label: 'Compete' }
 const EXAMS:     Item = { to: '/exams',     icon: FileText,        label: 'Exams' }
 const LABS:      Item = { to: '/labs',      icon: FlaskConical,    label: 'Labs' }
+const VISUALISE: Item = { to: '/visualise', icon: Workflow,        label: 'Visualiser' }
 const TEAMS:     Item = { to: '/teams',     icon: UsersRound,      label: 'Teams' }
 const EVALUATE:  Item = { to: '/evaluate',  icon: ClipboardCheck,  label: 'Evaluate' }
 const QUESTIONS: Item = { to: '/questions', icon: Library,         label: 'Question bank' }
@@ -90,7 +91,7 @@ export const Sidebar = forwardRef<HTMLElement, Props>(function Sidebar(
 
   const studentGroups: Group[] = [
     { label: 'Train',       items: [DASHBOARD, ANALYTICS, ROADMAP, PLAN] },
-    { label: 'Solve',       items: [PRACTICE, COMPETE, EXAMS, LABS] },
+    { label: 'Solve',       items: [PRACTICE, COMPETE, EXAMS, LABS, VISUALISE] },
     { label: 'Collaborate', items: [TEAMS, ...(marks ? [EVALUATE] : []), ...(writes ? [QUESTIONS] : [])] },
     // Where to get the desktop app — pointless inside it.
     { label: 'Account',     items: isDesktop() ? [PLATFORMS, PROFILE] : [PLATFORMS, PROFILE, DESKTOP] },
@@ -99,6 +100,7 @@ export const Sidebar = forwardRef<HTMLElement, Props>(function Sidebar(
   // them — only their profile, for their own password.
   const groups: Group[] = showAdmin
     ? [{ label: isSuperAdmin(user) ? 'Super admin' : 'Console', items: adminItems },
+       { label: 'Teach', items: [VISUALISE] },
        { label: 'Account', items: [PROFILE] }]
     : studentGroups
 

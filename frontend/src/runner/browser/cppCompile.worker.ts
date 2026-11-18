@@ -11,9 +11,7 @@
 import { BITS_STDCXX } from './stdcxxShim'
 import { wasmInitialMemoryBytes } from './wasmImage'
 
-/** Also pinned in the site's Content-Security-Policy (nginx/security-headers.conf); change both. */
-const CLANG_VERSION = '22.0.0-git20542-10'
-const CLANG_URL = `https://cdn.jsdelivr.net/npm/@yowasp/clang@${CLANG_VERSION}/gen/bundle.js`
+import { CLANG_URL } from './toolchains'
 
 /** Codeforces runs with a 256 MB stack; 64 MB covers a million-deep DFS here. */
 const STACK_BYTES = 64 * 1024 * 1024
@@ -32,7 +30,15 @@ const load = () => {
   return clang
 }
 
-export interface CompileRequest { source: string; language: 'cpp' | 'c' }
+export interface CompileRequest {
+  source: string
+  language: 'cpp' | 'c'
+  /**
+   * For the code visualiser: unoptimised (so every variable lives where the tracer reads it),
+   * with these extra files beside main.cpp (its runtime header) and these -D defines.
+   */
+  trace?: { files: Record<string, string>; defines: string[]; flags: string[] }
+}
 export type CompileMessage =
   | { kind: 'progress'; done: number; total: number }
   | { kind: 'done'; ok: true; module: WebAssembly.Module; output: string; ms: number
@@ -59,10 +65,13 @@ self.onmessage = async (e: MessageEvent<CompileRequest>) => {
 
   const isC = e.data.language === 'c'
   const file = isC ? 'main.c' : 'main.cpp'
+  const trace = e.data.trace
+  const opt = trace ? '-O0' : '-O2'
   const args = isC
     // The maths functions are in WASI's libc itself, so there is no -lm to pass.
-    ? ['clang', '-std=gnu11', '-O2']
-    : ['clang++', '-std=c++20', '-O2',
+    ? ['clang', '-std=gnu11', opt]
+    : ['clang++', '-std=c++20', opt, ...(trace?.defines.map(d => `-D${d}`) ?? []),
+      ...(trace?.flags ?? []),
       // The WebAssembly C++ library is built without exception support, and a clear
       // "exceptions are disabled" from the compiler beats a wall of undefined symbols from
       // the linker.
@@ -77,6 +86,7 @@ self.onmessage = async (e: MessageEvent<CompileRequest>) => {
       file, '-o', 'program',
     ], {
       [file]: e.data.source,
+      ...(trace?.files ?? {}),
       ...(isC ? {} : { include: { bits: { 'stdc++.h': BITS_STDCXX } } }),
     }, {
       stdout: collect,

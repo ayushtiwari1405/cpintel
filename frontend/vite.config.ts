@@ -12,7 +12,8 @@ export default defineConfig({
     // Imported only from the Run worker, which Vite's start-up scan does not follow. Left to be
     // found on the first Run, it triggers a re-optimise and a full page reload that drops the
     // code in the editor.
-    include: ['@bjorn3/browser_wasi_shim'],
+    // The visualiser's C++ parser is the same case: first imported deep inside a Visualise.
+    include: ['@bjorn3/browser_wasi_shim', '@vscode/tree-sitter-wasm'],
   },
   server: {
     port: 5173,
