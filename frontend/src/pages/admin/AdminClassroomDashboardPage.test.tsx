@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { screen, within } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { Route, Routes } from 'react-router-dom'
 import AdminClassroomDashboardPage from './AdminClassroomDashboardPage'
@@ -27,14 +27,14 @@ const dashboard: ClassDashboard = {
   ],
   roster: [
     { userId: 10, username: 'asha', fullName: 'Asha R', labSolved: 2, labProblems: 2, labMarks: 30,
-      labMaxMarks: 30, eventsAssigned: 1, eventsSat: 1, focusLosses: 3,
+      labMaxMarks: 30, eventsAssigned: 1, eventsSat: 1, focusLosses: 3, needsLook: false,
       labs: [{ labId: 50, assigned: true, solved: 2, late: 0, problems: 2, marks: 30 }],
       events: [
         { eventId: 70, assigned: true, sat: true, rank: 1, solved: 1, score: 55, focusLosses: 3 },
         { eventId: 71, assigned: true, sat: false, rank: null, solved: null, score: null, focusLosses: 0 },
       ] },
     { userId: 11, username: 'bhavin', fullName: null, labSolved: 0, labProblems: 2, labMarks: 0,
-      labMaxMarks: 30, eventsAssigned: 1, eventsSat: 0, focusLosses: 0,
+      labMaxMarks: 30, eventsAssigned: 1, eventsSat: 0, focusLosses: 0, needsLook: true,
       labs: [{ labId: 50, assigned: true, solved: 0, late: 0, problems: 2, marks: 0 }],
       events: [
         { eventId: 70, assigned: true, sat: false, rank: null, solved: null, score: null, focusLosses: 0 },
@@ -71,9 +71,19 @@ const student: StudentDashboard = {
   }],
 }
 
+beforeEach(() => {
+  // jsdom has no object URLs; the download only needs one to hand to a link.
+  URL.createObjectURL = vi.fn(() => 'blob:report')
+  URL.revokeObjectURL = vi.fn()
+})
+afterEach(() => vi.restoreAllMocks())
+
 function open(path: string) {
   signedIn(user('ADMIN'))
-  fakeServer({
+  const server = fakeServer({
+    'GET /admin/classrooms/3/report.xlsx': { data: null },
+    'GET /admin/classrooms/3/events/70/report.xlsx': { data: null },
+    'GET /admin/classrooms/3/labs/50/marks.xlsx': { data: null },
     'GET /users/me': { data: user('ADMIN') },
     'GET /admin/classrooms/3/dashboard': { data: dashboard },
     'GET /admin/classrooms/3/students/10/dashboard': { data: student },
@@ -84,6 +94,7 @@ function open(path: string) {
       <Route path="/admin/classrooms/:classroomId/students/:userId" element={<AdminStudentDashboardPage />} />
     </Routes>
   ))
+  return server
 }
 
 describe('classroom dashboard', () => {
@@ -107,6 +118,22 @@ describe('classroom dashboard', () => {
 
     expect(screen.queryByRole('link', { name: 'asha' })).not.toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'bhavin' })).toBeInTheDocument()
+  })
+})
+
+describe('classroom exports', () => {
+  it('downloads the class report, an event report and a lab\'s marks', async () => {
+    const server = open('/admin/classrooms/3/dashboard')
+    await screen.findByRole('link', { name: 'asha' })
+
+    await userEvent.click(screen.getByRole('button', { name: /Class report/ }))
+    await userEvent.click(screen.getByRole('button', { name: 'Download the report for Midterm' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Download marks for Lab 1' }))
+
+    await waitFor(() => expect(URL.createObjectURL).toHaveBeenCalledTimes(3))
+    expect(server.calls('GET /admin/classrooms/3/report.xlsx')).toHaveLength(1)
+    expect(server.calls('GET /admin/classrooms/3/events/70/report.xlsx')).toHaveLength(1)
+    expect(server.calls('GET /admin/classrooms/3/labs/50/marks.xlsx')).toHaveLength(1)
   })
 })
 

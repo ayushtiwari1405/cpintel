@@ -1,12 +1,15 @@
 import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { format } from 'date-fns'
-import { ArrowLeft, Settings } from 'lucide-react'
+import { ArrowLeft, Download, Settings } from 'lucide-react'
 import { clsx } from 'clsx'
 import { PageHeader } from '@/components/common/PageHeader'
 import { ErrorState, LoadingState } from '@/components/common/States'
 import { Ago, EmptyRow, Panel, Pill, StatCard } from '@/components/admin/AdminUi'
-import { useClassroomDashboard } from '@/hooks/useClassrooms'
+import {
+  useClassroomDashboard, useDownloadClassReport, useDownloadEventReport,
+} from '@/hooks/useClassrooms'
+import { useDownloadLabMarks } from '@/hooks/useLabs'
 import type {
   ClassDashboard, DashboardEventCell, DashboardEventColumn, DashboardLabCell, DashboardLabColumn,
   DashboardRosterRow, LabState,
@@ -33,6 +36,7 @@ export default function AdminClassroomDashboardPage() {
   const id = Number(classroomId)
   const valid = Number.isFinite(id)
   const { data, isLoading, isError, error, refetch } = useClassroomDashboard(valid ? id : null)
+  const report = useDownloadClassReport(id)
 
   if (!valid) return <ErrorState title="Not found" error={new Error('That address does not name a classroom.')} />
   if (isError) return <ErrorState title="Could not load the dashboard" error={error} onRetry={() => refetch()} />
@@ -52,16 +56,21 @@ export default function AdminClassroomDashboardPage() {
           {data.students} students · {plural(data.labs.length, 'lab')} · {plural(exams, 'exam')}
           {' · '}{plural(contests, 'contest')} · as of <Ago at={data.generatedAt} />
         </span>}
-        actions={
+        actions={<>
+          <button type="button" className="btn-primary btn-sm" disabled={report.isPending}
+            onClick={() => report.mutate(data.name)}>
+            <Download size={13} aria-hidden="true" />
+            {report.isPending ? 'Preparing…' : 'Class report (.xlsx)'}
+          </button>
           <Link to={`/admin/classrooms/${id}`} className="btn-secondary btn-sm">
             <Settings size={13} aria-hidden="true" /> Manage classroom
           </Link>
-        }
+        </>}
         className="mb-2" />
 
       <Headline data={data} />
       <Labs classroomId={id} labs={data.labs} />
-      <Events events={data.events} />
+      <Events classroomId={id} events={data.events} />
       <Roster data={data} />
     </div>
   )
@@ -74,7 +83,7 @@ function Headline({ data }: { data: ClassDashboard }) {
   const problems = sum(data.roster.map(r => r.labProblems))
   const sat = sum(data.roster.map(r => r.eventsSat))
   const due = sum(data.roster.map(r => r.eventsAssigned))
-  const flagged = data.roster.filter(r => needsLook(r, data)).length
+  const flagged = data.roster.filter(r => r.needsLook).length
   const focus = sum(data.roster.map(r => r.focusLosses))
 
   return (
@@ -96,6 +105,7 @@ function Headline({ data }: { data: ClassDashboard }) {
 // --------------------------------------------------------------------- labs
 
 function Labs({ classroomId, labs }: { classroomId: number; labs: DashboardLabColumn[] }) {
+  const download = useDownloadLabMarks(classroomId)
   return (
     <Panel title="Labs" description="Averages are over the students each lab was set for">
       <div className="overflow-x-auto">
@@ -107,11 +117,12 @@ function Labs({ classroomId, labs }: { classroomId: number; labs: DashboardLabCo
               <th className="px-3 py-2 font-medium">Solved on average</th>
               <th className="px-3 py-2 text-right font-medium">Average marks</th>
               <th className="px-3 py-2 text-right font-medium">Finished</th>
-              <th className="px-4 py-2 text-right font-medium">Nothing solved</th>
+              <th className="px-3 py-2 text-right font-medium">Nothing solved</th>
+              <th className="px-4 py-2"><span className="sr-only">Download</span></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-800">
-            {labs.length === 0 && <EmptyRow colSpan={6}>No labs in this classroom yet.</EmptyRow>}
+            {labs.length === 0 && <EmptyRow colSpan={7}>No labs in this classroom yet.</EmptyRow>}
             {labs.map(lab => {
               const state = LAB_STATE[lab.state]
               const ratio = lab.problemCount ? lab.averageSolved / lab.problemCount : 0
@@ -135,9 +146,14 @@ function Labs({ classroomId, labs }: { classroomId: number; labs: DashboardLabCo
                   <td className="px-3 py-2.5 text-right tabular-nums text-gray-300">
                     {lab.finishedAll}<span className="text-gray-600"> / {lab.studentCount}</span>
                   </td>
-                  <td className={clsx('px-4 py-2.5 text-right tabular-nums',
+                  <td className={clsx('px-3 py-2.5 text-right tabular-nums',
                     lab.state === 'CLOSED' && lab.solvedNone > 0 ? 'text-red-300' : 'text-gray-400')}>
                     {lab.solvedNone}
+                  </td>
+                  <td className="px-4 py-2.5 text-right">
+                    <DownloadButton label={`Download marks for ${lab.title}`}
+                      busy={download.isPending && download.variables?.labId === lab.labId}
+                      onClick={() => download.mutate({ labId: lab.labId, title: lab.title })} />
                   </td>
                 </tr>
               )
@@ -151,7 +167,8 @@ function Labs({ classroomId, labs }: { classroomId: number; labs: DashboardLabCo
 
 // ------------------------------------------------------------------- events
 
-function Events({ events }: { events: DashboardEventColumn[] }) {
+function Events({ classroomId, events }: { classroomId: number; events: DashboardEventColumn[] }) {
+  const download = useDownloadEventReport(classroomId)
   return (
     <Panel title="Contests and examinations"
       description="Scores come from each event's last built leaderboard, TA marks included">
@@ -164,12 +181,13 @@ function Events({ events }: { events: DashboardEventColumn[] }) {
               <th className="px-3 py-2 font-medium">Turned up</th>
               <th className="px-3 py-2 text-right font-medium">Average score</th>
               <th className="px-3 py-2 text-right font-medium">Average solved</th>
-              <th className="px-4 py-2 text-right font-medium">Focus losses</th>
+              <th className="px-3 py-2 text-right font-medium">Focus losses</th>
+              <th className="px-4 py-2"><span className="sr-only">Download</span></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-800">
             {events.length === 0 && (
-              <EmptyRow colSpan={6}>No contests or examinations in this classroom yet.</EmptyRow>
+              <EmptyRow colSpan={7}>No contests or examinations in this classroom yet.</EmptyRow>
             )}
             {events.map(e => {
               const started = e.lifecycle !== 'SCHEDULED'
@@ -199,9 +217,14 @@ function Events({ events }: { events: DashboardEventColumn[] }) {
                     {e.averageSolved == null ? '—' : num(e.averageSolved)}
                     {e.problemCount > 0 && <span className="text-gray-600"> / {e.problemCount}</span>}
                   </td>
-                  <td className={clsx('px-4 py-2.5 text-right tabular-nums',
+                  <td className={clsx('px-3 py-2.5 text-right tabular-nums',
                     e.focusLosses > 0 ? 'text-amber-300' : 'text-gray-500')}>
                     {e.focusLosses}
+                  </td>
+                  <td className="px-4 py-2.5 text-right">
+                    <DownloadButton label={`Download the report for ${e.name}`}
+                      busy={download.isPending && download.variables?.eventId === e.eventId}
+                      onClick={() => download.mutate({ eventId: e.eventId, name: e.name })} />
                   </td>
                 </tr>
               )
@@ -224,7 +247,7 @@ function Roster({ data }: { data: ClassDashboard }) {
     const q = query.trim().toLowerCase()
     const out = data.roster.filter(r =>
       (!q || r.username.toLowerCase().includes(q) || (r.fullName ?? '').toLowerCase().includes(q))
-      && (!onlyFlagged || needsLook(r, data)))
+      && (!onlyFlagged || r.needsLook))
     const by: Record<Sort, (a: DashboardRosterRow, b: DashboardRosterRow) => number> = {
       name: (a, b) => a.username.localeCompare(b.username, undefined, { numeric: true }),
       labs: (a, b) => share(a.labMarks, a.labMaxMarks) - share(b.labMarks, b.labMaxMarks),
@@ -358,6 +381,18 @@ function EventCellView({ cell, event }: { cell: DashboardEventCell; event?: Dash
 
 // ------------------------------------------------------------------ helpers
 
+/** An icon button that downloads a spreadsheet. */
+function DownloadButton({ label, busy, onClick }: { label: string; busy: boolean; onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick} disabled={busy} aria-label={label} title={label}
+      className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs text-gray-500
+                 hover:bg-gray-800 hover:text-gray-200 disabled:opacity-50">
+      <Download size={13} aria-hidden="true" className={busy ? 'animate-pulse' : ''} />
+      .xlsx
+    </button>
+  )
+}
+
 function KindPill({ kind }: { kind: 'EXAM' | 'CONTEST' }) {
   return <Pill tone={kind === 'EXAM' ? 'accent' : 'gray'}>{kind === 'EXAM' ? 'exam' : 'contest'}</Pill>
 }
@@ -375,13 +410,6 @@ function Meter({ ratio, label }: { ratio: number; label: string }) {
       <span className="whitespace-nowrap font-mono text-xs tabular-nums text-gray-300">{label}</span>
     </div>
   )
-}
-
-/** Missed an event that has started, or solved nothing in a closed lab set for them. */
-function needsLook(r: DashboardRosterRow, data: ClassDashboard) {
-  if (r.eventsSat < r.eventsAssigned) return true
-  return r.labs.some(c => c.assigned && c.solved === 0 && c.late === 0
-    && data.labs.find(l => l.labId === c.labId)?.state === 'CLOSED')
 }
 
 function sum(xs: number[]) { return xs.reduce((a, b) => a + Number(b), 0) }

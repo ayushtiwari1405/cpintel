@@ -85,6 +85,38 @@ export function useClassroomStudentDashboard(id: number | null, userId: number |
   })
 }
 
+/** Saves a downloaded file under a name made safe for any file system. */
+function save(blob: Blob, name: string, suffix: string) {
+  const base = name.trim().replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^[._]+|[._]+$/g, '') || 'classroom'
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `${base}-${suffix}.xlsx`
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
+}
+
+/** The class report: summary, students, labs, events and the detail behind them. */
+export function useDownloadClassReport(id: number) {
+  const toast = useToast()
+  return useMutation({
+    mutationFn: async (name: string) => save(await adminClassroomsApi.classReport(id), name, 'report'),
+    onError: () => toast.push('error', 'That download did not go through'),
+  })
+}
+
+/** One event's report. */
+export function useDownloadEventReport(id: number) {
+  const toast = useToast()
+  return useMutation({
+    mutationFn: async ({ eventId, name }: { eventId: number; name: string }) =>
+      save(await adminClassroomsApi.eventReport(id, eventId), name, 'report'),
+    onError: () => toast.push('error', 'That download did not go through'),
+  })
+}
+
 export function useClassroomMembers(id: number | null) {
   const isAdmin = useIsAdmin()
   return useQuery({

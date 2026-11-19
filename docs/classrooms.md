@@ -151,6 +151,31 @@ board fall back to their cached standings.
 Only the classroom's own work appears. A student's roadmap, gauntlet and recommendations are
 private and are not shown to staff.
 
+### Exports
+
+All three are Excel files, with times in IST.
+
+- **Class report.** Click **Class report (.xlsx)** on the dashboard
+  (`/api/v1/admin/classrooms/{id}/report.xlsx`). Its sheets are:
+  - **Summary**
+  - **Students**: one row per student; each lab shows the number solved, each event shows a
+    score, *absent*, *upcoming* or *not assigned*.
+  - **Labs** and **Events**: the dashboard tables.
+  - **Lab problems**: one row per student per lab problem, with status, solve time and marks.
+  - **Event questions**: one row per student per question, with marks, accepted, and wrong
+    attempts.
+- **Event report.** Click the download button on an event's row
+  (`/api/v1/admin/classrooms/{id}/events/{eventId}/report.xlsx`). It lists every student the
+  event was set for, absentees included: attended, rank, score, marks per question, wrong
+  attempts, submissions and focus losses. It is built from the same stored leaderboard as the
+  dashboard. The event's own leaderboard spreadsheet and results zip are still on the event
+  page.
+- **Lab marks.** Click the download button on a lab's row. This is the same spreadsheet as the
+  one on the lab page.
+
+A word stands in for a missing mark (*absent*, *upcoming*, *not set*), so a student who did
+not sit is never read as a zero.
+
 ## Running a team contest
 
 1. `/admin/teams` — create a team and add its members. For a whole class, the **Import a

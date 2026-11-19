@@ -1919,6 +1919,8 @@ export interface DashboardRosterRow {
   eventsAssigned: number
   eventsSat: number
   focusLosses: number
+  /** Missed an event that has started, or solved nothing in a closed lab set for them. */
+  needsLook: boolean
 }
 
 export interface ClassDashboard {

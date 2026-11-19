@@ -130,6 +130,33 @@ public class AdminClassroomController {
         return ResponseEntity.ok(ApiResponse.ok(dashboards.student(adminId, classroomId, userId)));
     }
 
+    @GetMapping("/{classroomId}/report.xlsx")
+    @Operation(summary = "The whole class as a spreadsheet: summary, students, labs, events and detail")
+    public ResponseEntity<byte[]> classReport(
+        @AuthenticationPrincipal Long adminId, @PathVariable Long classroomId) {
+        return download(dashboards.classReport(adminId, classroomId));
+    }
+
+    @GetMapping("/{classroomId}/events/{eventId}/report.xlsx")
+    @Operation(summary = "One contest or examination as a spreadsheet, absentees included")
+    public ResponseEntity<byte[]> eventReport(
+        @AuthenticationPrincipal Long adminId, @PathVariable Long classroomId,
+        @PathVariable Long eventId) {
+        return download(dashboards.eventReport(adminId, classroomId, eventId));
+    }
+
+    private static ResponseEntity<byte[]> download(
+        com.cpintel.classrooms.ClassroomDashboardService.Report report) {
+        return ResponseEntity.ok()
+            .contentType(org.springframework.http.MediaType.parseMediaType(
+                com.cpintel.common.Xlsx.CONTENT_TYPE))
+            .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
+                org.springframework.http.ContentDisposition.attachment()
+                    .filename(report.fileName()).build().toString())
+            .header(org.springframework.http.HttpHeaders.CACHE_CONTROL, "no-store")
+            .body(report.bytes());
+    }
+
     @GetMapping("/{classroomId}/members")
     @Operation(summary = "Students enrolled in the classroom")
     public ResponseEntity<ApiResponse<List<ClassroomsDto.Member>>> members(

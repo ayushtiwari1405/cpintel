@@ -68,11 +68,20 @@ public class ClassroomDashboardService {
     private final ExamEventService examLog;
     private final ExamLeaderboardService boards;
     private final PlatformAccountRepository accounts;
+    private final com.cpintel.repository.jpa.UserRepository users;
 
     // ------------------------------------------------------------------ the class
 
     @Transactional(readOnly = true)
     public ClassDashboard classroom(Long adminId, Long classroomId) {
+        return snapshot(adminId, classroomId).dashboard();
+    }
+
+    /** Everything the class dashboard and the class report are built from, read once. */
+    record Snapshot(Classroom room, List<User> students, List<LabsDto.Progress> progress,
+                    List<EventResult> results, ClassDashboard dashboard) {}
+
+    Snapshot snapshot(Long adminId, Long classroomId) {
         Classroom room = classrooms.requireManaged(adminId, classroomId);
         List<User> students = members.findByClassroom(classroomId).stream()
             .map(ClassroomMember::getUser).toList();
@@ -87,8 +96,43 @@ public class ClassroomDashboardService {
         List<RosterRow> roster = new ArrayList<>();
         for (User u : students) roster.add(rosterRow(u, progress, results));
 
-        return new ClassDashboard(classroomId, room.getName(), students.size(), labColumns,
-            eventColumns, roster, Instant.now());
+        return new Snapshot(room, students, progress, results,
+            new ClassDashboard(classroomId, room.getName(), students.size(), labColumns,
+                eventColumns, roster, Instant.now()));
+    }
+
+    // ------------------------------------------------------------------ reports
+
+    /** A spreadsheet file, named for download. */
+    public record Report(String fileName, byte[] bytes) {}
+
+    /** The whole class: summary, a line per student, every lab and event, and the detail. */
+    @Transactional(readOnly = true)
+    public Report classReport(Long adminId, Long classroomId) {
+        Snapshot snap = snapshot(adminId, classroomId);
+        return new Report(ClassroomReports.safe(snap.room().getName(), "classroom") + "-report.xlsx",
+            ClassroomReports.classWorkbook(snap, Instant.now()));
+    }
+
+    /**
+     * One contest or examination: every student it was set for, absentees included, with
+     * attendance, score, rank, marks per question and focus losses.
+     */
+    @Transactional(readOnly = true)
+    public Report eventReport(Long adminId, Long classroomId, Long eventId) {
+        classrooms.requireManaged(adminId, classroomId);
+        GroupContest event = eventRepository.findById(eventId)
+            .filter(e -> classroomId.equals(e.getClassroomId()))
+            .orElseThrow(() -> ApiException.notFound("No such event in this classroom"));
+        EventResult r = result(event);
+
+        java.util.Set<Long> ids = new java.util.LinkedHashSet<>(r.assigned());
+        ids.addAll(r.board().keySet());
+        List<User> people = new ArrayList<>(users.findAllById(ids));
+        people.sort(java.util.Comparator.comparing(User::getUsername,
+            com.cpintel.evaluation.UsernameOrder.NATURAL));
+        return new Report(ClassroomReports.safe(event.getName(), "event") + "-" + eventId + "-report.xlsx",
+            ClassroomReports.eventWorkbook(r, people, Instant.now()));
     }
 
     private static LabColumn labColumn(LabsDto.Progress p) {
@@ -148,8 +192,11 @@ public class ClassroomDashboardService {
                 s == null ? null : s.rank(), s == null ? null : s.solved(),
                 s == null ? null : s.score(), lost));
         }
+        boolean needsLook = sat < assigned || labCells.stream().anyMatch(c -> c.assigned()
+            && c.solved() == 0 && c.late() == 0 && progress.stream().anyMatch(p ->
+                p.lab().labId().equals(c.labId()) && "CLOSED".equals(p.lab().state())));
         return new RosterRow(id, u.getUsername(), u.getFullName(), labCells, eventCells,
-            labSolved, labProblems, labMarks, labMax, assigned, sat, focus);
+            labSolved, labProblems, labMarks, labMax, assigned, sat, focus, needsLook);
     }
 
     // --------------------------------------------------------------- one student
@@ -224,10 +271,10 @@ public class ClassroomDashboardService {
     }
 
     /** One person's line on an event's board. */
-    private record Standing(Integer rank, Integer solved, Double score,
+    record Standing(Integer rank, Integer solved, Double score,
                             List<EventsDto.LeaderboardCell> cells) {}
 
-    private EventResult result(GroupContest event) {
+    EventResult result(GroupContest event) {
         Long id = event.getContestId();
         Set<Long> assigned = events.participantIds(id);
         Map<Long, Map<String, long[]>> log = examLog.summarise(id);
@@ -270,7 +317,7 @@ public class ClassroomDashboardService {
     }
 
     /** Everything known about how one event went, ready to be read per student or summed. */
-    private record EventResult(GroupContest event, Set<Long> assigned,
+    record EventResult(GroupContest event, Set<Long> assigned,
                                Map<Long, Map<String, long[]>> log, Map<Long, Standing> board,
                                List<String> labels, Map<String, Double> marks, boolean marked,
                                Double maxScore, int problemCount, Instant boardAt) {

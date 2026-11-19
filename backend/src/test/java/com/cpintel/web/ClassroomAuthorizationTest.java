@@ -69,6 +69,10 @@ class ClassroomAuthorizationTest extends AuthorizationTestBase {
             .andExpect(status().isForbidden());
         mvc.perform(get("/api/v1/admin/classrooms/1/students/7/dashboard").with(asUser()))
             .andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/admin/classrooms/1/report.xlsx").with(asUser()))
+            .andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/admin/classrooms/1/events/5/report.xlsx").with(asUser()))
+            .andExpect(status().isForbidden());
         mvc.perform(get("/api/v1/admin/classrooms/1/dashboard").with(asAdmin()))
             .andExpect(status().isOk());
         mvc.perform(get("/api/v1/admin/classrooms/1/students/7/dashboard").with(asAdmin()))

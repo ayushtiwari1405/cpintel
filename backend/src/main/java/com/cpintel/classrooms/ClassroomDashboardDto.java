@@ -82,7 +82,9 @@ public final class ClassroomDashboardDto {
         /** Events set for them that have started; one still to come is not counted. */
         int eventsAssigned,
         int eventsSat,
-        int focusLosses
+        int focusLosses,
+        /** Missed an event that has started, or solved nothing in a closed lab set for them. */
+        boolean needsLook
     ) {}
 
     /** Null fields mean the lab was not set for this student. */

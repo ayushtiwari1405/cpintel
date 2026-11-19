@@ -45,6 +45,8 @@ class ClassroomDashboardServiceTest {
     private static final Long EXAM = 70L;
 
     private ClassroomMemberRepository members;
+    private com.cpintel.repository.jpa.UserRepository users;
+    private GroupContestRepository eventRepository;
     private ClassroomDashboardService service;
 
     @BeforeEach
@@ -52,7 +54,8 @@ class ClassroomDashboardServiceTest {
         ClassroomService classrooms = mock(ClassroomService.class);
         members = mock(ClassroomMemberRepository.class);
         LabService labs = mock(LabService.class);
-        GroupContestRepository eventRepository = mock(GroupContestRepository.class);
+        eventRepository = mock(GroupContestRepository.class);
+        users = mock(com.cpintel.repository.jpa.UserRepository.class);
         EventService events = mock(EventService.class);
         ExamEventService examLog = mock(ExamEventService.class);
         ExamLeaderboardService boards = mock(ExamLeaderboardService.class);
@@ -60,7 +63,7 @@ class ClassroomDashboardServiceTest {
         service = new ClassroomDashboardService(classrooms, members,
             mock(ContestGroupRepository.class), labs, eventRepository,
             mock(GroupStandingRepository.class), events, examLog, boards,
-            mock(PlatformAccountRepository.class));
+            mock(PlatformAccountRepository.class), users);
 
         when(classrooms.requireManaged(ADMIN, ROOM))
             .thenReturn(Classroom.builder().classroomId(ROOM).name("DSA").build());
@@ -92,6 +95,8 @@ class ClassroomDashboardServiceTest {
             .startsAt(now.minus(Duration.ofDays(2))).endsAt(now.minus(Duration.ofDays(2)).plus(Duration.ofHours(2)))
             .build();
         when(eventRepository.findByClassroomIdOrderByStartsAtDesc(ROOM)).thenReturn(List.of(exam));
+        when(eventRepository.findById(EXAM)).thenReturn(Optional.of(exam));
+        when(users.findAllById(any())).thenReturn(List.of(asha, bhavin));
         when(events.participantIds(EXAM)).thenReturn(new LinkedHashSet<>(List.of(ASHA, BHAVIN)));
         when(examLog.summarise(EXAM)).thenReturn(Map.of(
             ASHA, Map.of("EXAM_ENTERED", new long[]{1, 0}, "FOCUS_LOST", new long[]{3, 12})));
@@ -183,5 +188,60 @@ class ClassroomDashboardServiceTest {
         when(members.findByClassroomIdAndUserUserId(ROOM, 99L)).thenReturn(Optional.empty());
 
         assertThrows(ApiException.class, () -> service.student(ADMIN, ROOM, 99L));
+    }
+
+    @Test
+    @DisplayName("a student who missed an event that has started needs a look")
+    void needsLook() {
+        var roster = service.classroom(ADMIN, ROOM).roster();
+
+        assertFalse(roster.stream().filter(r -> r.userId().equals(ASHA)).findFirst().orElseThrow().needsLook());
+        assertTrue(roster.stream().filter(r -> r.userId().equals(BHAVIN)).findFirst().orElseThrow().needsLook());
+    }
+
+    @Test
+    @DisplayName("the class report has every sheet, and a missed exam reads absent, not zero")
+    void classReport() throws Exception {
+        var report = service.classReport(ADMIN, ROOM);
+
+        assertEquals("DSA-report.xlsx", report.fileName());
+        String book = text(report.bytes());
+        for (String sheet : List.of("Summary", "Students", "Labs", "Events", "Lab problems", "Event questions")) {
+            assertTrue(book.contains("name=\"" + sheet + "\""), sheet);
+        }
+        assertTrue(book.contains(">absent<"));
+        assertTrue(book.contains("Midterm (exam score)"));
+    }
+
+    @Test
+    @DisplayName("an event report lists absentees beside those who sat it, with marks per question")
+    void eventReport() throws Exception {
+        var report = service.eventReport(ADMIN, ROOM, EXAM);
+
+        assertEquals("Midterm-70-report.xlsx", report.fileName());
+        String book = text(report.bytes());
+        assertTrue(book.contains(">bhavin<") && book.contains(">absent<"));
+        assertTrue(book.contains("B (out of 60)"));
+    }
+
+    @Test
+    @DisplayName("an event from another classroom is not found")
+    void eventReportScoped() {
+        GroupContest other = GroupContest.builder().contestId(80L).classroomId(4L).kind("EXAM")
+            .name("Elsewhere").lifecycle("SCHEDULED").build();
+        when(eventRepository.findById(80L)).thenReturn(Optional.of(other));
+
+        assertThrows(ApiException.class, () -> service.eventReport(ADMIN, ROOM, 80L));
+    }
+
+    /** Every XML part of a workbook, joined: enough to find sheet names and cell text. */
+    private static String text(byte[] xlsx) throws Exception {
+        StringBuilder out = new StringBuilder();
+        try (var zip = new java.util.zip.ZipInputStream(new java.io.ByteArrayInputStream(xlsx))) {
+            for (var e = zip.getNextEntry(); e != null; e = zip.getNextEntry()) {
+                out.append(new String(zip.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8));
+            }
+        }
+        return out.toString();
     }
 }

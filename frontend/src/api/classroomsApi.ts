@@ -55,6 +55,16 @@ export const adminClassroomsApi = {
     apiClient.get<ApiResponse<StudentDashboard>>(
       `/admin/classrooms/${id}/students/${userId}/dashboard`).then(r => r.data),
 
+  /** The whole class as a spreadsheet. */
+  classReport: (id: number) =>
+    apiClient.get<Blob>(`/admin/classrooms/${id}/report.xlsx`,
+      { responseType: 'blob', timeout: 120_000 }).then(r => r.data),
+
+  /** One contest or examination as a spreadsheet, absentees included. */
+  eventReport: (id: number, eventId: number) =>
+    apiClient.get<Blob>(`/admin/classrooms/${id}/events/${eventId}/report.xlsx`,
+      { responseType: 'blob', timeout: 120_000 }).then(r => r.data),
+
   members: (id: number) =>
     apiClient.get<ApiResponse<ClassroomMember[]>>(`/admin/classrooms/${id}/members`)
       .then(r => r.data),
