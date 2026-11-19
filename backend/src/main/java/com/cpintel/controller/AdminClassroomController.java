@@ -29,6 +29,7 @@ public class AdminClassroomController {
 
     private final ClassroomService classrooms;
     private final com.cpintel.evaluation.ClassroomTaService tas;
+    private final com.cpintel.classrooms.ClassroomDashboardService dashboards;
 
     @GetMapping
     @Operation(summary = "The classrooms you run (every one, for a superadmin)")
@@ -112,6 +113,21 @@ public class AdminClassroomController {
     public ResponseEntity<ApiResponse<ClassroomsDto.JudgeCheck>> check(
         @AuthenticationPrincipal Long adminId, @PathVariable Long classroomId) {
         return ResponseEntity.ok(ApiResponse.ok(classrooms.checkJudge(adminId, classroomId)));
+    }
+
+    @GetMapping("/{classroomId}/dashboard")
+    @Operation(summary = "How the class is doing: every lab and event, and a line per student")
+    public ResponseEntity<ApiResponse<com.cpintel.classrooms.ClassroomDashboardDto.ClassDashboard>> dashboard(
+        @AuthenticationPrincipal Long adminId, @PathVariable Long classroomId) {
+        return ResponseEntity.ok(ApiResponse.ok(dashboards.classroom(adminId, classroomId)));
+    }
+
+    @GetMapping("/{classroomId}/students/{userId}/dashboard")
+    @Operation(summary = "How one student in the classroom is doing in its labs and events")
+    public ResponseEntity<ApiResponse<com.cpintel.classrooms.ClassroomDashboardDto.StudentDashboard>> studentDashboard(
+        @AuthenticationPrincipal Long adminId, @PathVariable Long classroomId,
+        @PathVariable Long userId) {
+        return ResponseEntity.ok(ApiResponse.ok(dashboards.student(adminId, classroomId, userId)));
     }
 
     @GetMapping("/{classroomId}/members")

@@ -1,7 +1,7 @@
 import { apiClient } from './client'
 import type {
-  ApiResponse, ClassroomMember, ClassroomRequest, ClassroomStaffMember, ClassroomSummary,
-  JudgeCheck, MyClassroom,
+  ApiResponse, ClassDashboard, ClassroomMember, ClassroomRequest, ClassroomStaffMember, ClassroomSummary,
+  JudgeCheck, MyClassroom, StudentDashboard,
 } from '@/types'
 
 /**
@@ -44,6 +44,16 @@ export const adminClassroomsApi = {
   check: (id: number) =>
     apiClient.post<ApiResponse<JudgeCheck>>(`/admin/classrooms/${id}/check`, undefined,
       { timeout: 60_000 }).then(r => r.data),
+
+  /** The class as a whole: every lab and event, and a line per student. */
+  dashboard: (id: number) =>
+    apiClient.get<ApiResponse<ClassDashboard>>(`/admin/classrooms/${id}/dashboard`)
+      .then(r => r.data),
+
+  /** One student's labs and events in this classroom. */
+  studentDashboard: (id: number, userId: number) =>
+    apiClient.get<ApiResponse<StudentDashboard>>(
+      `/admin/classrooms/${id}/students/${userId}/dashboard`).then(r => r.data),
 
   members: (id: number) =>
     apiClient.get<ApiResponse<ClassroomMember[]>>(`/admin/classrooms/${id}/members`)

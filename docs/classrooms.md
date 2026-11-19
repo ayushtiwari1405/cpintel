@@ -124,6 +124,33 @@ grid shows each student's handles and flags anyone whose solves are not being co
 - CSES: only the main problem set, not its other courses or contests. The API describes itself
   as having "no stability guarantees", so a change on CSES's side could need a change here.
 
+## Classroom dashboards
+
+**Dashboard** on a classroom's page (`/admin/classrooms/{id}/dashboard`) shows how the class is
+doing:
+
+- **Headline:** share of set lab problems solved in time, attendance at events that have
+  started, and how many students need a look (missed an event, or solved nothing in a closed
+  lab).
+- **Labs:** per lab, the average solved and average marks, how many finished it, and how many
+  solved nothing.
+- **Contests and examinations:** per event, turn-up, average score out of the paper's total,
+  average solved, and focus losses.
+- **Students:** one row per student. Each lab shows solved out of set, and each event shows a
+  score and rank, or *absent*. The roster can be sorted and narrowed to those needing a look.
+
+A student's name opens their page (`/admin/classrooms/{id}/students/{userId}`). It lists every
+lab problem with its status and solve time, and every contest or examination question by
+question, with marks, wrong attempts, rank, submissions and focus losses.
+
+Scores are read from each event's **last built leaderboard**, which includes TA hand marks.
+Opening a dashboard never recomputes a board or calls the judge, so a figure can lag until the
+event's leaderboard is refreshed or the event is marked done. Contests ranked on an outside
+board fall back to their cached standings.
+
+Only the classroom's own work appears. A student's roadmap, gauntlet and recommendations are
+private and are not shown to staff.
+
 ## Running a team contest
 
 1. `/admin/teams` — create a team and add its members. For a whole class, the **Import a

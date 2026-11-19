@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import {
-  AlertCircle, ArrowLeft, CheckCircle2, Copy, Loader2, Plus, RefreshCw, Save, UserMinus, UserPlus,
+  AlertCircle, ArrowLeft, CheckCircle2, Copy, LayoutDashboard, Loader2, Plus, RefreshCw, Save, UserMinus, UserPlus,
 } from 'lucide-react'
 import {
   useAdminClassroom, useArchiveClassroom, useCheckJudge, useClassroomMemberActions, useClassroomSettings,
@@ -48,6 +48,11 @@ export default function AdminClassroomDetailPage() {
         description={room.domjudgeUrl
           ? <span className="font-mono text-xs">{room.domjudgeUrl}</span>
           : 'No judge set.'}
+        actions={
+          <Link to={`/admin/classrooms/${id}/dashboard`} className="btn-primary btn-sm">
+            <LayoutDashboard size={13} aria-hidden="true" /> Dashboard
+          </Link>
+        }
         className="mb-2" />
       <Settings room={room} />
       <CodeforcesKey room={room} />
@@ -350,7 +355,8 @@ function Members({ classroomId }: { classroomId: number }) {
             {members?.map(m => (
               <tr key={m.userId}>
                 <td className="px-4 py-2.5">
-                  <span className="text-gray-200">{m.username}</span>
+                  <Link to={`/admin/classrooms/${classroomId}/students/${m.userId}`}
+                    className="text-gray-200 hover:text-accent-300">{m.username}</Link>
                   {m.fullName && <span className="block text-xs text-gray-600">{m.fullName}</span>}
                 </td>
                 <td className="px-4 py-2.5 font-mono text-xs">

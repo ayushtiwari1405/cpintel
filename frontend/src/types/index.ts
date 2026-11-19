@@ -1848,3 +1848,161 @@ export interface CsesVerdict {
   compiler: string | null
   tests: { number: number; verdict: string; timeMs: number | null }[]
 }
+
+// ------------------------------------------------------- classroom dashboards
+
+/** One lab summed over its students. Marks arrive as JSON numbers. */
+export interface DashboardLabColumn {
+  labId: number
+  title: string
+  opensAt: string
+  dueAt: string
+  state: LabState
+  problemCount: number
+  totalMarks: number
+  studentCount: number
+  averageSolved: number
+  averageMarks: number
+  finishedAll: number
+  solvedNone: number
+}
+
+export type DashboardEventKind = 'EXAM' | 'CONTEST'
+
+export interface DashboardEventColumn {
+  eventId: number
+  kind: DashboardEventKind
+  name: string
+  platform: string | null
+  startsAt: string | null
+  endsAt: string | null
+  lifecycle: string
+  assigned: number
+  sat: number
+  problemCount: number
+  averageScore: number | null
+  maxScore: number | null
+  averageSolved: number | null
+  focusLosses: number
+  boardAt: string | null
+}
+
+export interface DashboardLabCell {
+  labId: number
+  assigned: boolean
+  solved: number
+  late: number
+  problems: number
+  marks: number
+}
+
+export interface DashboardEventCell {
+  eventId: number
+  assigned: boolean
+  sat: boolean
+  rank: number | null
+  solved: number | null
+  score: number | null
+  focusLosses: number
+}
+
+export interface DashboardRosterRow {
+  userId: number
+  username: string
+  fullName: string | null
+  labs: DashboardLabCell[]
+  events: DashboardEventCell[]
+  labSolved: number
+  labProblems: number
+  labMarks: number
+  labMaxMarks: number
+  eventsAssigned: number
+  eventsSat: number
+  focusLosses: number
+}
+
+export interface ClassDashboard {
+  classroomId: number
+  name: string
+  students: number
+  labs: DashboardLabColumn[]
+  events: DashboardEventColumn[]
+  roster: DashboardRosterRow[]
+  generatedAt: string
+}
+
+export interface StudentDashboardHandles {
+  codeforces: string | null
+  codeforcesVerified: boolean
+  leetcode: string | null
+  leetcodeVerified: boolean
+  cses: string | null
+  csesConnected: boolean
+}
+
+export interface StudentDashboardLabProblem {
+  problemId: number
+  platform: LabPlatform
+  key: string
+  title: string
+  url: string
+  difficulty: string | null
+  marks: number
+  status: LabSolveStatus
+  solvedAt: string | null
+}
+
+export interface StudentDashboardLab {
+  labId: number
+  title: string
+  opensAt: string
+  dueAt: string
+  state: LabState
+  problems: StudentDashboardLabProblem[]
+  solved: number
+  late: number
+  marks: number
+  totalMarks: number
+}
+
+export interface StudentDashboardEventProblem {
+  label: string
+  maxMarks: number | null
+  solved: boolean
+  wrongAttempts: number
+  marks: number | null
+}
+
+export interface StudentDashboardEvent {
+  eventId: number
+  kind: DashboardEventKind
+  name: string
+  platform: string | null
+  startsAt: string | null
+  endsAt: string | null
+  lifecycle: string
+  sat: boolean
+  rank: number | null
+  rankedOf: number | null
+  solved: number | null
+  score: number | null
+  maxScore: number | null
+  submissions: number
+  focusLosses: number
+  problems: StudentDashboardEventProblem[]
+  boardAt: string | null
+}
+
+export interface StudentDashboard {
+  classroomId: number
+  classroomName: string
+  userId: number
+  username: string
+  fullName: string | null
+  email: string | null
+  joinedAt: string | null
+  teams: string[]
+  handles: StudentDashboardHandles
+  labs: StudentDashboardLab[]
+  events: StudentDashboardEvent[]
+}

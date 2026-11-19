@@ -209,4 +209,7 @@ public interface GroupContestRepository extends JpaRepository<GroupContest, Long
                       @Param("note") String note);
 
     long countByClassroomId(Long classroomId);
+
+    /** Every event run in a classroom, newest first: what its dashboard reads. */
+    List<GroupContest> findByClassroomIdOrderByStartsAtDesc(Long classroomId);
 }

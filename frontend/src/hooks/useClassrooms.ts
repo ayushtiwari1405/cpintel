@@ -63,6 +63,28 @@ export function useAdminClassroom(id: number | null) {
   })
 }
 
+/** The class dashboard. Built from stored results, so it is cheap to refetch on focus. */
+export function useClassroomDashboard(id: number | null) {
+  const isAdmin = useIsAdmin()
+  return useQuery({
+    queryKey: ['admin', 'classroom', id, 'dashboard'],
+    queryFn: () => adminClassroomsApi.dashboard(id!).then(r => r.data),
+    enabled: isAdmin && id != null,
+    staleTime: 1000 * 30,
+  })
+}
+
+/** One student's dashboard inside a classroom. */
+export function useClassroomStudentDashboard(id: number | null, userId: number | null) {
+  const isAdmin = useIsAdmin()
+  return useQuery({
+    queryKey: ['admin', 'classroom', id, 'student', userId],
+    queryFn: () => adminClassroomsApi.studentDashboard(id!, userId!).then(r => r.data),
+    enabled: isAdmin && id != null && userId != null,
+    staleTime: 1000 * 30,
+  })
+}
+
 export function useClassroomMembers(id: number | null) {
   const isAdmin = useIsAdmin()
   return useQuery({

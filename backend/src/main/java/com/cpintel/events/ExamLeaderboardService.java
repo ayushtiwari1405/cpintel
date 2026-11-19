@@ -104,6 +104,15 @@ public class ExamLeaderboardService {
         return answer(event, candidateState(event, now), standings, now);
     }
 
+    /**
+     * The board as last stored, without recomputing it: what a dashboard reads, so opening one
+     * never sets off a recompute (or a call to the judge) for every event in a classroom.
+     * Null when no board has been built yet.
+     */
+    public EventsDto.LeaderboardStandings stored(GroupContest event) {
+        return parse(event.getLeaderboardSnapshot());
+    }
+
     /** The board as a candidate may see it, if they may see it at all. */
     public EventsDto.Leaderboard forCandidate(Long userId, Long eventId) {
         GroupContest event = events.requireAssigned(userId, eventId);

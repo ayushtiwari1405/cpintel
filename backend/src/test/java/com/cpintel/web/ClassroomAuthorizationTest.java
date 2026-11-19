@@ -19,6 +19,7 @@ class ClassroomAuthorizationTest extends AuthorizationTestBase {
 
     @MockBean private ClassroomService classrooms;
     @MockBean private com.cpintel.evaluation.ClassroomTaService tas;
+    @MockBean private com.cpintel.classrooms.ClassroomDashboardService dashboards;
 
     private static final String BODY =
         "{\"name\":\"DSA\",\"domjudgeUrl\":\"https://judge.example.edu\"}";
@@ -58,6 +59,19 @@ class ClassroomAuthorizationTest extends AuthorizationTestBase {
             .andExpect(status().isOk());
         mvc.perform(put("/api/v1/admin/classrooms/1").with(asAdmin())
                 .contentType(MediaType.APPLICATION_JSON).content(BODY))
+            .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("a student cannot read a classroom's dashboards; an admin can")
+    void dashboardsAreForAdmins() throws Exception {
+        mvc.perform(get("/api/v1/admin/classrooms/1/dashboard").with(asUser()))
+            .andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/admin/classrooms/1/students/7/dashboard").with(asUser()))
+            .andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/admin/classrooms/1/dashboard").with(asAdmin()))
+            .andExpect(status().isOk());
+        mvc.perform(get("/api/v1/admin/classrooms/1/students/7/dashboard").with(asAdmin()))
             .andExpect(status().isOk());
     }
 }

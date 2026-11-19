@@ -26,6 +26,8 @@ const AdminFiles        = lazy(() => import('@/pages/admin/AdminContestFilesPage
 const AdminClassrooms   = lazy(() => import('@/pages/admin/AdminClassroomsPage'))
 const AdminClassroom    = lazy(() => import('@/pages/admin/AdminClassroomDetailPage'))
 const AdminLab          = lazy(() => import('@/pages/admin/AdminLabPage'))
+const AdminClassDashboard   = lazy(() => import('@/pages/admin/AdminClassroomDashboardPage'))
+const AdminStudentDashboard = lazy(() => import('@/pages/admin/AdminStudentDashboardPage'))
 const AdminLabEdit      = lazy(() => import('@/pages/admin/AdminLabEditPage'))
 const LabsPage          = lazy(() => import('@/pages/LabsPage'))
 const LabProblemPage    = lazy(() => import('@/pages/LabProblemPage'))
@@ -211,6 +213,10 @@ export function AppRoutes() {
           <Route path="/admin/classrooms"    element={<AdminRoute><AdminClassrooms /></AdminRoute>} />
           <Route path="/admin/classrooms/:classroomId"
                  element={<AdminRoute><AdminClassroom /></AdminRoute>} />
+          <Route path="/admin/classrooms/:classroomId/dashboard"
+                 element={<AdminRoute><AdminClassDashboard /></AdminRoute>} />
+          <Route path="/admin/classrooms/:classroomId/students/:userId"
+                 element={<AdminRoute><AdminStudentDashboard /></AdminRoute>} />
           <Route path="/admin/classrooms/:classroomId/labs/new"
                  element={<AdminRoute><AdminLabEdit key="new" /></AdminRoute>} />
           <Route path="/admin/classrooms/:classroomId/labs/:labId"
