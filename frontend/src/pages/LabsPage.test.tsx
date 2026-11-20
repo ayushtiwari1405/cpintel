@@ -48,13 +48,13 @@ describe('labs', () => {
     expect(within(card).getByLabelText('Solved in time')).toBeInTheDocument()
     expect(within(card).getByLabelText('Not solved')).toBeInTheDocument()
     expect(within(card).getByText('1 of 2 solved in time')).toBeInTheDocument()
-    expect(screen.queryByText(/Your solves are not being counted yet/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Solves aren't counted yet/)).not.toBeInTheDocument()
   })
 
   it('warns when a handle the labs need is missing or unverified', async () => {
     open({ labs: [lab()], codeforces: { handle: 'alice', verified: false }, leetcode: null, cses: null })
 
-    const warning = (await screen.findByText(/Your solves are not being counted yet/)).closest<HTMLElement>('[role="status"]')!
+    const warning = (await screen.findByText(/Solves aren't counted yet/)).closest<HTMLElement>('[role="status"]')!
     expect(warning).toHaveTextContent('verify your Codeforces handle (alice)')
     expect(warning).toHaveTextContent('link your LeetCode handle')
     expect(within(warning).getByRole('link', { name: 'Platforms' })).toHaveAttribute('href', '/platforms')

@@ -13,14 +13,14 @@ const PLATFORMS = [
   {
     id: 'CODEFORCES',
     name: 'Codeforces',
-    desc: 'Contests, ratings and your full submission history.',
+    desc: 'Ratings and submission history.',
     placeholder: 'tourist',
     synced: true,
   },
   {
     id: 'LEETCODE',
     name: 'LeetCode',
-    desc: 'Read only for lab assignments: CPIntel checks your recent accepted solutions.',
+    desc: 'Used for labs.',
     placeholder: 'your_username',
     synced: false,
   },
@@ -190,12 +190,9 @@ export default function PlatformsPage() {
       <aside className="rounded-xl border border-gray-800 p-4 text-sm text-gray-400">
         <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">How sync works</h2>
         <ul className="list-disc space-y-1 pl-4 text-xs marker:text-gray-600">
-          <li>The first sync fetches your full history and may take a minute.</li>
-          <li>Codeforces accounts sync automatically every night at 02:00 UTC.</li>
-          <li>Lab assignments only count solves from a verified handle. Verifying takes a minute
-            and is done once.</li>
-          <li>Submitting from Practice needs the Codeforces session above; linking a handle alone
-            does not enable it.</li>
+          <li>Codeforces syncs nightly at 02:00 UTC.</li>
+          <li>Labs only count verified handles.</li>
+          <li>Submitting needs the Codeforces session above.</li>
         </ul>
       </aside>
     </div>

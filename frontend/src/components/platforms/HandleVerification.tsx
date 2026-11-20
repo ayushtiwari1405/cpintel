@@ -31,7 +31,7 @@ export function HandleVerification({ account }: { account: PlatformAccount }) {
       <p className="flex items-start gap-1.5 text-xs text-amber-200">
         <ShieldAlert size={14} className="mt-px shrink-0" aria-hidden="true" />
         <span>
-          Not verified. Lab assignments only count solves from a handle you have proven is yours.
+          Not verified — labs only count verified handles.
         </span>
       </p>
 

@@ -108,7 +108,7 @@ export default function AdminOverviewPage() {
           </div>
         )}
         <p className="mt-2 text-xs text-gray-600">
-          Sizes only — admins cannot see file names or contents.
+          Sizes only — names and contents stay private.
         </p>
       </section>
 

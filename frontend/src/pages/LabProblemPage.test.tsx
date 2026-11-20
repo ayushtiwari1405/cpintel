@@ -80,7 +80,7 @@ describe('solving a LeetCode lab problem', () => {
 
   it('without the app or extension, says how to get them and does not offer submit', async () => {
     open(labs('alice'))
-    expect(await screen.findByText(/use the CPIntel desktop app or install the CPIntel browser extension/)).toBeInTheDocument()
+    expect(await screen.findByText(/with the desktop app or browser extension/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Submit/ })).toBeDisabled()
   })
 

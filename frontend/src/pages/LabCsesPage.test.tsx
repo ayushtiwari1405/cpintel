@@ -68,7 +68,7 @@ describe('solving a CSES lab task', () => {
 
   it('without a connected CSES account, does not offer submit', async () => {
     open(labs(null))
-    expect(await screen.findByText(/Connect your CSES account to submit from here/)).toBeInTheDocument()
+    expect(await screen.findByText(/Connect CSES to submit from here/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Submit/ })).toBeDisabled()
   })
 

@@ -44,7 +44,7 @@ export function ChangePasswordCard({ neverChanged }: { neverChanged?: boolean })
         <div>
           <p className="text-gray-300 font-medium">Password</p>
           <p className="mt-0.5 text-xs leading-relaxed text-gray-500">
-            Examination passwords come from your invigilator and are not affected.
+            Exam passwords aren't affected.
           </p>
         </div>
       </div>

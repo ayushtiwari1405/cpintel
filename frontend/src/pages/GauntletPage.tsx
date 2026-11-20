@@ -153,9 +153,7 @@ export default function GauntletPage() {
           </div>
 
           <p className="text-sm leading-relaxed text-gray-300">
-            Six areas of up to four tiers (about 1200, 1600, 2000 and 2400). Each tier asks two
-            questions about which technique a problem needs: answer both correctly to climb.
-            Your roadmap is then set to your level.
+            Answer both questions in a tier to climb (1200 → 2400). Your roadmap is set to your level.
           </p>
 
           <ul className="grid gap-2 sm:grid-cols-2">
@@ -168,9 +166,7 @@ export default function GauntletPage() {
           </ul>
 
           <p className="text-xs leading-relaxed text-gray-500">
-            Choose &ldquo;Not sure yet&rdquo; rather than guessing — a lucky guess places you too
-            high. Answers are final once checked; retakes open after a week and never undo
-            progress.
+            Pick &ldquo;Not sure yet&rdquo; over guessing. Retake after a week.
           </p>
 
           {paper.nextAttemptAt ? (

@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 import {
-  AlertCircle, ArrowLeft, CheckCircle2, Copy, LayoutDashboard, Loader2, Plus, RefreshCw, Save, UserMinus, UserPlus,
+  AlertCircle, ArrowLeft, CheckCircle2, Copy, FlaskConical, LayoutDashboard, Loader2, RefreshCw, Save,
+  UserMinus, UserPlus, Users,
 } from 'lucide-react'
 import {
   useAdminClassroom, useArchiveClassroom, useCheckJudge, useClassroomMemberActions, useClassroomSettings,
@@ -12,8 +13,11 @@ import { useAdminGroups } from '@/hooks/useGroups'
 import { useClassroomTaActions, useClassroomTas } from '@/hooks/useEvaluation'
 import { useAdminLabs } from '@/hooks/useLabs'
 import { format } from 'date-fns'
-import { Ago, EmptyRow, Panel, Pill } from '@/components/admin/AdminUi'
-import type { ClassroomSummary, TaAdded } from '@/types'
+import { Ago, EmptyRow, NewTile, Panel, Pill, Shelf, Tile, TileGrid, TileNote } from '@/components/admin/AdminUi'
+import { Tabs, panelProps } from '@/components/common/Tabs'
+import { useAdminEvents } from '@/hooks/useExams'
+import { EventTile } from '@/pages/admin/AdminExamsPage'
+import type { ClassroomSummary, EventKind, TaAdded } from '@/types'
 import { copyText } from '@/utils/clipboard'
 import { ErrorState, LoadingState } from '@/components/common/States'
 import { PageHeader } from '@/components/common/PageHeader'
@@ -54,14 +58,56 @@ export default function AdminClassroomDetailPage() {
           </Link>
         }
         className="mb-2" />
-      <Settings room={room} />
-      <CodeforcesKey room={room} />
-      <Labs classroomId={id} />
-      <Teams classroomId={id} />
-      <Members classroomId={id} />
-      <Staff classroomId={id} />
-      <TeachingAssistants classroomId={id} room={room} />
+      <ClassroomTabs room={room} />
     </div>
+  )
+}
+
+type Section = 'overview' | 'people' | 'settings'
+const SECTIONS: Section[] = ['overview', 'people', 'settings']
+
+/**
+ * The classroom split three ways, so what an admin opens most — its labs, examinations and
+ * teams — is the first screen rather than below two settings forms. The tab is in the address
+ * (?tab=people), so a reload or a shared link lands on the same one.
+ */
+function ClassroomTabs({ room }: { room: ClassroomSummary }) {
+  const id = room.classroomId
+  const [params, setParams] = useSearchParams()
+  const asked = params.get('tab') as Section | null
+  const tab: Section = asked && SECTIONS.includes(asked) ? asked : 'overview'
+  const choose = (next: Section) => setParams(p => {
+    const copy = new URLSearchParams(p)
+    if (next === 'overview') copy.delete('tab'); else copy.set('tab', next)
+    return copy
+  }, { replace: true })
+
+  return (
+    <>
+      <Tabs id="classroom" label="Classroom sections" value={tab} onChange={choose}
+        tabs={[
+          { key: 'overview', label: 'Overview' },
+          { key: 'people', label: 'People', badge: room.memberCount },
+          { key: 'settings', label: 'Settings' },
+        ]} />
+      <div {...panelProps('classroom', tab)} className="space-y-8 pt-2 outline-hidden">
+        {tab === 'overview' && <>
+          <Labs classroomId={id} />
+          <Events classroomId={id} kind="EXAM" />
+          <Events classroomId={id} kind="CONTEST" />
+          <Teams classroomId={id} />
+        </>}
+        {tab === 'people' && <div className="space-y-4">
+          <Members classroomId={id} />
+          <Staff classroomId={id} />
+          <TeachingAssistants classroomId={id} room={room} />
+        </div>}
+        {tab === 'settings' && <div className="space-y-4">
+          <Settings room={room} />
+          <CodeforcesKey room={room} />
+        </div>}
+      </div>
+    </>
   )
 }
 
@@ -213,14 +259,13 @@ function CodeforcesKey({ room }: { room: ClassroomSummary }) {
   })
   return (
     <Panel title="Codeforces API key"
-      description="Needed for exams on a private Codeforces group contest"
+      description="For private group contests"
       actions={room.codeforcesKeySet
         ? <Pill tone="green">key {room.codeforcesKeyHint}…</Pill>
         : <Pill tone="gray">none</Pill>}>
       <div className="space-y-3 p-4">
         <p className="text-xs leading-relaxed text-gray-500">
-          From a manager of the group, at codeforces.com/settings/api. CPIntel reads the group
-          contest's problems and verdicts with it. Codeforces checks it before it is saved.
+          From a group manager at codeforces.com/settings/api.
         </p>
         <div className="flex flex-wrap items-end gap-2">
           <label className="flex min-w-48 flex-1 flex-col gap-1">
@@ -260,69 +305,88 @@ const LAB_STATE = {
   CLOSED:   { label: 'Closed', tone: 'amber' },
 } as const
 
-/** Lab assignments: Codeforces and LeetCode problems the classroom's students are set. */
+/** Lab assignments: Codeforces, LeetCode and CSES problems the classroom's students are set. */
 function Labs({ classroomId }: { classroomId: number }) {
   const { data: labs, isLoading, isError } = useAdminLabs(classroomId)
   return (
-    <Panel title="Lab assignments"
-      description="Problems from Codeforces, LeetCode and CSES, checked from students' verified accounts."
+    <Shelf title="Lab assignments" count={labs?.length}>
+      <TileGrid label="Lab assignments">
+        <NewTile label="New lab" to={`/admin/classrooms/${classroomId}/labs/new`} />
+        {isLoading && <TileNote>Loading labs…</TileNote>}
+        {isError && <TileNote>Could not load the labs.</TileNote>}
+        {labs?.length === 0 && <TileNote>No labs yet.</TileNote>}
+        {labs?.map(l => (
+          <Tile key={l.labId}
+            to={`/admin/classrooms/${classroomId}/labs/${l.labId}`}
+            icon={FlaskConical}
+            kind="Lab"
+            tone={LAB_STATE[l.state].tone}
+            status={<Pill tone={LAB_STATE[l.state].tone}>{LAB_STATE[l.state].label}</Pill>}
+            corner={`${l.problems.length} · ${Number(l.totalMarks)} marks`}
+            title={l.title}
+            meta={[
+              `Due ${format(new Date(l.dueAt), 'd MMM yyyy, HH:mm')}`,
+              `${l.groupNames.length ? l.groupNames.join(', ') : 'Whole classroom'} · `
+                + `${l.studentCount} student${l.studentCount === 1 ? '' : 's'}`,
+            ]}
+          />
+        ))}
+      </TileGrid>
+    </Shelf>
+  )
+}
+
+/** This classroom's examinations or contests; they are created on the Examinations page. */
+function Events({ classroomId, kind }: { classroomId: number; kind: EventKind }) {
+  const { data, isLoading, isError } = useAdminEvents(kind)
+  const events = data?.filter(e => e.classroomId === classroomId)
+  const exam = kind === 'EXAM'
+  return (
+    <Shelf title={exam ? 'Examinations' : 'Contests'} count={events?.length}
       actions={
-        <Link to={`/admin/classrooms/${classroomId}/labs/new`} className="btn-primary btn-sm">
-          <Plus size={13} aria-hidden="true" /> New lab
+        <Link to={`/admin/exams?kind=${kind}&classroom=${classroomId}`}
+          className="text-xs text-accent-400 hover:text-accent-300">
+          All {exam ? 'examinations' : 'contests'}
         </Link>
       }>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-gray-800 text-left text-[11px] uppercase tracking-wide text-gray-500">
-              <th className="px-4 py-2 font-medium">Lab</th>
-              <th className="px-4 py-2 font-medium">Status</th>
-              <th className="px-4 py-2 font-medium">Due</th>
-              <th className="px-4 py-2 font-medium">Problems</th>
-              <th className="px-4 py-2 font-medium">For</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-800">
-            {isLoading && <EmptyRow colSpan={5}>Loading labs…</EmptyRow>}
-            {isError && <EmptyRow colSpan={5}>Could not load the labs.</EmptyRow>}
-            {labs?.length === 0 && <EmptyRow colSpan={5}>No labs yet.</EmptyRow>}
-            {labs?.map(l => (
-              <tr key={l.labId}>
-                <td className="px-4 py-2.5">
-                  <Link to={`/admin/classrooms/${classroomId}/labs/${l.labId}`}
-                    className="text-gray-200 hover:text-accent-300">{l.title}</Link>
-                </td>
-                <td className="px-4 py-2.5"><Pill tone={LAB_STATE[l.state].tone}>{LAB_STATE[l.state].label}</Pill></td>
-                <td className="px-4 py-2.5 text-xs text-gray-400">{format(new Date(l.dueAt), 'd MMM yyyy, HH:mm')}</td>
-                <td className="px-4 py-2.5 text-xs text-gray-400">{l.problems.length} · {Number(l.totalMarks)} marks</td>
-                <td className="px-4 py-2.5 text-xs text-gray-400">
-                  {l.groupNames.length ? l.groupNames.join(', ') : 'Whole classroom'} · {l.studentCount}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </Panel>
+      <TileGrid label={exam ? 'Examinations' : 'Contests'}>
+        <NewTile label={exam ? 'New examination' : 'New contest'}
+          to={`/admin/exams?kind=${kind}&classroom=${classroomId}&new=1`} />
+        {isLoading && <TileNote>Loading…</TileNote>}
+        {isError && <TileNote>Could not load them.</TileNote>}
+        {events?.length === 0 && <TileNote>{exam ? 'No examinations yet.' : 'No contests yet.'}</TileNote>}
+        {events?.map(e => <EventTile key={e.eventId} event={e} />)}
+      </TileGrid>
+    </Shelf>
   )
 }
 
 function Teams({ classroomId }: { classroomId: number }) {
-  const { data: groups } = useAdminGroups()
-  const mine = groups?.filter(g => g.classroomId === classroomId) ?? []
+  const { data: groups, isLoading } = useAdminGroups()
+  const mine = groups?.filter(g => g.classroomId === classroomId)
   return (
-    <Panel title="Teams" description="Create teams from the Teams page">
-      <div className="flex flex-wrap gap-1.5 p-4">
-        {mine.length === 0 && <span className="text-xs text-gray-600">No teams yet.</span>}
-        {mine.map(g => (
-          <Link key={g.groupId} to={`/admin/teams/${g.groupId}`}
-            className="rounded-md border border-gray-800 px-2 py-1 text-xs text-gray-300
-                       hover:border-accent-700 hover:text-accent-300">
-            {g.name} <span className="text-gray-600">· {g.memberCount}</span>
-          </Link>
+    <Shelf title="Teams" count={mine?.length}>
+      <TileGrid label="Teams">
+        <NewTile label="New team" to={`/admin/teams?classroom=${classroomId}&new=1`} />
+        {isLoading && <TileNote>Loading teams…</TileNote>}
+        {mine?.length === 0 && <TileNote>No teams yet.</TileNote>}
+        {mine?.map(g => (
+          <Tile key={g.groupId}
+            to={`/admin/teams/${g.groupId}`}
+            icon={Users}
+            kind="Team"
+            tone={g.active ? 'accent' : 'gray'}
+            status={!g.active && <Pill tone="gray">retired</Pill>}
+            corner={`${g.memberCount} member${g.memberCount === 1 ? '' : 's'}`}
+            title={g.name}
+            meta={[
+              `${g.contestCount} contest${g.contestCount === 1 ? '' : 's'}`,
+              g.description,
+            ]}
+          />
         ))}
-      </div>
-    </Panel>
+      </TileGrid>
+    </Shelf>
   )
 }
 
@@ -416,7 +480,7 @@ function Staff({ classroomId }: { classroomId: number }) {
   const already = new Set(staff?.map(s => s.userId))
 
   return (
-    <Panel title="Admins" description="Superadmins can access every classroom">
+    <Panel title="Admins">
       <div className="flex flex-wrap gap-1.5 p-4">
         {staff?.map(s => (
           <span key={s.userId}
@@ -488,7 +552,7 @@ function TeachingAssistants({ classroomId, room }: { classroomId: number; room: 
 
   return (
     <Panel title="Teaching assistants"
-      description="Assign questions or students to each TA on an examination's Evaluation tab"
+      description="Assign work on an exam's Evaluation tab"
       actions={
         <label className="flex items-center gap-2 text-xs text-gray-400">
           <input type="checkbox" checked={room.tasWriteQuestions} disabled={taQuestions.isPending}
@@ -528,7 +592,7 @@ function TeachingAssistants({ classroomId, room }: { classroomId: number; room: 
       </div>
       <div className="space-y-2 border-t border-gray-800 p-4">
         <span className="text-xs text-gray-500">
-          Matches an existing account by email, then username; otherwise creates one.
+          Uses an existing account if one matches.
         </span>
         <div className="flex flex-wrap gap-2">
           <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Email"

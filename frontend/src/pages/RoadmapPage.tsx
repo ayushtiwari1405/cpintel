@@ -142,7 +142,7 @@ export default function RoadmapPage() {
       )}
 
       <p className="text-center text-xs text-gray-500">
-        Skills unlock when their prerequisites reach 35% mastery and complete at 75% with enough attempts.
+        Unlocks at 35% of prerequisites · complete at 75%
       </p>
     </div>
   )

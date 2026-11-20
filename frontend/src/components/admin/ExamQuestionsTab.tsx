@@ -164,7 +164,7 @@ function Published({ state, eventId, exam }: { state: ExamBankState; eventId: nu
   const [rejudgeLabel, setRejudgeLabel] = useState<string | null>(null)
 
   return (
-    <Panel title="Questions" description="The paper has started, so its problems are fixed. A question corrected and checked again in the bank can replace its published version.">
+    <Panel title="Questions" description="Fixed once started; a re-checked bank question can replace its version.">
       <div className="space-y-2 p-4">
         {state.chosen.length === 0 && <p className="text-xs text-gray-500">This examination has no questions from the bank.</p>}
         {state.chosen.map(q => (
@@ -229,7 +229,7 @@ function Announcements({ state, eventId }: { state: ExamBankState; eventId: numb
   const { announce } = useExamBankActions(eventId)
   const [message, setMessage] = useState('')
   return (
-    <Panel title="Notices to candidates" description="Shown in the examination from its start, within about a minute.">
+    <Panel title="Notices to candidates" description="Shown to candidates within a minute.">
       <div className="space-y-3 p-4">
         {state.announcements.length === 0 ? <p className="text-xs text-gray-500">None sent.</p> : (
           <ul className="space-y-1.5">

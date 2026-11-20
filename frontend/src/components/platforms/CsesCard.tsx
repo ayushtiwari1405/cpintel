@@ -87,7 +87,7 @@ export function CsesCard({ account }: { account: PlatformAccount | undefined }) 
         <div className="min-w-0 flex-1">
           <h2 id="platform-CSES" className="mb-1 text-base font-semibold text-gray-50">CSES</h2>
           <p className="text-sm text-gray-400">
-            For lab assignments: CPIntel reads your CSES solves and can submit for you.
+            Used for labs.
           </p>
           {account && (
             <dl className="mt-4">

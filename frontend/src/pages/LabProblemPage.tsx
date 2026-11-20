@@ -325,7 +325,7 @@ function ConnectionNotice({ connection: c }: { connection: Connection }) {
         action={<Link to="/extension" className="btn-secondary btn-sm">Get the extension</Link>}>
         {extensionTooOld()
           ? 'Your CPIntel extension is too old for LeetCode. Install the new version to run and submit here.'
-          : 'To run and submit here, use the CPIntel desktop app or install the CPIntel browser extension. You can still solve it on LeetCode; it counts either way.'}
+          : 'Run and submit here with the desktop app or browser extension — or solve it on LeetCode.'}
       </WorkspaceNotice>
     )
   }

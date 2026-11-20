@@ -392,7 +392,7 @@ export default function VisualisePage() {
         <p className="mt-1.5 text-[11px] text-gray-500">
           {trace
             ? 'Click a line to jump to its next run. Click the gutter to set a breakpoint.'
-            : <>Runs in this browser. Click the gutter for breakpoints. <span className="kbd">Ctrl</span>+<span className="kbd">Enter</span> visualises.</>}
+            : <><span className="kbd">Ctrl</span>+<span className="kbd">Enter</span> to visualise · click the gutter for breakpoints</>}
         </p>
       </div>
     </div>
@@ -529,8 +529,7 @@ export default function VisualisePage() {
         ) : !trace ? (
           <EmptyState icon={<Play size={18} />} title="Write some code, then Visualise"
             className="h-full justify-center">
-            Step through it line by line, forwards and back, and watch variables, objects, pointers,
-            data structures and recursive calls change. Pick an example to start.
+            Step through line by line, or pick an example.
           </EmptyState>
         ) : compare ? (
           <div className="flex h-full flex-col">

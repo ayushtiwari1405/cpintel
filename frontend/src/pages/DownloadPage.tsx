@@ -90,30 +90,24 @@ function WindowsSteps({ release }: { release: DesktopRelease }) {
     <ol className="space-y-5">
       <Step n={1} title="Download the installer">
         <DownloadButton asset={exe} label="Download for Windows" />
-        <p>The file is <span className="font-mono text-gray-300">{exe.name}</span>.</p>
         <Expected>
           <p>
-            Your browser may say the file <em>isn't commonly downloaded</em>. In Edge choose
-            <span className="text-amber-100"> … → Keep → Keep anyway</span>; in Chrome choose
-            <span className="text-amber-100"> Keep</span>.
+            If the browser warns, choose <span className="text-amber-100">Keep</span>
+            (Edge: <span className="text-amber-100">… → Keep → Keep anyway</span>).
           </p>
         </Expected>
       </Step>
       <Step n={2} title="Open it">
         <Expected>
           <p>
-            Windows will most likely show a blue box: <em>"Windows protected your PC"</em>, with
-            <em> Publisher: Unknown publisher</em>. That is expected — CPIntel is not signed with
-            a paid code-signing certificate. Click <span className="text-amber-100">More info</span>,
-            check the app is <span className="font-mono">{exe.name}</span>, then
-            click <span className="text-amber-100">Run anyway</span>.
+            On <em>"Windows protected your PC"</em> (Unknown publisher), click{' '}
+            <span className="text-amber-100">More info → Run anyway</span>.
           </p>
         </Expected>
       </Step>
       <Step n={3} title="It installs and opens by itself">
         <p>
-          It installs for your account only — no administrator password — and opens when done.
-          Sign in with your CPIntel username and password.
+          No administrator password needed. Sign in with your CPIntel account.
         </p>
       </Step>
     </ol>
@@ -136,15 +130,13 @@ function MacSteps({ release }: { release: DesktopRelease }) {
           {intel && <DownloadButton asset={intel} label="Intel" />}
         </div>
         <p>
-          Not sure? Apple menu → <span className="text-gray-200">About This Mac</span>. "Chip:
-          Apple M…" means Apple Silicon; "Processor: … Intel" means Intel.
+          Not sure? Apple menu → <span className="text-gray-200">About This Mac</span>.
         </p>
       </Step>
       {zipped ? (
         <Step n={2} title="Open it and drag CPIntel into Applications">
           <p>
-            Double-click the downloaded .zip in Downloads. It unpacks into CPIntel; drag that onto
-            the Applications folder in Finder's sidebar.
+            Double-click the .zip, then drag CPIntel into Applications.
           </p>
         </Step>
       ) : (
@@ -155,20 +147,15 @@ function MacSteps({ release }: { release: DesktopRelease }) {
       <Step n={3} title="Open CPIntel from Applications — the first time takes one extra step">
         <Expected>
           <p>
-            macOS will say <em>"CPIntel" can't be opened because Apple cannot check it for
-            malicious software</em> (or <em>"Not Opened"</em>). That is expected — CPIntel is not
-            registered with Apple. Click <span className="text-amber-100">Done</span>, open
-            <span className="text-amber-100"> System Settings → Privacy &amp; Security</span>,
-            scroll down to <em>"CPIntel" was blocked</em> and click
-            <span className="text-amber-100"> Open Anyway</span>, then enter your Mac's password.
+            If macOS blocks it, open{' '}
+            <span className="text-amber-100">System Settings → Privacy &amp; Security</span> and click
+            <span className="text-amber-100"> Open Anyway</span>.
           </p>
           <p>
-            If instead it says <em>"CPIntel" is damaged and can't be opened</em> and there is no
-            Open Anyway button, open Terminal, run this, and open CPIntel again:
+            If it says <em>"damaged"</em>, run this in Terminal:
           </p>
           <Command text="xattr -cr /Applications/CPIntel.app" />
         </Expected>
-        <p>After that it opens normally. Sign in with your CPIntel username and password.</p>
       </Step>
     </ol>
   )
@@ -183,23 +170,18 @@ function LinuxSteps({ release }: { release: DesktopRelease }) {
       {deb && (
         <Step n={1} title="Ubuntu, Debian, Mint: the .deb package">
           <DownloadButton asset={deb} label="Download .deb" />
-          <p>Install it from the folder you downloaded it to:</p>
+          <p>From the download folder:</p>
           <Command text={`sudo apt install ./${deb.name}`} />
-          <p>
-            It asks for your computer password — that is the package manager, as for any
-            software. CPIntel then appears in your applications menu.
-          </p>
         </Step>
       )}
       {appImage && (
         <Step n={deb ? 2 : 1} title="Any other distribution: the AppImage">
           <DownloadButton asset={appImage} label="Download AppImage" />
-          <p>Make it runnable, then double-click it or run it:</p>
+          <p>Make it runnable, then open it:</p>
           <Command text={`chmod +x ${appImage.name}`} />
           <Expected>
             <p>
-              If it does nothing, or says <em>libfuse.so.2</em> is missing (Ubuntu 22.04 and
-              later), install FUSE once and try again:
+              If <em>libfuse.so.2</em> is missing:
             </p>
             <Command text="sudo apt install libfuse2" />
           </Expected>
@@ -230,12 +212,10 @@ function Checksums({ release, os }: { release: DesktopRelease; os: Os }) {
         <ShieldCheck size={15} className="text-green-400" /> Make sure it is the real file
       </p>
       <p className="text-xs leading-relaxed text-gray-400">
-        Optional. A tampered file has a different SHA-256 fingerprint. In
-        {os === 'windows' ? ' PowerShell' : ' a terminal'}, in the download folder, run this with
-        the file's name in place of FILE:
+        Optional. Run this in the download folder (replace FILE):
       </p>
       <Command text={command} />
-      <p className="text-xs text-gray-400">The result must match exactly:</p>
+      <p className="text-xs text-gray-400">It must match:</p>
       <ul className="space-y-1.5">
         {assets.map(a => (
           <li key={a.name} className="text-[11px]">
@@ -253,37 +233,21 @@ function RedFlags() {
   return (
     <div className="card space-y-3 border-red-900/60">
       <p className="flex items-center gap-2 text-sm font-medium text-gray-200">
-        <OctagonX size={15} className="text-red-400" /> Stop and ask if something is not as described
+        <OctagonX size={15} className="text-red-400" /> Don't install it if
       </p>
-      <p className="text-xs text-gray-400">Do not install it, and do not work around a warning, if:</p>
       <ul className="list-disc space-y-1.5 pl-5 text-xs leading-relaxed text-gray-400">
+        <li>It came from anywhere but this page.</li>
         <li>
-          You got the file anywhere other than this page — an email or chat attachment, a drive
-          link, a USB stick, another website — even if it is from someone you know.
+          The name doesn't start with <span className="font-mono text-gray-300">CPIntel-</span> or
+          isn't .exe, .dmg, .deb, .AppImage or (Mac) .zip.
         </li>
-        <li>
-          The file name does not start with <span className="font-mono text-gray-300">CPIntel-</span>,
-          or ends in anything other than .exe, .dmg, .deb or .AppImage (or .zip, for a Mac
-          only) — for example .msi, .scr, .bat.
-        </li>
-        <li>The fingerprint above does not match.</li>
-        <li>
-          On Windows, it asks for an administrator password, or the warning names a publisher
-          (anything other than <em>Unknown publisher</em>).
-        </li>
-        <li>
-          Your antivirus reports a threat. Do not switch your antivirus off or add an exception
-          for it.
-        </li>
-        <li>
-          Once installed, the app asks for anything other than your CPIntel sign-in and, if you
-          choose to connect it, your Codeforces account — for example your email or bank
-          password, or to install other software.
-        </li>
+        <li>The fingerprint doesn't match.</li>
+        <li>Windows asks for an administrator password or names a publisher.</li>
+        <li>Your antivirus flags it.</li>
+        <li>The app asks for anything beyond your CPIntel and Codeforces sign-ins.</li>
       </ul>
       <p className="text-xs leading-relaxed text-gray-300">
-        If any of these happen: delete the file, tell your instructor or the CPIntel
-        administrator what you saw (a screenshot helps), and keep using the website meanwhile.
+        Delete it and tell your instructor.
       </p>
     </div>
   )
@@ -313,8 +277,7 @@ export default function DownloadPage() {
         <Monitor size={22} className="text-accent-400" /> CPIntel desktop app
       </h1>
       <p className="mt-1 text-sm leading-relaxed text-gray-400">
-        Required for supervised examinations. Includes built-in compilers and connects to
-        Codeforces without a browser extension.
+        Required for supervised exams. Compilers included.
       </p>
     </div>
   )
@@ -326,8 +289,7 @@ export default function DownloadPage() {
         <div className="card flex items-start gap-2 text-sm text-gray-300">
           <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-green-400" />
           <p>
-            You are using the desktop app{version ? ` (version ${version})` : ''}. Updates are
-            offered in a ribbon at the top of the window.
+            You're on the desktop app{version ? ` (version ${version})` : ''}.
           </p>
         </div>
       </div>
@@ -396,9 +358,7 @@ export default function DownloadPage() {
       <div className="flex items-start gap-2 text-xs leading-relaxed text-gray-500">
         <ShieldCheck size={14} className="mt-0.5 shrink-0 text-gray-600" />
         <p>
-          The app shows this site, compiles and runs your code in a temporary folder when you
-          press Run, and — only during a contest or examination — records when you leave its
-          window, which your instructor can see. It never updates without your consent.
+          During an exam the app records when you leave its window. It never updates without asking.
         </p>
       </div>
     </div>

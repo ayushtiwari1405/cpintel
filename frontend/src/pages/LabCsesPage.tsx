@@ -126,7 +126,7 @@ function Workspace({ problem }: { problem: LabCsesProblem }) {
     >
       {account
         ? 'CSES no longer accepts your connection. Reconnect CSES to submit from here.'
-        : 'Connect your CSES account to submit from here. You can still run on the examples.'}
+        : 'Connect CSES to submit from here.'}
     </WorkspaceNotice>
   )
 

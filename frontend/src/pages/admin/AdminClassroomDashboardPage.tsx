@@ -107,7 +107,7 @@ function Headline({ data }: { data: ClassDashboard }) {
 function Labs({ classroomId, labs }: { classroomId: number; labs: DashboardLabColumn[] }) {
   const download = useDownloadLabMarks(classroomId)
   return (
-    <Panel title="Labs" description="Averages are over the students each lab was set for">
+    <Panel title="Labs">
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
@@ -171,7 +171,7 @@ function Events({ classroomId, events }: { classroomId: number; events: Dashboar
   const download = useDownloadEventReport(classroomId)
   return (
     <Panel title="Contests and examinations"
-      description="Scores come from each event's last built leaderboard, TA marks included">
+      description="TA marks included">
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
@@ -263,7 +263,7 @@ function Roster({ data }: { data: ClassDashboard }) {
 
   return (
     <Panel title="Students"
-      description="Labs: solved in time out of set. Events: score, or absent once it has started."
+      description="Labs: solved / set · Events: score"
       actions={<>
         <label className="flex items-center gap-1.5 text-xs text-gray-400">
           <input type="checkbox" checked={onlyFlagged} onChange={e => setOnlyFlagged(e.target.checked)}

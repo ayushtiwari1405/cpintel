@@ -474,9 +474,6 @@ function UserDetailDrawer({ userId, onClose }: { userId: number; onClose: () => 
                     ? 'Nothing uploaded.'
                     : `${data.fileCount} file${data.fileCount === 1 ? '' : 's'}, ${bytes(data.fileBytes)}.`}
                 </p>
-                <p className="mt-1 text-xs text-gray-600">
-                  Sizes only — admins cannot see file names or contents.
-                </p>
               </section>
 
               <ParticipationSection userId={userId} />
@@ -617,7 +614,7 @@ function CreateUserDialog(
         </div>
 
         <p className="mt-3 text-xs text-gray-600">
-          Shown in plain text so you can pass it on. Ask them to change it after signing in.
+          Ask them to change it after signing in.
         </p>
 
         <div className="mt-4 flex justify-end gap-2">
@@ -715,8 +712,7 @@ function SetPasswordDialog({ user, onClose }: { user: AdminUserRow; onClose: () 
               <Copy size={14} /> Copy it
             </button>
             <p className="text-xs leading-relaxed text-amber-300">
-              Shown only once and not emailed. Give it to them directly; they have been signed
-              out everywhere.
+              Shown only once. They've been signed out everywhere.
             </p>
             <button onClick={onClose} className="btn-primary w-full">Done</button>
           </div>

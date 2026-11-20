@@ -50,7 +50,7 @@ export default function AdminAuditPage() {
   return (
     <div className="space-y-4">
       <PageHeader title="Audit trail"
-        description="Sign-ins and administrative changes, newest first." className="mb-2" />
+        className="mb-2" />
       <div className="flex flex-wrap items-center gap-2">
         <select
           value={action}

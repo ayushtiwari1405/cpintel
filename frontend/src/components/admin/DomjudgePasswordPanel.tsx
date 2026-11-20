@@ -71,7 +71,7 @@ export function DomjudgePasswordPanel({ groupId }: { groupId: number }) {
   return (
     <Panel
       title="Update DOMjudge passwords"
-      description="Paste new passwords after changing them on the judge"
+      description="After changing them on the judge"
     >
       <div className="space-y-3 p-4">
         <textarea
@@ -86,10 +86,8 @@ export function DomjudgePasswordPanel({ groupId }: { groupId: number }) {
         />
 
         <p className="text-xs text-gray-600">
-          Needs <span className="text-gray-500">djUsername</span> and{' '}
-          <span className="text-gray-500">djPassword</span> columns. Each row updates the member
-          with that login (or the member whose username matches it). Passwords are verified
-          against the judge; a rejected one keeps the old password.
+          Columns: <span className="text-gray-500">djUsername</span>,{' '}
+          <span className="text-gray-500">djPassword</span>. Rejected passwords are kept as before.
         </p>
 
         <div className="flex flex-wrap items-center gap-2">

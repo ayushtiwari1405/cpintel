@@ -112,7 +112,7 @@ function Headline({ data }: { data: StudentDashboard }) {
 
 function Labs({ classroomId, labs }: { classroomId: number; labs: StudentDashboardLab[] }) {
   return (
-    <Panel title="Labs" description="Every problem in each lab set for this student">
+    <Panel title="Labs">
       {labs.length === 0 && <p className="px-4 py-8 text-center text-sm text-gray-600">No labs set for this student.</p>}
       <div className="divide-y divide-gray-800">
         {labs.map(lab => {
@@ -159,7 +159,7 @@ function Labs({ classroomId, labs }: { classroomId: number; labs: StudentDashboa
 function Events({ events }: { events: StudentDashboardEvent[] }) {
   return (
     <Panel title="Contests and examinations"
-      description="From each event's last built leaderboard, TA marks included">
+      description="TA marks included">
       {events.length === 0 && (
         <p className="px-4 py-8 text-center text-sm text-gray-600">Nothing assigned to this student.</p>
       )}

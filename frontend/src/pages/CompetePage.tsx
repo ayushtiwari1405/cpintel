@@ -95,7 +95,8 @@ function restoreContest(): ContestRef | null {
     const saved = localStorage.getItem(STORAGE_KEY)
     if (saved) {
       const parsed = JSON.parse(saved)
-      if (parsed?.platform && parsed?.id) return parsed as ContestRef
+      // Compete is Codeforces only now; a DOMjudge round saved before that is not reopened.
+      if (parsed?.platform === 'CODEFORCES' && parsed?.id) return parsed as ContestRef
     }
     const legacy = localStorage.getItem(LEGACY_STORAGE_KEY)
     if (legacy && Number(legacy)) return { platform: 'CODEFORCES', id: legacy }

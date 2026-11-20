@@ -146,21 +146,16 @@ export default function LoginPage() {
               paper, in examination mode, instead of the account. */}
           <p className="mt-3 rounded-lg border border-accent-900 bg-accent-950/30 px-3 py-2
             text-center text-xs leading-relaxed text-accent-200">
-            Sitting an examination? Use the examination password on your slip.
+            Exam? Use the password on your slip.
             {/* Not inside the desktop app, which is what the link offers. */}
             {!isDesktop() && (
               <>
-                {' '}On your own computer,{' '}
-                <Link to="/download" className="underline hover:text-accent-100">get the desktop app</Link>.
+                {' '}<Link to="/download" className="underline hover:text-accent-100">Get the desktop app</Link>.
               </>
             )}
           </p>
         </div>
 
-        {/* Platforms hint */}
-        <p className="text-center text-xs text-gray-600 mt-6">
-          Built on Codeforces and DOMjudge
-        </p>
       </div>
     </div>
   )

@@ -90,7 +90,7 @@ export function RosterImportPanel({ groupId }: Props) {
   return (
     <Panel
       title="Import a roster"
-      description="Paste from a spreadsheet or CSV; missing accounts are created"
+      description="Paste CSV; missing accounts are created"
     >
       <div className="space-y-3 p-4">
         <textarea
@@ -105,17 +105,13 @@ export function RosterImportPanel({ groupId }: Props) {
         />
 
         <p className="text-xs text-gray-600">
-          First row names the columns. <span className="text-gray-500">email</span> or{' '}
-          <span className="text-gray-500">username</span> is required;{' '}
+          Columns: <span className="text-gray-500">email</span> or{' '}
+          <span className="text-gray-500">username</span> (required),{' '}
           <span className="text-gray-500">fullName</span>,{' '}
-          <span className="text-gray-500">cfHandle</span> and{' '}
-          <span className="text-gray-500">teamName</span> are optional. Comma- or tab-separated.
-        </p>
-        <p className="text-xs text-gray-600">
-          Add <span className="text-gray-500">djUsername</span> and{' '}
-          <span className="text-gray-500">djPassword</span> to attach DOMjudge logins (verified
-          in the preview). New accounts use the DOMjudge username; those two columns alone
-          re-attach expired logins.
+          <span className="text-gray-500">cfHandle</span>,{' '}
+          <span className="text-gray-500">teamName</span>,{' '}
+          <span className="text-gray-500">djUsername</span>,{' '}
+          <span className="text-gray-500">djPassword</span>.
         </p>
 
         {/* The common roster has no team column at all and everybody on one team. Typing that
@@ -132,9 +128,6 @@ export function RosterImportPanel({ groupId }: Props) {
             className="w-44 rounded-md border border-gray-800 bg-gray-900 px-2 py-1 text-xs
                        text-gray-200 placeholder-gray-400 outline-hidden focus:border-accent-600"
           />
-          <span className="text-[11px] text-gray-600">
-            a <span className="text-gray-500">teamName</span> on a row still wins
-          </span>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">

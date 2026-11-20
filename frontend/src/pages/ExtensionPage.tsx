@@ -77,8 +77,7 @@ export default function ExtensionPage() {
         <Puzzle size={22} className="text-accent-400" /> CPIntel Connector
       </h1>
       <p className="mt-1 text-sm text-gray-400">
-        Lets CPIntel open Codeforces problems, and run and submit Codeforces and LeetCode
-        solutions, using this browser's own sign-ins to those sites.
+        Run and submit Codeforces and LeetCode solutions with this browser's sign-ins.
       </p>
     </div>
   )
@@ -90,7 +89,7 @@ export default function ExtensionPage() {
         <div className="card flex items-start gap-2 text-sm text-gray-300">
           <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-green-400" />
           <p>
-            The desktop app needs no extension. Connect your account from{' '}
+            Not needed in the desktop app. Connect from{' '}
             <Link to="/platforms" className="text-accent-300 underline">Platforms</Link>.
           </p>
         </div>
@@ -105,10 +104,10 @@ export default function ExtensionPage() {
         <div className="card space-y-3">
           <p className="flex items-center gap-2 text-sm text-gray-200">
             <CheckCircle2 size={16} className="text-green-400" />
-            The extension is installed in this browser (version {installed}).
+            Installed (version {installed}).
           </p>
           <p className="text-xs leading-relaxed text-gray-400">
-            Sign in at codeforces.com in this browser if you have not, then connect your account.
+            Sign in at codeforces.com, then connect.
           </p>
           <Link to="/platforms"
             className="btn-primary inline-flex items-center gap-1.5 px-4 py-1.5 text-xs">
@@ -118,12 +117,11 @@ export default function ExtensionPage() {
             <p className="flex items-start gap-1.5 text-xs text-amber-300/90">
               <AlertTriangle size={12} className="mt-0.5 shrink-0" />
               <span>
-                This site now hands out version {EXTENSION_VERSION}.{' '}
+                Version {EXTENSION_VERSION} is out.{' '}
                 <button onClick={downloadExtension} className="underline hover:text-amber-200">
                   Download it
                 </button>
-                , replace the files in your {EXTENSION_FOLDER} folder, and press the reload
-                arrow on the extension at {extensionsPage}.
+                , replace your {EXTENSION_FOLDER} folder and reload it at {extensionsPage}.
               </span>
             </p>
           )}
@@ -141,8 +139,7 @@ export default function ExtensionPage() {
           bg-amber-950/20 px-4 py-3 text-xs leading-relaxed text-amber-200">
           <AlertTriangle size={14} className="mt-0.5 shrink-0" />
           <p>
-            The extension works in Chrome, Edge and Brave. Open CPIntel in one of those to use
-            Codeforces here — or use the CPIntel desktop app, which needs no extension.
+            Works in Chrome, Edge and Brave — or use the desktop app.
           </p>
         </div>
       )}
@@ -151,7 +148,7 @@ export default function ExtensionPage() {
         <div className="card space-y-3">
           <p className="text-sm font-medium text-gray-200">Install it from the store</p>
           <p className="text-xs text-gray-400">
-            Updates automatically. Reload this page after installing.
+            Reload this page after installing.
           </p>
           <a href={STORE_URL} target="_blank" rel="noreferrer"
             className="btn-primary inline-flex items-center gap-1.5 px-4 py-1.5 text-xs">
@@ -173,16 +170,13 @@ export default function ExtensionPage() {
               <Download size={12} /> Download the extension
             </button>
             <p>
-              {downloaded ? 'Downloaded. ' : ''}Unzip <span className="font-mono text-gray-300">
-              {EXTENSION_FOLDER}.zip</span> and keep the <span className="font-mono
-              text-gray-300">{EXTENSION_FOLDER}</span> folder somewhere permanent, such as
-              Documents — deleting it removes the extension.
+              {downloaded ? 'Downloaded. ' : ''}Unzip it somewhere permanent — deleting the folder removes it.
             </p>
           </Step>
 
           <Step n={2} title="Open your browser's extensions page">
             <p>
-              Paste this into the address bar of a new tab:
+              Paste into a new tab:
             </p>
             <div className="flex items-center gap-2">
               <code className="select-all rounded-sm bg-black/40 px-2 py-1 font-mono text-gray-200">
@@ -197,17 +191,12 @@ export default function ExtensionPage() {
 
           <Step n={3} title="Turn on Developer mode, then Load unpacked">
             <p>
-              Switch on <span className="text-gray-200">Developer mode</span>
-              {browser === 'edge' ? ' (in the left-hand panel)' : ' (top right of that page)'}.
-              Press <span className="text-gray-200">Load unpacked</span> and choose the{' '}
-              <span className="font-mono text-gray-300">{EXTENSION_FOLDER}</span> folder — the one
-              that has <span className="font-mono text-gray-300">manifest.json</span> directly
-              inside it.
+              Choose the <span className="font-mono text-gray-300">{EXTENSION_FOLDER}</span> folder
+              (the one with <span className="font-mono text-gray-300">manifest.json</span>).
             </p>
           </Step>
 
           <Step n={4} title="Come back here and reload">
-            <p>An extension only starts on pages opened after it was installed.</p>
             <button onClick={() => window.location.reload()}
               className="btn-secondary inline-flex items-center gap-1.5 px-4 py-1.5 text-xs">
               <RefreshCw size={12} /> I have installed it — reload
@@ -219,9 +208,7 @@ export default function ExtensionPage() {
       <div className="flex items-start gap-2 text-xs leading-relaxed text-gray-500">
         <ShieldCheck size={14} className="mt-0.5 shrink-0 text-gray-600" />
         <p>
-          It only fetches codeforces.com pages when this site asks, stores nothing, and never
-          sends your Codeforces password or cookies to CPIntel. A developer-mode reminder from
-          your browser is expected.
+          Never sends your password or cookies to CPIntel.
         </p>
       </div>
     </div>

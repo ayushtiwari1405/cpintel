@@ -590,9 +590,8 @@ public final class PracticePlanner {
             notes.add("Nothing to plan from yet. Link and sync your Codeforces account, and your "
                 + "roadmap's first skills will appear here.");
         } else if (items.stream().anyMatch(i -> Plan.INFERRED.equals(i.basis()))) {
-            notes.add("Skills marked \"from your roadmap\" have fewer than " + MIN_ATTEMPTS_FOR_SHEET
-                + " attempted problems, so they come from your roadmap's next steps rather than "
-                + "from measured weakness.");
+            notes.add("\"From your roadmap\" skills have under " + MIN_ATTEMPTS_FOR_SHEET
+                + " attempts so far.");
         }
         if (!in.problemsetAvailable() && !items.isEmpty()) {
             notes.add("The Codeforces problem list could not be loaded, so some skills have no "

@@ -32,7 +32,7 @@ export default function LabsPage() {
   return (
     <div className="space-y-6">
       <PageHeader title="Labs"
-        description="Problems your instructors set on Codeforces, LeetCode and CSES. Solve them here or on those sites; CPIntel picks up your accepted submissions every few minutes."
+        description="Solve here or on the site — accepted solves are picked up automatically."
         actions={data.labs.length > 0 && (
           <button type="button" className="btn-secondary btn-sm" disabled={check.isPending}
             onClick={() => check.mutate()}>
@@ -89,8 +89,7 @@ function HandleWarnings({ needs, codeforces, leetcode, cses }: {
       bg-amber-950/30 p-4 text-sm text-amber-200">
       <AlertTriangle size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
       <p>
-        Your solves are not being counted yet. To get credit,{' '}
-        {problems.join(' and ')} on the <Link to="/platforms" className="font-medium underline">Platforms</Link> page.
+        Solves aren't counted yet: {problems.join(' and ')} on the <Link to="/platforms" className="font-medium underline">Platforms</Link> page.
       </p>
     </div>
   )

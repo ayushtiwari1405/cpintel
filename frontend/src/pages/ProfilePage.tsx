@@ -6,7 +6,7 @@ import { useToast } from '@/components/common/Toaster'
 import { Save, Loader2 } from 'lucide-react'
 import { ChangePasswordCard } from '@/components/common/ChangePasswordCard'
 import { PageHeader } from '@/components/common/PageHeader'
-import { roleLabel } from '@/utils/roles'
+import { isAdmin, roleLabel } from '@/utils/roles'
 
 export default function ProfilePage() {
   const { user } = useAuth()
@@ -101,10 +101,13 @@ export default function ProfilePage() {
             <dt className="text-gray-400">Member since</dt>
             <dd className="text-gray-200">{user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : '—'}</dd>
           </div>
-          <div className="flex justify-between gap-4 py-2">
-            <dt className="text-gray-400">User ID</dt>
-            <dd className="font-mono text-xs text-gray-200">{user?.userId}</dd>
-          </div>
+          {/* Students have no use for the internal id; staff quote it in the console. */}
+          {isAdmin(user) && (
+            <div className="flex justify-between gap-4 py-2">
+              <dt className="text-gray-400">User ID</dt>
+              <dd className="font-mono text-xs text-gray-200">{user?.userId}</dd>
+            </div>
+          )}
         </dl>
       </section>
     </div>

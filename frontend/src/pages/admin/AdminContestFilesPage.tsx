@@ -220,7 +220,7 @@ export default function AdminContestFilesPage() {
 
         <p className="flex items-start gap-2 border-t border-gray-800 px-4 py-3 text-xs text-gray-500">
           <Info size={13} className="mt-0.5 shrink-0" />
-          Blocking hides the files panel in that contest only. Uploads are not affected.
+          Blocking hides the files panel in that contest only.
         </p>
       </Panel>
     </div>

@@ -193,13 +193,8 @@ function DesktopAppControl({ detail }: { detail: EventDetail }) {
           </p>
           <p className="mt-0.5 max-w-2xl text-xs leading-relaxed text-gray-500">
             {required
-              ? 'Only the CPIntel desktop app can sign in with this paper\'s examination '
-                + 'password, so its restrictions apply to everyone. A browser is refused, and a '
-                + 'browser that pretends to be the app is flagged for you. Kiosk mode on the '
-                + 'lab\'s machines is what stops other programs.'
-              : 'Candidates may sit it in a browser as well as the desktop app. A browser sitting '
-                + 'is recorded as such: there the window can be left and the page closed.'}
-            {' '}Can be changed while the paper runs.
+              ? 'Browsers are refused.'
+              : 'Browser sittings are allowed and marked as such.'}
           </p>
         </div>
       </div>
@@ -514,8 +509,7 @@ function SettingsTab({ detail }: { detail: EventDetail }) {
           px-3 py-2 text-xs leading-relaxed text-amber-200">
           <Lock size={13} className="mt-0.5 shrink-0" />
           <span>
-            Started — settings are locked. The name and end time can still change, and
-            candidates can still be added on the People tab.
+            Started — settings locked except name, end time and people.
           </span>
         </p>
       )}
@@ -566,7 +560,6 @@ function SettingsTab({ detail }: { detail: EventDetail }) {
       <fieldset disabled={locked} className="space-y-4 disabled:opacity-60">
       <Panel
         title="Private files"
-        description="Candidates' own uploaded notes and templates"
       >
         <div className="space-y-2 p-4">
           {([
@@ -592,7 +585,7 @@ function SettingsTab({ detail }: { detail: EventDetail }) {
 
       <Panel
         title="Languages"
-        description="Leave all unticked to accept every language the judge offers."
+        description="None ticked = all allowed"
       >
         <div className="space-y-3 p-4">
           <div className="grid gap-x-4 gap-y-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -617,8 +610,7 @@ function SettingsTab({ detail }: { detail: EventDetail }) {
               bg-accent-950/40 px-3 py-2 text-xs leading-relaxed text-accent-200">
               <Code2 size={13} className="mt-0.5 shrink-0" />
               <span>
-                Only these appear in the editor; the server refuses other languages for both
-                Run and Submit.
+                Only these can be used.
                 {' '}
                 {/*
                   Said plainly because it is the one way this setting bites unexpectedly: the
@@ -656,7 +648,7 @@ function SettingsTab({ detail }: { detail: EventDetail }) {
               onChange={e => setForm({
                 ...form, awayThresholdSeconds: Number(e.target.value) || 1 })} />
             <span className="text-xs text-gray-600">
-              Time away before a warning and a recorded absence.
+              Before a warning is recorded.
             </span>
           </label>
 
@@ -679,9 +671,7 @@ function SettingsTab({ detail }: { detail: EventDetail }) {
             ))}
             <p className="flex items-start gap-2 pt-1 text-xs leading-relaxed text-gray-600">
               <AlertTriangle size={12} className="mt-0.5 shrink-0" />
-              The desktop app applies what the operating system allows and reports the rest. A
-              browser applies almost none (full screen is the exception), and browser sittings
-              are recorded as weaker monitoring.
+              Browsers can only enforce full screen.
             </p>
           </div>
 
@@ -746,7 +736,6 @@ function PeopleTab({ detail }: { detail: EventDetail }) {
     <div className="space-y-4">
       <Panel
         title="Teams"
-        description="Membership is checked when a candidate opens the paper"
       >
         <ul className="divide-y divide-gray-800">
           {detail.teams.length === 0 && (
@@ -798,7 +787,6 @@ function PeopleTab({ detail }: { detail: EventDetail }) {
 
       <Panel
         title="Individuals"
-        description="For resits or candidates on no team"
       >
         <ul className="divide-y divide-gray-800">
           {detail.users.length === 0 && (
@@ -940,7 +928,7 @@ function ProblemsTab({ detail }: { detail: EventDetail }) {
       title="Problems"
       description={onJudge
         ? `From the linked ${judgeName} contest. Ranked by total marks, then time`
-        : 'Statements, tests and verdicts stay on the judge'}
+        : undefined}
       actions={
         <div className="flex items-center gap-2">
           {onJudge && (
@@ -1127,8 +1115,8 @@ function MonitorTab({ eventId, live }: { eventId: number; live: boolean }) {
       <Panel
         title="Candidates"
         description={live
-          ? 'Live — figures are observations, not findings'
-          : 'Final figures'}
+          ? 'Live'
+          : 'Final'}
       >
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -1187,11 +1175,6 @@ function MonitorTab({ eventId, live }: { eventId: number; live: boolean }) {
         </div>
       </Panel>
 
-      <p className="flex items-start gap-2 px-1 text-xs leading-relaxed text-gray-600">
-        <AlertTriangle size={12} className="mt-0.5 shrink-0" />
-        A focus loss shows that the window was left, not why — there is deliberately no single
-        score to read as a verdict.
-      </p>
     </div>
   )
 }
@@ -1319,7 +1302,7 @@ function StudentList({ rows, loading, flagCounts, onOpen }: {
       title="Students"
       description={rows
         ? `${rows.length} candidate${rows.length === 1 ? '' : 's'} · click one to read their log`
-        : 'Everyone assigned to this examination'}
+        : undefined}
       actions={
         <div className="w-48">
           <input
@@ -1422,7 +1405,7 @@ function FlagList({ report, loading, onOpen }: {
           ? `Away ${report.longAwaySeconds}s+ at once, away ${report.frequentAwayCount}+ times, `
             + `signed in more than once, or a first submission under `
             + `${report.fastSubmissionSeconds}s after opening the problem`
-          : 'Things in this examination worth a look'}
+          : undefined}
         actions={
           <div className="w-48">
             <select value={kind} className={INPUT}
@@ -1440,7 +1423,7 @@ function FlagList({ report, loading, onOpen }: {
 
       <p className="flex items-start gap-2 px-1 text-xs leading-relaxed text-gray-600">
         <AlertTriangle size={12} className="mt-0.5 shrink-0" />
-        Flags are prompts, not findings. Read the whole session before drawing conclusions.
+        Flags are prompts, not findings.
       </p>
     </div>
   )
@@ -1545,7 +1528,7 @@ function CandidateLog({ eventId, userId, username, flags, onBack }: {
         title={`${username} — session log`}
         description={logs
           ? `${logs.total} event${logs.total === 1 ? '' : 's'} · kept for ${logs.retentionDays} days`
-          : 'Everything recorded for this candidate'}
+          : undefined}
         actions={
           <div className="w-48">
             <select value={type} className={INPUT}
@@ -1645,8 +1628,7 @@ function RejudgePanel({ event, problems }: {
       description="After its tests or limits were corrected on the judge">
       <div className="space-y-3 p-4">
         <p className="max-w-2xl text-xs leading-relaxed text-gray-500">
-          Resubmits every submission for the problem in original order, keeping original times,
-          then re-ranks the leaderboard. They appear on DOMjudge as new submissions.
+          Resubmits every submission in order and re-ranks.
         </p>
         <div className="flex flex-wrap items-end gap-2">
           <label className="flex flex-col gap-1">
@@ -1747,7 +1729,7 @@ function LeaderboardTab({ eventId, live, exam, name, done, event }: {
   return (
     <div className="space-y-4">
       <Panel title="Leaderboard settings"
-        description={`Can be changed at any time, including while the ${noun} runs`}>
+>
         {!settings ? (
           <div className="flex items-center gap-2 p-4 text-sm text-gray-500">
             <Loader2 size={14} className="animate-spin" /> Loading…
@@ -1782,7 +1764,7 @@ function LeaderboardTab({ eventId, live, exam, name, done, event }: {
               </label>
             </div>
             <p className="text-xs text-gray-600">
-              Added per wrong attempt on a solved problem; compilation errors do not count.
+              Per wrong attempt on a solved problem.
             </p>
 
             <label className="flex items-start gap-2">

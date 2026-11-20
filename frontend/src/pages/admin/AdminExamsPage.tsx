@@ -1,8 +1,9 @@
-import { useState } from 'react'
-import { Link } from 'react-router-dom'
-import { ArrowRight, Eye, Loader2, Plus, ShieldCheck } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { format } from 'date-fns'
+import { Eye, FileText, Loader2, Plus, Trophy } from 'lucide-react'
 
-import { Ago, EmptyRow, Panel, Pill } from '@/components/admin/AdminUi'
+import { NewTile, Panel, Pill, Shelf, Tile, TileGrid, TileNote, revealForm } from '@/components/admin/AdminUi'
 import { useAdminEvents, useCreateEvent } from '@/hooks/useExams'
 import { useAdminClassrooms } from '@/hooks/useClassrooms'
 import { ClassroomSelect } from '@/components/admin/ClassroomSelect'
@@ -23,14 +24,19 @@ import { PageHeader } from '@/components/common/PageHeader'
  * therefore the one that gets its own click on the event's own page.
  */
 export default function AdminExamsPage() {
-  const [kind, setKind] = useState<EventKind>('EXAM')
+  // ?kind=CONTEST&classroom=3&new=1 — how a classroom's page links here to add one of its own.
+  const [params] = useSearchParams()
+  const fromClassroom = Number(params.get('classroom')) || null
+  const [kind, setKind] = useState<EventKind>(params.get('kind') === 'CONTEST' ? 'CONTEST' : 'EXAM')
   const { data: allEvents, isLoading } = useAdminEvents(kind)
   const { data: allTeams } = useAdminGroups()
   const { data: classrooms } = useAdminClassrooms()
   const create = useCreateEvent()
 
-  const [filter, setFilter] = useState<number | null>(null)
-  const [classroomId, setClassroomId] = useState<number | null>(null)
+  const [filter, setFilter] = useState<number | null>(fromClassroom)
+  const [classroomId, setClassroomId] = useState<number | null>(fromClassroom)
+  const askedForNew = params.get('new') === '1'
+  useEffect(() => { if (askedForNew) revealForm('new-event') }, [askedForNew])
   const events = allEvents?.filter(e => filter == null || e.classroomId === filter)
   // An event is sat by teams in its own classroom, on that classroom's judge.
   const teams = allTeams?.filter(t => t.classroomId === classroomId)
@@ -96,85 +102,25 @@ export default function AdminExamsPage() {
         ))}
       </div>
 
-      <Panel
-        title={exam ? 'Examinations' : 'Contests'}
-        description={exam ? 'Monitored; every session is recorded' : 'Unmonitored rounds on a judge'}
+      <Shelf title={exam ? 'Examinations' : 'Contests'} count={events?.length}
         actions={<ClassroomSelect value={filter} onChange={setFilter} allowAll
           className="rounded-md border border-gray-800 bg-gray-900 px-2 py-1 text-xs
-                     text-gray-300 outline-hidden" />}
-      >
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-800 text-left text-[11px] uppercase tracking-wide text-gray-500">
-                <th className="px-4 py-2 font-medium">Name</th>
-                <th className="px-4 py-2 font-medium">State</th>
-                <th className="px-4 py-2 font-medium">Window</th>
-                <th className="px-4 py-2 font-medium">Assigned</th>
-                <th className="px-4 py-2 font-medium">Problems</th>
-                <th className="px-4 py-2 font-medium" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-800">
-              {isLoading && <EmptyRow colSpan={6}>Loading…</EmptyRow>}
-              {!isLoading && events?.length === 0 && (
-                <EmptyRow colSpan={6}>
-                  {exam
-                    ? 'No examinations yet.'
-                    : 'No contests yet.'}
-                </EmptyRow>
-              )}
-              {events?.map(event => (
-                <tr key={event.eventId} className="transition-colors hover:bg-gray-850/60">
-                  <td className="px-4 py-2.5">
-                    <Link
-                      to={`/admin/exams/${event.eventId}`}
-                      className="font-medium text-gray-200 hover:text-accent-400"
-                    >
-                      {event.name}
-                    </Link>
-                    <p className="text-xs text-gray-600">
-                      {classroomName(event.classroomId)} · {event.platform} · {event.judgeContestId}
-                      {event.teamName && <> · {event.teamName}</>}
-                    </p>
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <LifecyclePill lifecycle={event.lifecycle} />
-                    {event.completedAt && <span className="ml-2"><Pill tone="green">done</Pill></span>}
-                    {event.lockdownRequired && (
-                      <span className="ml-2 inline-flex items-center gap-1 text-[11px]
-                        text-accent-300">
-                        <Eye size={11} /> monitored
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-2.5 text-xs text-gray-500">
-                    {event.startsAt ? <Ago at={event.startsAt} /> : 'not set'}
-                  </td>
-                  <td className="px-4 py-2.5 text-xs tabular-nums text-gray-400">
-                    {event.participantCount}
-                    <span className="text-gray-600">
-                      {' '}({event.assignedTeams} team{event.assignedTeams === 1 ? '' : 's'},
-                      {' '}{event.assignedUsers} named)
-                    </span>
-                  </td>
-                  <td className="px-4 py-2.5 tabular-nums text-gray-400">{event.problemCount}</td>
-                  <td className="px-4 py-2.5 text-right">
-                    <Link
-                      to={`/admin/exams/${event.eventId}`}
-                      className="inline-flex items-center gap-1 text-xs text-accent-400
-                                 hover:text-accent-300"
-                    >
-                      Open <ArrowRight size={12} />
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Panel>
+                     text-gray-300 outline-hidden" />}>
+        <TileGrid label={exam ? 'Examinations' : 'Contests'}>
+          <NewTile label={exam ? 'New examination' : 'New contest'}
+            onClick={() => revealForm('new-event')} />
+          {isLoading && <TileNote>Loading…</TileNote>}
+          {!isLoading && events?.length === 0 && (
+            <TileNote>{exam ? 'No examinations yet.' : 'No contests yet.'}</TileNote>
+          )}
+          {events?.map(event => (
+            <EventTile key={event.eventId} event={event}
+              classroom={filter == null ? classroomName(event.classroomId) : null} />
+          ))}
+        </TileGrid>
+      </Shelf>
 
+      <div id="new-event" className="scroll-mt-4">
       <Panel
         title={exam ? 'New examination' : 'New contest'}
         description={platform
@@ -282,12 +228,8 @@ export default function AdminExamsPage() {
         </div>
         )}
       </Panel>
+      </div>
 
-      <p className="flex items-start gap-2 px-1 text-xs leading-relaxed text-gray-600">
-        <ShieldCheck size={13} className="mt-0.5 shrink-0" />
-        The judge supplies verdicts. CPIntel controls who may sit and records each session. On
-        Codeforces, candidates submit through their own connected account.
-      </p>
     </div>
   )
 }
@@ -297,11 +239,11 @@ type Platform = 'DOMJUDGE' | 'CODEFORCES'
 const JUDGES: Record<Platform, { name: string, hint: string }> = {
   DOMJUDGE: {
     name: 'DOMjudge',
-    hint: "The classroom's judge. CPIntel creates the contest from the question bank.",
+    hint: 'Built from the question bank.',
   },
   CODEFORCES: {
     name: 'Codeforces',
-    hint: 'A Codeforces contest link. Candidates submit with their own account; marks are set once it starts.',
+    hint: 'A contest link; candidates use their own accounts.',
   },
 }
 
@@ -321,14 +263,44 @@ function Field({ label, className, children }: {
   )
 }
 
+const LIFECYCLE_TONE = {
+  DRAFT: 'gray', SCHEDULED: 'amber', ACTIVE: 'green', ENDED: 'gray', ARCHIVED: 'gray',
+} as const
+
+/**
+ * An examination or contest as a tile. Shared with the classroom page, which shows its own
+ * events the same way; `classroom` names the classroom when the list mixes several.
+ */
+export function EventTile({ event, classroom }: { event: EventSummary; classroom?: string | null }) {
+  const exam = event.kind === 'EXAM'
+  const when = event.startsAt ? format(new Date(event.startsAt), 'd MMM yyyy, HH:mm') : 'No start time'
+  return (
+    <Tile
+      to={`/admin/exams/${event.eventId}`}
+      icon={exam ? FileText : Trophy}
+      kind={exam ? 'Exam' : 'Contest'}
+      tone={event.completedAt ? 'gray' : LIFECYCLE_TONE[event.lifecycle]}
+      status={event.completedAt ? <Pill tone="green">done</Pill> : <LifecyclePill lifecycle={event.lifecycle} />}
+      corner={`${event.problemCount} problem${event.problemCount === 1 ? '' : 's'}`}
+      title={event.name}
+      meta={[
+        when,
+        <>
+          {event.participantCount} assigned · {event.platform === 'CODEFORCES' ? 'Codeforces' : 'DOMjudge'}
+          {event.lockdownRequired && (
+            <span className="ml-1 inline-flex items-center gap-0.5 text-accent-300">
+              · <Eye size={11} aria-hidden="true" /> monitored
+            </span>
+          )}
+        </>,
+        [classroom, event.teamName].filter(Boolean).join(' · ') || null,
+      ]}
+    />
+  )
+}
+
 export function LifecyclePill({ lifecycle }: { lifecycle: EventLifecycle }) {
-  const tone = ({
-    DRAFT:     'gray',
-    SCHEDULED: 'amber',
-    ACTIVE:    'green',
-    ENDED:     'gray',
-    ARCHIVED:  'gray',
-  } as const)[lifecycle]
+  const tone = LIFECYCLE_TONE[lifecycle]
 
   const label = ({
     DRAFT: 'draft', SCHEDULED: 'scheduled', ACTIVE: 'live', ENDED: 'ended', ARCHIVED: 'archived',

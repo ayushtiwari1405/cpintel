@@ -92,16 +92,15 @@ export function ExamPasswordsTab({ eventId }: { eventId: number }) {
           bg-amber-950/40 px-3 py-2.5 text-xs leading-relaxed text-amber-200">
           <AlertTriangle size={14} className="mt-0.5 shrink-0" />
           <span>
-            <span className="font-medium">CPINTEL_EXAM_PASSWORD_KEY is not set</span>: no
-            passwords can be generated, and this examination opens for anyone assigned. Set it
-            and restart before running a paper that needs one.
+            <span className="font-medium">CPINTEL_EXAM_PASSWORD_KEY is not set</span> — no
+            passwords can be generated, so the exam opens for anyone assigned.
           </span>
         </p>
       )}
 
       <Panel
         title="Examination password"
-        description="Shared by the whole room. Rotating it ends every session opened with the old one."
+        description="Shared by the room. Rotating ends old sessions."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             {status.examPasswordSet && (
@@ -174,8 +173,7 @@ export function ExamPasswordsTab({ eventId }: { eventId: number }) {
 
       <Panel
         title="Examination sign-in passwords"
-        description="One per candidate; required to sit the paper. Candidates sign in with their
-          username and this password. Issuing more never invalidates ones already handed out."
+        description="One per candidate, used with their username."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             {status.passcodesIssued > 0 && (
@@ -318,10 +316,6 @@ export function ExamPasswordsTab({ eventId }: { eventId: number }) {
               </table>
             </div>
 
-            <p className="text-xs leading-relaxed text-gray-600">
-              Nothing is emailed; candidates get passwords only from you. They stay readable
-              here if a slip goes missing.
-            </p>
           </div>
         )}
       </Panel>

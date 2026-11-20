@@ -47,7 +47,6 @@ export default function AdminLabEditPage() {
       </Link>
       <PageHeader eyebrow={room ? `${room.name} · Lab` : 'Lab'}
         title={labId != null ? `Edit ${lab?.title}` : 'New lab'}
-        description="Problems from Codeforces and LeetCode. Students solve them there; CPIntel reads their accepted submissions from their verified handles."
         className="mb-2" />
       <Editor classroomId={classroomId} lab={lab ?? null} />
     </div>
@@ -169,8 +168,7 @@ function Editor({ classroomId, lab }: { classroomId: number; lab: LabSummary | n
             <span className="text-sm text-gray-300">
               Count problems solved before the lab opened
               <span className="block text-xs text-gray-500">
-                Off: only solves between opening and the deadline count. On LeetCode only a student's
-                recent solves are visible, so they may need to resubmit an old solution.
+                Off: only solves inside the lab window count.
               </span>
             </span>
           </label>
@@ -262,8 +260,7 @@ function Editor({ classroomId, lab }: { classroomId: number; lab: LabSummary | n
           </div>
           {addError && <p role="alert" className="text-xs text-red-400">{addError}</p>}
           <p className="text-[11px] text-gray-500">
-            Codeforces problemset, contest and gym links, or shorthand like 1700A. LeetCode problem
-            links. CSES problem-set links, or shorthand like cses:1068.
+            Codeforces, LeetCode or CSES links — or 1700A, cses:1068.
           </p>
         </div>
       </Panel>
