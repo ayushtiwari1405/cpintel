@@ -70,6 +70,9 @@ public class DomjudgeClient {
      */
     private final DomjudgeWebSession webSession;
 
+    /** Fails calls at once while this judge is not answering. See {@link JudgeBreaker}. */
+    private final JudgeBreaker breaker;
+
     /** Sample routes differ between DOMjudge builds, so what was learned is per judge too. */
     private final DomjudgeSampleClient samples;
 
@@ -85,6 +88,7 @@ public class DomjudgeClient {
         this.baseUrl = baseUrl;
         this.username = username;
         this.password = password;
+        this.breaker = new JudgeBreaker("The judge of classroom " + classroomId);
         this.webSession = new DomjudgeWebSession(this);
         this.samples = new DomjudgeSampleClient(this);
     }
@@ -172,6 +176,7 @@ public class DomjudgeClient {
         }
         return builder.clone()
             .baseUrl(root())
+            .filter(breaker.filter())
             .filter(repairMalformedContentType())
             .exchangeStrategies(ExchangeStrategies.builder()
                 .codecs(c -> c.defaultCodecs().maxInMemorySize(MAX_RESPONSE_BYTES))
