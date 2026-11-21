@@ -33,6 +33,9 @@ public class CsesStatements {
     private final org.springframework.web.reactive.function.client.WebClient platformWebClient;
     private final com.cpintel.integration.OutboundRateLimiter rateLimiter;
 
+    @org.springframework.beans.factory.annotation.Value("${cpintel.platforms.cses.base-url:https://cses.fi}")
+    private String baseUrl = "https://cses.fi";
+
     public record Example(String input, String output) {}
 
     public record Statement(String taskId, String name, String timeLimit, String memoryLimit,
@@ -47,9 +50,20 @@ public class CsesStatements {
         Cached hit = cache.get(taskId);
         if (hit != null && hit.at().plus(TTL).isAfter(Instant.now())) return hit.statement();
         rateLimiter.acquire("cses", 500, 30_000);
-        String page = platformWebClient.get().uri("https://cses.fi/problemset/task/{id}/", taskId)
-            .retrieve().bodyToMono(String.class).block(Duration.ofSeconds(20));
+        String page;
+        try {
+            page = platformWebClient.get().uri(baseUrl + "/problemset/task/{id}/", taskId)
+                .retrieve().bodyToMono(String.class).block(Duration.ofSeconds(20));
+        } catch (org.springframework.web.reactive.function.client.WebClientResponseException.NotFound e) {
+            return null;   // CSES has no such task: an answer, not an outage
+        }
         Statement st = page == null ? null : parse(taskId, page);
+        if (page != null && st == null) {
+            // A 200 that is not a task page means CSES changed its markup (or sent an error page).
+            // Say so in the log, since from outside it looks exactly like "no such task".
+            log.warn("CSES task {} answered 200 but the page has no statement block (div.md); "
+                + "has cses.fi changed its layout?", taskId);
+        }
         if (st != null && cache.size() < 1_000) cache.put(taskId, new Cached(st, Instant.now()));
         return st;
     }

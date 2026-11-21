@@ -112,4 +112,23 @@ class CfStatementScraperTest {
         assertFalse(d.statementAvailable());
         assertEquals("BROWSER_CHECK", d.statementIssue());
     }
+
+    @Test
+    @DisplayName("a 200 page with no statement (the layout changed, or the problem is not out) degrades to an issue, never throws")
+    void pageWithoutAStatementDegrades() {
+        var detail = scraper.parsePage("<html><body><div id=\"new-layout\">hi</div></body></html>",
+            1900, "c", 1400, List.of("math"), false);
+        assertEquals("NOT_FOUND", detail.statementIssue());
+        assertTrue(detail.url().contains("1900"));
+    }
+
+    @Test
+    @DisplayName("a statement whose inner structure changed still opens, just with less in it")
+    void innerStructureChangedStillOpens() {
+        var detail = scraper.parsePage(
+            "<html><body><div class=\"problem-statement\"><p>Some new layout</p></div></body></html>",
+            1900, "c", 1400, List.of("math"), false);
+        assertNotNull(detail);
+        assertNull(detail.statementIssue());
+    }
 }
