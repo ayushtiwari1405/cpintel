@@ -98,10 +98,36 @@ test('an ended session signs out once, and its requests are not sent', async () 
   const results = await Promise.allSettled([client.get('/a'), client.get('/b'), client.get('/c')])
 
   assert.ok(results.every(r => r.status === 'rejected' && r.reason instanceof CanceledError))
-  assert.equal(state.renewals, 1)
+  assert.equal(state.renewals, 2, 'asked once, then once more in case another tab had just renewed')
   assert.equal(state.ended.length, 1, 'signed out once')
   assert.equal(state.ended[0].response.status, 401, 'with the server\'s own answer, for the message')
   assert.equal(server.seen.length, 0, 'nothing went to the API')
+})
+
+test('a renewal that lost the race to another tab succeeds on the second ask', async () => {
+  // The first answer is the 401 a tab gets when another tab spent the cookie a moment before.
+  const { client, state, server } = setup({
+    renew: n => { if (n === 1) throw refused(401); return 'fresh' }, handle: acceptOnly('fresh'),
+  })
+
+  const answer = await client.get('/users/me')
+
+  assert.equal(answer.status, 200)
+  assert.equal(state.renewals, 2)
+  assert.equal(state.ended.length, 0, 'the session was not ended')
+  assert.deepEqual(server.seen.map(s => s.token), ['fresh'])
+})
+
+test('a renewal refused with a reason is final and not asked twice', async () => {
+  const exam = () => {
+    const response = { status: 401, data: { code: 'EXAM_IN_PROGRESS' }, statusText: '', headers: {}, config: {} }
+    return new AxiosError('refused', 'ERR_BAD_REQUEST', {}, {}, response)
+  }
+  const { client, state } = setup({ renew: () => { throw exam() }, handle: () => ({}) })
+
+  await assert.rejects(client.get('/users/me'))
+  assert.equal(state.renewals, 1)
+  assert.equal(state.ended.length, 1)
 })
 
 test('a token the server rejects is renewed once and the request tried once more, never in a loop', async () => {

@@ -78,6 +78,8 @@ class RefreshTokenRotationTest {
             .expiresAt(Instant.now().plus(Duration.ofDays(7)))
             .revoked(revoked).rotatedAt(rotatedAt).build();
         when(tokens.findByToken(TokenDigest.of(raw))).thenReturn(Optional.of(token));
+        // An unspent token is won by whoever presents it first.
+        when(tokens.claim(eq(1L), any())).thenReturn(revoked ? 0 : 1);
         return token;
     }
 
@@ -117,12 +119,30 @@ class RefreshTokenRotationTest {
         AuthDto.AuthResponse response = refresh("raw-1");
 
         assertEquals("next-raw-token", response.getRefreshToken());
-        assertTrue(old.getRevoked());
-        assertNotNull(old.getRotatedAt());
+        verify(tokens).claim(eq(old.getTokenId()), any());
         RefreshToken next = lastSaved();
         assertEquals("family-1", next.getFamilyId());
         assertEquals(TokenDigest.of("next-raw-token"), next.getToken());
         verify(tokens, never()).revokeFamily(any());
+    }
+
+    @Test
+    @DisplayName("of two requests spending one token at the same instant, the loser gets no session")
+    void concurrentSpendOfOneTokenHasOneWinner() {
+        // Both requests read the token as unspent; the database lets only one claim it.
+        stored("raw-1", false, null);
+        when(tokens.claim(eq(1L), any())).thenReturn(1, 0);
+
+        AuthDto.AuthResponse winner = refresh("raw-1");
+        assertEquals("next-raw-token", winner.getRefreshToken());
+
+        assertThrows(ApiException.class, () -> refresh("raw-1"));
+
+        // One successor was stored, and the loser is the owner racing themselves, not a theft:
+        // the family is left alone.
+        verify(tokens, times(1)).save(any());
+        verify(tokens, never()).revokeFamily(any());
+        verify(jwt, never()).revokeUserTokens(any());
     }
 
     @Test

@@ -98,6 +98,7 @@ class DesktopAppRequirementTest {
             .token(TokenDigest.of("raw")).familyId("f").examId(7L)
             .expiresAt(Instant.now().plus(Duration.ofDays(1))).revoked(false).build();
         when(tokens.findByToken(TokenDigest.of("raw"))).thenReturn(Optional.of(token));
+        when(tokens.claim(eq(1L), any())).thenReturn(1);
         AuthDto.RefreshRequest req = new AuthDto.RefreshRequest();
         req.setRefreshToken("raw");
         return service.refresh(req, from);

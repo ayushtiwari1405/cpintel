@@ -203,10 +203,12 @@ public class AuthService {
             throw ApiException.unauthorized("Refresh token expired");
         }
 
-        // Rotate: revoke old, issue new
-        token.setRevoked(true);
-        token.setRotatedAt(now);
-        refreshTokenRepository.save(token);
+        // Rotate: revoke old, issue new. The old one is claimed atomically: of several requests
+        // presenting it at the same instant exactly one wins, and the rest are turned away as
+        // the owner racing themselves (see REUSE_GRACE) rather than each being handed a session.
+        if (refreshTokenRepository.claim(token.getTokenId(), now) == 0) {
+            throw ApiException.unauthorized("Refresh token has been revoked");
+        }
 
         User user = token.getUser();
 

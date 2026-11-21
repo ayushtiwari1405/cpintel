@@ -61,14 +61,41 @@ export function unreachable(error: unknown): boolean {
 /** Waits between tries of a read while the server is unreachable: about a minute in all. */
 export const READ_RETRY_DELAYS_MS = [1_000, 2_000, 4_000, 8_000, 15_000, 30_000]
 
+/** How long a refused renewal waits before asking once more: time for another tab's cookie. */
+export const RENEW_RETRY_DELAY_MS = 400
+
 export function installSession(client: AxiosInstance, hooks: SessionHooks) {
   const sleep = hooks.sleep ?? (ms => new Promise<void>(resolve => setTimeout(resolve, ms)))
   let pending: Promise<string> | null = null
 
+  /**
+   * Asks for a renewal, and once more if the answer is a plain 401.
+   *
+   * The refresh cookie is shared by every tab, and the server spends a token for one request
+   * only. A tab that renews at the same moment as another loses, and its request goes out with
+   * a token the other tab has just replaced. A moment later the browser holds the winner's
+   * cookie, so asking again succeeds; a session that really has ended is refused again and
+   * signs out. Answers that say why — an examination running, a desktop-only paper — are final
+   * and are not repeated.
+   */
+  async function renewOnceMore(): Promise<string> {
+    try {
+      return await hooks.renew()
+    } catch (error) {
+      const response = (error as { response?: { status?: number; data?: { code?: string } } })?.response
+      const code = response?.data?.code
+      const plain = response?.status === 401
+        && (code === undefined || code === 'UNAUTHORIZED' || code === 'TOKEN_EXPIRED')
+      if (!plain) throw error
+      await sleep(RENEW_RETRY_DELAY_MS)
+      return hooks.renew()
+    }
+  }
+
   /** One renewal at a time; everybody who needs it while it runs shares its answer. */
   function renew(): Promise<string> {
     if (!pending) {
-      pending = hooks.renew()
+      pending = renewOnceMore()
         .then(token => {
           hooks.keep(token)
           return token

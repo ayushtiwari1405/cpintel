@@ -325,7 +325,8 @@ describe('restoring the session after a reload', () => {
     expect(await screen.findByRole('heading', { name: 'Login page' })).toBeInTheDocument()
     expect(location()).toBe('/login')
     expect(useAuthStore.getState().isAuthenticated).toBe(false)
-    expect(post).toHaveBeenCalledTimes(1)
+    // Asked, then once more in case another tab had just renewed (see renewOnceMore).
+    expect(post).toHaveBeenCalledTimes(2)
     expect(server.seen).toEqual([])
     jsdomNoise.mockRestore()
   })

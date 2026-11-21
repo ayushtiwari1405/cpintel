@@ -15,6 +15,20 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long
     /** @param tokenDigest the token's {@link com.cpintel.common.TokenDigest}, never the token */
     Optional<RefreshToken> findByToken(String tokenDigest);
 
+    /**
+     * Spends one token, once. Returns 1 for the request that spent it and 0 for any other that
+     * tried at the same moment.
+     *
+     * <p>The row is claimed by the update itself, not by reading it and writing it back: two
+     * requests presenting the same token both read it as unspent, and a read-then-write lets both
+     * of them rotate it and walk away with a live successor. Postgres makes the second update
+     * wait for the first to commit and then finds the row no longer matches.
+     */
+    @Modifying
+    @Query("UPDATE RefreshToken rt SET rt.revoked = true, rt.rotatedAt = :now "
+        + "WHERE rt.tokenId = :tokenId AND rt.revoked = false")
+    int claim(@Param("tokenId") Long tokenId, @Param("now") Instant now);
+
     /** Ends every session renewed from one sign-in. Returns how many were still live. */
     @Modifying
     @Query("UPDATE RefreshToken rt SET rt.revoked = true "
