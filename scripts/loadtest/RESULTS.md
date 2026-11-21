@@ -1,5 +1,53 @@
 # Load test results
 
+## 21 Nov 2026: 400 candidates
+
+Same laptop and pinning as below, a 30-minute paper, 400 candidates signing in over five minutes,
+on the code of that day (refresh-token claim, problem-list back-off, audit pool included).
+
+**First run: the room could not get in.** At the bell 933 requests got no reply, 249 `enter` and
+328 `unlock` calls among them, and 200 requests failed together after exactly the pool's 30 s
+timeout. A thread dump taken during the stall showed all 200 request threads waiting for a
+database connection and the 20 pooled connections held by threads of the same requests:
+`EventService.unlock` is transactional (one connection) and wrote its audit entry through
+`AuditService.recordIn`, a `REQUIRES_NEW` transaction (a second). Twenty unlocks each held one and
+waited for another, so nothing moved until the timeout. The 200-candidate run did not stall
+(unlock p99 67 ms): at that size the arrivals did not line twenty unlocks up at once.
+
+**Fix:** audit rows are written over a small pool of their own (`AuditWriter`, four connections,
+5 s wait, each insert committed on its own, as before), so no request waits on a connection that
+only requests hold. A test fails if any `AuditService` method becomes transactional again.
+
+**Second run, same room:** every request returned 2xx (132,863 requests, 65/s). The bell is
+still slower than at 200 (unlock p50 3.2 s against 32 ms): four hundred requests queue for twenty
+connections at the bell (not examined further).
+
+| | p50 | p90 | p99 |
+|---|---|---|---|
+| `POST /exams/{id}/unlock` (the bell) | 3.2 s | 5.2 s | 6.5 s |
+| `POST /exams/{id}/enter` | 2.5 s | 5.0 s | 6.3 s |
+| `POST /auth/login` (exam code) | 51 ms | 64 ms | 113 ms |
+| `POST /compete/.../submit` | 0.20 s | 0.35 s | 0.80 s |
+| `GET /exams/{id}` (the page poll) | 17 ms | 169 ms | 10.8 s |
+| `POST /exams/{id}/monitor/heartbeat` | 8 ms | 92 ms | 4.8 s |
+
+CPIntel's backend peaked at 171% of its four cores and 1.5 GB; nginx 15%.
+
+**What did give way, and is not CPIntel's:**
+- **The code runner.** `POST /run` p50 1.3 s but p90 52 s and 116 Runs timed out at the page's 120 s
+  wait; the runner sat at 302% of its cores. Each candidate ran about 3.4 times in the paper. On
+  the server give the runner its own cores and expect the same cliff somewhere between 200 and
+  400 candidates running at this rate.
+- **The judge.** submit → verdict p50 358 s, p90 377 s (200 candidates: p50 16 s, p90 30 s): 1,008
+  submissions in 25 minutes onto three efficiency-core judgehosts and a domserver at 153%. CPIntel's
+  own endpoints stayed flat while it climbed, so this is the judge's queue; the college's judge
+  needs sizing for the room.
+- The long tails (p99 of 5 to 11 s on the page poll and heartbeat) lie at the bell and while the
+  runner was starved; they are not steady-state.
+
+One `AsyncRequestNotUsableException` (a client dropped the connection mid-response) is logged at
+ERROR; it is noise, not a failure.
+
 ## 5 Nov 2026: 200 candidates again, on this round's code
 
 Same machine and layout as 16 October (CPIntel on four efficiency cores, 4–7, with the production

@@ -817,7 +817,10 @@ sign-in. A retired token presented again more than ten seconds after its rotatio
 parties held it, the owner and whoever copied it, and there is no telling which is which: the
 whole family is revoked, the user's access tokens with it, and `REFRESH_TOKEN_REUSED` is
 audited. Inside those ten seconds it is two tabs of one browser racing to renew, and is simply
-refused. A token revoked any other way — signing out, an admin, an examination starting — has no
+refused. A token is spent by one atomic `UPDATE … WHERE revoked = false` (`RefreshTokenRepository.claim`),
+not by reading it and then saving it: read-then-write let requests that arrived together all
+succeed (measured: up to eight live successors from one token). The loser of such a race gets a
+401, and the client asks once more after 400 ms, by which time it holds the winner's cookie. A token revoked any other way — signing out, an admin, an examination starting — has no
 rotation behind it and raises nothing. Expired rows are deleted every six hours; revoked rows are
 kept until they expire, since recognising a replay needs them.
 
@@ -860,9 +863,13 @@ has sat an examination (above).
 console is what gives it a reason to exist, so it now records sign-ins, failed sign-ins,
 registrations, and every administrative change, with the address each came from.
 
-Two properties of `AuditService` are deliberate. Recording runs in its own transaction, because
+Two properties of `AuditService` are deliberate. Recording commits on its own, because
 a failed login — the event most worth keeping — is raised by throwing out of a transaction that
-then rolls back, taking an enlisted audit row with it. And a failure to record never fails the
+then rolls back, taking an enlisted audit row with it. It does so over `AuditWriter`'s own small
+connection pool rather than a `REQUIRES_NEW` transaction: that took a second connection from the
+request pool while the caller held its first, and at 400 candidates unlocking at the bell twenty
+requests each held one and waited for another until the pool's 30 s timeout (see
+`scripts/loadtest/RESULTS.md`). No `AuditService` method may be `@Transactional`; a test enforces it. And a failure to record never fails the
 action being recorded: losing a row of history is a smaller problem than a login that stops
 working because the audit table is unavailable.
 
