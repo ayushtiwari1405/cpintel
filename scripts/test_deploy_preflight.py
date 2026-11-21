@@ -98,6 +98,27 @@ class PreflightTest(unittest.TestCase):
         values["CPINTEL_MAIL_LOG_UNDELIVERED"] = "true"
         self.assertIn("writes reset links to the backend log", self.run_with(values).stdout)
 
+    def test_cors_origins_match_what_the_backend_accepts(self):
+        values = good()
+        self.assertIn("PASS  CPINTEL_CORS_ALLOWED_ORIGINS is empty", self.run_with(values).stdout)
+        values["CPINTEL_CORS_ALLOWED_ORIGINS"] = "https://app.college.example, https://app.college.example:8443"
+        r = self.run_with(values)
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertIn("lists 2 exact origin(s)", r.stdout)
+        for bad, why in (("*", "wildcards"), ("https://*.college.example", "wildcards"), ("null", "'null'"),
+                         ("https://app.college.example/", "no path"), ("ftp://app.college.example", "only http and https"),
+                         ("app.college.example", "only http and https"), ("https://u:p@app.college.example", "username"),
+                         ("https://app.college.example?x=1", "no query")):
+            values["CPINTEL_CORS_ALLOWED_ORIGINS"] = "https://ok.college.example," + bad
+            r = self.run_with(values)
+            self.assertEqual(r.returncode, 1, f"{bad!r} should fail:\n{r.stdout}")
+            self.assertIn("FAIL  CPINTEL_CORS_ALLOWED_ORIGINS entry 2", r.stdout)
+            self.assertIn(why, r.stdout)
+        values["CPINTEL_CORS_ALLOWED_ORIGINS"] = "http://app.college.example"
+        r = self.run_with(values)
+        self.assertEqual(r.returncode, 0)
+        self.assertIn("WARN  CPINTEL_CORS_ALLOWED_ORIGINS entry 1 is plain http", r.stdout)
+
     def test_the_version_and_the_exception_deadline(self):
         r = self.run_with(good(), "--version", "latest")
         self.assertIn("FAIL  --version 'latest' is not a commit id", r.stdout)

@@ -154,6 +154,47 @@ def check_settings(env, report):
         report.line("WARN", "no CPINTEL_ACME_EMAIL and nothing in nginx/certs/: nginx will serve a temporary self-signed certificate")
 
 
+def cors_problem(value):
+    """Why this is not an exact http(s) origin, or None. Mirrors CorsConfig.problemWith."""
+    from urllib.parse import urlsplit
+    if "*" in value:
+        return "patterns and wildcards are not accepted"
+    if value.lower() == "null":
+        return "'null' is never a CPIntel page"
+    try:
+        u = urlsplit(value)
+        u.port  # raises on a bad port
+    except ValueError:
+        return "not a URL"
+    if u.scheme.lower() not in ("http", "https"):
+        return "only http and https origins"
+    if not u.hostname:
+        return "no host"
+    if "@" in u.netloc:
+        return "a username or password is not part of an origin"
+    if u.path:
+        return "an origin has no path, not even a trailing '/'"
+    if u.query or u.fragment or value.endswith(("?", "#")):
+        return "an origin has no query or fragment"
+    return None
+
+
+def check_cors(env, report):
+    """The prod backend refuses to start on a bad CPINTEL_CORS_ALLOWED_ORIGINS (CorsConfig)."""
+    entries = [e.strip() for e in env.get("CPINTEL_CORS_ALLOWED_ORIGINS", "").split(",") if e.strip()]
+    if not entries:
+        report.line("PASS", "CPINTEL_CORS_ALLOWED_ORIGINS is empty: only the page's own origin may call the API (right behind nginx)")
+        return
+    bad = [(i + 1, cors_problem(e)) for i, e in enumerate(entries) if cors_problem(e)]
+    for position, problem in bad:
+        report.line("FAIL", f"CPINTEL_CORS_ALLOWED_ORIGINS entry {position}: {problem}; the backend would refuse to start")
+    plain = [i + 1 for i, e in enumerate(entries) if not cors_problem(e) and e.lower().startswith("http://")]
+    for position in plain:
+        report.line("WARN", f"CPINTEL_CORS_ALLOWED_ORIGINS entry {position} is plain http: tokens that origin reads cross the network unencrypted")
+    if not bad:
+        report.line("PASS", f"CPINTEL_CORS_ALLOWED_ORIGINS lists {len(entries)} exact origin(s)")
+
+
 def check_version(version, report):
     if version is None:
         report.line("WARN", "no --version given: the image tag was not checked")
@@ -212,6 +253,7 @@ def main(argv=None):
         check_secrets(env, report)
         print("Deployment settings")
         check_settings(env, report)
+        check_cors(env, report)
         print("Compose")
         check_compose(env_file, args.version, report)
     print("Images")
