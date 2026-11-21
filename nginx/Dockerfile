@@ -10,6 +10,6 @@ COPY security-headers.conf /etc/nginx/security-headers.conf
 COPY templates/ /etc/nginx/templates/
 COPY docker-entrypoint.d/ /docker-entrypoint.d/
 COPY cpintel-cert.sh /usr/local/bin/cpintel-cert
-RUN chmod +x /docker-entrypoint.d/40-cpintel-tls.sh /usr/local/bin/cpintel-cert \
+RUN chmod +x /docker-entrypoint.d/30-cpintel-real-ip.sh /docker-entrypoint.d/40-cpintel-tls.sh /usr/local/bin/cpintel-cert \
  && mkdir -p /var/www/certbot /etc/nginx/tls /etc/nginx/certs
 EXPOSE 80 443

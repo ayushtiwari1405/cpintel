@@ -88,6 +88,12 @@ examination password and DOMjudge login unreadable; there is no recovery.
   within a minute, without a restart. With neither, nginx serves a temporary self-signed one.
 - **A lab behind one NAT address:** set `CPINTEL_LAB_NETWORKS` to its range, or two hundred
   people signing in together hit the per-address limits.
+- **Behind Cloudflare or another proxy:** nginx sees the proxy's address, not the caller's, so
+  the per-address rate limits treat everyone as one person and `CPINTEL_LAB_NETWORKS` cannot
+  match. Set `CPINTEL_REAL_IP_FROM` to the proxy's ranges (Cloudflare publishes them at
+  cloudflare.com/ips) and recreate nginx. Check it worked: sign in from the lab and read the
+  address in the audit log or `docker logs cpintel-nginx`; it should be the machine's, not the
+  proxy's. If the lab reaches the server directly over the campus network, none of this applies.
 - **Mail:** without `SMTP_HOST`, password-reset emails reach nobody. Set
   `CPINTEL_MAIL_LOG_UNDELIVERED=true` to have reset links written to the backend log for an
   admin to pass on. Examination passwords are never emailed either way.

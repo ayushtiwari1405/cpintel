@@ -1,5 +1,11 @@
 # Rendered at container start: ${CPINTEL_DOMAIN} is filled in from the environment.
 
+# ── caller address ───────────────────────────────────────────────────────────
+#
+# Empty unless CPINTEL_REAL_IP_FROM is set (30-cpintel-real-ip.sh): behind Cloudflare, or any
+# proxy, $remote_addr is the proxy's, and everything keyed on it below sees one caller.
+include /etc/nginx/real-ip.inc;
+
 # ── rate limits ──────────────────────────────────────────────────────────────
 #
 # Keyed by address, which is right for the internet and wrong for a lab whose two hundred

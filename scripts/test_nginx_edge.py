@@ -159,6 +159,42 @@ def _docker(*args, timeout=300):
     return r.stdout
 
 
+class RealIpScript(unittest.TestCase):
+    """30-cpintel-real-ip.sh: what it writes for the proxy settings, and what it refuses."""
+    SCRIPT = NGINX / "docker-entrypoint.d" / "30-cpintel-real-ip.sh"
+
+    def run_script(self, **env):
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d) / "real-ip.inc"
+            r = subprocess.run(["sh", str(self.SCRIPT)], capture_output=True, text=True,
+                               env={"PATH": os.environ["PATH"], "CPINTEL_REAL_IP_FILE": str(out), **env})
+            return r, (out.read_text() if out.exists() else None)
+
+    def test_unset_writes_an_empty_file(self):
+        r, text = self.run_script()
+        self.assertEqual((r.returncode, text), (0, ""))
+
+    def test_proxies_become_trusted_sources_with_the_default_header(self):
+        r, text = self.run_script(CPINTEL_REAL_IP_FROM="173.245.48.0/20, 2400:cb00::/32")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(text.splitlines(), ["set_real_ip_from 173.245.48.0/20;",
+                                             "set_real_ip_from 2400:cb00::/32;",
+                                             "real_ip_header CF-Connecting-IP;"])
+
+    def test_anything_that_is_not_an_address_or_header_stops_the_container(self):
+        for env in ({"CPINTEL_REAL_IP_FROM": "10.0.0.0/8; return 200"},
+                    {"CPINTEL_REAL_IP_FROM": "10.0.0.0/8", "CPINTEL_REAL_IP_HEADER": "X-A; x"}):
+            r, _ = self.run_script(**env)
+            self.assertEqual(r.returncode, 1, env)
+            self.assertIn("cpintel-edge", r.stderr)
+
+    def test_the_template_includes_it_and_compose_passes_it(self):
+        self.assertIn("include /etc/nginx/real-ip.inc;", TEMPLATE)
+        compose = (ROOT / "docker-compose.yml").read_text()
+        self.assertIn("CPINTEL_REAL_IP_FROM: ${CPINTEL_REAL_IP_FROM:-}", compose)
+        self.assertIn("30-cpintel-real-ip.sh", (NGINX / "Dockerfile").read_text())
+
+
 @unittest.skipUnless(_docker_ok(), "needs docker and openssl (or CPINTEL_NO_DOCKER=1 was set)")
 class Runtime(unittest.TestCase):
 
@@ -176,6 +212,10 @@ class Runtime(unittest.TestCase):
         assert n == 2, f"expected 2 proxy_read_timeout lines, found {n}"
         (cls.tmp / "templates" / "cpintel.conf.template").write_text(conf)
         (cls.tmp / "lab-networks.inc").write_text("")
+        # What 30-cpintel-real-ip.sh writes when the proxy in front is trusted. Trusting every
+        # peer is for this test only: its connection comes from Docker's gateway address.
+        (cls.tmp / "real-ip.inc").write_text(
+            "set_real_ip_from 0.0.0.0/0;\nset_real_ip_from ::/0;\nreal_ip_header CF-Connecting-IP;\n")
         (cls.tmp / "stub.py").write_text(STUB)
         subprocess.run(["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1",
                         "-subj", "/CN=localhost", "-keyout", str(cls.tmp / "tls" / "privkey.pem"),
@@ -202,6 +242,7 @@ class Runtime(unittest.TestCase):
                 "-v", f"{cls.tmp / 'templates'}:/etc/nginx/templates:ro",
                 "-v", f"{cls.tmp / 'tls'}:/etc/nginx/tls:ro",
                 "-v", f"{cls.tmp / 'lab-networks.inc'}:/etc/nginx/lab-networks.inc:ro",
+                "-v", f"{cls.tmp / 'real-ip.inc'}:/etc/nginx/real-ip.inc:ro",
                 _nginx_image())
         out = _docker("port", cls.stub_name, "443/tcp", timeout=30)
         cls.port = int(out.strip().splitlines()[0].rsplit(":", 1)[1])
@@ -257,6 +298,14 @@ class Runtime(unittest.TestCase):
             for name in CLEARED_FORWARDING:
                 self.assertIsNone(seen[name], f"{path}: {name}")
             self.assertNotIn("10.20.0.6", seen["X-Forwarded-For"] or "", path)
+
+    def test_a_trusted_proxys_caller_address_reaches_the_backend(self):
+        for path, method in (("/api/v1/thing?case=echo", "GET"), ("/api/v1/auth/login?case=echo", "POST")):
+            _, _, body = self.get(path, method, {"CF-Connecting-IP": "10.20.0.9"})
+            self.assertEqual(json.loads(body)["X-Forwarded-For"], "10.20.0.9", path)
+            # Without the header the connection's own address is what the backend is told.
+            _, _, body = self.get(path, method)
+            self.assertNotEqual(json.loads(body)["X-Forwarded-For"], "10.20.0.9", path)
 
     def test_only_a_package_import_takes_a_large_upload(self):
         big = b"x" * (10 * 1024 * 1024)

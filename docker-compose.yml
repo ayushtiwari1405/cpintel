@@ -308,6 +308,8 @@ services:
     environment:
       CPINTEL_DOMAIN: ${CPINTEL_DOMAIN:-localhost}
       CPINTEL_LAB_NETWORKS: ${CPINTEL_LAB_NETWORKS:-}
+      CPINTEL_REAL_IP_FROM: ${CPINTEL_REAL_IP_FROM:-}
+      CPINTEL_REAL_IP_HEADER: ${CPINTEL_REAL_IP_HEADER:-CF-Connecting-IP}
     volumes:
       - letsencrypt:/etc/letsencrypt:ro
       - certbot_www:/var/www/certbot
