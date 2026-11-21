@@ -33,6 +33,13 @@ connections at the bell (not examined further).
 
 CPIntel's backend peaked at 171% of its four cores and 1.5 GB; nginx 15%.
 
+**Third run, after the submissions poll stopped re-reading the archive for finished attempts**
+(one SELECT per finished submission per poll, about a hundred a second across the room, now
+remembered per submission and written again only when the verdict changes): every request 2xx
+again (135,391, 66/s), verdicts resolved as before (1,020, same mix). `GET .../submissions`
+p50 331 → 167 ms and p90 772 → 544 ms; unlock p50 3.2 → 2.4 s and p99 6.5 → 5.2 s; enter p50 2.5 →
+2.2 s. The runner (Run p90 54 s) and the judge (submit → verdict p50 364 s) are unchanged.
+
 **What did give way, and is not CPIntel's:**
 - **The code runner.** `POST /run` p50 1.3 s but p90 52 s and 116 Runs timed out at the page's 120 s
   wait; the runner sat at 302% of its cores. Each candidate ran about 3.4 times in the paper. On

@@ -215,32 +215,36 @@ public class SubmissionArchive {
      * The same, for a judge whose submission ids are only unique per instance. A student in
      * two classrooms can hold submission 17 on both judges, so the contest has to pin which.
      */
-    public void updateVerdict(Long userId, String platform, String contestId, Long externalId,
-                              String verdict, Integer passedTestCount, Integer timeMs,
-                              Long memoryBytes) {
-        if (externalId == null || verdict == null || contestId == null) return;
-        applyVerdict(() -> repo.findByUserIdAndPlatformAndContestIdAndExternalId(
+    public boolean updateVerdict(Long userId, String platform, String contestId, Long externalId,
+                                 String verdict, Integer passedTestCount, Integer timeMs,
+                                 Long memoryBytes) {
+        if (externalId == null || verdict == null || contestId == null) return false;
+        return applyVerdict(() -> repo.findByUserIdAndPlatformAndContestIdAndExternalId(
                 userId, platform, contestId, externalId),
             externalId, verdict, passedTestCount, timeMs, memoryBytes);
     }
 
-    private void applyVerdict(java.util.function.Supplier<java.util.Optional<CodeSubmission>> find,
-                              Long externalId,
-                              String verdict, Integer passedTestCount, Integer timeMs,
-                              Long memoryBytes) {
+    /** True when the archived row exists and now carries this verdict. */
+    private boolean applyVerdict(java.util.function.Supplier<java.util.Optional<CodeSubmission>> find,
+                                 Long externalId,
+                                 String verdict, Integer passedTestCount, Integer timeMs,
+                                 Long memoryBytes) {
         try {
-            find.get()
-                .filter(row -> !verdict.equals(row.getVerdict()))
-                .ifPresent(row -> {
-                    row.setVerdict(verdict);
-                    row.setPassedTestCount(passedTestCount);
-                    row.setTimeConsumedMs(timeMs);
-                    row.setMemoryConsumedBytes(memoryBytes);
-                    row.setUpdatedAt(Instant.now());
-                    repo.save(row);
-                });
+            var found = find.get();
+            if (found.isEmpty()) return false;
+            CodeSubmission row = found.get();
+            if (!verdict.equals(row.getVerdict())) {
+                row.setVerdict(verdict);
+                row.setPassedTestCount(passedTestCount);
+                row.setTimeConsumedMs(timeMs);
+                row.setMemoryConsumedBytes(memoryBytes);
+                row.setUpdatedAt(Instant.now());
+                repo.save(row);
+            }
+            return true;
         } catch (Exception e) {
             log.debug("Could not update archived verdict for {}: {}", externalId, e.getMessage());
+            return false;
         }
     }
 

@@ -605,15 +605,34 @@ public class DomjudgeCompeteProvider implements CompeteProvider {
         return VERDICTS.getOrDefault(code, code);
     }
 
+    /**
+     * The verdict last written to the archive for each submission, so the poll does not look the
+     * row up again on every tick just to find it already matches (one SELECT per finished
+     * submission per poll: about a hundred a second across a room of 400). A rejudge changes the
+     * verdict, which no longer matches, so it is written. Bounded; a restart or a clear costs one
+     * lookup per submission.
+     */
+    private static final int ARCHIVED_MEMO_MAX = 50_000;
+    private final java.util.concurrent.ConcurrentHashMap<String, String> archivedVerdicts =
+        new java.util.concurrent.ConcurrentHashMap<>();
+
     /** DOMjudge ids are numeric strings; the archive keys attempts by the number. */
     private void archiveVerdict(Long userId, String contestId, String submissionId,
                                 String verdict, Integer timeMs) {
         if (submissionId == null) return;
+        String memoKey = userId + "|" + contestId + "|" + submissionId;
+        if (verdict.equals(archivedVerdicts.get(memoKey))) return;
         try {
             // Scoped to the contest: submission ids are only unique on one judge, and the same
             // student can hold a submission 17 on two of them.
-            archive.updateVerdict(userId, SubmissionArchive.DOMJUDGE, contestId,
+            boolean archived = archive.updateVerdict(userId, SubmissionArchive.DOMJUDGE, contestId,
                 Long.parseLong(submissionId.trim()), verdict, null, timeMs, null);
+            // Only remembered once the row exists and matches: a verdict seen before the attempt
+            // is linked to its judge id must be tried again on the next poll.
+            if (archived) {
+                if (archivedVerdicts.size() >= ARCHIVED_MEMO_MAX) archivedVerdicts.clear();
+                archivedVerdicts.put(memoKey, verdict);
+            }
         } catch (NumberFormatException e) {
             // attachExternalId left such a row unlinked too, so there is nothing to update.
         }
