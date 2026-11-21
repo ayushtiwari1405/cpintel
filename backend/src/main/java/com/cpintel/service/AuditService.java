@@ -1,13 +1,9 @@
 package com.cpintel.service;
 
-import com.cpintel.entity.AuditLog;
-import com.cpintel.repository.jpa.AuditLogRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Writes the audit trail.
@@ -145,22 +141,19 @@ public class AuditService {
     private static final int MAX_USER_AGENT = 500;
     private static final int MAX_IP = 45;
 
-    private final AuditLogRepository auditLogRepository;
+    private final AuditWriter writer;
 
     /**
      * Records an action with no request context — schedulers, startup tasks.
      *
-     * The transaction annotation sits on the entry points rather than on the shared helper
-     * below, because a call from one method of this class to another never passes through the
-     * proxy that would start the new transaction.
+     * Not transactional, on purpose: the write goes through {@link AuditWriter}'s own pool, so
+     * it never asks the request pool for a second connection while the caller holds a first.
      */
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void record(Long userId, String action, String entityType, String entityId) {
         write(userId, action, entityType, entityId, null, null);
     }
 
     /** Records an action along with where it came from. */
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void record(Long userId, String action, String entityType, String entityId,
                        HttpServletRequest request) {
         write(userId, action, entityType, entityId,
@@ -176,7 +169,6 @@ public class AuditService {
      * deployment-wide — a sign-in, a role change — and only a superadmin sees it unless it is
      * the reader's own.
      */
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void recordIn(Long classroomId, Long userId, String action, String entityType,
                          String entityId, HttpServletRequest request) {
         write(classroomId, userId, action, entityType, entityId,
@@ -192,15 +184,8 @@ public class AuditService {
     private void write(Long classroomId, Long userId, String action, String entityType,
                        String entityId, String ip, String userAgent) {
         try {
-            auditLogRepository.save(AuditLog.builder()
-                .classroomId(classroomId)
-                .userId(userId)
-                .action(action)
-                .entityType(entityType)
-                .entityId(clip(entityId, MAX_ENTITY_ID))
-                .ipAddress(clip(ip, MAX_IP))
-                .userAgent(clip(userAgent, MAX_USER_AGENT))
-                .build());
+            writer.insert(userId, classroomId, action, entityType, clip(entityId, MAX_ENTITY_ID),
+                clip(ip, MAX_IP), clip(userAgent, MAX_USER_AGENT));
         } catch (Exception e) {
             log.warn("Could not write audit entry {} for user {}: {}", action, userId, e.getMessage());
         }
