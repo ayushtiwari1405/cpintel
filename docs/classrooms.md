@@ -26,6 +26,11 @@ with a different DOMjudge account in each, and both logins are kept side by side
   attaching a login enrols them in that team's classroom. To put a student already in one
   classroom into another, import them into a team in the second classroom as before. The
   username matches their existing account, and the second login is attached next to the first.
+- **A team cannot lose a candidate mid-paper.** While an examination assigned to a team is
+  running, moving or removing one of its members is refused, because a paper's candidates are
+  worked out from the team and the person would be locked out. It is allowed when the person is
+  also named on the paper, or the team they move to is assigned to it too. To stop somebody
+  sitting a running paper, revoke their access on the examination instead.
 - **Students only see their own classrooms.** A classroom's DOMjudge contests refuse anyone
   not enrolled in it. In normal mode a student picks a classroom to see its past exams.
 - **One examination at a time**, across all classrooms. The lockout already enforces this.

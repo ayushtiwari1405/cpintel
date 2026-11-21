@@ -202,6 +202,8 @@ public class GroupService {
                 existing.getUser().getUsername() + " is already in " + target.getName() + ".");
         }
 
+        refuseWhileSitting(fromGroupId, userId, toGroupId);
+
         String handle = existing.getExternalHandle();
         User user = existing.getUser();
         memberRepository.delete(existing);
@@ -219,11 +221,41 @@ public class GroupService {
         return GroupMapper.toMember(moved, codeforcesHandle(moved));
     }
 
+    /**
+     * Refuses to take somebody off a team while an examination assigned to that team is running
+     * and the team is the only way they reach it.
+     *
+     * <p>An examination's candidates are worked out from its assignments each time they are
+     * read, so a person who leaves the team mid-paper stops being a candidate: they are locked
+     * out of the paper, and drop off its marks sheet and leaderboard. That is never what a move
+     * is for. They are safe to move when they are also named on the paper directly, or when the
+     * team they are moving to is assigned to it as well.
+     */
+    private void refuseWhileSitting(Long fromGroupId, Long userId, Long toGroupId) {
+        Instant now = Instant.now();
+        for (GroupContest event : assignmentRepository.eventsForTeam(fromGroupId)) {
+            if (!event.isExam()
+                || event.effectiveLifecycle(now) != GroupContest.Lifecycle.ACTIVE) continue;
+            Long eventId = event.getContestId();
+            boolean named = assignmentRepository.participantsNamedDirectly(eventId).contains(userId);
+            boolean stillReaches = toGroupId != null && assignmentRepository
+                .eventsForTeam(toGroupId).stream().anyMatch(e -> e.getContestId().equals(eventId));
+            if (!named && !stillReaches) {
+                throw ApiException.conflict("They are sitting \"" + event.getName() + "\" as a "
+                    + "member of this team, and it is running. Moving or removing them now would "
+                    + "lock them out of the paper. Wait until it ends, name them on the "
+                    + "examination first, or revoke their access on the examination if the "
+                    + "aim is to stop them sitting it.");
+            }
+        }
+    }
+
     @Transactional
     public void removeMember(Long adminId, Long groupId, Long userId, HttpServletRequest httpReq) {
         if (!memberRepository.existsByGroupGroupIdAndUserUserId(groupId, userId)) {
             throw ApiException.notFound("That person is not in this group");
         }
+        refuseWhileSitting(groupId, userId, null);
         memberRepository.deleteByGroupGroupIdAndUserUserId(groupId, userId);
         auditService.recordIn(classroomOf(groupId), adminId, AuditService.GROUP_MEMBER_REMOVED, "GROUP",
             groupId + ":" + userId, httpReq);

@@ -44,6 +44,22 @@ class SolveMatcherTest {
     }
 
     @Test
+    void aSolveExactlyAtTheDeadlineIsInTimeAndOneSecondLaterIsLate() {
+        var atDue = SolveMatcher.match(List.of(pending(false)), List.of(at("2026-11-17T09:00:00Z", "s")));
+        assertThat(atDue).singleElement().satisfies(f -> assertThat(f.late()).isFalse());
+        var after = SolveMatcher.match(List.of(pending(false)), List.of(at("2026-11-17T09:00:01Z", "s")));
+        assertThat(after).singleElement().satisfies(f -> assertThat(f.late()).isTrue());
+    }
+
+    @Test
+    void aSolveExactlyWhenTheLabOpensCountsAndOneSecondBeforeDoesNot() {
+        var atOpen = SolveMatcher.match(List.of(pending(false)), List.of(at("2026-11-10T09:00:00Z", "s")));
+        assertThat(atOpen).singleElement().satisfies(f -> assertThat(f.late()).isFalse());
+        var before = SolveMatcher.match(List.of(pending(false)), List.of(at("2026-11-10T08:59:59Z", "s")));
+        assertThat(before).isEmpty();
+    }
+
+    @Test
     void prefersInTimeOverLateThenTheEarliest() {
         var found = SolveMatcher.match(List.of(pending(false)), List.of(
             at("2026-11-18T00:00:00Z", "late"),
