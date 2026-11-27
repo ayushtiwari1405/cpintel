@@ -104,7 +104,8 @@ public class MailService {
         try {
             if (StringUtils.hasText(html)) {
                 MimeMessage message = sender.createMimeMessage();
-                MimeMessageHelper helper = new MimeMessageHelper(message, "UTF-8");
+                // Multipart: a text and an HTML body cannot go in a single-part message.
+                MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
                 helper.setFrom(from);
                 helper.setTo(to);
                 helper.setSubject(subject);
