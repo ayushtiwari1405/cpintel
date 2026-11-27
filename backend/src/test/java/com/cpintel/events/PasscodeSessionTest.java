@@ -2,6 +2,7 @@ package com.cpintel.events;
 
 import com.cpintel.entity.ExamPasscode;
 import com.cpintel.entity.User;
+import com.cpintel.exception.ApiException;
 import com.cpintel.files.ContestFilePolicy;
 import com.cpintel.repository.jpa.*;
 import com.cpintel.repository.mongo.CodeSubmissionRepository;
@@ -15,6 +16,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
@@ -73,13 +75,33 @@ class PasscodeSessionTest {
     @Test
     @DisplayName("reissuing a slip ends the session opened with the old code")
     void reissueEndsSession() {
-        when(events.isAssignedTo(EXAM, CANDIDATE)).thenReturn(true);
         when(passwords.reissue(ADMIN, EXAM, CANDIDATE, null)).thenReturn(issued(CANDIDATE));
 
         service.reissuePasscode(ADMIN, EXAM, CANDIDATE, null);
 
         verify(access).revoke(EXAM, CANDIDATE);
         verify(access, never()).revoke(EXAM, OTHER);
+    }
+
+    @Test
+    @DisplayName("a draft's slip can be reissued, though the draft is open to nobody yet")
+    void reissuesOnADraft() {
+        when(events.isAssignedTo(EXAM, CANDIDATE)).thenReturn(false);
+        when(passwords.reissue(ADMIN, EXAM, CANDIDATE, null)).thenReturn(issued(CANDIDATE));
+
+        service.reissuePasscode(ADMIN, EXAM, CANDIDATE, null);
+
+        verify(passwords).reissue(ADMIN, EXAM, CANDIDATE, null);
+    }
+
+    @Test
+    @DisplayName("nobody outside the examination is given a code")
+    void refusesTheUnassigned() {
+        assertThrows(ApiException.class,
+            () -> service.reissuePasscode(ADMIN, EXAM, 99L, null));
+
+        verify(passwords, never()).reissue(any(), any(), any(), any());
+        verify(access, never()).revoke(any(), any());
     }
 
     @Test

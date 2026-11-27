@@ -843,7 +843,8 @@ public class EventService {
     @Transactional
     public EventsDto.IssuedPasscode reissuePasscode(Long adminId, Long eventId, Long userId,
                                                     HttpServletRequest httpReq) {
-        if (!eventRepository.isAssignedTo(eventId, userId)) {
+        // Who could be issued a code, not who may enter now: a draft opens to nobody yet.
+        if (!participantIds(eventId).contains(userId)) {
             throw ApiException.badRequest(
                 "That person is not assigned to this examination, so a code would open "
                 + "nothing. Assign them first.");
