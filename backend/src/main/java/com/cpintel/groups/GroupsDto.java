@@ -1,5 +1,6 @@
 package com.cpintel.groups;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -209,7 +210,7 @@ public class GroupsDto {
     ) {}
 
     public record ViolationReport(
-        @NotNull List<ViolationEvent> events
+        @NotNull List<@NotNull @Valid ViolationEvent> events
     ) {}
 
     // ------------------------------------------------------ participant's view

@@ -14,6 +14,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -199,7 +200,10 @@ public class PasswordService {
         if (!passwordEncoder.matches(currentPassword, user.getPasswordHash())) {
             auditService.record(userId, AuditService.PASSWORD_CHANGE_FAILED, "USER",
                 String.valueOf(userId), httpReq);
-            throw ApiException.unauthorized("That is not your current password.");
+            // Not 401: the session is fine, and a 401 tells the client to renew it and send
+            // this again, spending a second of the few attempts allowed.
+            throw new ApiException(HttpStatus.BAD_REQUEST, "WRONG_CURRENT_PASSWORD",
+                "That is not your current password.");
         }
         if (passwordEncoder.matches(newPassword, user.getPasswordHash())) {
             throw ApiException.badRequest("That is already your password.");

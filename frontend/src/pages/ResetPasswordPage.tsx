@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { AlertTriangle, ArrowLeft, Eye, EyeOff } from 'lucide-react'
 
@@ -27,6 +27,8 @@ export default function ResetPasswordPage() {
   const [confirm, setConfirm] = useState('')
   const [showPass, setShowPass] = useState(false)
   const reset = useResetPassword()
+  const passwordId = useId()
+  const confirmId = useId()
 
   const mismatch = confirm.length > 0 && password !== confirm
   const ready = isStrongPassword(password) && password === confirm
@@ -66,11 +68,12 @@ export default function ResetPasswordPage() {
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1.5">
+                <label htmlFor={passwordId} className="block text-sm font-medium text-gray-300 mb-1.5">
                   New password
                 </label>
                 <div className="relative">
                   <input
+                    id={passwordId}
                     type={showPass ? 'text' : 'password'}
                     value={password}
                     onChange={e => setPassword(e.target.value)}
@@ -84,6 +87,7 @@ export default function ResetPasswordPage() {
                   <button
                     type="button"
                     onClick={() => setShowPass(v => !v)}
+                    aria-label={showPass ? 'Hide password' : 'Show password'}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500
                       hover:text-gray-300"
                   >
@@ -94,10 +98,11 @@ export default function ResetPasswordPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1.5">
+                <label htmlFor={confirmId} className="block text-sm font-medium text-gray-300 mb-1.5">
                   Type it again
                 </label>
                 <input
+                  id={confirmId}
                   type={showPass ? 'text' : 'password'}
                   value={confirm}
                   onChange={e => setConfirm(e.target.value)}

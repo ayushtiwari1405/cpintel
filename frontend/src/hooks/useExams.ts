@@ -6,6 +6,7 @@ import { useIsAdmin } from '@/hooks/useAdmin'
 import type {
   EventKind, EventLifecycle, EventProblem, ExamLeaderboardSettings,
 } from '@/types'
+import { reloadAfterChange } from '@/utils/queries'
 
 // ------------------------------------------------------------- candidate
 
@@ -341,7 +342,7 @@ function useEventMutation<TArgs, TResult>(
   return useMutation({
     mutationFn: fn,
     onSuccess: (result, args) => {
-      qc.invalidateQueries({ queryKey: ['admin'] })
+      void reloadAfterChange(qc, ['admin'])
       toast.push('success', success(args, result))
     },
     onError: (err: any) => {

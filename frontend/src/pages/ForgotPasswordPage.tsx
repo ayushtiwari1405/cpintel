@@ -1,33 +1,36 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowLeft, MailCheck } from 'lucide-react'
 
 import { BrandLockup } from '@/components/common/BrandMark'
 import { useForgotPassword } from '@/hooks/useAuth'
 import { ThemeToggle } from '@/components/common/ThemeToggle'
+import { serverMessage } from '@/components/common/States'
 
 /**
  * Asking for a reset link.
  *
- * <p>The screen says the same thing however it went, because the server answers the same way:
- * an address with no account behind it and an address with one produce an identical response.
+ * <p>The screen says the same thing whether or not the address has an account, because the
+ * server answers the same way: the two produce an identical response.
  * Drawing the distinction here would put back exactly the enumeration the endpoint removes, on
  * a deployment whose user list is the roster of whoever is being examined.
  *
  * <p>Which is why the confirmation is worded as a conditional rather than a promise. "We have
  * sent you an email" would be a lie half the time; "if an account uses that address" is true
  * either way and tells somebody who mistyped it what to check.
+ *
+ * <p>A request that failed is different: nothing was sent, whoever the address belongs to, so
+ * saying so reveals nothing and telling the person to check their mail would strand them.
  */
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('')
   const [sent, setSent] = useState(false)
   const request = useForgotPassword()
+  const emailId = useId()
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    // Settled rather than success: a network failure would otherwise leave the form looking
-    // like it had done nothing, and the honest recovery is the same either way — try again.
-    request.mutate(email, { onSettled: () => setSent(true) })
+    request.mutate(email, { onSuccess: () => setSent(true) })
   }
 
   return (
@@ -64,13 +67,16 @@ export default function ForgotPasswordPage() {
 
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1.5">Email</label>
+                  <label htmlFor={emailId} className="block text-sm font-medium text-gray-300 mb-1.5">
+                    Email
+                  </label>
                   {/*
                     The address, not the username — a link has to go somewhere, and the
                     username is not somewhere. Said on the label rather than discovered from a
                     refusal, since the sign-in box next door accepts either.
                   */}
                   <input
+                    id={emailId}
                     type="email"
                     value={email}
                     onChange={e => setEmail(e.target.value)}
@@ -81,6 +87,13 @@ export default function ForgotPasswordPage() {
                     autoFocus
                   />
                 </div>
+
+                {request.isError && (
+                  <p role="alert" className="text-sm leading-relaxed text-red-400">
+                    {serverMessage(request.error)
+                      ?? 'The request did not go through. Check your connection and try again.'}
+                  </p>
+                )}
 
                 <button
                   type="submit"

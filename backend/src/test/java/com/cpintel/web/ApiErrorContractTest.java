@@ -183,4 +183,103 @@ class ApiErrorContractTest extends AuthorizationTestBase {
             .andReturn();
         assertSafe(r, SECRET_PASSWORD, "not found in table");
     }
+
+    private org.springframework.test.web.servlet.ResultActions postJson(String path, String body)
+            throws Exception {
+        return mvc.perform(post(path).contentType(MediaType.APPLICATION_JSON).content(body));
+    }
+
+    @Test
+    @DisplayName("a NUL character is a 400, signed in or not, and reaches no service")
+    void nulCharacter() throws Exception {
+        assertSafe(postJson("/api/v1/auth/login",
+                "{\"identifier\":\"a\\u0000b\",\"password\":\"" + SECRET_PASSWORD + "\"}")
+            .andExpect(status().isBadRequest()).andReturn(), SECRET_PASSWORD);
+        mvc.perform(put("/api/v1/users/me").with(asUser()).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"fullName\":\"a\\u0000b\"}"))
+            .andExpect(status().isBadRequest());
+        mvc.perform(get("/api/v1/users/me").with(asUser()).param("q", "a\u0000b"))
+            .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(authService, userService);
+    }
+
+    @Test
+    @DisplayName("tabs and newlines are not refused")
+    void ordinaryControlCharacters() throws Exception {
+        mvc.perform(put("/api/v1/users/me").with(asUser()).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"institution\":\"a\\tb\\nc\"}"))
+            .andExpect(status().isOk());
+    }
+
+    private static String registration(String email, String password) {
+        return "{\"username\":\"ada\",\"email\":\"" + email + "\",\"password\":\"" + password
+            + "\"}";
+    }
+
+    @Test
+    @DisplayName("an address too long to store, or with no domain, is a 400 on its field")
+    void unusableAddress() throws Exception {
+        String label = "d".repeat(60);
+        String longAddress = "ada@" + String.join(".", label, label, label, label, label) + ".com";
+        for (String address : new String[] {longAddress, "ada@localhost"}) {
+            postJson("/api/v1/auth/register", registration(address, "A-long-password-1"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.email").exists());
+        }
+        verifyNoInteractions(authService);
+    }
+
+    @Test
+    @DisplayName("a password over the maximum is told about the maximum")
+    void passwordTooLong() throws Exception {
+        postJson("/api/v1/auth/register", registration("ada@example.com", "x".repeat(201)))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.errors.password")
+                .value("A password can be at most 200 characters"));
+    }
+
+    @Test
+    @DisplayName("an avatar address is a web address or nothing")
+    void avatarAddress() throws Exception {
+        for (String bad : new String[] {"javascript:alert(1)", "data:text/html,x", "ftp://x/y"}) {
+            mvc.perform(put("/api/v1/users/me").with(asUser())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"avatarUrl\":\"" + bad + "\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.avatarUrl").exists());
+        }
+        for (String good : new String[] {"", "https://example.com/a.png", "HTTP://example.com/a"}) {
+            mvc.perform(put("/api/v1/users/me").with(asUser())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"avatarUrl\":\"" + good + "\"}"))
+                .andExpect(status().isOk());
+        }
+    }
+
+    @Test
+    @DisplayName("losing a race to create the same thing is a 409 that names no table")
+    void uniqueViolation() throws Exception {
+        when(userService.getProfile(USER_ID)).thenThrow(
+            new org.springframework.dao.DataIntegrityViolationException("could not execute",
+                new java.sql.SQLException(
+                    "duplicate key value violates unique constraint \"users_email_key\"", "23505")));
+
+        MvcResult r = mvc.perform(get("/api/v1/users/me").with(asUser()))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.code").value("CONFLICT"))
+            .andReturn();
+        assertSafe(r, "users_email_key", "constraint");
+    }
+
+    @Test
+    @DisplayName("any other integrity failure is still a fault of ours")
+    void otherIntegrityViolation() throws Exception {
+        when(userService.getProfile(USER_ID)).thenThrow(
+            new org.springframework.dao.DataIntegrityViolationException("could not execute",
+                new java.sql.SQLException("null value in column \"role\"", "23502")));
+
+        assertSafe(mvc.perform(get("/api/v1/users/me").with(asUser()))
+            .andExpect(status().isInternalServerError()).andReturn(), "column");
+    }
 }

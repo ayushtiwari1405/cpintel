@@ -34,16 +34,19 @@ public class UserDto {
 
     @Getter @Setter
     public static class UpdateRequest {
-        @Size(max = 100)
+        @Size(max = 100, message = "Full name can be at most 100 characters")
         private String fullName;
 
-        @Size(max = 100)
+        @Size(max = 100, message = "Country can be at most 100 characters")
         private String country;
 
-        @Size(max = 200)
+        @Size(max = 200, message = "Institution can be at most 200 characters")
         private String institution;
 
-        @Size(max = 500)
+        /** Empty to clear it. Only a web address: this is a value a page may one day link to. */
+        @Size(max = 500, message = "An avatar address can be at most 500 characters")
+        @Pattern(regexp = "(?i)^(https?://\\S+)?$",
+            message = "An avatar address has to start with http:// or https://")
         private String avatarUrl;
     }
 

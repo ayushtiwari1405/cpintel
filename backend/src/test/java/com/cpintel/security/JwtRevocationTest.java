@@ -145,4 +145,38 @@ class JwtRevocationTest {
 
         assertFalse(jwt.isValid(token));
     }
+
+    @Test
+    @DisplayName("a token issued a moment before the revocation is rejected, to the millisecond")
+    void millisecondPrecision() throws InterruptedException {
+        var claims = jwt.extractClaims(
+            jwt.generateAccessToken(USER_ID, "ada@example.com", "USER"));
+        Thread.sleep(2);
+
+        revokedAt(System.currentTimeMillis());
+        assertTrue(jwt.isSessionRevoked(USER_ID, claims));
+    }
+
+    @Test
+    @DisplayName("a token issued a moment after the revocation stands")
+    void issuedAfterRevocation() throws InterruptedException {
+        revokedAt(System.currentTimeMillis());
+        Thread.sleep(2);
+
+        var claims = jwt.extractClaims(
+            jwt.generateAccessToken(USER_ID, "ada@example.com", "USER"));
+        assertFalse(jwt.isSessionRevoked(USER_ID, claims));
+    }
+
+    @Test
+    @DisplayName("a refresh token's successor is repeatable, and differs from token to token")
+    void successor() {
+        assertEquals(jwt.successorOf("one"), jwt.successorOf("one"));
+        assertNotEquals(jwt.successorOf("one"), jwt.successorOf("two"));
+        assertNotEquals("one", jwt.successorOf("one"));
+
+        JwtProperties other = new JwtProperties();
+        other.setSecret("another_secret_key_long_enough_for_hmac_sha256_ok");
+        assertNotEquals(jwt.successorOf("one"), new JwtService(other, redis).successorOf("one"));
+    }
 }

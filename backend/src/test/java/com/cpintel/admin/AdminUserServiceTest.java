@@ -286,6 +286,43 @@ class AdminUserServiceTest {
         }
     }
 
+    @Test
+    @DisplayName("the characters a search treats as patterns are searched for as typed")
+    void searchIsLiteral() {
+        assertEquals("abc\\_x", AdminUserService.literal("abc_x"));
+        assertEquals("\\%", AdminUserService.literal("%"));
+        assertEquals("a\\\\b", AdminUserService.literal("a\\b"));
+    }
+
+    @Test
+    @DisplayName("changing only the capitals of an address is not a clash, and stays verified")
+    void recapitalisingAnAddress() {
+        User target = user(OTHER_ID, "USER", true);
+        target.setEmail("Ada@Example.com");
+
+        service.updateUser(ADMIN_ID, OTHER_ID,
+            new AdminDto.UpdateUserRequest(null, "ada@example.com", null, null), true, null);
+
+        verify(users).existsByEmailIgnoreCaseAndUserIdNot("ada@example.com", OTHER_ID);
+        assertEquals("ada@example.com", target.getEmail());
+        assertTrue(target.getIsVerified());
+    }
+
+    @Test
+    @DisplayName("another account's address, in any capitals, is refused")
+    void takingAnotherAccountsAddress() {
+        user(OTHER_ID, "USER", true);
+        when(users.existsByEmailIgnoreCaseAndUserIdNot("taken@example.com", OTHER_ID))
+            .thenReturn(true);
+
+        ApiException e = assertThrows(ApiException.class, () -> service.updateUser(ADMIN_ID,
+            OTHER_ID, new AdminDto.UpdateUserRequest(null, "TAKEN@example.com", null, null),
+            true, null));
+
+        assertEquals(409, e.getStatus().value());
+        verify(users, never()).save(any());
+    }
+
     @Nested
     @DisplayName("Creating accounts")
     class Creation {
@@ -297,8 +334,8 @@ class AdminUserServiceTest {
         @Test
         @DisplayName("a plain admin may create an ordinary user")
         void adminMayCreateAUser() {
-            when(users.existsByEmail(any())).thenReturn(false);
-            when(users.existsByUsername(any())).thenReturn(false);
+            when(users.existsByEmailIgnoreCase(any())).thenReturn(false);
+            when(users.existsByUsernameIgnoreCase(any())).thenReturn(false);
 
             // Someone running a contest has to be able to add the people sitting it. Creating
             // a participant hands out no privilege, so there is nothing to reserve.
@@ -326,8 +363,8 @@ class AdminUserServiceTest {
         @Test
         @DisplayName("a super admin may still create an admin")
         void superAdminMayCreateAnAdmin() {
-            when(users.existsByEmail(any())).thenReturn(false);
-            when(users.existsByUsername(any())).thenReturn(false);
+            when(users.existsByEmailIgnoreCase(any())).thenReturn(false);
+            when(users.existsByUsernameIgnoreCase(any())).thenReturn(false);
 
             var row = service.createUser(
                 ADMIN_ID, req("newadmin", "newadmin@example.com", "ADMIN"), true, null);
@@ -338,8 +375,8 @@ class AdminUserServiceTest {
         @Test
         @DisplayName("creates the account, hashes the password, and seeds its unified score row")
         void createsAccount() {
-            when(users.existsByEmail(any())).thenReturn(false);
-            when(users.existsByUsername(any())).thenReturn(false);
+            when(users.existsByEmailIgnoreCase(any())).thenReturn(false);
+            when(users.existsByUsernameIgnoreCase(any())).thenReturn(false);
 
             var row = service.createUser(ADMIN_ID, req("newbie", "New@Example.com", "USER"), true, null);
 
@@ -356,8 +393,8 @@ class AdminUserServiceTest {
         @Test
         @DisplayName("an absent role means USER rather than a guess")
         void defaultsToUser() {
-            when(users.existsByEmail(any())).thenReturn(false);
-            when(users.existsByUsername(any())).thenReturn(false);
+            when(users.existsByEmailIgnoreCase(any())).thenReturn(false);
+            when(users.existsByUsernameIgnoreCase(any())).thenReturn(false);
 
             assertEquals("USER",
                 service.createUser(ADMIN_ID, req("newbie", "n@example.com", null), true, null).role());
@@ -376,7 +413,7 @@ class AdminUserServiceTest {
         @Test
         @DisplayName("a duplicate email is refused before anything is written")
         void rejectsDuplicateEmail() {
-            when(users.existsByEmail("taken@example.com")).thenReturn(true);
+            when(users.existsByEmailIgnoreCase("taken@example.com")).thenReturn(true);
 
             assertThrows(ApiException.class, () ->
                 service.createUser(ADMIN_ID, req("someone", "taken@example.com", "USER"), true, null));
@@ -386,8 +423,8 @@ class AdminUserServiceTest {
         @Test
         @DisplayName("a duplicate username is refused before anything is written")
         void rejectsDuplicateUsername() {
-            when(users.existsByEmail(any())).thenReturn(false);
-            when(users.existsByUsername("taken")).thenReturn(true);
+            when(users.existsByEmailIgnoreCase(any())).thenReturn(false);
+            when(users.existsByUsernameIgnoreCase("taken")).thenReturn(true);
 
             assertThrows(ApiException.class, () ->
                 service.createUser(ADMIN_ID, req("taken", "free@example.com", "USER"), true, null));

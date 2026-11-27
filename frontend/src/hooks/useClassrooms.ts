@@ -4,6 +4,7 @@ import { adminClassroomsApi, classroomsApi } from '@/api/classroomsApi'
 import { useToast } from '@/components/common/Toaster'
 import { useIsAdmin } from '@/hooks/useAdmin'
 import type { ClassroomRequest, ClassroomSummary } from '@/types'
+import { reloadAfterChange } from '@/utils/queries'
 
 // ------------------------------------------------------------------ student
 
@@ -145,7 +146,7 @@ export function useCreateClassroom() {
   return useMutation({
     mutationFn: (body: ClassroomRequest) => adminClassroomsApi.create(body).then(r => r.data),
     onSuccess: room => {
-      qc.invalidateQueries({ queryKey: ['admin', 'classrooms'] })
+      void reloadAfterChange(qc, ['admin', 'classrooms'])
       toast.push('info', `Created ${room.name}`)
     },
     onError: err => toast.push('error', errorOf(err, 'Could not create the classroom')),

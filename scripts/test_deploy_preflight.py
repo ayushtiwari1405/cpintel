@@ -55,6 +55,7 @@ class PreflightTest(unittest.TestCase):
         self.assertIn("PASS  JWT_SECRET is set", r.stdout)
         self.assertIn("vulnerability-scan exceptions run to 2026-12-31 (70 days)", r.stdout)
         self.assertIn("mongo-index-upgrade.sh --container cpintel-mongo --check", r.stdout)
+        self.assertIn("postgres-upgrade-check.sh --container cpintel-postgres", r.stdout)
 
     def test_missing_short_placeholder_and_shared_secrets_fail(self):
         values = good()

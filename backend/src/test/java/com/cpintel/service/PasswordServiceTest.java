@@ -249,6 +249,9 @@ class PasswordServiceTest {
                 () -> service.change(USER_ID, "not-the-password", "A-brand-new-one4", null));
 
             assertTrue(e.getMessage().toLowerCase().contains("current password"));
+            // Not 401, which would have the client renew its session and send it again.
+            assertEquals(400, e.getStatus().value());
+            assertEquals("WRONG_CURRENT_PASSWORD", e.getCode());
             assertEquals("hash:oldpassword", user.getPasswordHash());
             verifyNoInteractions(refreshTokens);
         }

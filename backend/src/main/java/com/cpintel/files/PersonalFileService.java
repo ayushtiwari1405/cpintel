@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * The user's own files, stored so they are reachable from inside a running contest.
@@ -76,6 +77,14 @@ public class PersonalFileService {
     private String allowedExtensionsRaw;
 
     private Set<String> allowedExtensions;
+
+    /**
+     * One upload at a time for each person, so the limits are counted and spent together:
+     * twenty simultaneous uploads used to count the same five files and all fit. A fixed set of
+     * stripes rather than a lock per user, which would grow with the roster. This holds within
+     * one backend process, which is what the deployment runs.
+     */
+    private final Object[] uploadLocks = Stream.generate(Object::new).limit(64).toArray();
 
     @PostConstruct
     void parseAllowedExtensions() {
@@ -168,6 +177,14 @@ public class PersonalFileService {
                 + human(maxFileBytes) + " per file.");
         }
 
+        synchronized (uploadLocks[Math.floorMod(Long.hashCode(userId), uploadLocks.length)]) {
+            return store(userId, name, extension, bytes, label, replace);
+        }
+    }
+
+    /** Checks the limits and writes the file; the caller holds this person's upload lock. */
+    private FilesDto.FileMeta store(Long userId, String name, String extension, byte[] bytes,
+                                    String label, boolean replace) {
         PersonalFile existing = repo.findByUserIdAndName(userId, name).orElse(null);
         if (existing != null && !replace) {
             throw ApiException.conflict("You already have a file called " + name

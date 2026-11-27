@@ -5,6 +5,7 @@ import { useAuthStore } from '@/store/authStore'
 import { useToast } from '@/components/common/Toaster'
 import { useNavigate } from 'react-router-dom'
 import { homeFor } from '@/utils/roles'
+import { serverMessage } from '@/components/common/States'
 
 export function useLogin() {
   const { setAccessToken, setUser, setSession } = useAuthStore()
@@ -21,8 +22,8 @@ export function useLogin() {
       setSession(exam ? 'EXAM' : 'NORMAL', exam ? res.data.examId! : null)
       navigate(exam ? '/exam' : homeFor(res.data.user))
     },
-    onError: (err: any) => {
-      toast.push('error', err.response?.data?.message ?? 'Login failed')
+    onError: (err: unknown) => {
+      toast.push('error', serverMessage(err) ?? 'Login failed')
     },
   })
 }
@@ -30,9 +31,8 @@ export function useLogin() {
 /**
  * Asking for a reset link.
  *
- * Deliberately shows the same message however it goes, including when the address belongs to
- * nobody — the server answers identically, and a screen that drew a distinction would put the
- * enumeration back that the endpoint removed.
+ * The server answers an address with an account and one without identically, so success says
+ * nothing about which it was. A request that failed is reported as one: nothing was sent.
  */
 export function useForgotPassword() {
   return useMutation({

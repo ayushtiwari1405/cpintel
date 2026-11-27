@@ -4,6 +4,7 @@ import { useToast } from '@/components/common/Toaster'
 import { useAuth } from '@/contexts/AuthContext'
 import { isAdmin as hasConsole, isSuperAdmin } from '@/utils/roles'
 import type { AssignableRole } from '@/types'
+import { reloadAfterChange } from '@/utils/queries'
 
 /**
  * Data for the admin console.
@@ -93,7 +94,7 @@ function useAdminMutation<TArgs, TResult>(
   return useMutation({
     mutationFn: fn,
     onSuccess: (result, args) => {
-      queryClient.invalidateQueries({ queryKey: ['admin'] })
+      void reloadAfterChange(queryClient, ['admin'])
       toast.push('success', success(args, result))
     },
     onError: (err: any) => {

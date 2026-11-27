@@ -372,18 +372,32 @@ public class EventService {
                 event.setArchivedAt(null);
             }
             case ENDED -> {
+                // Only something running can be ended. Anything else has no window to cut short:
+                // moving a draft here would publish it, paper and all, and moving one that has
+                // not started would save an end before its start.
+                if (current != GroupContest.Lifecycle.ACTIVE) {
+                    throw ApiException.badRequest(
+                        "Only a running event can be ended. To withdraw one that has not "
+                            + "started, take it back to a draft.");
+                }
                 // Ending early. The window is what everything else reads, so it is the window
                 // that moves; leaving it in the future and setting a flag would mean the arena
                 // and this screen disagreed about whether submissions were open.
-                if (event.getEndsAt() == null || event.getEndsAt().isAfter(now)) {
-                    event.setEndsAt(now);
-                }
+                event.setEndsAt(now);
                 event.setLifecycle(GroupContest.Lifecycle.SCHEDULED.name());
                 event.setArchivedAt(null);
             }
             case ARCHIVED -> {
                 if (current == GroupContest.Lifecycle.ACTIVE) {
                     throw ApiException.badRequest("This is still running. End it first.");
+                }
+                // An archive is the record of something that happened, and candidates may read
+                // it. A draft, or a published event still waiting for its start, has not
+                // happened: archiving it would hand them a paper nobody has sat.
+                if (current != GroupContest.Lifecycle.ENDED
+                        && current != GroupContest.Lifecycle.ARCHIVED) {
+                    throw ApiException.badRequest(
+                        "Only an event that has ended can be archived. Delete a draft instead.");
                 }
                 event.setLifecycle(GroupContest.Lifecycle.ARCHIVED.name());
                 event.setArchivedAt(now);
@@ -582,8 +596,10 @@ public class EventService {
          */
         // Before the start there is nothing to read, unlocked or not; after the end it is the
         // record of a paper that is over.
+        boolean over = stage == GroupContest.Lifecycle.ENDED
+            || stage == GroupContest.Lifecycle.ARCHIVED;
         boolean mayReadPaper = (stage == GroupContest.Lifecycle.ACTIVE && unlocked)
-            || stage == GroupContest.Lifecycle.ENDED || stage == GroupContest.Lifecycle.ARCHIVED;
+            || (over && event.hasStarted(now));
 
         return new EventsDto.MyExam(
             summarise(event, now),

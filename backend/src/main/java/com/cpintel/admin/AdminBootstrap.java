@@ -76,7 +76,7 @@ public class AdminBootstrap implements ApplicationRunner {
         }
 
         String email = bootstrapEmail.trim().toLowerCase(java.util.Locale.ROOT);
-        User user = userRepository.findByEmail(email).orElse(null);
+        User user = userRepository.findByEmailIgnoreCase(email).orElse(null);
 
         if (user == null) {
             createSuperAdmin(email);
@@ -130,7 +130,7 @@ public class AdminBootstrap implements ApplicationRunner {
 
         String username = StringUtils.hasText(bootstrapUsername)
             ? bootstrapUsername.trim() : "superadmin";
-        if (userRepository.existsByUsername(username)) {
+        if (userRepository.existsByUsernameIgnoreCase(username)) {
             log.error("Cannot create super admin {}: the username '{}' is taken. "
                 + "Set cpintel.admin.bootstrap-username to something else.", MailService.masked(email), username);
             return;

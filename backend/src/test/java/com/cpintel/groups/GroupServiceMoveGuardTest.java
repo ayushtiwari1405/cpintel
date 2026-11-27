@@ -116,6 +116,27 @@ class GroupServiceMoveGuardTest {
     }
 
     @Test
+    @DisplayName("retiring a team whose examination is running is refused")
+    void refusesRetiringDuringARunningExam() {
+        teamHas(FROM, exam("EXAM", "SCHEDULED", -600, 3600));
+        List<GroupMember> roster = List.of(members.findByGroupGroupIdAndUserUserId(FROM, USER).orElseThrow());
+        when(members.findByGroup(FROM)).thenReturn(roster);
+        assertThrows(ApiException.class, () -> service.deactivate(9L, FROM, null));
+        verify(groups, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("retiring it is fine when every member is also named on the paper")
+    void allowsRetiringWhenAllAreNamed() {
+        teamHas(FROM, exam("EXAM", "SCHEDULED", -600, 3600));
+        List<GroupMember> roster = List.of(members.findByGroupGroupIdAndUserUserId(FROM, USER).orElseThrow());
+        when(members.findByGroup(FROM)).thenReturn(roster);
+        when(assignments.participantsNamedDirectly(EXAM)).thenReturn(List.of(USER));
+        service.deactivate(9L, FROM, null);
+        verify(groups).save(any());
+    }
+
+    @Test
     @DisplayName("papers that are not running, and ordinary contests, do not block a move")
     void ignoresPapersThatAreNotRunning() {
         teamHas(FROM,

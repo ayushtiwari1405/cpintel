@@ -255,7 +255,18 @@ function LifecycleControls({ detail }: { detail: EventDetail }) {
           Publish
         </button>
       )}
-      {(event.lifecycle === 'SCHEDULED' || event.lifecycle === 'ACTIVE') && (
+      {event.lifecycle === 'SCHEDULED' && (
+        <button
+          onClick={() => setLifecycle.mutate({ eventId: id, lifecycle: 'DRAFT' })}
+          disabled={setLifecycle.isPending}
+          title="Hide it from candidates again and make it editable"
+          className="rounded-lg border border-gray-800 bg-gray-900 px-3 py-1.5 text-xs
+                     text-gray-300 transition-colors hover:bg-gray-800 disabled:opacity-40"
+        >
+          Back to draft
+        </button>
+      )}
+      {event.lifecycle === 'ACTIVE' && (
         <button
           onClick={() => setLifecycle.mutate({ eventId: id, lifecycle: 'ENDED' })}
           className="rounded-lg border border-gray-800 bg-gray-900 px-3 py-1.5 text-xs

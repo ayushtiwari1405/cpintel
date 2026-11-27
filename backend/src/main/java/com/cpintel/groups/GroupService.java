@@ -103,7 +103,14 @@ public class GroupService {
     public GroupsDto.GroupSummary update(Long adminId, Long groupId, GroupsDto.GroupRequest req,
                                          HttpServletRequest httpReq) {
         ContestGroup group = require(groupId);
-        group.setName(req.name().trim());
+        String name = req.name().trim();
+        // The same rule as creating one, which a rename used to walk around.
+        if (groupRepository.existsByClassroomIdAndNameIgnoreCaseAndGroupIdNot(
+                group.getClassroomId(), name, groupId)) {
+            throw ApiException.conflict("A group called \"" + name + "\" already exists in "
+                + "this classroom.");
+        }
+        group.setName(name);
         group.setDescription(trimToNull(req.description()));
         groupRepository.save(group);
 
@@ -124,10 +131,32 @@ public class GroupService {
     @Transactional
     public void deactivate(Long adminId, Long groupId, HttpServletRequest httpReq) {
         ContestGroup group = require(groupId);
+        if (!Boolean.FALSE.equals(group.getIsActive())) refuseRetiringWhileSitting(groupId);
         group.setIsActive(false);
         groupRepository.save(group);
         auditService.recordIn(classroomOf(groupId), adminId, AuditService.GROUP_DEACTIVATED, "GROUP",
             String.valueOf(groupId), httpReq);
+    }
+
+    /**
+     * A retired team gives its members nothing, so retiring one during its examination drops
+     * them from the paper exactly as removing each of them would. Allowed when every member is
+     * also named on the paper.
+     */
+    private void refuseRetiringWhileSitting(Long groupId) {
+        Instant now = Instant.now();
+        for (GroupContest event : assignmentRepository.eventsForTeam(groupId)) {
+            if (!event.isExam()
+                || event.effectiveLifecycle(now) != GroupContest.Lifecycle.ACTIVE) continue;
+            List<Long> named = assignmentRepository.participantsNamedDirectly(event.getContestId());
+            boolean someoneDependsOnIt = memberRepository.findByGroup(groupId).stream()
+                .anyMatch(member -> !named.contains(member.getUser().getUserId()));
+            if (someoneDependsOnIt) {
+                throw ApiException.conflict("This team is sitting \"" + event.getName() + "\", "
+                    + "and it is running. Retiring the team now would lock its members out of "
+                    + "the paper. Wait until it ends.");
+            }
+        }
     }
 
     // ---------------------------------------------------------------- members

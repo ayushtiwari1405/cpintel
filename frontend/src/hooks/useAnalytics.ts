@@ -138,12 +138,3 @@ export function useRegenerateRoadmap() {
     },
   })
 }
-
-export function useUpdateRoadmapNode() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: ({ nodeId, status }: { nodeId: number; status: string }) =>
-      roadmapApi.updateNode(nodeId, status),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['roadmap'] }),
-  })
-}

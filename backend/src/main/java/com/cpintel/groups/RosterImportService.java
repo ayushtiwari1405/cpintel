@@ -308,8 +308,8 @@ public class RosterImportService {
         }
 
         Optional<User> existing = Optional.<User>empty()
-            .or(() -> email == null ? Optional.empty() : userRepository.findByEmail(email))
-            .or(() -> username == null ? Optional.empty() : userRepository.findByUsername(username));
+            .or(() -> email == null ? Optional.empty() : userRepository.findByEmailIgnoreCase(email))
+            .or(() -> username == null ? Optional.empty() : userRepository.findByUsernameIgnoreCase(username));
 
         if (existing.isPresent()) {
             User user = existing.get();
@@ -574,7 +574,7 @@ public class RosterImportService {
 
     private boolean isFree(String username, Set<String> plannedUsernames) {
         return !plannedUsernames.contains(username.toLowerCase(Locale.ROOT))
-            && !userRepository.existsByUsername(username);
+            && !userRepository.existsByUsernameIgnoreCase(username);
     }
 
     private String generatePassword() {

@@ -37,8 +37,8 @@ class ClassroomTaServiceTest {
         service = new ClassroomTaService(mock(ClassroomService.class), classrooms, assignments,
             users, mock(UnifiedScoreRepository.class), encoder, mock(AuditService.class),
             mock(EvaluationLocks.class));
-        when(users.findByEmail(anyString())).thenReturn(Optional.empty());
-        when(users.findByUsername(anyString())).thenReturn(Optional.empty());
+        when(users.findByEmailIgnoreCase(anyString())).thenReturn(Optional.empty());
+        when(users.findByUsernameIgnoreCase(anyString())).thenReturn(Optional.empty());
         when(users.save(any())).thenAnswer(inv -> {
             User u = inv.getArgument(0);
             u.setUserId(77L);
@@ -52,7 +52,7 @@ class ClassroomTaServiceTest {
     void linksExisting() {
         User existing = User.builder().userId(3L).username("asha").email("asha@x.edu")
             .role("USER").isActive(true).build();
-        when(users.findByUsername("asha")).thenReturn(Optional.of(existing));
+        when(users.findByUsernameIgnoreCase("asha")).thenReturn(Optional.of(existing));
 
         EvaluationDto.TaAdded added = service.add(ADMIN, ROOM,
             new EvaluationDto.TaRequest(null, "asha", null), null);
@@ -66,7 +66,7 @@ class ClassroomTaServiceTest {
     @Test
     @DisplayName("Admins are not made TAs")
     void refusesAdmins() {
-        when(users.findByEmail("boss@x.edu")).thenReturn(Optional.of(User.builder().userId(2L)
+        when(users.findByEmailIgnoreCase("boss@x.edu")).thenReturn(Optional.of(User.builder().userId(2L)
             .username("boss").role("ADMIN").isActive(true).build()));
 
         assertThrows(ApiException.class, () -> service.add(ADMIN, ROOM,
@@ -91,7 +91,7 @@ class ClassroomTaServiceTest {
     void newNeedsEmailAndFreeName() {
         assertThrows(ApiException.class, () -> service.add(ADMIN, ROOM,
             new EvaluationDto.TaRequest(null, "ghost", null), null));
-        when(users.existsByUsername("taken")).thenReturn(true);
+        when(users.existsByUsernameIgnoreCase("taken")).thenReturn(true);
         assertThrows(ApiException.class, () -> service.add(ADMIN, ROOM,
             new EvaluationDto.TaRequest("someone@x.edu", "taken", null), null));
     }

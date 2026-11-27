@@ -164,7 +164,7 @@ public class PracticeService {
 
         String handle = submitClient.resolveHandle(cookies, userAgent);
         if (handle == null) {
-            throw ApiException.unauthorized(
+            throw ApiException.badRequest(
                 "Codeforces did not recognise that session as signed in. If you are signed in "
                     + "at codeforces.com, this is usually Cloudflare refusing the request "
                     + "because it did not come from the same browser the cookies belong to — "

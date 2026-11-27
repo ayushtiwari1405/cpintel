@@ -208,7 +208,8 @@ the product.
 ## Administration
 
 - JWT auth with refresh token rotation (the refresh token is an `HttpOnly`, `SameSite=Strict`
-  cookie; the access token is kept in memory only) and Argon2id password hashing
+  cookie; the access token is kept in memory only) and Argon2id password hashing. Signing out
+  ends every session of the account. Usernames and addresses are unique ignoring capitals
 - Three roles — `USER`, `ADMIN`, `SUPER_ADMIN` — with role assignment, the creation of other
   admins, and account deletion reserved to the super admin, so the tier that hands out
   privilege sits above the tier that uses it. An ordinary admin runs the room but cannot

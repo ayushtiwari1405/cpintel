@@ -1,5 +1,6 @@
 package com.cpintel.admin;
 
+import com.cpintel.common.EmailRule;
 import com.cpintel.dto.PlatformDto;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -80,10 +81,12 @@ public class AdminDto {
                  message = "Username can only contain letters, numbers and underscores")
         String username,
 
-        @NotBlank @Email @Size(max = 255)
+        @NotBlank @Email(regexp = EmailRule.PATTERN, message = EmailRule.MESSAGE)
+        @Size(max = EmailRule.MAX_LENGTH)
         String email,
 
         @NotBlank @Size(min = 8, message = "Password must be at least 8 characters")
+        @Size(max = 200, message = "A password can be at most 200 characters")
         String password,
 
         @Size(max = 100)
@@ -102,7 +105,8 @@ public class AdminDto {
      */
     public record UpdateUserRequest(
         @Size(max = 100) String fullName,
-        @Email @Size(max = 255) String email,
+        @Email(regexp = EmailRule.PATTERN, message = EmailRule.MESSAGE)
+        @Size(max = EmailRule.MAX_LENGTH) String email,
         @Size(max = 200) String institution,
         @Size(max = 100) String country
     ) {}
@@ -126,7 +130,8 @@ public class AdminDto {
      * thinking of.
      */
     public record SetPasswordRequest(
-        @Size(min = 8, max = 200, message = "A password has to be at least 8 characters")
+        @Size(min = 8, message = "A password has to be at least 8 characters")
+        @Size(max = 200, message = "A password can be at most 200 characters")
         String password,
         @Size(max = 200) String reason
     ) {}

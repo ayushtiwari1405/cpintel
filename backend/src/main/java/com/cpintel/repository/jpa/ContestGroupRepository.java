@@ -31,5 +31,9 @@ public interface ContestGroupRepository extends JpaRepository<ContestGroup, Long
 
     boolean existsByClassroomIdAndNameIgnoreCase(Long classroomId, String name);
 
+    /** Whether another team in the classroom is already called this. */
+    boolean existsByClassroomIdAndNameIgnoreCaseAndGroupIdNot(Long classroomId, String name,
+                                                              Long groupId);
+
     long countByClassroomId(Long classroomId);
 }

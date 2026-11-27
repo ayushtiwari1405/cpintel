@@ -54,6 +54,7 @@ class RefreshTokenRotationTest {
         jwt = mock(JwtService.class);
         when(jwt.generateAccessToken(any(), any(), any(), any())).thenReturn("access");
         when(jwt.generateRefreshToken()).thenReturn("next-raw-token");
+        when(jwt.successorOf("raw-1")).thenReturn("next-raw-token");
 
         var lockout = mock(com.cpintel.events.ExamLockoutService.class);
         when(lockout.lockFor(any())).thenReturn(Optional.empty());
@@ -204,5 +205,88 @@ class RefreshTokenRotationTest {
 
         verify(tokens).findByToken(TokenDigest.of("raw-1"));
         verify(tokens, never()).findByToken("raw-1");
+    }
+
+    // ------------------------------------------------------- a lost renewal reply
+
+    private static final String BROWSER = "Firefox";
+
+    private AuthDto.AuthResponse refreshFrom(String agent, String raw) {
+        AuthDto.RefreshRequest req = new AuthDto.RefreshRequest();
+        req.setRefreshToken(raw);
+        MockHttpServletRequest http = new MockHttpServletRequest();
+        http.addHeader("User-Agent", agent);
+        return service.refresh(req, http);
+    }
+
+    /** raw-1 was rotated this long ago, and next-raw-token stored for it. */
+    private RefreshToken rotated(Duration ago, boolean successorSpent) {
+        stored("raw-1", true, Instant.now().minus(ago));
+        RefreshToken next = RefreshToken.builder()
+            .tokenId(2L).user(ada).token(TokenDigest.of("next-raw-token")).familyId("family-1")
+            .deviceInfo(BROWSER).expiresAt(Instant.now().plus(Duration.ofDays(7)))
+            .revoked(successorSpent).build();
+        when(tokens.findByToken(TokenDigest.of("next-raw-token"))).thenReturn(Optional.of(next));
+        return next;
+    }
+
+    @Test
+    @DisplayName("a client that lost the reply is given the same successor again")
+    void lostReplyIsRepeated() {
+        rotated(Duration.ofSeconds(2), false);
+
+        AuthDto.AuthResponse again = refreshFrom(BROWSER, "raw-1");
+
+        assertEquals("next-raw-token", again.getRefreshToken());
+        assertEquals("access", again.getAccessToken());
+        // The same session, not another one.
+        verify(tokens, never()).save(any());
+        verify(tokens, never()).revokeFamily(any());
+    }
+
+    @Test
+    @DisplayName("not to another browser")
+    void notToAnotherBrowser() {
+        rotated(Duration.ofSeconds(2), false);
+
+        assertThrows(ApiException.class, () -> refreshFrom("curl", "raw-1"));
+    }
+
+    @Test
+    @DisplayName("not once the successor has itself been used or revoked")
+    void notOnceSpent() {
+        rotated(Duration.ofSeconds(2), true);
+
+        assertThrows(ApiException.class, () -> refreshFrom(BROWSER, "raw-1"));
+    }
+
+    @Test
+    @DisplayName("not after the grace period: that is a copy, and the family ends")
+    void notAfterGrace() {
+        rotated(AuthService.REUSE_GRACE.plusSeconds(1), false);
+        when(tokens.revokeFamily("family-1")).thenReturn(1);
+
+        assertThrows(ApiException.class, () -> refreshFrom(BROWSER, "raw-1"));
+
+        verify(tokens).revokeFamily("family-1");
+        verify(jwt).revokeUserTokens(42L);
+    }
+
+    @Test
+    @DisplayName("not to an account deactivated since")
+    void notToADeactivatedAccount() {
+        rotated(Duration.ofSeconds(2), false);
+        ada.setIsActive(false);
+
+        assertThrows(ApiException.class, () -> refreshFrom(BROWSER, "raw-1"));
+    }
+
+    @Test
+    @DisplayName("signing out retires the other sessions' access tokens too")
+    void logoutRetiresAccessTokens() {
+        service.logout(null, 42L);
+
+        verify(tokens).revokeAllByUserId(42L);
+        verify(jwt).revokeUserTokens(42L);
     }
 }

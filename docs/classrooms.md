@@ -29,8 +29,11 @@ with a different DOMjudge account in each, and both logins are kept side by side
 - **A team cannot lose a candidate mid-paper.** While an examination assigned to a team is
   running, moving or removing one of its members is refused, because a paper's candidates are
   worked out from the team and the person would be locked out. It is allowed when the person is
-  also named on the paper, or the team they move to is assigned to it too. To stop somebody
-  sitting a running paper, revoke their access on the examination instead.
+  also named on the paper, or the team they move to is assigned to it too. Retiring the team is
+  refused the same way unless every member is named, and removing a candidate from the classroom
+  is refused however they were given the paper. To stop somebody sitting a running paper, revoke
+  their access on the examination instead.
+- **A team's name is its own.** No two teams in a classroom share one, whatever the capitals.
 - **Students only see their own classrooms.** A classroom's DOMjudge contests refuse anyone
   not enrolled in it. In normal mode a student picks a classroom to see its past exams.
 - **One examination at a time**, across all classrooms. The lockout already enforces this.

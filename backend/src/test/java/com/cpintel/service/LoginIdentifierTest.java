@@ -142,6 +142,40 @@ class LoginIdentifierTest {
     }
 
     @Test
+    @DisplayName("deactivation is only mentioned to somebody who has the password")
+    void deactivatedNeedsThePassword() {
+        ada.setIsActive(false);
+
+        ApiException wrong = assertThrows(ApiException.class, () -> signIn("ada", "wrong"));
+        assertEquals(401, wrong.getStatus().value());
+        assertEquals("Invalid credentials", wrong.getMessage());
+
+        assertEquals(403,
+            assertThrows(ApiException.class, () -> signIn("ada", "correct")).getStatus().value());
+    }
+
+    @Test
+    @DisplayName("an examination password gives a deactivated account no session either")
+    void deactivatedExamPassword() {
+        ada.setIsActive(false);
+        when(examLogin.match(42L, "K7FQ-M2XB")).thenReturn(Optional.of(
+            com.cpintel.entity.GroupContest.builder().contestId(7L).kind("EXAM").build()));
+
+        assertEquals(403,
+            assertThrows(ApiException.class, () -> signIn("ada", "K7FQ-M2XB")).getStatus().value());
+    }
+
+    @Test
+    @DisplayName("an unknown name costs a hash comparison, as a known one does")
+    void unknownNameCostsAComparison() {
+        when(encoder.encode(any())).thenReturn("stand-in-hash");
+
+        assertThrows(ApiException.class, () -> signIn("nobody", "wrong"));
+
+        verify(encoder).matches("wrong", "stand-in-hash");
+    }
+
+    @Test
     @DisplayName("the address is tried first, so it wins if a username somehow matches one")
     void addressWins() {
         User other = User.builder().userId(99L).username("ada@example.com")

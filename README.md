@@ -23,7 +23,7 @@ The full list is in [docs/features.md](docs/features.md).
 ## Stack
 
 React 19 + TypeScript (Vite) talks to Spring Boot 3 / Java 21, backed by PostgreSQL 16 (system
-of record, Flyway — 35 versioned migrations), MongoDB (submissions, files), and Redis (sessions,
+of record, Flyway — 38 versioned migrations), MongoDB (submissions, files), and Redis (sessions,
 cache). Code runs in a locked-down runner container (bubblewrap + rlimits). Everything ships as
 Docker Compose services behind nginx. Optional monitoring uses Prometheus, Grafana and Loki.
 

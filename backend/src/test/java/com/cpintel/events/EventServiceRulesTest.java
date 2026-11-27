@@ -477,6 +477,62 @@ class EventServiceRulesTest {
         }
 
         @Test
+        @DisplayName("a draft cannot be ended, which would publish it")
+        void draftCannotBeEnded() {
+            GroupContest exam = event("DRAFT",
+                Instant.now().plus(Duration.ofDays(1)),
+                Instant.now().plus(Duration.ofDays(2)));
+            Instant end = exam.getEndsAt();
+
+            assertThrows(ApiException.class,
+                () -> service.setLifecycle(ADMIN, EVENT, "ENDED", null));
+
+            assertEquals("DRAFT", exam.getLifecycle());
+            assertEquals(end, exam.getEndsAt());
+        }
+
+        @Test
+        @DisplayName("nothing that is not running can be ended")
+        void onlyARunningOneCanBeEnded() {
+            for (String[] state : new String[][] {{"SCHEDULED", "future"}, {"SCHEDULED", "past"},
+                    {"ARCHIVED", "past"}}) {
+                Duration shift = state[1].equals("future") ? Duration.ofDays(1) : Duration.ofDays(-1);
+                event(state[0], Instant.now().plus(shift),
+                    Instant.now().plus(shift).plus(Duration.ofHours(1)));
+
+                assertThrows(ApiException.class,
+                    () -> service.setLifecycle(ADMIN, EVENT, "ENDED", null),
+                    state[0] + " " + state[1]);
+            }
+        }
+
+        @Test
+        @DisplayName("a draft, or a paper still waiting for its start, cannot be archived")
+        void unsatCannotBeArchived() {
+            for (String lifecycle : new String[] {"DRAFT", "SCHEDULED"}) {
+                GroupContest exam = event(lifecycle,
+                    Instant.now().plus(Duration.ofDays(1)),
+                    Instant.now().plus(Duration.ofDays(2)));
+
+                assertThrows(ApiException.class,
+                    () -> service.setLifecycle(ADMIN, EVENT, "ARCHIVED", null), lifecycle);
+                assertEquals(lifecycle, exam.getLifecycle());
+            }
+        }
+
+        @Test
+        @DisplayName("an ended examination can be archived")
+        void endedCanBeArchived() {
+            GroupContest exam = event("SCHEDULED",
+                Instant.now().minus(Duration.ofHours(2)),
+                Instant.now().minus(Duration.ofHours(1)));
+
+            service.setLifecycle(ADMIN, EVENT, "ARCHIVED", null);
+
+            assertEquals("ARCHIVED", exam.getLifecycle());
+        }
+
+        @Test
         @DisplayName("a running examination cannot be taken back to a draft")
         void cannotDraftALivePaper() {
             event("SCHEDULED",

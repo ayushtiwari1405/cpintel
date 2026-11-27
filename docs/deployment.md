@@ -137,7 +137,8 @@ docker logs cpintel-runner 2>&1 | grep 'sandbox active'   # otherwise see step 1
 **Upgrading a server whose database predates this release:** its MongoDB indexes, and possibly
 duplicate files or contest rules, need
 [Upgrading an existing MongoDB](operations.md#upgrading-an-existing-mongodb) *before*
-`./deploy.sh`; a fresh install needs nothing.
+`./deploy.sh`; a fresh install needs nothing. A database at schema V35 or earlier also needs
+[the PostgreSQL check](operations.md#upgrading-an-existing-postgresql-database-past-v35) first.
 
 ## 6. First use
 

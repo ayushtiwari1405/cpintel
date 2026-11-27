@@ -82,6 +82,10 @@ to test a list of addresses against the roster of whoever is being examined.
 **Signing in takes either a username or an email address**, in one field. People here are given
 a username and may never use the address on their account, so insisting on the address would
 ask half of them for something they do not have to hand.
+Both are unique ignoring capitals, and a new address needs a domain with a dot
+(`name@localhost` is refused). A refused sign-in says only that the credentials were wrong;
+"deactivated" is said only to somebody who gave the right password. Signing out ends every
+session of the account.
 
 **With no SMTP configured, resets can still work — for an operator who opts in.** By default
 the backend logs only that a message was not sent, with the subject and the recipient masked

@@ -8,8 +8,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
+import javax.crypto.Mac;
 import javax.crypto.SecretKey;
+import javax.crypto.spec.SecretKeySpec;
+import java.nio.charset.StandardCharsets;
+import java.security.GeneralSecurityException;
 import java.time.Duration;
+import java.util.Base64;
 import java.util.Date;
 import java.util.Map;
 import java.util.UUID;
@@ -26,7 +31,8 @@ public class JwtService {
     private static final String USER_REVOKE_PREFIX = "jwt:user-revoked:";
 
     /**
-     * Tokens issued within this long of a revocation are left alone.
+     * For a token that records only the second it was issued in — one from before
+     * {@link #ISSUED_MS_CLAIM} — those issued within this long of a revocation are left alone.
      *
      * A JWT records its issue time to the second, so a token minted in the same second as a
      * revocation cannot be told apart from one minted just before it. Erring towards keeping
@@ -36,6 +42,9 @@ public class JwtService {
      * account still cannot mint anything new.
      */
     private static final long REVOCATION_GRACE_MS = 1000L;
+
+    /** When the token was issued, to the millisecond; the standard claim keeps only seconds. */
+    private static final String ISSUED_MS_CLAIM = "iat_ms";
 
     private SecretKey signingKey() {
         byte[] keyBytes = Decoders.BASE64.decode(
@@ -55,12 +64,14 @@ public class JwtService {
     public String generateAccessToken(Long userId, String email, String role, Long examId) {
         Map<String, Object> claims = new java.util.HashMap<>(Map.of("email", email, "role", role));
         if (examId != null) claims.put(EXAM_CLAIM, examId);
+        long now = System.currentTimeMillis();
         return Jwts.builder()
             .id(UUID.randomUUID().toString())
             .subject(String.valueOf(userId))
             .claims(claims)
-            .issuedAt(new Date())
-            .expiration(new Date(System.currentTimeMillis() + props.getExpiryMs()))
+            .claim(ISSUED_MS_CLAIM, now)
+            .issuedAt(new Date(now))
+            .expiration(new Date(now + props.getExpiryMs()))
             .signWith(signingKey(), Jwts.SIG.HS256)
             .compact();
     }
@@ -70,6 +81,24 @@ public class JwtService {
 
     public String generateRefreshToken() {
         return UUID.randomUUID().toString() + "-" + UUID.randomUUID().toString();
+    }
+
+    /**
+     * The refresh token that replaces this one at renewal: an HMAC of it under the server's key.
+     *
+     * <p>Derived rather than random so that it can be given again to a client that lost the
+     * reply, without storing it. Without the key it cannot be worked out from the token it
+     * replaces. The prefix keeps this use of the key apart from signing access tokens.
+     */
+    public String successorOf(String refreshToken) {
+        try {
+            Mac mac = Mac.getInstance("HmacSHA256");
+            mac.init(new SecretKeySpec(signingKey().getEncoded(), "HmacSHA256"));
+            return Base64.getUrlEncoder().withoutPadding().encodeToString(mac.doFinal(
+                ("refresh-successor:" + refreshToken).getBytes(StandardCharsets.UTF_8)));
+        } catch (GeneralSecurityException e) {
+            throw new IllegalStateException("HmacSHA256 is not available", e);
+        }
     }
 
     public Claims extractClaims(String token) {
@@ -161,12 +190,24 @@ public class JwtService {
      * half of a revocation is the refresh token row in Postgres, which does not depend on this.
      */
     public boolean isRevokedForUser(Long userId, Date issuedAt) {
-        if (userId == null || issuedAt == null) return false;
+        if (issuedAt == null) return false;
+        return revokedSince(userId, issuedAt.getTime() + REVOCATION_GRACE_MS - 1);
+    }
+
+    /** As above, to the millisecond where the token says when it was issued. */
+    public boolean isSessionRevoked(Long userId, Claims claims) {
+        Object issued = claims.get(ISSUED_MS_CLAIM);
+        if (issued instanceof Number at) return revokedSince(userId, at.longValue());
+        return isRevokedForUser(userId, claims.getIssuedAt());
+    }
+
+    /** Whether the user's sessions were revoked after this instant. */
+    private boolean revokedSince(Long userId, long instant) {
+        if (userId == null) return false;
         try {
             Object marker = redisTemplate.opsForValue().get(USER_REVOKE_PREFIX + userId);
             if (marker == null) return false;
-            long revokedAt = Long.parseLong(marker.toString());
-            return issuedAt.getTime() + REVOCATION_GRACE_MS <= revokedAt;
+            return instant < Long.parseLong(marker.toString());
         } catch (Exception e) {
             log.debug("Could not read revocation marker for user {}: {}", userId, e.getMessage());
             return false;

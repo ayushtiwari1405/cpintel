@@ -4,6 +4,7 @@ import { useAdminClassrooms, useCreateClassroom } from '@/hooks/useClassrooms'
 import { useIsSuperAdmin } from '@/hooks/useAdmin'
 import { Ago, NewTile, Panel, Pill, Tile, TileGrid, TileNote, revealForm } from '@/components/admin/AdminUi'
 import { PageHeader } from '@/components/common/PageHeader'
+import { ErrorState } from '@/components/common/States'
 
 const field = `rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 text-sm text-gray-200
                placeholder-gray-400 outline-hidden focus:border-accent-600`
@@ -16,7 +17,7 @@ const field = `rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 text-sm t
  * here rather than by the first student to open a paper.
  */
 export default function AdminClassroomsPage() {
-  const { data: classrooms, isLoading } = useAdminClassrooms()
+  const { data: classrooms, isLoading, isError, error, refetch } = useAdminClassrooms()
   const create = useCreateClassroom()
   // Only a superadmin creates classrooms and decides which admins run each one.
   const isSuper = useIsSuperAdmin()
@@ -56,6 +57,11 @@ export default function AdminClassroomsPage() {
       <TileGrid label="Classrooms">
         {isSuper && <NewTile label="New classroom" onClick={openForm} />}
         {isLoading && <TileNote>Loading classrooms…</TileNote>}
+        {isError && !classrooms && (
+          <li className="col-span-full">
+            <ErrorState title="Could not load the classrooms" error={error} onRetry={() => refetch()} />
+          </li>
+        )}
         {!isLoading && classrooms?.length === 0 && (
           <TileNote>
             {isSuper

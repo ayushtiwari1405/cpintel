@@ -41,10 +41,24 @@ export function EmptyState({ icon, title, children, action, className, compact }
   )
 }
 
+/**
+ * What the server said about a failure, or undefined if it said nothing.
+ *
+ * A refused form answers "Validation failed" with the reason for each field beside it; the
+ * reasons are what the person can act on, so they are preferred.
+ */
+export function serverMessage(error: unknown): string | undefined {
+  const data = (error as {
+    response?: { data?: { message?: string; errors?: Record<string, string> | null } }
+  } | null)?.response?.data
+  const fields = [...new Set(Object.values(data?.errors ?? {}).filter(Boolean))]
+  if (fields.length > 0) return fields.join('. ')
+  return data?.message || undefined
+}
+
 /** The server's own words when a request failed, the error message otherwise. */
 export function errorMessage(error: unknown, fallback = 'Something went wrong.'): string {
-  const e = error as { response?: { data?: { message?: string } }; message?: string } | null
-  return e?.response?.data?.message || e?.message || fallback
+  return serverMessage(error) || (error as { message?: string } | null)?.message || fallback
 }
 
 /**

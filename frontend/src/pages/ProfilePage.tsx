@@ -5,6 +5,7 @@ import { userApi } from '@/api/userApi'
 import { useToast } from '@/components/common/Toaster'
 import { Save, Loader2 } from 'lucide-react'
 import { ChangePasswordCard } from '@/components/common/ChangePasswordCard'
+import { serverMessage } from '@/components/common/States'
 import { PageHeader } from '@/components/common/PageHeader'
 import { isAdmin, roleLabel } from '@/utils/roles'
 
@@ -24,7 +25,7 @@ export default function ProfilePage() {
       queryClient.invalidateQueries({ queryKey: ['me'] })
       toast.push('success', 'Profile updated')
     },
-    onError: () => toast.push('error', 'Update failed'),
+    onError: (err: unknown) => toast.push('error', serverMessage(err) ?? 'Update failed'),
   })
 
   const set = (k: keyof typeof form) =>
@@ -57,15 +58,16 @@ export default function ProfilePage() {
       {/* Form */}
       <div className="card space-y-4">
         {[
-          { key: 'fullName',    label: 'Full name',    placeholder: 'Your name' },
-          { key: 'avatarUrl',   label: 'Avatar URL',   placeholder: 'https://...' },
-        ].map(({ key, label, placeholder }) => (
+          { key: 'fullName',    label: 'Full name',    placeholder: 'Your name',   max: 100 },
+          { key: 'avatarUrl',   label: 'Avatar URL',   placeholder: 'https://...', max: 500 },
+        ].map(({ key, label, placeholder, max }) => (
           <div key={key}>
             <label htmlFor={`profile-${key}`} className="mb-1.5 block text-sm font-medium text-gray-300">{label}</label>
             <input
               id={`profile-${key}`}
               className="input"
               placeholder={placeholder}
+              maxLength={max}
               value={form[key as keyof typeof form]}
               onChange={set(key as keyof typeof form)}
             />

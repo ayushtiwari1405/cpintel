@@ -171,6 +171,26 @@ The integration test rehearses all of this on a throwaway copy of an earlier rel
 ([Full-stack integration test](testing.md#full-stack-integration-test-opt-in-locally-on-main-in-ci)), and
 `scripts/test_mongo_index_upgrade.py` covers each case of the script on its own.
 
+## Upgrading an existing PostgreSQL database past V35
+
+Flyway applies the migrations when the new backend starts, so there is nothing to run by hand -
+but V36 to V38 meet data an earlier release accepted. Check first, on the server, after a backup:
+
+```bash
+scripts/postgres-upgrade-check.sh --container cpintel-postgres   # read-only; rows named by id
+```
+
+| What it lists | What the upgrade does |
+|---|---|
+| Accounts differing only in capitals | **Stops** (V36); the backend does not start. Rename or merge them first (exit status 3). Sign-in already fails for both |
+| Teams sharing a name in a classroom | Appends the team's id to each later one (V38) |
+| Events with an end before their start, or archived before they could have started | Back to draft (V37), unless someone's session log shows they were sat |
+| Finished or archived examinations with no session log | Nothing. A draft that was ended or archived after its planned start looks like these: read the list, and take any such one back by hand |
+| Avatar addresses that are not `http(s)` | Cleared (V37) |
+
+An account whose address has no domain (`name@localhost`) keeps working, but the console will
+not save it until it is given a full address.
+
 ## Backups and restore
 
 `scripts/backup.sh` (nightly from cron, and by `deploy.sh` before each deploy) dumps the `cpintel`

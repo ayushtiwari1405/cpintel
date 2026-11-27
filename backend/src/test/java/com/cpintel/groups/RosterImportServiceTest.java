@@ -61,9 +61,9 @@ class RosterImportServiceTest {
         group.setClassroomId(CLASSROOM);
         when(groups.findById(GROUP_ID)).thenReturn(Optional.of(group));
 
-        when(users.findByEmail(anyString())).thenReturn(Optional.empty());
-        when(users.findByUsername(anyString())).thenReturn(Optional.empty());
-        when(users.existsByUsername(anyString())).thenReturn(false);
+        when(users.findByEmailIgnoreCase(anyString())).thenReturn(Optional.empty());
+        when(users.findByUsernameIgnoreCase(anyString())).thenReturn(Optional.empty());
+        when(users.existsByUsernameIgnoreCase(anyString())).thenReturn(false);
         when(members.existsByGroupGroupIdAndUserUserId(anyLong(), anyLong())).thenReturn(false);
         when(encoder.encode(anyString())).thenReturn("hashed");
 
@@ -111,9 +111,9 @@ class RosterImportServiceTest {
         @Test
         @DisplayName("reports each row's fate separately")
         void classifiesEveryRow() {
-            when(users.findByEmail("known@uni.edu"))
+            when(users.findByEmailIgnoreCase("known@uni.edu"))
                 .thenReturn(Optional.of(existing(11L, "known", "known@uni.edu")));
-            when(users.findByEmail("member@uni.edu"))
+            when(users.findByEmailIgnoreCase("member@uni.edu"))
                 .thenReturn(Optional.of(existing(12L, "member", "member@uni.edu")));
             when(members.existsByGroupGroupIdAndUserUserId(GROUP_ID, 12L)).thenReturn(true);
 
@@ -166,7 +166,7 @@ class RosterImportServiceTest {
         @Test
         @DisplayName("a plain admin may still add people who already have accounts")
         void plainAdminMayAddExisting() {
-            when(users.findByEmail("known@uni.edu"))
+            when(users.findByEmailIgnoreCase("known@uni.edu"))
                 .thenReturn(Optional.of(existing(11L, "known", "known@uni.edu")));
             when(users.getReferenceById(11L))
                 .thenReturn(existing(11L, "known", "known@uni.edu"));
@@ -297,7 +297,7 @@ class RosterImportServiceTest {
             // Re-importing a corrected sheet is the normal way a wrong DOMjudge team name gets
             // fixed, and a conflict error would make that the one thing the feature cannot do.
             User user = existing(12L, "member", "member@uni.edu");
-            when(users.findByEmail("member@uni.edu")).thenReturn(Optional.of(user));
+            when(users.findByEmailIgnoreCase("member@uni.edu")).thenReturn(Optional.of(user));
             when(members.existsByGroupGroupIdAndUserUserId(GROUP_ID, 12L)).thenReturn(true);
 
             GroupMember membership = GroupMember.builder()
@@ -417,7 +417,7 @@ class RosterImportServiceTest {
         @DisplayName("logins alone re-attach to the accounts named after them")
         void reattachByLogin() {
             // The stored logins expire; re-pasting the judge's own account list must be enough.
-            when(users.findByUsername("team01"))
+            when(users.findByUsernameIgnoreCase("team01"))
                 .thenReturn(Optional.of(existing(12L, "team01", "asha@uni.edu")));
             when(members.existsByGroupGroupIdAndUserUserId(GROUP_ID, 12L)).thenReturn(true);
             when(domjudge.provision(anyLong(), any())).thenReturn(attached("Team 01"));

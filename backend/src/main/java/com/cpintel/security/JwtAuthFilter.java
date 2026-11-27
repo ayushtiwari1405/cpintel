@@ -40,7 +40,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                 // take hold now rather than whenever the token in that browser happens to
                 // expire. A token older than the revocation is treated as absent, which sends
                 // the client through refresh — where the account state is checked properly.
-                if (!jwtService.isRevokedForUser(userId, claims.getIssuedAt())) {
+                if (!jwtService.isSessionRevoked(userId, claims)) {
                     // An examination session reaches one paper and nothing else; the request
                     // carries which, and ExamModeFilter holds it to that.
                     Object exam = claims.get(JwtService.EXAM_CLAIM);

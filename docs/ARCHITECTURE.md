@@ -816,8 +816,13 @@ renewal retires the token it was given and issues the next in the same *family* 
 sign-in. A retired token presented again more than ten seconds after its rotation means two
 parties held it, the owner and whoever copied it, and there is no telling which is which: the
 whole family is revoked, the user's access tokens with it, and `REFRESH_TOKEN_REUSED` is
-audited. Inside those ten seconds it is two tabs of one browser racing to renew, and is simply
-refused. A token is spent by one atomic `UPDATE … WHERE revoked = false` (`RefreshTokenRepository.claim`),
+audited. Inside those ten seconds it is the owner: two tabs of one browser racing to renew, or a
+browser that never received the reply to a renewal. Each successor is an HMAC of the token it
+replaces (`JwtService.successorOf`), so the same successor can be given again without a raw token
+ever being stored. That happens only for the same user agent, while the successor is unused and
+the session may still be renewed; anything else is simply refused. The cost: a thief who presents
+a copy within those seconds, from the same user agent, receives it too, and is found out only when
+one of the two renews it after the other. A token is spent by one atomic `UPDATE … WHERE revoked = false` (`RefreshTokenRepository.claim`),
 not by reading it and then saving it: read-then-write let requests that arrived together all
 succeed (measured: up to eight live successors from one token). The loser of such a race gets a
 401, and the client asks once more after 400 ms, by which time it holds the winner's cookie. A token revoked any other way — signing out, an admin, an examination starting — has no
@@ -835,13 +840,15 @@ a user had three separate ways of not working, and each needed closing:
 - **The refresh token already issued.** Revoked in Postgres, which is the durable half.
 - **The access token already in the browser.** Valid for up to fifteen more minutes with no way
   to withdraw it. `JwtService.revokeUserTokens` records the moment of revocation in Redis and
-  `JwtAuthFilter` rejects anything issued earlier.
+  `JwtAuthFilter` rejects anything issued earlier. Signing out does the same, since it signs
+  out every session of the account.
 
 The last one deliberately fails open: if Redis cannot be read, tokens are honoured. The failure
 being guarded against is a cache blip signing out every user of the deployment at once, and the
-refresh token revocation in Postgres still stops anything new being minted. It also leaves a
-sub-second grace window, because a JWT records its issue time only to the second and the wrong
-rounding turns a fresh login into a loop of tokens that are dead on arrival.
+refresh token revocation in Postgres still stops anything new being minted. A JWT records its
+issue time only to the second, so access tokens also carry it to the millisecond (`iat_ms`); a
+token without that claim keeps a sub-second grace window, because the wrong rounding turns a
+fresh login into a loop of tokens that are dead on arrival.
 
 The same revocation runs on a role change, which is what makes a promotion take effect while
 the person is looking at the screen rather than a quarter of an hour later.

@@ -6,6 +6,7 @@ import { useAdminClassrooms } from '@/hooks/useClassrooms'
 import { ClassroomSelect } from '@/components/admin/ClassroomSelect'
 import { Ago, NewTile, Panel, Pill, Shelf, Tile, TileGrid, TileNote, revealForm } from '@/components/admin/AdminUi'
 import { PageHeader } from '@/components/common/PageHeader'
+import { ErrorState } from '@/components/common/States'
 
 /**
  * The groups an admin runs contests for.
@@ -14,7 +15,7 @@ import { PageHeader } from '@/components/common/PageHeader'
  * changes rarely — which is why creating one lives inline here rather than behind its own page.
  */
 export default function AdminGroupsPage() {
-  const { data: allGroups, isLoading } = useAdminGroups()
+  const { data: allGroups, isLoading, isError, error, refetch } = useAdminGroups()
   const { data: classrooms } = useAdminClassrooms()
   const create = useCreateGroup()
 
@@ -50,6 +51,11 @@ export default function AdminGroupsPage() {
         <TileGrid label="Teams">
           <NewTile label="New team" onClick={() => revealForm('new-team')} />
           {isLoading && <TileNote>Loading teams…</TileNote>}
+          {isError && !allGroups && (
+            <li className="col-span-full">
+              <ErrorState title="Could not load the teams" error={error} onRetry={() => refetch()} />
+            </li>
+          )}
           {!isLoading && groups?.length === 0 && (
             <TileNote>No teams yet. Create one, add its people, then point it at a contest.</TileNote>
           )}

@@ -73,6 +73,36 @@ class PersonalFileServiceTest {
             .build();
     }
 
+    @Test
+    @DisplayName("uploads arriving together cannot all fit through the same gap")
+    void simultaneousUploadsRespectTheLimit() throws Exception {
+        List<PersonalFile> saved = java.util.Collections.synchronizedList(new ArrayList<>());
+        when(repo.listMetadata(USER)).thenAnswer(call -> {
+            List<PersonalFile> seen = new ArrayList<>(saved);
+            Thread.sleep(5);   // Long enough for another upload to count the same files.
+            return seen;
+        });
+        when(repo.save(any(PersonalFile.class))).thenAnswer(call -> {
+            saved.add(call.getArgument(0));
+            return call.getArgument(0);
+        });
+
+        try (var threads = java.util.concurrent.Executors.newFixedThreadPool(20)) {
+            var uploads = java.util.stream.IntStream.range(0, 20)
+                .<java.util.concurrent.Callable<Object>>mapToObj(n -> () -> {
+                    try {
+                        return service.upload(USER, file("f" + n + ".txt", "x"), null, false);
+                    } catch (ApiException full) {
+                        return full;
+                    }
+                })
+                .toList();
+            for (var result : threads.invokeAll(uploads)) result.get();
+        }
+
+        assertEquals(3, saved.size());
+    }
+
     @Nested
     @DisplayName("names")
     class Names {

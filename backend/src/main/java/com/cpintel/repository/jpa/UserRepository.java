@@ -16,26 +16,31 @@ import java.util.Optional;
 
 @Repository
 public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificationExecutor<User> {
-    Optional<User> findByEmail(String email);
-    Optional<User> findByUsername(String username);
-
     /**
-     * The two lookups sign-in uses, folding case.
+     * Accounts are matched ignoring case everywhere: sign-in, password reset, and every check
+     * that a name or address is free. Postgres holds them unique on {@code lower()} (V36), so
+     * two accounts can never differ only in capitals; storage keeps whatever was typed.
      *
-     * <p>Both columns are unique and case-sensitive in Postgres, and both hold values that
-     * arrived from a human typing them. An address is not case-sensitive by its own rules, and
-     * a person typing their username with a capital at the start of a sentence has not typed a
-     * different username. Matching exactly turns either into a support request, so sign-in
-     * folds case and the storage keeps whatever was entered.
-     *
-     * <p>They stay separate from the exact lookups above, which are what registration and the
-     * admin console use to refuse a duplicate — those genuinely mean "is this taken".
+     * <p>Written out rather than derived from the method name: a derived {@code IgnoreCase}
+     * query compares with {@code upper()}, which would not use those indexes.
      */
-    Optional<User> findByEmailIgnoreCase(String email);
+    @Query("SELECT u FROM User u WHERE lower(u.email) = lower(:email)")
+    Optional<User> findByEmailIgnoreCase(@Param("email") String email);
 
-    Optional<User> findByUsernameIgnoreCase(String username);
-    boolean existsByEmail(String email);
-    boolean existsByUsername(String username);
+    @Query("SELECT u FROM User u WHERE lower(u.username) = lower(:username)")
+    Optional<User> findByUsernameIgnoreCase(@Param("username") String username);
+
+    @Query("SELECT COUNT(u) > 0 FROM User u WHERE lower(u.email) = lower(:email)")
+    boolean existsByEmailIgnoreCase(@Param("email") String email);
+
+    @Query("SELECT COUNT(u) > 0 FROM User u WHERE lower(u.username) = lower(:username)")
+    boolean existsByUsernameIgnoreCase(@Param("username") String username);
+
+    /** Whether some other account holds this address: an edit must not clash with itself. */
+    @Query("SELECT COUNT(u) > 0 FROM User u WHERE lower(u.email) = lower(:email) "
+        + "AND u.userId <> :userId")
+    boolean existsByEmailIgnoreCaseAndUserIdNot(@Param("email") String email,
+                                                @Param("userId") Long userId);
 
     @Query("SELECT u FROM User u LEFT JOIN FETCH u.platformAccounts WHERE u.userId = :id")
     Optional<User> findByIdWithPlatforms(@Param("id") Long id);

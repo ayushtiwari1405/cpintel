@@ -14,6 +14,7 @@ import com.cpintel.security.JwtService;
 import com.cpintel.security.PasswordPolicy;
 import com.cpintel.config.AppMetrics;
 import com.cpintel.security.RateLimitService;
+import jakarta.annotation.PostConstruct;
 import jakarta.servlet.http.HttpServletRequest;
 import com.cpintel.security.Roles;
 import lombok.RequiredArgsConstructor;
@@ -69,9 +70,9 @@ public class AuthService {
                 "Registration is closed. Ask an administrator to create your account.");
         }
 
-        if (userRepository.existsByEmail(req.getEmail()))
+        if (userRepository.existsByEmailIgnoreCase(req.getEmail()))
             throw ApiException.conflict("Email already registered");
-        if (userRepository.existsByUsername(req.getUsername()))
+        if (userRepository.existsByUsernameIgnoreCase(req.getUsername()))
             throw ApiException.conflict("Username already taken");
         PasswordPolicy.require(req.getPassword(), req.getUsername(), req.getEmail());
 
@@ -137,14 +138,11 @@ public class AuthService {
         // case for an admin reading this back is exactly the one where no such account exists.
         // The password is never part of the record.
         if (user == null) {
+            // The same Argon2 comparison a real account costs, so that how long the refusal
+            // takes does not say whether the name exists.
+            passwordEncoder.matches(req.getPassword(), standInHash());
             auditService.record(null, AuditService.LOGIN_FAILED, "IDENTIFIER", identifier, httpReq);
             throw ApiException.unauthorized("Invalid credentials");
-        }
-
-        if (!user.getIsActive()) {
-            auditService.record(user.getUserId(), AuditService.LOGIN_FAILED, "USER",
-                "deactivated", httpReq);
-            throw ApiException.forbidden("Account is deactivated");
         }
 
         // The examination password on this person's slip signs them in to examination mode for
@@ -154,6 +152,21 @@ public class AuthService {
         // start of a paper used to pay that two hundred times before reaching the check that
         // let them in. The codes are generated at random, so no account password collides.
         var exam = examLogin.match(user.getUserId(), req.getPassword());
+        if (exam.isEmpty()
+                && !passwordEncoder.matches(req.getPassword(), user.getPasswordHash())) {
+            auditService.record(user.getUserId(), AuditService.LOGIN_FAILED, "USER",
+                "bad-password", httpReq);
+            throw ApiException.unauthorized("Invalid credentials");
+        }
+
+        // Only now, to somebody holding one of this account's passwords. Said before the
+        // password was checked, it told anybody who typed a name that the account exists.
+        if (!user.getIsActive()) {
+            auditService.record(user.getUserId(), AuditService.LOGIN_FAILED, "USER",
+                "deactivated", httpReq);
+            throw ApiException.forbidden("Account is deactivated");
+        }
+
         if (exam.isPresent()) {
             rateLimiter.reset(ACCOUNT_BUCKET, identifier);
             requireDesktopAppIfAsked(exam.get(), user, httpReq);
@@ -163,12 +176,6 @@ public class AuthService {
             log.info("User {} signed in to examination {}", user.getUserId(),
                 exam.get().getContestId());
             return buildAuthResponse(user, httpReq, exam.get());
-        }
-
-        if (!passwordEncoder.matches(req.getPassword(), user.getPasswordHash())) {
-            auditService.record(user.getUserId(), AuditService.LOGIN_FAILED, "USER",
-                "bad-password", httpReq);
-            throw ApiException.unauthorized("Invalid credentials");
         }
 
         rateLimiter.reset(ACCOUNT_BUCKET, identifier);
@@ -194,6 +201,8 @@ public class AuthService {
 
         Instant now = Instant.now();
         if (token.getRevoked()) {
+            var again = replaySuccessor(token, req.getRefreshToken(), now, httpReq);
+            if (again.isPresent()) return again.get();
             refuseReuse(token, now, httpReq);
             throw ApiException.unauthorized("Refresh token has been revoked");
         }
@@ -211,7 +220,18 @@ public class AuthService {
         }
 
         User user = token.getUser();
+        var exam = requireMayRenew(token, user, httpReq);
+        return buildAuthResponse(user, httpReq, exam, token.getFamilyId(),
+            jwtService.successorOf(req.getRefreshToken()));
+    }
 
+    /**
+     * Whether this session may carry on, whichever way its renewal was asked for.
+     *
+     * @return the examination an examination session is for; null for an ordinary one
+     */
+    private com.cpintel.entity.GroupContest requireMayRenew(RefreshToken token, User user,
+                                                            HttpServletRequest httpReq) {
         // Checked here as well as at login. Refresh is the one path that hands out a fresh
         // access token without a password, so without this an account deactivated mid-session
         // would keep renewing itself for as long as its refresh token lived.
@@ -230,12 +250,47 @@ public class AuthService {
             // Checked at every renewal as well as at sign-in: a session carried into a browser,
             // or a paper switched over to desktop-only while it runs, ends here.
             requireDesktopAppIfAsked(exam, user, httpReq);
-            return buildAuthResponse(user, httpReq, exam, token.getFamilyId());
+            return exam;
         }
         // An ordinary session does not renew while its holder's examination runs. The token was
-        // revoked by the rotation above, so this is the sign-out.
+        // revoked by the rotation, so this is the sign-out.
         refuseDuringExamination(user, httpReq);
-        return buildAuthResponse(user, httpReq, null, token.getFamilyId());
+        return null;
+    }
+
+    /**
+     * Answers a token retired a moment ago with the successor it was exchanged for.
+     *
+     * <p>Tokens are single use, so a browser that never received the reply to a renewal — a
+     * dropped connection, a reload while it was in flight — holds only the retired one and had
+     * no way back in. The successor is derived from the token it replaced, so it can be given
+     * again without any raw token ever having been stored.
+     *
+     * <p>Only within {@link #REUSE_GRACE} of the rotation, only to the same browser, only while
+     * the successor has not itself been used or revoked, and only if the session may still be
+     * renewed. The cost: somebody who copied a token and presents it inside those seconds from
+     * the same user agent receives the successor too. That is still found out, because the two
+     * then share one token and the second to renew it after the grace ends the family.
+     */
+    private java.util.Optional<AuthDto.AuthResponse> replaySuccessor(
+            RefreshToken retired, String raw, Instant now, HttpServletRequest httpReq) {
+        Instant rotated = retired.getRotatedAt();
+        if (rotated == null || rotated.plus(REUSE_GRACE).isBefore(now)) {
+            return java.util.Optional.empty();
+        }
+        String successor = jwtService.successorOf(raw);
+        RefreshToken next = refreshTokenRepository
+            .findByToken(com.cpintel.common.TokenDigest.of(successor))
+            .filter(t -> !t.getRevoked() && t.getExpiresAt().isAfter(now))
+            .filter(t -> java.util.Objects.equals(t.getFamilyId(), retired.getFamilyId()))
+            .filter(t -> java.util.Objects.equals(t.getDeviceInfo(),
+                httpReq.getHeader("User-Agent")))
+            .orElse(null);
+        if (next == null) return java.util.Optional.empty();
+
+        User user = next.getUser();
+        var exam = requireMayRenew(next, user, httpReq);
+        return java.util.Optional.of(respond(user, exam, successor));
     }
 
     /**
@@ -329,6 +384,9 @@ public class AuthService {
             jwtService.blacklist(accessToken);
         }
         refreshTokenRepository.revokeAllByUserId(userId);
+        // Signing out signs out every session, so the access tokens the others are holding stop
+        // here too rather than working until they expire.
+        jwtService.revokeUserTokens(userId);
         auditService.record(userId, AuditService.LOGOUT, "USER", String.valueOf(userId));
         log.info("User {} logged out", userId);
     }
@@ -344,14 +402,31 @@ public class AuthService {
      * reasoning out of the security path, where it would silently become wrong the day the
      * username rules change.
      *
-     * <p>Both lookups are unique columns, so there is no ambiguity to resolve: no address can
-     * also be a username.
+     * <p>Both columns are unique ignoring case, so there is no ambiguity to resolve: no address
+     * can also be a username.
      */
     private User resolve(String identifier) {
         if (identifier.isEmpty()) return null;
         return userRepository.findByEmailIgnoreCase(identifier)
             .or(() -> userRepository.findByUsernameIgnoreCase(identifier))
             .orElse(null);
+    }
+
+    /** A hash of nothing anybody can type, compared against when no account matched. */
+    private volatile String standInHash;
+
+    @PostConstruct
+    void prepareStandInHash() {
+        standInHash();
+    }
+
+    private String standInHash() {
+        String hash = standInHash;
+        if (hash == null) {
+            hash = passwordEncoder.encode(java.util.UUID.randomUUID().toString());
+            standInHash = hash;
+        }
+        return hash;
     }
 
     /**
@@ -371,20 +446,22 @@ public class AuthService {
 
     private AuthDto.AuthResponse buildAuthResponse(User user, HttpServletRequest req,
                                                    com.cpintel.entity.GroupContest exam) {
-        return buildAuthResponse(user, req, exam, java.util.UUID.randomUUID().toString());
+        return buildAuthResponse(user, req, exam, java.util.UUID.randomUUID().toString(),
+            jwtService.generateRefreshToken());
     }
 
     /**
-     * @param exam     the paper an examination session is for; null for an ordinary session
-     * @param familyId the sign-in this session was renewed from; a fresh one for a new sign-in
+     * Stores a new refresh token and answers with it.
+     *
+     * @param exam         the paper an examination session is for; null for an ordinary session
+     * @param familyId     the sign-in this session was renewed from; a fresh one for a new
+     *                     sign-in
+     * @param refreshToken random for a new sign-in, derived from its predecessor on renewal
      */
     private AuthDto.AuthResponse buildAuthResponse(User user, HttpServletRequest req,
                                                    com.cpintel.entity.GroupContest exam,
-                                                   String familyId) {
+                                                   String familyId, String refreshToken) {
         Long examId = exam == null ? null : exam.getContestId();
-        String accessToken  = jwtService.generateAccessToken(user.getUserId(), user.getEmail(),
-            user.getRole(), examId);
-        String refreshToken = jwtService.generateRefreshToken();
 
         // An examination session lives no longer than its paper.
         Instant expires = Instant.now().plusMillis(7 * 24 * 60 * 60 * 1000L);
@@ -405,6 +482,14 @@ public class AuthService {
             .build();
         refreshTokenRepository.save(rt);
 
+        return respond(user, exam, refreshToken);
+    }
+
+    private AuthDto.AuthResponse respond(User user, com.cpintel.entity.GroupContest exam,
+                                         String refreshToken) {
+        Long examId = exam == null ? null : exam.getContestId();
+        String accessToken  = jwtService.generateAccessToken(user.getUserId(), user.getEmail(),
+            user.getRole(), examId);
         return AuthDto.AuthResponse.builder()
             .accessToken(accessToken)
             .refreshToken(refreshToken)

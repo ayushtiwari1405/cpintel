@@ -35,6 +35,4 @@ export const roadmapApi = {
     apiClient.get<ApiResponse<any[]>>('/roadmaps/current').then(r => r.data),
   regenerate: () =>
     apiClient.post<ApiResponse<any[]>>('/roadmaps/regenerate').then(r => r.data),
-  updateNode: (nodeId: number, status: string) =>
-    apiClient.patch<ApiResponse<any>>(`/roadmaps/nodes/${nodeId}?status=${status}`).then(r => r.data),
 }

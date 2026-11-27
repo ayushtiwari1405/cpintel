@@ -150,7 +150,11 @@ export function installSession(client: AxiosInstance, hooks: SessionHooks) {
 
       // A 401 from signing in is a wrong password, not an expired session; renewing would turn
       // the message into a bounce back to the login page.
-      if (error.response?.status !== 401 || request._retry || SIGNING_IN.test(request.url ?? '')) {
+      // Nor is a refused Codeforces session: it is the other site's, and renewing ours would only
+      // send the same request, a submission included, a second time.
+      const code = (error.response?.data as { code?: string } | undefined)?.code
+      if (error.response?.status !== 401 || request._retry || SIGNING_IN.test(request.url ?? '')
+          || code === 'CF_SESSION_INVALID') {
         return Promise.reject(error)
       }
       request._retry = true

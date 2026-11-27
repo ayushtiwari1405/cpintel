@@ -75,8 +75,9 @@
    Requires `CPINTEL_EXAM_PASSWORD_KEY`. Without it the tab says so, and nobody can sit the
    examination, because examination mode can only be entered with an issued password.
 7. **Publish.** From here the clock owns it: it opens when its window opens and closes when the
-   window closes. "End now" moves the window rather than setting a flag, so the arena and this
-   screen cannot disagree about whether submissions are open.
+   window closes. Until it opens, **Back to draft** withdraws it. While it runs, **End now** moves
+   the window rather than setting a flag, so the arena and this screen cannot disagree about
+   whether submissions are open.
 8. Candidates sign in on the ordinary login page with their username and the examination
    sign-in password from their slip, and land straight on the paper — there is no navigation in
    examination mode. If the paper has a room password they get one more screen asking for it.
@@ -120,6 +121,7 @@
    repeats it after a later re-evaluation; **Reopen** takes the mark back and lets the board
    move again. Anything the judge would not hand over is said on the page and in the workbook.
 14. **Archive** puts a finished event out of everybody's way and **Unarchive** brings it back.
+   Only an ended event can be archived; a draft nobody wants is deleted.
    Its record stays: the session log, the leaderboard and the export all remain downloadable,
    and a done event cannot be deleted.
 

@@ -238,9 +238,9 @@ public class AdminUserService {
         String email = req.email().trim().toLowerCase(Locale.ROOT);
         String username = req.username().trim();
 
-        if (userRepository.existsByEmail(email))
+        if (userRepository.existsByEmailIgnoreCase(email))
             throw ApiException.conflict("Email already registered");
-        if (userRepository.existsByUsername(username))
+        if (userRepository.existsByUsernameIgnoreCase(username))
             throw ApiException.conflict("Username already taken");
 
         User user = userRepository.save(User.builder()
@@ -287,11 +287,12 @@ public class AdminUserService {
         if (StringUtils.hasText(req.email())) {
             String email = req.email().trim().toLowerCase(Locale.ROOT);
             if (!email.equals(user.getEmail())) {
-                if (userRepository.existsByEmail(email)) {
+                if (userRepository.existsByEmailIgnoreCaseAndUserIdNot(email, targetUserId)) {
                     throw ApiException.conflict("Email already registered");
                 }
+                // Only a different address needs verifying again, not a change of capitals.
+                if (!email.equalsIgnoreCase(user.getEmail())) user.setIsVerified(false);
                 user.setEmail(email);
-                user.setIsVerified(false);
             }
         }
         if (req.fullName() != null) {
@@ -582,11 +583,11 @@ public class AdminUserService {
             List<jakarta.persistence.criteria.Predicate> predicates = new ArrayList<>();
 
             if (StringUtils.hasText(query)) {
-                String like = "%" + query.trim().toLowerCase(Locale.ROOT) + "%";
+                String like = "%" + literal(query.trim().toLowerCase(Locale.ROOT)) + "%";
                 predicates.add(cb.or(
-                    cb.like(cb.lower(root.get("username")), like),
-                    cb.like(cb.lower(root.get("email")), like),
-                    cb.like(cb.lower(cb.coalesce(root.get("fullName"), "")), like)));
+                    cb.like(cb.lower(root.get("username")), like, LIKE_ESCAPE),
+                    cb.like(cb.lower(root.get("email")), like, LIKE_ESCAPE),
+                    cb.like(cb.lower(cb.coalesce(root.get("fullName"), "")), like, LIKE_ESCAPE)));
             }
             if (StringUtils.hasText(role))
                 predicates.add(cb.equal(root.get("role"), role.trim().toUpperCase(Locale.ROOT)));
@@ -596,6 +597,13 @@ public class AdminUserService {
             return predicates.isEmpty() ? cb.conjunction()
                 : cb.and(predicates.toArray(jakarta.persistence.criteria.Predicate[]::new));
         };
+    }
+
+    private static final char LIKE_ESCAPE = '\\';
+
+    /** What was typed, to be found as typed: {@code _} is legal in a username. */
+    static String literal(String typed) {
+        return typed.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
     }
 
     /** One query for a whole page of users rather than one per row. */

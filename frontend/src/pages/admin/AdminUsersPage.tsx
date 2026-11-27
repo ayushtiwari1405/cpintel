@@ -17,6 +17,7 @@ import { clsx } from 'clsx'
 import type { AdminUserRow, AssignableRole, Role } from '@/types'
 import { copyText } from '@/utils/clipboard'
 import { PageHeader } from '@/components/common/PageHeader'
+import { ErrorState } from '@/components/common/States'
 
 /**
  * Accounts, and what an admin can do to one.
@@ -56,7 +57,7 @@ export default function AdminUsersPage() {
     return () => clearTimeout(timer)
   }, [search])
 
-  const { data, isLoading, isFetching } = useAdminUsers({
+  const { data, isLoading, isFetching, isError, error, refetch } = useAdminUsers({
     query,
     role: role || undefined,
     active: active === '' ? null : active === 'true',
@@ -137,6 +138,14 @@ export default function AdminUsersPage() {
             <tbody className="divide-y divide-gray-800">
               {isLoading && (
                 <EmptyRow colSpan={7}>Loading accounts…</EmptyRow>
+              )}
+              {isError && !data && (
+                <tr>
+                  <td colSpan={7} className="p-4">
+                    <ErrorState title="Could not load the accounts" error={error}
+                      onRetry={() => refetch()} />
+                  </td>
+                </tr>
               )}
               {!isLoading && data?.users.length === 0 && (
                 <EmptyRow colSpan={7}>

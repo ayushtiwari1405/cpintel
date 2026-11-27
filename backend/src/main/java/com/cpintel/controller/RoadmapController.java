@@ -58,15 +58,6 @@ public class RoadmapController {
         return ResponseEntity.ok(ApiResponse.ok(roadmapService.nodeByKey(userId, nodeKey)));
     }
 
-    @PatchMapping("/nodes/{nodeId}")
-    public ResponseEntity<ApiResponse<RoadmapNodeView>> updateNode(
-        @AuthenticationPrincipal Long userId,
-        @PathVariable Long nodeId,
-        @RequestParam String status) {
-        return ResponseEntity.ok(ApiResponse.ok(
-            roadmapService.markNodeProgress(userId, nodeId, status)));
-    }
-
     // ── placement gauntlet ─────────────────────────────────────────────────
 
     @GetMapping("/gauntlet")

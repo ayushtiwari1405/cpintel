@@ -89,8 +89,8 @@ public class ClassroomTaService {
         String lookupEmail = email;
         String lookupUsername = username;
         Optional<User> existing = Optional.<User>empty()
-            .or(() -> lookupEmail == null ? Optional.empty() : users.findByEmail(lookupEmail))
-            .or(() -> lookupUsername == null ? Optional.empty() : users.findByUsername(lookupUsername));
+            .or(() -> lookupEmail == null ? Optional.empty() : users.findByEmailIgnoreCase(lookupEmail))
+            .or(() -> lookupUsername == null ? Optional.empty() : users.findByUsernameIgnoreCase(lookupUsername));
 
         boolean created = false;
         String password = null;
@@ -117,7 +117,7 @@ public class ClassroomTaService {
                 throw ApiException.badRequest("'" + username + "' can't be a username: use 3 to "
                     + "50 letters, numbers and underscores.");
             }
-            if (users.existsByUsername(username)) {
+            if (users.existsByUsernameIgnoreCase(username)) {
                 throw ApiException.conflict("The username '" + username + "' is taken by an "
                     + "account with a different email. Give another username, or that "
                     + "account's email to link it.");

@@ -3,6 +3,7 @@ import { adminApi } from '@/api/adminApi'
 import { groupsApi } from '@/api/groupsApi'
 import { useToast } from '@/components/common/Toaster'
 import { useIsAdmin } from '@/hooks/useAdmin'
+import { reloadAfterChange } from '@/utils/queries'
 
 // ------------------------------------------------------------- participant
 
@@ -89,7 +90,7 @@ function useGroupMutation<TArgs, TResult>(
   return useMutation({
     mutationFn: fn,
     onSuccess: (result, args) => {
-      queryClient.invalidateQueries({ queryKey: ['admin'] })
+      void reloadAfterChange(queryClient, ['admin'])
       toast.push('success', success(args, result))
     },
     onError: (err: any) => {

@@ -178,29 +178,6 @@ public class RoadmapService {
         return toView(node, masteryByNodeKey(userId), solvedProblemKeys(userId));
     }
 
-    @Transactional
-    public RoadmapNodeView markNodeProgress(Long userId, Long nodeId, String status) {
-        RoadmapNode node = roadmapNodeRepository.findById(nodeId)
-            .orElseThrow(() -> ApiException.notFound("Roadmap node not found"));
-        if (!node.getUser().getUserId().equals(userId)) {
-            throw ApiException.forbidden("Not your roadmap node");
-        }
-        if (!List.of("LOCKED", "UNLOCKED", "IN_PROGRESS", "COMPLETED").contains(status)) {
-            throw ApiException.badRequest("Unknown roadmap status: " + status);
-        }
-
-        node.setStatus(status);
-        if ("COMPLETED".equals(status) && node.getCompletedAt() == null) {
-            node.setCompletedAt(Instant.now());
-        }
-        if (!"LOCKED".equals(status) && node.getUnlockedAt() == null) {
-            node.setUnlockedAt(Instant.now());
-        }
-        roadmapNodeRepository.save(node);
-
-        return toView(node, masteryByNodeKey(userId), solvedProblemKeys(userId));
-    }
-
     /**
      * Create any node rows the user is missing, and retire ones the taxonomy no longer has.
      *
@@ -272,7 +249,7 @@ public class RoadmapService {
 
     private String statusFor(RoadmapTaxonomy.NodeDef def, RoadmapNode node,
                              Map<String, RoadmapNode> byKey, Map<String, TopicMastery> mastery) {
-        // A status the user set by hand is theirs to keep; nothing here overrides it downwards.
+        // Nothing here moves a status downwards.
         TopicMastery own = mastery.get(def.id());
 
         boolean prereqsMet = def.prereqIds().stream().allMatch(pid -> {
@@ -283,9 +260,9 @@ public class RoadmapService {
         });
 
         if (done(def, own)) return "COMPLETED";
-        // Done stays done, however it got there — by rating, by hand, or by the placement
-        // gauntlet. This used to return UNLOCKED for a completed node whose own mastery was
-        // low, which undid every hand-marked and placed completion on the next regenerate.
+        // Done stays done, however it got there — by rating or by the placement gauntlet. This
+        // used to return UNLOCKED for a completed node whose own mastery was low, which undid
+        // every placed completion on the next regenerate.
         if ("COMPLETED".equals(node.getStatus())) return "COMPLETED";
         if (!prereqsMet) {
             // Never re-lock something already opened; that reads as lost progress.

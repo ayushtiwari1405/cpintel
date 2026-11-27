@@ -84,6 +84,46 @@ class ClassroomServiceTest {
     }
 
     @Nested
+    @DisplayName("removing a student")
+    class RemovingAStudent {
+
+        private static final long STUDENT = 7L, EXAM = 50L;
+
+        private void running(long classroomId, boolean candidate) {
+            com.cpintel.entity.GroupContest exam = new com.cpintel.entity.GroupContest();
+            exam.setContestId(EXAM);
+            exam.setClassroomId(classroomId);
+            exam.setName("Paper");
+            when(events.findExamsOverlapping(any(), any())).thenReturn(List.of(exam));
+            when(events.isAssignedTo(EXAM, STUDENT)).thenReturn(candidate);
+        }
+
+        @Test
+        @DisplayName("is refused while they are sitting one of its examinations")
+        void refusedMidPaper() {
+            running(ROOM, true);
+
+            ApiException e = assertThrows(ApiException.class,
+                () -> service.removeMember(OWNER, ROOM, STUDENT, null));
+
+            assertEquals(409, e.getStatus().value());
+            verify(members, never()).deleteByClassroomIdAndUserUserId(anyLong(), anyLong());
+        }
+
+        @Test
+        @DisplayName("is allowed when the running paper is not theirs, or is another classroom's")
+        void allowedOtherwise() {
+            running(ROOM, false);
+            service.removeMember(OWNER, ROOM, STUDENT, null);
+
+            running(ROOM + 1, true);
+            service.removeMember(OWNER, ROOM, STUDENT, null);
+
+            verify(members, times(2)).deleteByClassroomIdAndUserUserId(ROOM, STUDENT);
+        }
+    }
+
+    @Nested
     @DisplayName("the Codeforces API key")
     class CodeforcesKey {
 

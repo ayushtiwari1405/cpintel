@@ -1,6 +1,8 @@
 package com.cpintel.exception;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
@@ -20,6 +22,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
+import java.sql.SQLException;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
@@ -67,6 +70,42 @@ public class GlobalExceptionHandler {
         });
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
             .body(new ErrorResponse("VALIDATION_ERROR", "Validation failed", Instant.now(), errors));
+    }
+
+    /**
+     * What the database refused. Only two refusals are the caller's to hear about.
+     *
+     * <p>A unique violation is what the losers of a race get: every request checked, found the
+     * name free, and one of them stored it first. Answering 409 gives them what the check would
+     * have said a moment later. A text value the database cannot hold is a bad request. Anything
+     * else — a missing value, a broken reference — is a fault here, and stays a 500 in the log.
+     */
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ErrorResponse> handleDataIntegrity(DataIntegrityViolationException ex) {
+        String state = sqlState(ex);
+        if (ex instanceof DuplicateKeyException || UNIQUE_VIOLATION.equals(state)) {
+            // The cause names tables and values, so it is not repeated to the caller.
+            log.warn("Refused a duplicate: {}", ex.getClass().getSimpleName());
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new ErrorResponse("CONFLICT",
+                    "That already exists. Reload to see it before trying again."));
+        }
+        if (UNSTORABLE_TEXT.equals(state)) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ErrorResponse("BAD_REQUEST",
+                    "The request contains a character that cannot be stored."));
+        }
+        return handleGeneral(ex);
+    }
+
+    private static final String UNIQUE_VIOLATION = "23505";
+    private static final String UNSTORABLE_TEXT = "22021";
+
+    private static String sqlState(Throwable error) {
+        for (Throwable cause = error; cause != null; cause = cause.getCause()) {
+            if (cause instanceof SQLException sql) return sql.getSQLState();
+        }
+        return null;
     }
 
     @ExceptionHandler(BadCredentialsException.class)

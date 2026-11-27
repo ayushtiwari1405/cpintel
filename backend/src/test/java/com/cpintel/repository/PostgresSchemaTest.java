@@ -133,6 +133,39 @@ class PostgresSchemaTest {
         assertThat(count("SELECT count(*) FROM flyway_schema_history WHERE NOT success")).isZero();
     }
 
+    // ------------------------------------------------------------------- uniqueness
+
+    @Autowired private com.cpintel.repository.jpa.UserRepository users;
+
+    @Test
+    @DisplayName("two accounts cannot differ only in capitals, and lookups fold case")
+    void accountsAreUniqueIgnoringCase() {
+        long id = user("stu_ab");
+
+        assertThat(users.findByUsernameIgnoreCase("STU_AB")).get()
+            .extracting(u -> u.getUserId()).isEqualTo(id);
+        assertThat(users.existsByEmailIgnoreCase("STU_AB@EXAMPLE.TEST")).isTrue();
+        assertThat(users.existsByUsernameIgnoreCase("stu_ac")).isFalse();
+        assertThat(users.existsByEmailIgnoreCaseAndUserIdNot("Stu_ab@example.test", id)).isFalse();
+        assertThat(users.existsByEmailIgnoreCaseAndUserIdNot("Stu_ab@example.test", id + 1)).isTrue();
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> jdbc.update(
+                "INSERT INTO users (username, email, password_hash) VALUES ('STU_AB', 'other@example.test', 'x')"))
+            .isInstanceOf(org.springframework.dao.DuplicateKeyException.class);
+    }
+
+    @Test
+    @DisplayName("two teams in one classroom cannot share a name")
+    void teamNamesAreUniqueInAClassroom() {
+        long owner = user("team_owner");
+        long room = classroom("Teams", owner);
+        String insert = "INSERT INTO contest_groups (classroom_id, name, owner_id) VALUES (?, ?, ?)";
+        jdbc.update(insert, room, "Alpha", owner);
+        jdbc.update(insert, classroom("Other teams", owner), "Alpha", owner);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> jdbc.update(insert, room, "ALPHA", owner))
+            .isInstanceOf(org.springframework.dao.DuplicateKeyException.class);
+    }
+
     // ------------------------------------------------------------------- classrooms
 
     @Test

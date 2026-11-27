@@ -353,16 +353,36 @@ public class ClassroomService {
      *
      * <p>Their past sessions and submissions stay — those are the classroom's record of what
      * happened, not the student's membership.
+     *
+     * <p>Refused while they are sitting one of its examinations, however they were given it:
+     * leaving the teams drops them from a paper assigned to one, and the judge login that goes
+     * with the enrolment is what their submissions are sent with.
      */
     @Transactional
     public void removeMember(Long adminId, Long classroomId, Long userId,
                              HttpServletRequest httpReq) {
         requireManaged(adminId, classroomId);
+        refuseWhileSitting(classroomId, userId);
         groupMembers.deleteFromClassroom(classroomId, userId);
         members.deleteByClassroomIdAndUserUserId(classroomId, userId);
         credentials.delete(classroomId, userId);
         auditService.recordIn(classroomId, adminId, AuditService.CLASSROOM_MEMBER_REMOVED, "CLASSROOM",
             classroomId + ":" + userId, httpReq);
+    }
+
+    private void refuseWhileSitting(Long classroomId, Long userId) {
+        java.time.Instant now = java.time.Instant.now();
+        // The overlap query takes a half-open span; this one holds only the present instant.
+        events.findExamsOverlapping(now, now.plusMillis(1)).stream()
+            .filter(exam -> classroomId.equals(exam.getClassroomId()))
+            .filter(exam -> events.isAssignedTo(exam.getContestId(), userId))
+            .findFirst()
+            .ifPresent(exam -> {
+                throw ApiException.conflict("They are sitting \"" + exam.getName() + "\", and it "
+                    + "is running. Removing them from the classroom now would lock them out of "
+                    + "the paper. Wait until it ends, or revoke their access on the examination "
+                    + "if the aim is to stop them sitting it.");
+            });
     }
 
     @Transactional

@@ -11,6 +11,8 @@ export default function LoginPage() {
   const [password, setPassword]     = useState('')
   const [showPass, setShowPass]     = useState(false)
   const login = useLogin()
+  // The browser's own "required" accepts a field of spaces, which the server refuses.
+  const [blank, setBlank] = useState<'identifier' | 'password' | null>(null)
   const identifierId = useId()
   const passwordId = useId()
   // Set when an examination session was closed because its paper ended.
@@ -25,6 +27,9 @@ export default function LoginPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+    const missing = !identifier.trim() ? 'identifier' : !password.trim() ? 'password' : null
+    setBlank(missing)
+    if (missing) return
     login.mutate({ identifier, password })
   }
 
@@ -123,6 +128,12 @@ export default function LoginPage() {
                 </Link>
               </div>
             </div>
+
+            {blank && (
+              <p role="alert" className="text-xs text-amber-400">
+                {blank === 'identifier' ? 'Enter your email or username.' : 'Enter your password.'}
+              </p>
+            )}
 
             <button
               type="submit"

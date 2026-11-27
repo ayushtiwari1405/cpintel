@@ -11,7 +11,8 @@ docker CLI is there, `docker compose config` (which reads files only and talks t
 
 What it never does: connect to a database or to Docker's daemon, start or stop anything, pull or
 push an image, back up, restore, migrate or deploy. It cannot see a server's data, so it cannot
-tell whether MongoDB needs the index upgrade, and it does not check DNS, certificates on the
+tell whether MongoDB needs the index upgrade or PostgreSQL holds rows a migration would stop on
+(scripts/postgres-upgrade-check.sh says), and it does not check DNS, certificates on the
 wire, ports or reachability: those are for the server itself (docs/deployment.md).
 Passing it means the settings look complete, not that a deployment will work.
 
@@ -263,6 +264,8 @@ def main(argv=None):
     print("Not checked here")
     print("  INFO  MongoDB's indexes and duplicates: on a server with an existing database, run")
     print("        scripts/mongo-index-upgrade.sh --container cpintel-mongo --check first (docs/operations.md)")
+    print("  INFO  PostgreSQL's rows: on a server with an existing database, run")
+    print("        scripts/postgres-upgrade-check.sh --container cpintel-postgres first (docs/operations.md)")
     print("  INFO  DNS, certificates on the wire, ports and reachability: only the server can tell")
 
     print(f"=== {report.failed} failed, {report.warned} warning(s)")

@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { groupsApi } from '@/api/groupsApi'
 import { isDesktop, type LockdownState } from '@/utils/desktopBridge'
+import { fitEvent, rejectedEvents, withoutRejected } from '@/utils/reportQueue'
 import type { ViolationEvent } from '@/types'
 
 /** How often the queue is flushed to the server. */
@@ -58,7 +59,7 @@ export function useViolationReporter({ contestId, active, lockdown }: Options): 
   const reported = useRef({ unavailable: false, released: false })
   const wasEngaged = useRef(false)
 
-  const enqueue = (event: ViolationEvent) => { queue.current.push(event) }
+  const enqueue = (event: ViolationEvent) => { queue.current.push(fitEvent(event)) }
 
   // The desktop app may not be in use at all, which is itself worth recording once.
   useEffect(() => {
@@ -151,8 +152,10 @@ export function useViolationReporter({ contestId, active, lockdown }: Options): 
         // Only now: a failed send must leave the queue intact, or a contestant with a flaky
         // connection ends up with the cleanest record in the group.
         queue.current = queue.current.slice(batch.length)
-      } catch {
-        /* keep the queue and try again on the next tick */
+      } catch (error) {
+        // Keep the queue and try again on the next tick, less anything refused as invalid:
+        // that would be refused again, and hold back everything behind it.
+        queue.current = withoutRejected(queue.current, batch.length, rejectedEvents(error))
       } finally {
         sending.current = false
       }

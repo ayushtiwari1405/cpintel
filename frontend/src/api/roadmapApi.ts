@@ -125,11 +125,6 @@ export const roadmapApi = {
   regenerate: () =>
     apiClient.post<ApiResponse<RoadmapNodeData[]>>('/roadmaps/regenerate').then(r => r.data),
 
-  updateNode: (nodeId: number, status: string) =>
-    apiClient.patch<ApiResponse<RoadmapNodeData>>(
-      `/roadmaps/nodes/${nodeId}?status=${status}`
-    ).then(r => r.data),
-
   gauntlet: () =>
     apiClient.get<ApiResponse<GauntletPaper>>('/roadmaps/gauntlet').then(r => r.data),
 

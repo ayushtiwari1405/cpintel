@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { examsApi } from '@/api/examsApi'
 import { isDesktop, type LockdownState } from '@/utils/desktopBridge'
+import { fitEvent, rejectedEvents, withoutRejected } from '@/utils/reportQueue'
 import type { ExamClientEvent, ExamEventType, MyExam } from '@/types'
 
 /** How often the queue is flushed to the server. */
@@ -113,12 +114,12 @@ export function useExamSession({ exam, lockdown }: Options): ExamSession {
   }, [])
 
   const enqueue = useCallback((type: ExamEventType, extra: Partial<ExamClientEvent> = {}) => {
-    queue.current.push({
+    queue.current.push(fitEvent({
       eventId: extra.eventId ?? `${sessionId.current}-${type}-${queue.current.length}-${Date.now()}`,
       type,
       occurredAt: new Date().toISOString(),
       ...extra,
-    })
+    }))
   }, [])
 
   // ------------------------------------------------------------- reporting
@@ -246,8 +247,10 @@ export function useExamSession({ exam, lockdown }: Options): ExamSession {
         await examsApi.report(examId, batch)
         // Only now: a failed send must leave the queue intact.
         queue.current = queue.current.slice(batch.length)
-      } catch {
-        /* keep the queue and try again on the next tick */
+      } catch (error) {
+        // Keep the queue and try again on the next tick, less anything refused as invalid:
+        // that would be refused again, and hold back everything behind it.
+        queue.current = withoutRejected(queue.current, batch.length, rejectedEvents(error))
       } finally {
         sending.current = false
       }

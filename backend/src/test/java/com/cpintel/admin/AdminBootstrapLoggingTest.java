@@ -87,7 +87,7 @@ class AdminBootstrapLoggingTest {
     @Test
     @DisplayName("creating the super admin logs its user id")
     void created() {
-        when(users.findByEmail(ADDRESS)).thenReturn(Optional.empty());
+        when(users.findByEmailIgnoreCase(ADDRESS)).thenReturn(Optional.empty());
         when(users.save(any(User.class))).thenAnswer(i -> {
             User u = i.getArgument(0);
             u.setUserId(17L);
@@ -107,7 +107,7 @@ class AdminBootstrapLoggingTest {
     void promoted() {
         User verified = user(23L, "USER");
         verified.setIsVerified(true);
-        when(users.findByEmail(ADDRESS)).thenReturn(Optional.of(verified));
+        when(users.findByEmailIgnoreCase(ADDRESS)).thenReturn(Optional.of(verified));
 
         bootstrap.run(null);
 
@@ -123,7 +123,7 @@ class AdminBootstrapLoggingTest {
         User planted = user(31L, "USER");
         planted.setIsVerified(true);
         planted.setManagedBy(2L);
-        when(users.findByEmail(ADDRESS)).thenReturn(Optional.of(planted));
+        when(users.findByEmailIgnoreCase(ADDRESS)).thenReturn(Optional.of(planted));
 
         bootstrap.run(null);
 
@@ -135,7 +135,7 @@ class AdminBootstrapLoggingTest {
     @Test
     @DisplayName("an unverified account on the configured address is not promoted")
     void unverifiedAccountNotPromoted() {
-        when(users.findByEmail(ADDRESS)).thenReturn(Optional.of(user(32L, "USER")));
+        when(users.findByEmailIgnoreCase(ADDRESS)).thenReturn(Optional.of(user(32L, "USER")));
 
         bootstrap.run(null);
 
@@ -145,7 +145,7 @@ class AdminBootstrapLoggingTest {
     @Test
     @DisplayName("an admin-level account is still promoted, so the setting stays a way back in")
     void adminStillPromoted() {
-        when(users.findByEmail(ADDRESS)).thenReturn(Optional.of(user(33L, "ADMIN")));
+        when(users.findByEmailIgnoreCase(ADDRESS)).thenReturn(Optional.of(user(33L, "ADMIN")));
 
         bootstrap.run(null);
 
@@ -155,7 +155,7 @@ class AdminBootstrapLoggingTest {
     @Test
     @DisplayName("an account that is already a super admin is named by user id, at debug")
     void alreadySuperAdmin() {
-        when(users.findByEmail(ADDRESS)).thenReturn(Optional.of(user(5L, "SUPER_ADMIN")));
+        when(users.findByEmailIgnoreCase(ADDRESS)).thenReturn(Optional.of(user(5L, "SUPER_ADMIN")));
 
         bootstrap.run(null);
 
@@ -168,7 +168,7 @@ class AdminBootstrapLoggingTest {
     @DisplayName("with no account and no password, the warning masks the address")
     void noPassword() {
         ReflectionTestUtils.setField(bootstrap, "bootstrapPassword", "");
-        when(users.findByEmail(ADDRESS)).thenReturn(Optional.empty());
+        when(users.findByEmailIgnoreCase(ADDRESS)).thenReturn(Optional.empty());
 
         bootstrap.run(null);
 
@@ -181,12 +181,12 @@ class AdminBootstrapLoggingTest {
     @Test
     @DisplayName("a password too short, and a username taken, are refused with the address masked")
     void refused() {
-        when(users.findByEmail(ADDRESS)).thenReturn(Optional.empty());
+        when(users.findByEmailIgnoreCase(ADDRESS)).thenReturn(Optional.empty());
         ReflectionTestUtils.setField(bootstrap, "bootstrapPassword", "short");
         bootstrap.run(null);
 
         ReflectionTestUtils.setField(bootstrap, "bootstrapPassword", "a-long-enough-password");
-        when(users.existsByUsername("superadmin")).thenReturn(true);
+        when(users.existsByUsernameIgnoreCase("superadmin")).thenReturn(true);
         bootstrap.run(null);
 
         assertNoAddress();

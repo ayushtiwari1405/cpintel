@@ -1,5 +1,6 @@
 package com.cpintel.dto;
 
+import com.cpintel.common.EmailRule;
 import com.cpintel.security.PasswordPolicy;
 import com.fasterxml.jackson.annotation.JsonAlias;
 import jakarta.validation.constraints.*;
@@ -7,6 +8,11 @@ import lombok.*;
 import lombok.extern.jackson.Jacksonized;
 
 public class AuthDto {
+
+    private static final String TOO_SHORT =
+        "A password has to be at least " + PasswordPolicy.MIN_LENGTH + " characters";
+    private static final String TOO_LONG =
+        "A password can be at most " + PasswordPolicy.MAX_LENGTH + " characters";
 
     @Getter @Setter
     public static class RegisterRequest {
@@ -16,12 +22,13 @@ public class AuthDto {
         private String username;
 
         @NotBlank(message = "Email is required")
-        @Email(message = "Invalid email format")
+        @Email(regexp = EmailRule.PATTERN, message = EmailRule.MESSAGE)
+        @Size(max = EmailRule.MAX_LENGTH, message = "An email address can be at most 255 characters")
         private String email;
 
         @NotBlank(message = "Password is required")
-        @Size(min = PasswordPolicy.MIN_LENGTH, max = PasswordPolicy.MAX_LENGTH,
-            message = "A password has to be at least " + PasswordPolicy.MIN_LENGTH + " characters")
+        @Size(min = PasswordPolicy.MIN_LENGTH, message = TOO_SHORT)
+        @Size(max = PasswordPolicy.MAX_LENGTH, message = TOO_LONG)
         private String password;
 
         @Size(max = 100)
@@ -73,7 +80,7 @@ public class AuthDto {
 
     @Getter @Setter
     public static class ForgotPasswordRequest {
-        @NotBlank @Email
+        @NotBlank @Email @Size(max = EmailRule.MAX_LENGTH)
         private String email;
     }
 
@@ -83,8 +90,8 @@ public class AuthDto {
         private String token;
 
         @NotBlank(message = "A new password is required")
-        @Size(min = PasswordPolicy.MIN_LENGTH, max = PasswordPolicy.MAX_LENGTH,
-            message = "A password has to be at least " + PasswordPolicy.MIN_LENGTH + " characters")
+        @Size(min = PasswordPolicy.MIN_LENGTH, message = TOO_SHORT)
+        @Size(max = PasswordPolicy.MAX_LENGTH, message = TOO_LONG)
         private String newPassword;
     }
 
@@ -95,8 +102,8 @@ public class AuthDto {
         private String currentPassword;
 
         @NotBlank(message = "A new password is required")
-        @Size(min = PasswordPolicy.MIN_LENGTH, max = PasswordPolicy.MAX_LENGTH,
-            message = "A password has to be at least " + PasswordPolicy.MIN_LENGTH + " characters")
+        @Size(min = PasswordPolicy.MIN_LENGTH, message = TOO_SHORT)
+        @Size(max = PasswordPolicy.MAX_LENGTH, message = TOO_LONG)
         private String newPassword;
     }
 }

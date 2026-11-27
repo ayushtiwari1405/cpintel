@@ -1,5 +1,8 @@
 package com.cpintel.events;
 
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.PositiveOrZero;
+import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -180,10 +183,13 @@ public class EventsDto {
         @Size(max = 200) String title,
         @Size(max = 100) String externalId,
         Integer ordering,
+        /** Null for unmarked. The same ceiling as a mark set by hand. */
+        @PositiveOrZero(message = "Marks cannot be negative")
+        @DecimalMax(value = "100000", message = "Marks can be at most 100000")
         Double points
     ) {}
 
-    public record ProblemsRequest(@NotNull List<ProblemRequest> problems) {}
+    public record ProblemsRequest(@NotNull List<@NotNull @Valid ProblemRequest> problems) {}
 
     /**
      * Whether a Codeforces event's candidates can sit it. {@code contestProblem} and
@@ -251,7 +257,7 @@ public class EventsDto {
         List<Long> teamIds,
         /** People who may enter by name, whatever team they are in. */
         List<Long> userIds,
-        List<ProblemRequest> problems,
+        List<@NotNull @Valid ProblemRequest> problems,
         /**
          * Whether contestants may open their personal files during it. Decided here, with the
          * rest of the event, and fixed with it once it starts. Null leaves the contest's rule
@@ -419,7 +425,7 @@ public class EventsDto {
         Instant occurredAt
     ) {}
 
-    public record EventReport(@NotNull List<ClientEvent> events) {}
+    public record EventReport(@NotNull List<@NotNull @Valid ClientEvent> events) {}
 
     public record LogEntry(
         Long id,
