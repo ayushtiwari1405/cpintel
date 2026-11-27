@@ -34,11 +34,27 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WebMvcTest(controllers = com.cpintel.controller.AdminUserController.class)
 class AdminUserAuthorizationTest extends AuthorizationTestBase {
 
+    @org.junit.jupiter.api.Test
+    @org.junit.jupiter.api.DisplayName("an ordinary user cannot mail anybody a password")
+    void userCannotMailPasswords() throws Exception {
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                .post("/api/v1/admin/users/password-mail").with(asUser())
+                .with(org.springframework.security.test.web.servlet.request
+                    .SecurityMockMvcRequestPostProcessors.csrf())
+                .contentType("application/json").content("{\"messages\":[]}"))
+            .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                .status().isForbidden());
+        org.mockito.Mockito.verifyNoInteractions(passwordMail);
+    }
+
     @MockBean
     private AdminUserService users;
 
     @MockBean
     private com.cpintel.events.EventAnalyticsService analytics;
+
+    @MockBean
+    private com.cpintel.mail.PasswordMailService passwordMail;
 
     private static final String ROLE_BODY   = "{\"role\":\"ADMIN\"}";
     private static final String CREATE_BODY = """

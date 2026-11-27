@@ -1,3 +1,4 @@
+import type { MailLine } from '@/utils/passwordSheet'
 import { apiClient } from './client'
 import type {
   AdminOverview, AdminUserDetail, AdminUserPage, ApiResponse, AuditPage, ParticipationRow,
@@ -112,7 +113,33 @@ export interface DomjudgePasswordResult {
   failed: number
 }
 
+/** One drafted message. It goes to the address on the account, never to one named here. */
+export interface PasswordMail {
+  userId: number
+  password: string
+  subject: string
+  lines: MailLine[]
+}
+
+export interface PasswordMailResult {
+  userId: number
+  /** The mail server accepted it, which is as far as CPIntel can see. */
+  sent: boolean
+  error: string | null
+}
+
+/** Longer than most requests: each message waits on the mail server in turn. */
+export const PASSWORD_MAIL_TIMEOUT = 90_000
+
 export const adminApi = {
+  passwordMailStatus: () =>
+    apiClient.get<ApiResponse<{ configured: boolean; from: string | null }>>(
+      '/admin/users/password-mail').then(r => r.data),
+
+  mailPasswords: (messages: PasswordMail[]) =>
+    apiClient.post<ApiResponse<PasswordMailResult[]>>('/admin/users/password-mail',
+      { messages }, { timeout: PASSWORD_MAIL_TIMEOUT }).then(r => r.data),
+
   /** Moves a member to another team in one action, keeping their judge handle. */
   moveMember: (groupId: number, userId: number, targetGroupId: number) =>
     apiClient.post<ApiResponse<GroupMember>>(
@@ -171,8 +198,7 @@ export const adminApi = {
    * out to have one generated.
    *
    * The password comes back in the response and that is the only copy — it is stored hashed
-   * and is never emailed, because a live credential in a mailbox is what the reset-link flow
-   * exists to avoid.
+   * and this emails nothing carrying it; the admin may send it with {@code mailPasswords}.
    */
   setPassword: (userId: number, password?: string, reason?: string) =>
     apiClient.post<ApiResponse<GeneratedPassword>>(

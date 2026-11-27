@@ -1,8 +1,9 @@
 import { useMemo, useRef, useState } from 'react'
 import {
-  AlertTriangle, Check, Download, Eye, Loader2, ShieldAlert, Upload, UserPlus, X,
+  AlertTriangle, Check, Download, Eye, FileText, Loader2, ShieldAlert, Upload, UserPlus, X,
 } from 'lucide-react'
 import { downloadSpreadsheet } from '@/utils/spreadsheet'
+import { PasswordSheetDialog } from '@/components/admin/PasswordSheetDialog'
 import { clsx } from 'clsx'
 import { useImportRoster } from '@/hooks/useGroups'
 import type { RosterImportResult, RosterRowOutcome, RosterRowStatus } from '@/api/adminApi'
@@ -34,9 +35,12 @@ ben@uni.edu,Ben Tan,,Team 02,team02,pw2`
 
 interface Props {
   groupId: number
+  /** Named on a password sheet where a row has no team of its own. */
+  groupName: string
 }
 
-export function RosterImportPanel({ groupId }: Props) {
+export function RosterImportPanel({ groupId, groupName }: Props) {
+  const [sheets, setSheets] = useState(false)
   const [text, setText] = useState('')
   const [teamName, setTeamName] = useState('')
   const [preview, setPreview] = useState<RosterImportResult | null>(null)
@@ -206,14 +210,38 @@ export function RosterImportPanel({ groupId }: Props) {
                   They are stored hashed and cannot be shown again. If you leave this page
                   without saving them, each person will need a password reset.
                 </p>
-                <button
-                  onClick={downloadCredentials}
-                  className="mt-2 flex items-center gap-1.5 rounded-lg bg-green-700 px-3 py-1.5
-                             text-xs font-medium text-white transition-colors
-                             hover:bg-green-600"
-                >
-                  <Download size={13} /> Download credentials spreadsheet
-                </button>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button
+                    onClick={downloadCredentials}
+                    className="flex items-center gap-1.5 rounded-lg bg-green-700 px-3 py-1.5
+                               text-xs font-medium text-white transition-colors
+                               hover:bg-green-600"
+                  >
+                    <Download size={13} /> Download credentials spreadsheet
+                  </button>
+                  <button
+                    onClick={() => setSheets(true)}
+                    className="flex items-center gap-1.5 rounded-lg border border-green-800
+                               px-3 py-1.5 text-xs font-medium text-green-300 transition-colors
+                               hover:bg-green-950/60"
+                  >
+                    <FileText size={13} /> Create password sheets
+                  </button>
+                </div>
+                <PasswordSheetDialog
+                  open={sheets}
+                  onClose={() => setSheets(false)}
+                  kind="roster"
+                  fileName={`cpintel-group-${groupId}-password-sheets.pdf`}
+                  people={credentials.map(r => ({
+                    userId: r.userId ?? undefined,
+                    username: r.username ?? '',
+                    password: r.generatedPassword ?? '',
+                    email: r.email,
+                    fullName: r.fullName,
+                    team: r.teamName || groupName,
+                  }))}
+                />
               </div>
             </div>
           </div>

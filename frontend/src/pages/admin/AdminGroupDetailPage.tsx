@@ -280,7 +280,7 @@ export default function AdminGroupDetailPage() {
         </div>
       </Panel>
 
-      <RosterImportPanel groupId={id} />
+      <RosterImportPanel groupId={id} groupName={data.group.name} />
 
       <DomjudgePasswordPanel groupId={id} />
 

@@ -51,6 +51,7 @@ public class AdminEventController {
     private final ExamFlagService flags;
     private final ExamLeaderboardService leaderboard;
     private final ExamPasswordService passwords;
+    private final com.cpintel.mail.PasswordMailService passwordMail;
     private final JudgeProblemService judgeProblems;
     private final com.cpintel.events.CodeforcesReadinessService readiness;
     private final com.cpintel.events.EventCompletionService completion;
@@ -387,9 +388,9 @@ public class AdminEventController {
 
     // -------------------------------------------------- examination passwords
     //
-    // The passwords that open a paper. Generated here, printed here, and never emailed
-    // anywhere — see ExamPasswordService for why an examination password that arrives in a
-    // mailbox defeats the arrangement it belongs to.
+    // The passwords that open a paper. Generated here and meant to be printed; a candidate's
+    // own is mailed only when an admin asks for it — see ExamPasswordService for what an
+    // examination password that arrives in a mailbox gives up.
     //
     // Reading them is split from the rest of the detail screen deliberately: the status route
     // says whether passwords exist and is safe to load with the page, and the two reveal
@@ -460,6 +461,17 @@ public class AdminEventController {
         HttpServletRequest httpReq) {
         return ResponseEntity.ok(ApiResponse.ok(
             events.revealPasscodes(adminId, eventId, httpReq)));
+    }
+
+    @PostMapping("/{eventId}/passwords/mail")
+    @Operation(summary = "Email candidates their own sign-in passwords")
+    public ResponseEntity<ApiResponse<List<com.cpintel.mail.PasswordMailDto.Result>>> mailPasscodes(
+        @AuthenticationPrincipal Long adminId,
+        @PathVariable Long eventId,
+        @jakarta.validation.Valid @RequestBody com.cpintel.mail.PasswordMailDto.Request req,
+        HttpServletRequest httpReq) {
+        return ResponseEntity.ok(ApiResponse.ok(
+            passwordMail.toCandidates(adminId, eventId, req, httpReq)));
     }
 
     /** One candidate's code again, for the slip that went under a radiator at eleven. */

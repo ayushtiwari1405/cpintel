@@ -379,10 +379,10 @@ public class AdminUserService {
      * and is what {@code /auth/forgot-password} is for; this exists because it does not always
      * work, and "ask an administrator" has to lead somewhere.
      *
-     * <p><b>The password is returned once and never emailed.</b> It is handed over the same way
-     * the first one was. Mailing it would put a live credential in a mailbox, which is the
-     * thing the reset-link flow exists to avoid, and a deployment with no SMTP would have no
-     * path at all.
+     * <p><b>The password is returned once, and this mails nothing carrying it.</b> The admin
+     * hands it over the same way as the first one, or chooses to send it from the password sheet
+     * editor ({@link com.cpintel.mail.PasswordMailService}). The reset link remains the better
+     * route, since it puts no live password in a mailbox.
      *
      * <p>Everything the owner had open is closed, and they are told it happened — by mail if
      * there is any, with no password and no link in it. An administrator quietly taking over
@@ -515,6 +515,13 @@ public class AdminUserService {
             throw ApiException.forbidden("This account was not made by you or a fellow admin of "
                 + "your classrooms. Only a super admin may " + verb + " it.");
         }
+    }
+
+    /** The account an admin may mail an issued password to: one whose password they may set. */
+    public User requireMayEmail(Long adminId, Long targetUserId, boolean callerIsSuperAdmin) {
+        User user = require(targetUserId);
+        requireMayTouch(adminId, user, callerIsSuperAdmin, "email the password of");
+        return user;
     }
 
     /**

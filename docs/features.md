@@ -146,7 +146,7 @@ ordinary contest in four ways, and nothing else:
   per candidate for one paper and printed on the slip on their desk, opens **examination
   mode**: a session that can reach that one paper and nothing else — no practice, no profile,
   no files, no other contest — and that expires fifteen minutes after the paper closes. New
-  passwords are issued for every examination, and none is ever emailed. It works from an hour
+  passwords are issued for every examination, and none is emailed unless an admin sends it. It works from an hour
   before the start until the end. The two modes cannot reach into each other: a normal session
   cannot open, unlock or submit to a scheduled or running examination, and an examination
   session cannot touch anything outside it. Optionally the paper also has a **room password**.
@@ -217,7 +217,9 @@ the product.
   default; see [Roles and accounts](accounts.md#roles-and-accounts)
 - Sign in with a username or an email address; set your own password from your profile, or
   reset it through a one-use emailed link. The first password is handed over with the username
-  and never mailed — see [Passwords](accounts.md#passwords)
+  and not mailed automatically — see [Passwords](accounts.md#passwords)
+- [Password sheets](accounts.md#password-sheets): draft a message once, then download it filled in
+  for each person as one PDF or email each their own, wherever passwords are handed out
 - Admin console at `/admin`: deployment overview, account administration (roles, profile
   corrections, deactivation, password resets, signing an account out everywhere, participation
   history), an append-only audit trail of every sign-in and administrative change, team

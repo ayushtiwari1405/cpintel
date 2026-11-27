@@ -10,12 +10,13 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 
 /**
  * The one place an email leaves this system.
  *
- * <p><b>It never throws at a caller.</b> Every send here is a notification about something that
+ * <p><b>{@link #send} never throws at a caller.</b> Every send through it is a notification about something that
  * has already happened — a password was reset, an account was created — and none of them is the
  * thing the user asked for. A mail server that is down, misconfigured or slow must not turn a
  * successful password change into a 500 that makes somebody believe it failed and try again.
@@ -32,8 +33,9 @@ import jakarta.mail.internet.MimeMessage;
  * rather than safer. {@link com.cpintel.config.SecretsCheck} warns at startup either way, so it
  * is a visible choice rather than a silent one.
  *
- * <p><b>Nothing here sends an examination password.</b> Those are carried into the room on
- * paper; see {@link com.cpintel.events.ExamPasswordService} for why.
+ * <p><b>No notification carries a password.</b> The one message that does is the one an admin
+ * drafts and sends from the password sheets; it goes through {@link #deliver}, which reports
+ * failure to its caller and never writes the message to a log. See {@link PasswordMailService}.
  */
 @Service
 @Slf4j
@@ -71,6 +73,33 @@ public class MailService {
     /** True when an operator has pointed this deployment at an SMTP server. */
     public boolean isConfigured() {
         return StringUtils.hasText(host) && senders.getIfAvailable() != null;
+    }
+
+    /** The address mail is sent from, as configured. */
+    public String from() {
+        return from;
+    }
+
+    /**
+     * Sends one message now, and says if it could not.
+     *
+     * <p>For mail somebody is waiting to hear about. Unlike {@link #send} it logs nothing at all
+     * of the message, whatever {@code log-undelivered} says: these carry passwords.
+     */
+    public void deliver(String to, String subject, String plainText, String html)
+        throws MessagingException {
+        JavaMailSender sender = senders.getIfAvailable();
+        if (sender == null || !StringUtils.hasText(host)) {
+            throw new IllegalStateException("No SMTP server is configured");
+        }
+        MimeMessage message = sender.createMimeMessage();
+        // Multipart: a text and an HTML body cannot go in a single-part message.
+        MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+        helper.setFrom(from);
+        helper.setTo(to);
+        helper.setSubject(subject);
+        helper.setText(plainText, html);
+        sender.send(message);
     }
 
     public String baseUrl() {

@@ -863,7 +863,7 @@ public class EventService {
 
     private static EventsDto.IssuedPasscode toIssuedDto(ExamPasswordService.Issued issued) {
         return new EventsDto.IssuedPasscode(issued.userId(), issued.username(),
-            issued.fullName(), issued.code(), issued.issuedAt(), issued.firstUsedAt(),
+            issued.fullName(), issued.email(), issued.code(), issued.issuedAt(), issued.firstUsedAt(),
             issued.useCount());
     }
 

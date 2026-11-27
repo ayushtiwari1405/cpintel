@@ -45,11 +45,11 @@ what "remove this person" almost always means.
 
 ## Passwords
 
-**The first password is handed over, not emailed.** An account is created with a username and a
-password, and both are given to the person directly — on a deployment sheet, in a room, however
-that particular arrangement works. Nothing is mailed to bootstrap an account, because the mail
-would be a live credential sitting in a mailbox and because the networks this runs on cannot
-always reach a mail server at the moment the accounts are made.
+**The first password is handed over, and nothing mails it by itself.** An account is created with
+a username and a password, and both are given to the person directly — on a deployment sheet, in
+a room, or, if an admin chooses, by [email from the password sheets](#password-sheets). It is not
+automatic because the mail is a live credential sitting in a mailbox and because the networks this
+runs on cannot always reach a mail server at the moment the accounts are made.
 
 **After that the password is the owner's.** They can change it from `/profile`, which asks for
 the current one — a session can be an unlocked laptop, and that field is what makes the person
@@ -95,7 +95,43 @@ recipient and link included, is written to the backend log at INFO, so a deploym
 network can complete a reset by hand; anyone who can read that log can then use those links.
 The backend warns at startup either way rather than refusing, because an exam lab with no mail
 server is a real arrangement rather than a mistake. An administrator can also set a password
-directly from `/admin/users`, which shows it once and never emails it.
+directly from `/admin/users`, which shows it once and emails it only if the admin then sends it.
+
+A username is fixed when the account is created. Neither its owner nor an admin can change it.
+
+### Password sheets
+
+Wherever a password has just been generated, set or read back — a new account, a new password,
+a roster import, a new teaching assistant, an examination's sign-in passwords — **Create
+password sheet** turns it into something to hand over: write the message once, then download one
+PDF with a page for each person, or email each person their own.
+
+- `{{name}}`, `{{username}}`, `{{password}}`, `{{email}}`, `{{site}}` and `{{date}}` are filled
+  in per page; a roster adds `{{team}}`, a teaching assistant `{{classroom}}`, an examination
+  `{{exam}}`, `{{start}}` and `{{end}}`. The buttons under the message insert them.
+- A line starting `# ` is a heading, `**words**` are bold, and passwords print in a fixed-width
+  face. The preview shows each page before downloading.
+- The PDF is built in the browser. The wording and subject are remembered in that browser, per
+  kind of sheet; no names or passwords are kept.
+- The PDF can only print English and western European characters. Anything else is named and the
+  download refused until the message no longer uses it (for a name in another script, use
+  `{{username}}`).
+- The file holds every password in plain text. Delete it once the pages are handed out.
+
+**Emailing them** needs `SMTP_HOST`; without it the editor offers only the download.
+
+- Nothing is sent until you confirm how many people, and from which address. Each message goes to
+  the address on that person's account; no other address can be given.
+- Only an issued password can be sent: an account's while its owner has not set their own, or a
+  candidate's present code for an examination they are assigned to. An admin can send only for
+  accounts and examinations they could set or issue the password for.
+- Messages go a few at a time, with progress, a stop button and the reason for each one that
+  failed. "Handed to the mail server" means accepted, not delivered: check bounces at the
+  sending address, and your provider's daily limit before mailing a large class.
+- Passwords are not stored or logged on the way, and each send is in the audit trail.
+- **A mailed examination password lets whoever reads that mail sign in as the candidate, from
+  anywhere.** A sheet handed out in the room cannot be used that way. The room password is never
+  mailed.
 
 ### The first super admin
 

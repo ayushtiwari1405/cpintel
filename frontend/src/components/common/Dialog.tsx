@@ -12,7 +12,7 @@ interface Props {
   footer?: ReactNode
   /** 'side' slides in from the right edge and takes the full height, for record details. */
   variant?: 'center' | 'side'
-  size?: 'sm' | 'md' | 'lg'
+  size?: 'sm' | 'md' | 'lg' | 'xl'
   /** False while a save is in flight, so Escape or a stray click cannot abandon it. */
   dismissible?: boolean
 }
@@ -51,7 +51,7 @@ export function Dialog({ open, onClose, title, description, children, footer,
         variant === 'side'
           ? 'ml-auto h-full w-full border-l sm:w-120'
           : clsx('mx-auto my-[8vh] max-h-[84vh] w-[calc(100%-2rem)] rounded-xl border',
-              size === 'sm' ? 'sm:max-w-sm' : size === 'lg' ? 'sm:max-w-2xl' : 'sm:max-w-lg'),
+              { sm: 'sm:max-w-sm', md: 'sm:max-w-lg', lg: 'sm:max-w-2xl', xl: 'sm:max-w-5xl' }[size]),
       )}
     >
       {open && (

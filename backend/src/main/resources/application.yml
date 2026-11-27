@@ -63,10 +63,10 @@ spring:
           max-active: 10
           min-idle: 2
 
-  # Mail. Only password resets and account notices use it, and a deployment that sets no host
-  # still works — with cpintel.mail.log-undelivered on, MailService logs what it would have
-  # sent, which on a closed exam-lab network is how an operator finishes what the user started.
-  # Examination passwords are never sent here; see ExamPasswordService.
+  # Mail. Password resets, account notices and the password sheets an admin chooses to send use
+  # it. A deployment that sets no host still works - with cpintel.mail.log-undelivered on,
+  # MailService logs the notices it would have sent, which on a closed exam-lab network is how an
+  # operator finishes what the user started. Password sheets are never written to that log.
   mail:
     host: ${SMTP_HOST:}
     port: ${SMTP_PORT:587}

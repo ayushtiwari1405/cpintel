@@ -40,11 +40,13 @@ import java.util.Set;
  *       in the room has it.</li>
  * </ul>
  *
- * <p>Neither is ever emailed, and there is deliberately no route that would. They are printed
- * and carried into the room, and that is the whole arrangement: the credential in somebody's
- * mailbox gets them into CPIntel, and getting into the paper additionally needs something only
- * the invigilator can hand them. An emailed examination password would collapse the two into
- * one, and a candidate at home with a phone would have everything they needed.
+ * <p>Neither is mailed by anything automatic. The arrangement they are made for is paper carried
+ * into the room: the credential in somebody's mailbox gets them into CPIntel, and getting into
+ * the paper additionally needs something only the invigilator can hand them. An emailed
+ * examination password collapses the two, and a candidate at home with a phone has everything
+ * they need. An admin may still choose to mail each candidate their own sign-in password from
+ * the password sheet editor, which says this before sending
+ * ({@link com.cpintel.mail.PasswordMailService}); the room password has no such route.
  *
  * <h2>Why these are encrypted rather than hashed</h2>
  *
@@ -347,6 +349,15 @@ public class ExamPasswordService {
         return passcodes.recordUse(personal.getPasscodeId(), personal.getCode(), Instant.now()) == 1;
     }
 
+    /** Whether this is the candidate's present code, without counting it as a use. */
+    @Transactional(readOnly = true)
+    public boolean isCurrentPasscode(Long examId, Long userId, String code) {
+        requireExam(examId);
+        ExamPasscode personal = passcodes.find(examId, userId).orElse(null);
+        return personal != null
+            && constantTimeEquals(decrypt(personal.getCode()), normalise(code));
+    }
+
     /** Whether this is the room's shared password, for a paper that has one. */
     public boolean matchesExamPassword(GroupContest exam, String typed) {
         if (!requiresExamPassword(exam)) return true;
@@ -362,8 +373,8 @@ public class ExamPasswordService {
      * {@code DomjudgeCredentialStore.Stored} has one: the generated form would carry the code
      * into the first log line this is interpolated into.
      */
-    public record Issued(Long userId, String username, String fullName, String code,
-                         Instant issuedAt, Instant firstUsedAt, int useCount) {
+    public record Issued(Long userId, String username, String fullName, String email,
+                         String code, Instant issuedAt, Instant firstUsedAt, int useCount) {
         @Override
         public String toString() {
             return "ExamPasscode[user=" + username + ", used=" + useCount + "]";
@@ -372,7 +383,8 @@ public class ExamPasswordService {
 
     private Issued toIssued(ExamPasscode row, String plain) {
         User user = row.getUser();
-        return new Issued(user.getUserId(), user.getUsername(), user.getFullName(), plain,
+        return new Issued(user.getUserId(), user.getUsername(), user.getFullName(),
+            user.getEmail(), plain,
             row.getIssuedAt(), row.getFirstUsedAt(),
             row.getUseCount() == null ? 0 : row.getUseCount());
     }

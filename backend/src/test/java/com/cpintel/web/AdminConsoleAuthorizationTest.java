@@ -69,6 +69,7 @@ class AdminConsoleAuthorizationTest extends AuthorizationTestBase {
     @MockBean private com.cpintel.events.EventCompletionService eventCompletion;
     @MockBean private com.cpintel.events.EventRejudgeService eventRejudge;
     @MockBean private ExamPasswordService examPasswords;
+    @MockBean private com.cpintel.mail.PasswordMailService passwordMail;
     @MockBean private JudgeProblemService judgeProblems;
     @MockBean private com.cpintel.events.CodeforcesReadinessService codeforcesReadiness;
     @MockBean private GroupMemberRepository members;
@@ -158,6 +159,23 @@ class AdminConsoleAuthorizationTest extends AuthorizationTestBase {
                 .with(asAdmin()).with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"text\":\"email\\nasha@uni.edu\",\"dryRun\":true}"))
+            .andExpect(status().is(not403()));
+    }
+
+    private static final String MAIL = "{\"messages\":[{\"userId\":5,\"password\":\"p\","
+        + "\"subject\":\"s\",\"lines\":[{\"heading\":false,\"spans\":[]}]}]}";
+
+    @Test
+    @DisplayName("an ordinary user cannot mail a candidate's password; an admin passes the role gate")
+    void mailingCandidatesNeedsTheConsole() throws Exception {
+        // Which classroom's admins pass is ClassroomAccessInterceptor's, tested on its own.
+        mvc.perform(post("/api/v1/admin/events/1/passwords/mail").with(asUser()).with(csrf())
+                .contentType(MediaType.APPLICATION_JSON).content(MAIL))
+            .andExpect(status().isForbidden());
+        org.mockito.Mockito.verifyNoInteractions(passwordMail);
+
+        mvc.perform(post("/api/v1/admin/events/1/passwords/mail").with(asAdmin()).with(csrf())
+                .contentType(MediaType.APPLICATION_JSON).content(MAIL))
             .andExpect(status().is(not403()));
     }
 

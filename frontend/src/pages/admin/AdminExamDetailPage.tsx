@@ -132,7 +132,7 @@ export default function AdminExamDetailPage() {
       {tab === 'people'   && <PeopleTab detail={detail} />}
       {tab === 'problems' && <ProblemsTab detail={detail} />}
       {tab === 'questions' && <ExamQuestionsTab detail={detail} />}
-      {tab === 'passwords' && <ExamPasswordsTab eventId={id} />}
+      {tab === 'passwords' && <ExamPasswordsTab event={event} />}
       {tab === 'monitor'  && <MonitorTab eventId={id} live={event.lifecycle === 'ACTIVE'} />}
       {tab === 'logs'     && <LogsTab eventId={id} live={event.lifecycle === 'ACTIVE'} />}
       {tab === 'evaluation' && <EvaluationTab eventId={id} done={!!event.completedAt} />}

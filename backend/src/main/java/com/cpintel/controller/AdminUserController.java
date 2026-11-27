@@ -5,6 +5,8 @@ import com.cpintel.admin.AdminUserService;
 import com.cpintel.common.ApiResponse;
 import com.cpintel.events.EventAnalyticsService;
 import com.cpintel.events.EventsDto;
+import com.cpintel.mail.PasswordMailDto;
+import com.cpintel.mail.PasswordMailService;
 import com.cpintel.security.Roles;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -35,6 +37,7 @@ import java.util.List;
 public class AdminUserController {
 
     private final AdminUserService users;
+    private final PasswordMailService passwordMail;
     private final EventAnalyticsService analytics;
 
     @GetMapping
@@ -154,9 +157,8 @@ public class AdminUserController {
      * one and lives on {@code /auth/forgot-password}. This exists because it does not always
      * work, and "ask an administrator" has to lead somewhere.
      *
-     * <p>The new password is in the response and is the only copy: it is stored hashed and is
-     * never emailed, because a live credential sitting in a mailbox is what the reset-link
-     * flow exists to avoid. Leave the body's password blank to have one generated.
+     * <p>The new password is in the response and is the only copy: it is stored hashed, and this
+     * does not email it. Leave the body's password blank to have one generated.
      */
     @PostMapping("/{userId}/password")
     @Operation(summary = "Set a new password for this account, shown once")
@@ -172,6 +174,23 @@ public class AdminUserController {
             "Give this to them directly. It is not stored anywhere you can read it again, and "
             + "it has not been emailed.",
             users.setPassword(adminId, userId, body, Roles.isSuperAdmin(authentication), httpReq)));
+    }
+
+    @GetMapping("/password-mail")
+    @Operation(summary = "Whether this server can send mail, and from which address")
+    public ResponseEntity<ApiResponse<PasswordMailDto.Status>> passwordMailStatus() {
+        return ResponseEntity.ok(ApiResponse.ok(passwordMail.status()));
+    }
+
+    @PostMapping("/password-mail")
+    @Operation(summary = "Email issued account passwords to the accounts they belong to")
+    public ResponseEntity<ApiResponse<List<PasswordMailDto.Result>>> mailPasswords(
+        @AuthenticationPrincipal Long adminId,
+        Authentication authentication,
+        @Valid @RequestBody PasswordMailDto.Request req,
+        HttpServletRequest httpReq) {
+        return ResponseEntity.ok(ApiResponse.ok(passwordMail.toAccounts(
+            adminId, req, Roles.isSuperAdmin(authentication), httpReq)));
     }
 
     /**

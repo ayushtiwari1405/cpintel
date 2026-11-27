@@ -1026,6 +1026,7 @@ export interface IssuedPasscode {
   userId: number
   username: string
   fullName: string | null
+  email: string
   code: string
   issuedAt: string
   /** When this code first opened the paper, or null if it never has. */

@@ -196,7 +196,8 @@ not sit is never read as a zero.
    logins. **Preview** first — it writes nothing and reports per row what would happen. Rows
    for people who have no account yet create one; any admin may do this, and the account is
    always an ordinary `USER`. Generated passwords are shown once, on that screen, and stored
-   hashed — the download is the only copy.
+   hashed — the download is the only copy. Download them as a spreadsheet, or draft
+   [password sheets](accounts.md#password-sheets) and download them as one PDF.
 
    **Put everyone on one team** with the team box beside the paste, which is what a class list
    normally wants. A `teamName` on a row still wins over it, so a mixed roster keeps its own

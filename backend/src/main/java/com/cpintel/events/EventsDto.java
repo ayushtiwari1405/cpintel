@@ -372,6 +372,7 @@ public class EventsDto {
         Long userId,
         String username,
         String fullName,
+        String email,
         String code,
         Instant issuedAt,
         /** When this code first opened the paper, or null if it never has. */

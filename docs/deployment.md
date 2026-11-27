@@ -96,7 +96,8 @@ examination password and DOMjudge login unreadable; there is no recovery.
   proxy's. If the lab reaches the server directly over the campus network, none of this applies.
 - **Mail:** without `SMTP_HOST`, password-reset emails reach nobody. Set
   `CPINTEL_MAIL_LOG_UNDELIVERED=true` to have reset links written to the backend log for an
-  admin to pass on. Examination passwords are never emailed either way.
+  admin to pass on. [Emailing password sheets](accounts.md#password-sheets) also needs
+  `SMTP_HOST`, with a `CPINTEL_MAIL_FROM` the server will accept.
 - **DOMjudge:** each classroom's DOMjudge must be reachable from this server (not just from the
   lab). Check with `curl -sI <domjudge-url>/api/v4/info` from the server.
 

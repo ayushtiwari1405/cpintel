@@ -53,4 +53,13 @@ class MailServiceTest {
         assertThat(sent).hasSize(1);
         assertThat(written(sent.get(0))).contains("plain body", "<p>html body</p>", "text/html");
     }
+
+    @Test
+    @DisplayName("a message somebody is waiting on is sent with both bodies too")
+    void deliversBothBodies() throws Exception {
+        service().deliver("a@x.org", "Sheet", "plain body", "<p>html body</p>");
+
+        assertThat(sent).hasSize(1);
+        assertThat(written(sent.get(0))).contains("plain body", "<p>html body</p>");
+    }
 }

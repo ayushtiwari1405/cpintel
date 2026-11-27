@@ -10,7 +10,7 @@ import {
   Ago, EmptyRow, Pager, Panel, Pill, actionLabel, actionTone, bytes,
 } from '@/components/admin/AdminUi'
 import {
-  Copy, KeyRound, Loader2, LogOut, Plus, Search, Shield, ShieldOff, Trash2, UserCheck,
+  Copy, FileText, KeyRound, Loader2, LogOut, Plus, Search, Shield, ShieldOff, Trash2, UserCheck,
   UserX, X,
 } from 'lucide-react'
 import { clsx } from 'clsx'
@@ -18,6 +18,7 @@ import type { AdminUserRow, AssignableRole, Role } from '@/types'
 import { copyText } from '@/utils/clipboard'
 import { PageHeader } from '@/components/common/PageHeader'
 import { ErrorState } from '@/components/common/States'
+import { PasswordSheetDialog } from '@/components/admin/PasswordSheetDialog'
 
 /**
  * Accounts, and what an admin can do to one.
@@ -549,15 +550,21 @@ function CreateUserDialog(
   { canCreateAdmins, onClose }: { canCreateAdmins: boolean; onClose: () => void }
 ) {
   const create = useCreateUser()
+  /** The account just made, while its password can still be put on a sheet. */
+  const [created, setCreated] = useState<{
+    userId: number; username: string; email: string; password: string; fullName?: string
+  } | null>(null)
+  const [sheet, setSheet] = useState(false)
   const [form, setForm] = useState({
     username: '', email: '', password: '', fullName: '', role: 'USER' as AssignableRole,
   })
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    // Escape closes the sheet editor first, which handles it itself.
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !sheet) onClose() }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
+  }, [onClose, sheet])
 
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm(f => ({ ...f, [k]: e.target.value }))
@@ -569,15 +576,46 @@ function CreateUserDialog(
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!valid) return
+    const account = {
+      username: form.username.trim(),
+      email: form.email.trim().toLowerCase(),
+      password: form.password,
+      fullName: form.fullName.trim() || undefined,
+    }
     create.mutate(
-      {
-        username: form.username.trim(),
-        email: form.email.trim(),
-        password: form.password,
-        fullName: form.fullName.trim() || undefined,
-        role: form.role,
-      },
-      { onSuccess: onClose },
+      { ...account, role: form.role },
+      { onSuccess: res => setCreated({ ...account, userId: res.data.userId }) },
+    )
+  }
+
+  if (created) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="absolute inset-0 bg-black/60" onClick={onClose} />
+        <div className="relative w-full max-w-md space-y-3 rounded-xl border border-gray-800
+          bg-gray-950 p-5">
+          <h2 className="text-sm font-medium text-gray-200">
+            Account {created.username} created
+          </h2>
+          <p className="text-xs text-amber-300">
+            Make a password sheet now if you need one: the password cannot be shown again after
+            this is closed.
+          </p>
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={() => setSheet(true)} className="btn-secondary">
+              <FileText size={14} /> Create password sheet
+            </button>
+            <button type="button" onClick={onClose} className="btn-primary">Done</button>
+          </div>
+        </div>
+        <PasswordSheetDialog
+          open={sheet}
+          onClose={() => setSheet(false)}
+          kind="new-account"
+          fileName={`${created.username}-password-sheet.pdf`}
+          people={[created]}
+        />
+      </div>
     )
   }
 
@@ -677,9 +715,10 @@ function Field({ label, value }: { label: string; value: string | null | undefin
  *
  * <p>Two things this screen is careful about. The password is shown <b>once</b> — the server
  * keeps only a hash, so an admin who closes this without copying it has to do it again, and
- * the dialog says so rather than letting them find out. And it is never emailed: it is handed
- * over the way the first one was, because a live credential sitting in a mailbox is exactly
- * what the reset-link flow next door exists to avoid.
+ * the dialog says so rather than letting them find out. And setting it emails nothing carrying
+ * it: it is handed over the way the first one was, or sent from the password sheet editor only
+ * if the admin chooses to, since the reset-link flow next door is what keeps live credentials
+ * out of mailboxes.
  *
  * <p>Generating is the default and the better path. A password an administrator was already
  * thinking of is one they will think of again.
@@ -687,6 +726,7 @@ function Field({ label, value }: { label: string; value: string | null | undefin
 function SetPasswordDialog({ user, onClose }: { user: AdminUserRow; onClose: () => void }) {
   const [chosen, setChosen] = useState('')
   const [issued, setIssued] = useState<string | null>(null)
+  const [sheet, setSheet] = useState(false)
   const setPassword = useSetUserPassword()
 
   const tooShort = chosen.length > 0 && chosen.length < 8
@@ -720,6 +760,24 @@ function SetPasswordDialog({ user, onClose }: { user: AdminUserRow; onClose: () 
             >
               <Copy size={14} /> Copy it
             </button>
+            <button
+              onClick={() => setSheet(true)}
+              className="flex w-full items-center justify-center gap-1.5 rounded-lg border
+                border-gray-800 px-3 py-2 text-sm text-gray-300 transition-colors
+                hover:bg-gray-800"
+            >
+              <FileText size={14} /> Create password sheet
+            </button>
+            <PasswordSheetDialog
+              open={sheet}
+              onClose={() => setSheet(false)}
+              kind="new-password"
+              fileName={`${user.username}-password-sheet.pdf`}
+              people={[{
+                userId: user.userId, username: user.username, password: issued, email: user.email,
+                fullName: user.fullName,
+              }]}
+            />
             <p className="text-xs leading-relaxed text-amber-300">
               Shown only once. They've been signed out everywhere.
             </p>

@@ -68,7 +68,7 @@ class PasscodeSessionTest {
     }
 
     private static ExamPasswordService.Issued issued(Long userId) {
-        return new ExamPasswordService.Issued(userId, "u" + userId, null, "CODE", Instant.now(),
+        return new ExamPasswordService.Issued(userId, "u" + userId, null, "u@x.org", "CODE", Instant.now(),
             null, 0);
     }
 

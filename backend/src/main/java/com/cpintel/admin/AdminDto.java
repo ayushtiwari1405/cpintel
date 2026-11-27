@@ -121,9 +121,9 @@ public class AdminDto {
      *
      * <p>For the person who has forgotten theirs and cannot reach their own mail, which on a
      * deployment handing out accounts on a sheet of paper is a common enough morning. The
-     * password is chosen or generated here and handed over the same way the first one was; it
-     * is never emailed, because a live credential in a mailbox is exactly what the reset-link
-     * flow exists to avoid.
+     * password is chosen or generated here and handed over the same way the first one was.
+     * Setting it mails nothing carrying it; the admin may send it from the password sheet
+     * editor, though the reset link is better at keeping live credentials out of mailboxes.
      *
      * <p>Leave {@code password} blank to have one generated, which is the better path — a
      * generated password is returned once and is not one the administrator was already

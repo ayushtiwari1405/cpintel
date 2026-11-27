@@ -44,6 +44,8 @@ public class AuditService {
     public static final String PASSWORD_CHANGE_FAILED   = "PASSWORD_CHANGE_FAILED";
     /** An administrator set somebody else's password. Never records the password. */
     public static final String PASSWORD_SET_BY_ADMIN    = "ADMIN_PASSWORD_SET";
+    /** An issued password mailed to its account, from the password sheets. */
+    public static final String PASSWORD_MAILED       = "ADMIN_PASSWORD_MAILED";
     /** A super admin deleted an account outright. */
     public static final String USER_DELETED             = "ADMIN_USER_DELETED";
 
@@ -51,6 +53,7 @@ public class AuditService {
     public static final String EXAM_PASSWORD_SET     = "ADMIN_EXAM_PASSWORD_SET";
     public static final String EXAM_PASSWORD_CLEARED = "ADMIN_EXAM_PASSWORD_CLEARED";
     public static final String EXAM_PASSCODES_ISSUED = "ADMIN_EXAM_PASSCODES_ISSUED";
+    public static final String EXAM_PASSCODE_MAILED  = "ADMIN_EXAM_PASSCODE_MAILED";
     public static final String EXAM_PASSCODES_READ   = "ADMIN_EXAM_PASSCODES_READ";
     public static final String EXAM_UNLOCKED         = "EXAM_UNLOCKED";
     /** Signed in with an examination password, into examination mode. */

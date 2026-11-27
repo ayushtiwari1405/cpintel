@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import {
-  AlertCircle, ArrowLeft, CheckCircle2, Copy, FlaskConical, LayoutDashboard, Loader2, RefreshCw, Save,
+  AlertCircle, ArrowLeft, CheckCircle2, Copy, FileText, FlaskConical, LayoutDashboard, Loader2, RefreshCw, Save,
   UserMinus, UserPlus, Users,
 } from 'lucide-react'
 import {
@@ -21,6 +21,7 @@ import type { ClassroomSummary, EventKind, TaAdded } from '@/types'
 import { copyText } from '@/utils/clipboard'
 import { ErrorState, LoadingState } from '@/components/common/States'
 import { PageHeader } from '@/components/common/PageHeader'
+import { PasswordSheetDialog } from '@/components/admin/PasswordSheetDialog'
 
 const field = `rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 text-sm text-gray-200
                placeholder-gray-400 outline-hidden focus:border-accent-600`
@@ -534,6 +535,7 @@ function TeachingAssistants({ classroomId, room }: { classroomId: number; room: 
   const [username, setUsername] = useState('')
   const [fullName, setFullName] = useState('')
   const [added, setAdded] = useState<TaAdded | null>(null)
+  const [sheet, setSheet] = useState(false)
 
   const submit = () => {
     add.mutate({
@@ -619,10 +621,28 @@ function TeachingAssistants({ classroomId, room }: { classroomId: number; room: 
                   className="inline-flex items-center gap-1 text-gray-500 hover:text-gray-300">
                   <Copy size={11} /> Copy
                 </button>
+                <button onClick={() => setSheet(true)}
+                  className="inline-flex items-center gap-1 text-gray-500 hover:text-gray-300">
+                  <FileText size={11} /> Create password sheet
+                </button>
                 <span className="text-amber-400/80">Shown only now. Hand it over before leaving the page.</span>
               </p>
             )}
           </div>
+        )}
+        {added?.password && (
+          <PasswordSheetDialog
+            key={added.ta.userId}
+            open={sheet}
+            onClose={() => setSheet(false)}
+            kind="ta"
+            fileName={`${added.ta.username}-password-sheet.pdf`}
+            shared={[{ key: 'classroom', label: 'The classroom’s name', value: room.name }]}
+            people={[{
+              userId: added.ta.userId, username: added.ta.username, password: added.password, email: added.ta.email,
+              fullName: added.ta.fullName,
+            }]}
+          />
         )}
       </div>
     </Panel>

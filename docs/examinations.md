@@ -52,7 +52,9 @@
    browser records that its monitoring was the weaker kind rather than showing a clean sheet.
 6. **Passwords** — the tab that produces what you carry into the room. **Issue passwords**
    gives every assigned candidate an examination sign-in password for this paper; download the
-   spreadsheet (`.xlsx`, one column per field) and print the desk slips from it. Optionally
+   spreadsheet (`.xlsx`, one column per field), or draft the slips as
+   [password sheets](accounts.md#password-sheets) — one PDF, a page per candidate, with a
+   **Sheet** button on each row for a single reissued code. Optionally
    **generate** a room password as well — one string for the whole paper, read out when you
    start it.
 
@@ -61,10 +63,11 @@
    sitting has begun*: by the time the paper starts everybody in the room has it, so on its own
    it cannot tell a candidate from somebody who heard it read out through a door.
 
-   **Neither is ever emailed, and there is no route that would.** The credential in somebody's
-   mailbox gets them into CPIntel; getting into the paper additionally needs something only you
-   can hand them. Mailing an examination password would collapse the two, and a candidate at
-   home with a phone would have everything they needed.
+   **Hand them over in the room.** The credential in somebody's mailbox gets them into CPIntel;
+   getting into the paper additionally needs something only you can hand them. You can
+   [email each candidate their own sign-in password](accounts.md#password-sheets), but that
+   collapses the two: a candidate at home with a phone then has everything they need. Nothing
+   sends it unless you confirm it, and the room password is never emailed.
 
    Issue is additive, so a candidate added an hour before the sitting gets a code without
    invalidating the two hundred slips you have already printed. A slip that goes missing at

@@ -32,10 +32,10 @@ import java.util.Optional;
  *
  * <p><b>The first password is not this service's business.</b> An account is created by an
  * administrator, and its first password is handed over with the username — in person, on a
- * deployment sheet, however that particular room works. Nothing is emailed to bootstrap an
- * account, because the mail would be a live credential sitting in a mailbox, and because the
- * deployments this runs on cannot always reach a mail server at the moment the accounts are
- * made. What this adds is everything after that: the password becomes the owner's, and they
+ * deployment sheet, however that particular room works. Nothing is emailed automatically to
+ * bootstrap an account, because the mail would be a live credential sitting in a mailbox, and
+ * because the deployments this runs on cannot always reach a mail server at the moment the
+ * accounts are made; an admin may choose to send it from the password sheet editor. What this adds is everything after that: the password becomes the owner's, and they
  * can change it without asking anyone.
  *
  * <p><b>Three things make a reset link safe enough to email.</b>

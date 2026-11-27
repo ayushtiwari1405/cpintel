@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import {
-  AlertTriangle, Copy, Download, KeyRound, Loader2, Printer, RefreshCw, Trash2,
+  AlertTriangle, Copy, Download, FileText, KeyRound, Loader2, Printer, RefreshCw, Trash2,
 } from 'lucide-react'
 
 import { Ago, EmptyRow, Panel, Pill } from '@/components/admin/AdminUi'
@@ -10,10 +10,11 @@ import {
   useClearExamPassword, useExamPasswordStatus, useGenerateExamPassword, useIssuePasscodes,
   useReissuePasscode, useRevokePasscodes,
 } from '@/hooks/useExams'
-import type { IssuedPasscode } from '@/types'
+import type { EventSummary, IssuedPasscode } from '@/types'
 import { downloadSpreadsheet } from '@/utils/spreadsheet'
 import { copyText } from '@/utils/clipboard'
 import { ErrorState, LoadingState } from '@/components/common/States'
+import { PasswordSheetDialog } from '@/components/admin/PasswordSheetDialog'
 
 /**
  * The passwords that open one examination, and the screen that prints them.
@@ -30,12 +31,13 @@ import { ErrorState, LoadingState } from '@/components/common/States'
  * means "the person typing this is the person this seat belongs to", which the shared password
  * cannot mean, because by the time the paper starts everyone in the room has it.
  *
- * <h2>Nothing here is emailed</h2>
+ * <h2>Made to be handed over in the room</h2>
  *
- * <p>Deliberately, and there is no route that would. These are printed and carried into the
- * room: the credential in somebody's mailbox gets them into CPIntel, and getting into the paper
- * additionally needs something only the invigilator can hand them. Mailing an examination
- * password would collapse the two, and a candidate at home with a phone would have everything.
+ * <p>Printed, as a table or as one drafted sheet per candidate: the credential in somebody's
+ * mailbox gets them into CPIntel, and getting into the paper additionally needs something only
+ * the invigilator can hand them. The sheet editor can also email each candidate their own code,
+ * only when asked, and says before sending that a mailed code gives that protection up. The
+ * room's shared password is never mailed.
  *
  * <h2>Reading them is an action, not a page load</h2>
  *
@@ -43,8 +45,13 @@ import { ErrorState, LoadingState } from '@/components/common/States'
  * themselves arrive from a separate request that is audited every time it is made — so an
  * admin who opened this screen has not thereby read the room's codes.
  */
-export function ExamPasswordsTab({ eventId }: { eventId: number }) {
+export function ExamPasswordsTab({ event }: {
+  event: Pick<EventSummary, 'eventId' | 'name' | 'startsAt' | 'endsAt'>
+}) {
+  const { eventId } = event
   const toast = useToast()
+  /** Whose sheets are being drafted: everybody shown, one candidate, or nobody. */
+  const [sheets, setSheets] = useState<'all' | number | null>(null)
   const { data: status, isLoading, isError, error, refetch } = useExamPasswordStatus(eventId)
 
   const [sharedPassword, setSharedPassword] = useState<string | null>(null)
@@ -252,6 +259,13 @@ export function ExamPasswordsTab({ eventId }: { eventId: number }) {
                 <Download size={12} /> Download spreadsheet
               </button>
               <button
+                onClick={() => setSheets('all')}
+                className="flex items-center gap-1.5 rounded-md border border-gray-800
+                  px-2.5 py-1.5 text-xs text-gray-300 transition-colors hover:bg-gray-800"
+              >
+                <FileText size={12} /> Create password sheets
+              </button>
+              <button
                 onClick={() => window.print()}
                 className="flex items-center gap-1.5 rounded-md border border-gray-800
                   px-2.5 py-1.5 text-xs text-gray-300 transition-colors hover:bg-gray-800"
@@ -298,7 +312,15 @@ export function ExamPasswordsTab({ eventId }: { eventId: number }) {
                           </span>
                         )}
                       </td>
-                      <td className="px-4 py-2.5 text-right">
+                      <td className="whitespace-nowrap px-4 py-2.5 text-right">
+                        <button
+                          onClick={() => setSheets(row.userId)}
+                          aria-label={`Password sheet for ${row.username}`}
+                          className="mr-1.5 rounded-md border border-gray-800 px-2 py-1 text-xs
+                            text-gray-400 transition-colors hover:bg-gray-800"
+                        >
+                          Sheet
+                        </button>
                         <button
                           onClick={() => reissue.mutate({ eventId, userId: row.userId }, {
                             onSuccess: (res) => setCodes(current => current?.map(c =>
@@ -319,8 +341,38 @@ export function ExamPasswordsTab({ eventId }: { eventId: number }) {
           </div>
         )}
       </Panel>
+
+      {codes && (
+        <PasswordSheetDialog
+          key={sheets ?? 'closed'}
+          open={sheets !== null}
+          onClose={() => setSheets(null)}
+          kind="exam"
+          eventId={eventId}
+          fileName={typeof sheets === 'number'
+            ? `exam-${eventId}-password-sheet.pdf` : `exam-${eventId}-password-sheets.pdf`}
+          shared={[
+            { key: 'exam', label: 'The examination’s name', value: event.name },
+            { key: 'start', label: 'When it starts', value: sheetTime(event.startsAt) },
+            { key: 'end', label: 'When it ends', value: sheetTime(event.endsAt) },
+          ]}
+          people={codes
+            .filter(c => typeof sheets !== 'number' || c.userId === sheets)
+            .map(c => ({
+              userId: c.userId, username: c.username, password: c.code, fullName: c.fullName, email: c.email,
+            }))}
+        />
+      )}
     </div>
   )
+}
+
+/** A time as a sheet prints it, with its zone, since paper cannot adjust to the reader's. */
+function sheetTime(at: string | null): string {
+  return at ? new Date(at).toLocaleString('en-GB', {
+    day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit',
+    timeZoneName: 'short',
+  }) : ''
 }
 
 /**

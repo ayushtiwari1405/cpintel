@@ -964,10 +964,16 @@ because by the time the paper starts everybody in the room has it. The sign-in p
 what opens examination mode; the room password, if one was generated, is the unlock screen
 after that.
 
-Neither is ever emailed, and there is deliberately no route that would. The credential in
-somebody's mailbox gets them into CPIntel; getting into the paper additionally needs something
-only the invigilator can hand them. An emailed examination password collapses the two, and a
-candidate at home with a phone has everything they need.
+Neither is mailed by anything automatic. The credential in somebody's mailbox gets them into
+CPIntel; getting into the paper additionally needs something only the invigilator can hand them.
+An emailed examination password collapses the two, and a candidate at home with a phone has
+everything they need. An admin may still send each candidate their own sign-in password from the
+password sheet editor, after a warning that says so (`PasswordMailService`: current code,
+assigned candidate, audited); the room password has no such route.
+
+The same service mails issued account passwords. It takes styled lines rather than HTML, and a
+user id rather than an address; sends synchronously, five to a request, outside any transaction;
+and refuses an account whose owner has set a password, so it cannot be used to test guesses.
 
 ### Why they are encrypted rather than hashed
 

@@ -1,4 +1,5 @@
 import { apiClient } from './client'
+import { PASSWORD_MAIL_TIMEOUT, type PasswordMail, type PasswordMailResult } from './adminApi'
 import type {
   CodeforcesReadiness,
   ApiResponse, EventDetail, EventKind, EventLifecycle, EventProblem, EventSummary, JudgeProblem,
@@ -242,9 +243,9 @@ export const adminEventsApi = {
 
   // ----------------------------------------------------- examination passwords
   //
-  // Generated here, printed here, and never emailed anywhere: an examination password that
-  // arrives in a mailbox defeats the arrangement it belongs to, since the credential in
-  // somebody's inbox is exactly what getting into the paper is meant to need more than.
+  // Generated here and meant to be printed: an examination password that arrives in a mailbox
+  // defeats the arrangement it belongs to. A candidate's own is mailed only when an admin asks
+  // (mailPasscodes), after being told that.
   //
   // Reading them is split from the status deliberately. The status route says whether
   // passwords exist and is safe to load with the page; the two reveal routes hand over the
@@ -286,6 +287,12 @@ export const adminEventsApi = {
   reissuePasscode: (eventId: number, userId: number) =>
     apiClient.post<ApiResponse<IssuedPasscode>>(
       `/admin/events/${eventId}/passwords/candidates/${userId}`, {}).then(r => r.data),
+
+  /** Each candidate their own sign-in password, when an admin chooses to mail it. */
+  mailPasscodes: (eventId: number, messages: PasswordMail[]) =>
+    apiClient.post<ApiResponse<PasswordMailResult[]>>(
+      `/admin/events/${eventId}/passwords/mail`, { messages },
+      { timeout: PASSWORD_MAIL_TIMEOUT }).then(r => r.data),
 
   revokePasscodes: (eventId: number) =>
     apiClient.delete<ApiResponse<void>>(`/admin/events/${eventId}/passwords/candidates`)
